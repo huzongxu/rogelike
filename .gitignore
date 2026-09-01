@@ -6,8 +6,9 @@ minigame/
 # AI 生图源图(一次性加工源,成品已入 public/assets;脚本见 scripts/)
 vibe_images/
 
-# 一次性去字/擦除脚本工作区
-text-erase/
+# 一次性去字/擦除脚本工作区(整体忽略,仅白名单保留合成脚本)
+text-erase/*
+!text-erase/compose.js
 
 # 验证截图与临时输出
 .fx-shots/
