@@ -1,0 +1,129 @@
+/* ============================================================
+   《回响深渊》UI v2 设计稿 —— 共享 tokens 与组件
+   依据 docs/UI-DESIGN.md v1 tokens 扩展;渲染分辨率 480×854 @2x
+   ============================================================ */
+:root{
+  --bg-deep:#0B0E14; --bg-2:#131826;
+  --panel:rgba(19,24,38,.92); --panel-2:rgba(30,38,58,.6);
+  --line:rgba(126,150,200,.16); --line-strong:rgba(90,200,250,.35);
+  --t1:#E8ECF4; --t2:#8F9BB3; --t3:#5A6A80;
+  --gold:#FFD76A; --echo:#C8B6FF; --dust:#7FD8FF; --hp:#FF5A6E;
+  --q0:#C8CDD6; --q1:#4AA3FF; --q2:#C06CFF; --q3:#FF9D2E; --qh:#4DFFC8;
+  --act:#4DFFC8; --danger:#FF6B7A; --boss:#FF4D5E;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:#05070B}
+body{font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+
+.screen{width:480px;height:854px;position:relative;overflow:hidden;color:var(--t1);
+  background:
+    radial-gradient(120% 55% at 50% -8%, rgba(88,110,200,.16), transparent 62%),
+    radial-gradient(90% 38% at 50% 106%, rgba(40,210,190,.09), transparent 60%),
+    linear-gradient(180deg,#0B0E14 0%, #0E1220 55%, #0A0D13 100%);
+}
+/* 暗角 */
+.screen::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:40;
+  box-shadow:inset 0 0 110px rgba(0,0,0,.5);}
+/* 深渊竖光柱 */
+.shafts{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.5;
+  background:
+    linear-gradient(100deg, transparent 20%, rgba(120,150,255,.05) 21%, transparent 24%),
+    linear-gradient(80deg, transparent 55%, rgba(120,200,255,.04) 56%, transparent 60%),
+    linear-gradient(95deg, transparent 76%, rgba(200,182,255,.045) 77%, transparent 81%);
+}
+/* 漂浮微粒 */
+.dust{position:absolute;width:3px;height:3px;border-radius:50%;background:#7FD8FF;opacity:.5;
+  box-shadow:0 0 8px 1px rgba(127,216,255,.65);z-index:1}
+.dust.v{background:#C8B6FF;box-shadow:0 0 8px 1px rgba(200,182,255,.6)}
+.dust.g{background:#FFD76A;box-shadow:0 0 8px 1px rgba(255,215,106,.55)}
+
+/* ---------- 排版 ---------- */
+.h1{font-size:22px;font-weight:800;letter-spacing:.04em}
+.h2{font-size:15px;font-weight:700}
+.body{font-size:13px}
+.cap{font-size:11px;color:var(--t2)}
+.micro{font-size:10px;color:var(--t3)}
+.num{font-weight:800;font-variant-numeric:tabular-nums}
+
+/* ---------- 顶栏 / 货币 ---------- */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;position:relative;z-index:5}
+.curbar{display:flex;gap:8px;padding:0 16px 10px;position:relative;z-index:5}
+.cur{display:flex;align-items:center;gap:5px;height:26px;padding:0 10px;border-radius:13px;
+  background:var(--panel-2);border:1px solid var(--line);font-size:12px;font-weight:800}
+.cur .ic{font-size:13px}
+.cur.gold{color:var(--gold)} .cur.echo{color:var(--echo)} .cur.dust{color:var(--dust)}
+.cur.tket{color:#F5A6C8}
+
+/* ---------- 面板 ---------- */
+.glass{background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.section{margin:10px 16px;position:relative;z-index:5}
+.sec-title{display:flex;align-items:center;gap:8px;margin:14px 16px 8px;position:relative;z-index:5}
+.sec-title .rule{flex:1;height:1px;background:linear-gradient(90deg,var(--line-strong),transparent)}
+.sec-title span{font-size:12px;font-weight:700;color:var(--t2);letter-spacing:.12em}
+
+/* ---------- 按钮 ---------- */
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;border-radius:4px;
+  font-weight:700;letter-spacing:.03em;white-space:nowrap}
+.btn-primary{height:44px;background:linear-gradient(180deg,#16412F,#102E22);
+  border:2px solid var(--act);color:var(--act);font-size:15px;
+  box-shadow:0 0 18px rgba(77,255,200,.22), inset 0 0 16px rgba(77,255,200,.07)}
+.btn-secondary{height:30px;background:#22314B;border:1px solid rgba(255,255,255,.28);color:var(--t1);font-size:12.5px}
+.btn-danger{height:26px;padding:0 12px;background:#3A2222;border:1px solid var(--danger);color:var(--danger);font-size:12px}
+.btn-mini{height:26px;padding:0 12px;background:#22314B;border:1px solid rgba(255,255,255,.25);color:var(--t1);font-size:12px}
+.btn-act-mini{height:28px;padding:0 12px;background:#123528;border:1px solid var(--act);color:var(--act);font-size:12px;
+  box-shadow:0 0 10px rgba(77,255,200,.18)}
+.btn.disabled{opacity:.38;box-shadow:none}
+
+/* ---------- 卡牌(品质) ---------- */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;position:relative;overflow:hidden;
+  display:flex;flex-direction:column}
+.card .qbar{height:4px;width:100%}
+.card.q0{border-color:rgba(200,205,214,.4)}
+.card.q1{border-color:rgba(74,163,255,.55);box-shadow:0 0 14px rgba(74,163,255,.10)}
+.card.q2{border-color:rgba(192,108,255,.6);box-shadow:0 0 14px rgba(192,108,255,.12)}
+.card.q3{border-color:rgba(255,157,46,.65);box-shadow:0 0 16px rgba(255,157,46,.14)}
+.card.qh{border-color:rgba(77,255,200,.7);box-shadow:0 0 18px rgba(77,255,200,.2)}
+.card.q0 .qbar{background:linear-gradient(90deg,transparent,#C8CDD6,transparent)}
+.card.q1 .qbar{background:linear-gradient(90deg,transparent,#4AA3FF,transparent);box-shadow:0 0 8px rgba(74,163,255,.8)}
+.card.q2 .qbar{background:linear-gradient(90deg,transparent,#C06CFF,transparent);box-shadow:0 0 8px rgba(192,108,255,.8)}
+.card.q3 .qbar{background:linear-gradient(90deg,transparent,#FF9D2E,transparent);box-shadow:0 0 8px rgba(255,157,46,.8)}
+.card.qh .qbar{background:linear-gradient(90deg,#4DFFC8,#7FD8FF,#C06CFF,#FF9D2E,#4DFFC8)}
+.qc0{color:var(--q0)} .qc1{color:var(--q1)} .qc2{color:var(--q2)} .qc3{color:var(--q3)} .qch{color:var(--qh)}
+
+/* ---------- 列表行 ---------- */
+.row{display:flex;align-items:center;gap:10px;height:52px;padding:0 12px;border-radius:6px;
+  background:var(--panel-2);border:1px solid var(--line)}
+.row.active{background:rgba(90,200,250,.10);border-color:var(--line-strong);
+  box-shadow:0 0 14px rgba(90,200,250,.10), inset 0 0 20px rgba(90,200,250,.04)}
+.row.locked{opacity:.5}
+.row.selected{background:rgba(90,200,250,.16);border-color:#5AC8FA}
+
+/* ---------- 小徽章 / chip ---------- */
+.chip{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 8px;border-radius:10px;
+  font-size:10.5px;font-weight:700;background:var(--panel-2);border:1px solid var(--line)}
+.chip.warn{color:#FFB0B8;border-color:rgba(255,77,94,.5);background:rgba(255,77,94,.10)}
+.chip.ok{color:var(--act);border-color:rgba(77,255,200,.45);background:rgba(77,255,200,.08)}
+.chip.env{color:#B8C6FF;border-color:rgba(140,160,255,.4);background:rgba(140,160,255,.08)}
+
+/* ---------- 血条 ---------- */
+.hpbar{height:12px;border-radius:6px;background:rgba(10,13,20,.8);border:1px solid rgba(255,90,110,.35);
+  overflow:hidden;position:relative}
+.hpbar .fill{height:100%;background:linear-gradient(90deg,#B8324A,#FF5A6E 70%,#FF8A96);
+  box-shadow:0 0 10px rgba(255,90,110,.5)}
+
+/* ---------- 页签 ---------- */
+.tabs{display:flex;gap:8px;padding:0 16px;position:relative;z-index:5}
+.tab{flex:1;height:34px;display:flex;align-items:center;justify-content:center;border-radius:4px;
+  font-size:13px;font-weight:700;color:var(--t2);background:var(--panel-2);border:1px solid var(--line)}
+.tab.on{color:#fff;background:linear-gradient(180deg,#3A3160,#2A2448);border-color:var(--echo);
+  box-shadow:0 0 14px rgba(200,182,255,.25)}
+
+.footer{position:absolute;left:0;right:0;bottom:0;padding:12px 16px 18px;z-index:6;
+  background:linear-gradient(180deg,transparent, rgba(5,7,11,.88) 34%)}
+
+/* 图标小方块(侧边入口) */
+.side-btn{width:56px;height:52px;border-radius:6px;background:var(--panel);border:1px solid var(--line);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  font-size:11px;font-weight:700;color:var(--t1)}
+.side-btn .ic{font-size:16px}
+.side-btn.hl{border-color:rgba(200,182,255,.5);box-shadow:0 0 12px rgba(200,182,255,.15)}

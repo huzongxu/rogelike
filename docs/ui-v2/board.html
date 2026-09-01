@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="shared.css">
+<style>
+  body{background:#05070B}
+  .board{width:1200px;height:900px;position:relative;overflow:hidden;color:var(--t1);
+    background:
+      radial-gradient(60% 40% at 18% -6%, rgba(88,110,200,.14), transparent 62%),
+      radial-gradient(50% 34% at 88% 108%, rgba(40,210,190,.08), transparent 60%),
+      linear-gradient(180deg,#0B0E14, #0D1120 55%, #0A0D13);}
+  .bhead{display:flex;align-items:flex-end;justify-content:space-between;padding:30px 36px 18px;
+    border-bottom:1px solid var(--line)}
+  .bhead .t{font-size:27px;font-weight:900;letter-spacing:.06em}
+  .bhead .t small{display:block;font-size:11px;font-weight:400;color:var(--t3);letter-spacing:.34em;margin-top:6px}
+  .kw{display:flex;gap:8px}
+  .cols{display:flex;gap:22px;padding:22px 36px}
+  .col{display:flex;flex-direction:column;gap:14px}
+  .col.c1{width:330px}.col.c2{width:330px}.col.c3{flex:1}
+  .panel-t{font-size:12px;font-weight:800;color:var(--t2);letter-spacing:.18em;display:flex;align-items:center;gap:8px}
+  .panel-t::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,var(--line-strong),transparent)}
+  .sw{display:flex;align-items:center;gap:10px;height:34px}
+  .sw .c{width:46px;height:26px;border-radius:4px;border:1px solid rgba(255,255,255,.14);flex:none}
+  .sw .n{font-size:11.5px;font-weight:700;width:118px}
+  .sw .h{font-size:10.5px;color:var(--t3);font-variant-numeric:tabular-nums}
+  .type-row{display:flex;align-items:baseline;gap:12px;padding:7px 0;border-bottom:1px dashed rgba(126,150,200,.12)}
+  .type-row .lb{font-size:9.5px;color:var(--t3);width:56px;flex:none}
+  .note{font-size:11px;color:var(--t2);line-height:1.8}
+  .note b{color:var(--t1)}
+  .glow-card{padding:14px;display:flex;flex-direction:column;gap:12px}
+  .demo-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .mood{height:120px;border-radius:8px;position:relative;overflow:hidden;border:1px solid var(--line)}
+  .mood .tag{position:absolute;left:10px;bottom:8px;font-size:10px;color:var(--t2);letter-spacing:.1em}
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="bhead">
+    <div class="t">《回响深渊》UI 美术设计提案<small>ECHO ABYSS · ART DIRECTION V2 · 480×854 竖屏</small></div>
+    <div class="kw">
+      <span class="chip env">深渊暗调</span><span class="chip env">霓虹点缀</span>
+      <span class="chip env">玻璃层级</span><span class="chip ok">一手操作 ≥44px</span>
+    </div>
+  </div>
+
+  <div class="cols">
+    <!-- 调色板 -->
+    <div class="col c1">
+      <div class="panel-t">色彩 TOKENS</div>
+      <div>
+        <div class="sw"><div class="c" style="background:#0B0E14"></div><div class="n">bg-deep 战场底</div><div class="h">#0B0E14</div></div>
+        <div class="sw"><div class="c" style="background:#131826"></div><div class="n">bg-panel 面板</div><div class="h">#131826 · 92%</div></div>
+        <div class="sw"><div class="c" style="background:#E8ECF4"></div><div class="n">text-primary</div><div class="h">#E8ECF4</div></div>
+        <div class="sw"><div class="c" style="background:#8F9BB3"></div><div class="n">text-secondary</div><div class="h">#8F9BB3</div></div>
+        <div class="sw"><div class="c" style="background:#FFD76A"></div><div class="n">gold 金币 ✦</div><div class="h">#FFD76A</div></div>
+        <div class="sw"><div class="c" style="background:#C8B6FF"></div><div class="n">echo 回响 ◈</div><div class="h">#C8B6FF</div></div>
+        <div class="sw"><div class="c" style="background:#7FD8FF"></div><div class="n">stardust 星尘 ❋</div><div class="h">#7FD8FF</div></div>
+        <div class="sw"><div class="c" style="background:#FF5A6E"></div><div class="n">hp 生命</div><div class="h">#FF5A6E</div></div>
+        <div class="sw"><div class="c" style="background:#4DFFC8"></div><div class="n">action-primary</div><div class="h">#4DFFC8</div></div>
+        <div class="sw"><div class="c" style="background:#FF4D5E"></div><div class="n">boss 警告</div><div class="h">#FF4D5E</div></div>
+      </div>
+      <div class="panel-t">品质色阶</div>
+      <div class="demo-row" style="gap:6px">
+        <div style="text-align:center"><div class="c" style="width:52px;height:22px;border-radius:4px;background:#C8CDD6"></div><div class="micro">普通</div></div>
+        <div style="text-align:center"><div class="c" style="width:52px;height:22px;border-radius:4px;background:#4AA3FF"></div><div class="micro">稀有</div></div>
+        <div style="text-align:center"><div class="c" style="width:52px;height:22px;border-radius:4px;background:#C06CFF"></div><div class="micro">史诗</div></div>
+        <div style="text-align:center"><div class="c" style="width:52px;height:22px;border-radius:4px;background:#FF9D2E"></div><div class="micro">传奇</div></div>
+        <div style="text-align:center"><div class="c" style="width:52px;height:22px;border-radius:4px;background:linear-gradient(90deg,#4DFFC8,#7FD8FF,#C06CFF,#FF9D2E)"></div><div class="micro">隐藏</div></div>
+      </div>
+    </div>
+
+    <!-- 字体与氛围 -->
+    <div class="col c2">
+      <div class="panel-t">字体层级</div>
+      <div>
+        <div class="type-row"><span class="lb">H1 22</span><span style="font-size:22px;font-weight:800">回响深渊</span></div>
+        <div class="type-row"><span class="lb">H2 15</span><span style="font-size:15px;font-weight:700">章间商店 · 第 3 章</span></div>
+        <div class="type-row"><span class="lb">Body 13</span><span style="font-size:13px">杀怪掉落金币,章间购买卡牌</span></div>
+        <div class="type-row"><span class="lb">Cap 11</span><span style="font-size:11px;color:var(--t2)">价格随已购数量与章节递增</span></div>
+        <div class="type-row"><span class="lb">Num 18</span><span style="font-size:18px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums">✦ 1,280 · ◈ 320 · ❋ 45</span></div>
+      </div>
+      <div class="panel-t">氛围母题</div>
+      <div class="mood" style="background:
+        radial-gradient(60% 46% at 50% 30%, rgba(90,120,220,.28), transparent 70%),
+        linear-gradient(180deg,#0B0E14,#131A2C 60%,#0A0D13)">
+        <div style="position:absolute;left:50%;top:38%;width:56px;height:56px;margin:-28px;border-radius:50%;
+          border:1px solid rgba(127,216,255,.5);box-shadow:0 0 24px rgba(127,216,255,.35), inset 0 0 18px rgba(127,216,255,.2)"></div>
+        <div class="tag">深渊光环 · 标题/主按钮聚焦</div>
+      </div>
+      <div class="mood" style="background:
+        radial-gradient(50% 40% at 50% 78%, rgba(255,77,94,.30), transparent 70%),
+        linear-gradient(180deg,#0B0E14,#1A1016 70%,#0A0D13)">
+        <div style="position:absolute;inset:0;box-shadow:inset 0 0 46px rgba(255,77,94,.35)"></div>
+        <div class="tag">血色脉冲 · 狂潮 / Boss / 阵亡</div>
+      </div>
+      <div class="note">原则:<b>霓虹只给关键信息</b>(品质 / 货币 / 主按钮 / 危险);大面积保持深蓝黑,信息浮在玻璃层上;战斗特效色=品质色,避免新增色相。</div>
+    </div>
+
+    <!-- 组件库 -->
+    <div class="col c3">
+      <div class="panel-t">组件样例</div>
+      <div class="glass glow-card">
+        <div class="demo-row">
+          <div class="btn btn-primary" style="width:190px">开始第 4 章</div>
+          <div class="btn btn-secondary">商店 →</div>
+          <div class="btn btn-danger">销毁</div>
+          <div class="btn btn-act-mini">升品</div>
+        </div>
+        <div class="demo-row">
+          <div class="cur gold"><span class="ic">✦</span><span class="num">1,280</span></div>
+          <div class="cur echo"><span class="ic">◈</span><span class="num">320</span></div>
+          <div class="cur dust"><span class="ic">❋</span><span class="num">45</span></div>
+          <div class="chip env">☄ 反伤领域</div>
+          <div class="chip ok">✚ 荆棘回血激活</div>
+          <div class="chip warn">Boss 接近</div>
+        </div>
+        <div style="width:250px">
+          <div class="cap" style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="color:var(--hp);font-weight:800">❤ 生命</span><span class="num">86 / 100</span></div>
+          <div class="hpbar"><div class="fill" style="width:86%"></div></div>
+        </div>
+        <div class="demo-row">
+          <div class="card q1" style="width:104px;height:120px"><div class="qbar"></div>
+            <div style="text-align:center;margin-top:8px" class="qc1" >稀 有</div>
+            <div style="text-align:center;font-size:13px;font-weight:800;margin-top:4px">飞刀投射</div>
+            <div style="text-align:center;font-size:9.5px;color:var(--t2);margin-top:3px">伤害 38 · 3 发</div>
+            <div style="margin:auto 10px 8px;height:24px;border-radius:4px;background:#123528;border:1px solid var(--act);
+              color:var(--act);font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center">45 ✦</div>
+          </div>
+          <div class="card q2" style="width:104px;height:120px"><div class="qbar"></div>
+            <div style="text-align:center;margin-top:8px" class="qc2">史 诗</div>
+            <div style="text-align:center;font-size:13px;font-weight:800;margin-top:4px">火焰新星</div>
+            <div style="text-align:center;font-size:9.5px;color:var(--t2);margin-top:3px">爆发 96 · 半径 130</div>
+            <div style="margin:auto 10px 8px;height:24px;border-radius:4px;background:#123528;border:1px solid var(--act);
+              color:var(--act);font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center">90 ✦</div>
+          </div>
+          <div class="card q3" style="width:104px;height:120px"><div class="qbar"></div>
+            <div style="text-align:center;margin-top:8px" class="qc3">传 奇</div>
+            <div style="text-align:center;font-size:13px;font-weight:800;margin-top:4px">连锁闪电</div>
+            <div style="text-align:center;font-size:9.5px;color:var(--t2);margin-top:3px">链跳 ×6 · 麻痹</div>
+            <div style="margin:auto 10px 8px;height:24px;border-radius:4px;background:#1A2028;border:1px solid rgba(255,255,255,.14);
+              color:var(--t3);font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center">320 ✦</div>
+          </div>
+          <div class="card qh" style="width:104px;height:120px"><div class="qbar"></div>
+            <div style="text-align:center;margin-top:8px" class="qch">隐 藏</div>
+            <div style="text-align:center;font-size:13px;font-weight:800;margin-top:4px">死亡弹幕</div>
+            <div style="text-align:center;font-size:9.5px;color:var(--t2);margin-top:3px">三重融合限定</div>
+            <div style="margin:auto 10px 8px;height:24px;border-radius:4px;background:rgba(77,255,200,.08);border:1px solid var(--qh);
+              color:var(--qh);font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center">图鉴</div>
+          </div>
+        </div>
+        <div class="demo-row">
+          <div class="row active" style="width:300px;height:44px">
+            <div style="width:28px;height:28px;border-radius:5px;background:#3A2F14;border:1px solid var(--gold);
+              color:var(--gold);display:flex;align-items:center;justify-content:center;font-weight:800">3</div>
+            <div style="flex:1;font-size:12.5px;font-weight:700">沼泽深处 <span class="micro">7/20</span></div>
+            <span style="color:var(--gold);font-size:12px;font-weight:800">▶ 继续</span>
+          </div>
+          <div class="tabs" style="flex:1;padding:0"><div class="tab on">构筑师</div><div class="tab">效率</div><div class="tab">征服者</div></div>
+        </div>
+      </div>
+      <div class="note" style="margin-top:2px">组件规则:主按钮 44px 描边发光 · 卡牌 = 品质顶条 + 品质描边 · 列表行 26-52px 选中青描边 · 圆角 ≤8px · 对比度 ≥4.5:1</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

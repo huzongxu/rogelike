@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>回响深渊 · Echo Abyss</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0b0e14;
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      #game {
+        display: block;
+        /* 全屏画布:内容由代码按 560×996 设计分辨率等比缩放居中(手机/桌面同布局) */
+        background: #0b0e14;
+      }
+      canvas {
+        touch-action: none;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="game"></canvas>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

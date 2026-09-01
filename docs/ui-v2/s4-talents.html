@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .trow{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;
+    background:var(--panel-2);border:1px solid var(--line)}
+  .trow.done{border-color:rgba(77,255,200,.4);background:rgba(77,255,200,.05)}
+  .trow.locked{opacity:.48}
+  .trow .icn{width:36px;height:36px;flex:none;border-radius:6px;display:flex;align-items:center;justify-content:center;
+    font-size:16px;background:#1A2334;border:1px solid var(--line)}
+  .trow.done .icn{border-color:rgba(77,255,200,.5);box-shadow:0 0 10px rgba(77,255,200,.2)}
+  .trow .info{flex:1;display:flex;flex-direction:column;gap:2px}
+  .trow .nm{font-size:13.5px;font-weight:800;display:flex;align-items:center;gap:8px}
+  .trow .ds{font-size:10.5px;color:var(--t2)}
+  .trow .req{font-size:10px;color:var(--t3)}
+  .cost{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+  .cost .pt{font-size:12px;font-weight:800;color:var(--echo)}
+  .lvchip{font-size:9.5px;font-weight:800;padding:1px 7px;border-radius:8px;border:1px solid var(--line);color:var(--t2)}
+  .lvchip.on{color:var(--act);border-color:rgba(77,255,200,.5)}
+  .summary{margin:12px 16px 0;padding:10px 12px;display:flex;align-items:center;gap:10px;position:relative;z-index:5}
+  .summary .txt{flex:1;display:flex;flex-direction:column;gap:4px}
+  .track2{height:5px;border-radius:3px;background:#131A28;overflow:hidden}
+  .track2 i{display:block;height:100%;width:40%;background:linear-gradient(90deg,#3AA89A,#4DFFC8);
+    box-shadow:0 0 8px rgba(77,255,200,.6)}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="shafts"></div>
+  <div class="dust v" style="left:12%;top:30%"></div>
+  <div class="dust" style="left:84%;top:52%"></div>
+  <div class="dust v" style="left:20%;top:72%"></div>
+
+  <div class="topbar">
+    <div class="h1">天赋</div>
+    <div style="display:flex;gap:8px">
+      <div class="cur echo"><span class="ic">◈</span><span class="num">320</span></div>
+      <div class="cur" style="color:var(--act)"><span class="ic">✓</span>可用 120</div>
+    </div>
+  </div>
+
+  <div class="tabs" style="margin-top:4px">
+    <div class="tab on">构筑师</div>
+    <div class="tab">效率专家</div>
+    <div class="tab">征服者</div>
+  </div>
+
+  <div class="sec-title"><span>构筑师 · 层级 2 / 5</span><div class="rule"></div></div>
+
+  <div style="display:flex;flex-direction:column;gap:8px;margin:0 16px;position:relative;z-index:5">
+    <div class="trow done">
+      <div class="icn" style="color:var(--act)">⚙</div>
+      <div class="info">
+        <div class="nm">额外武装 <span class="lvchip on">Lv 1 / 1 ✓</span></div>
+        <div class="ds">开局多带 1 件装备</div>
+      </div>
+      <div class="cost"><span class="pt">3 ◈</span></div>
+    </div>
+    <div class="trow done">
+      <div class="icn" style="color:var(--act)">↯</div>
+      <div class="info">
+        <div class="nm">快速启动 <span class="lvchip on">Lv 1 / 1 ✓</span></div>
+        <div class="ds">首次升级经验 -20%</div>
+      </div>
+      <div class="cost"><span class="pt">2 ◈</span></div>
+    </div>
+    <div class="trow">
+      <div class="icn" style="color:var(--echo)">◎</div>
+      <div class="info">
+        <div class="nm">词缀鉴赏 <span class="lvchip">Lv 0 / 1</span></div>
+        <div class="ds">显示词缀隐藏数值区间</div>
+      </div>
+      <div class="cost"><span class="pt">5 ◈</span><div class="btn btn-act-mini" style="height:24px;font-size:11px">加点</div></div>
+    </div>
+    <div class="trow">
+      <div class="icn" style="color:var(--echo)">▣</div>
+      <div class="info">
+        <div class="nm">槽位扩展 Ⅰ <span class="lvchip">Lv 0 / 2</span></div>
+        <div class="ds">装备槽 +1(最多 +2)</div>
+      </div>
+      <div class="cost"><span class="pt">8 ◈</span><div class="btn btn-act-mini" style="height:24px;font-size:11px">加点</div></div>
+    </div>
+    <div class="trow locked">
+      <div class="icn">🔒</div>
+      <div class="info">
+        <div class="nm">定向搜索</div>
+        <div class="ds">升级三选一可锁定 1 种触发器类型</div>
+        <div class="req">需要:层级 3 解锁</div>
+      </div>
+      <div class="cost"><span class="pt">12 ◈</span></div>
+    </div>
+    <div class="trow locked">
+      <div class="icn">🔒</div>
+      <div class="info">
+        <div class="nm">完美蓝图</div>
+        <div class="ds">传奇装备生成时词缀数量 +1</div>
+        <div class="req">需要:层级 4 解锁</div>
+      </div>
+      <div class="cost"><span class="pt">20 ◈</span></div>
+    </div>
+  </div>
+
+  <div class="glass summary">
+    <div class="txt">
+      <div style="display:flex;justify-content:space-between;font-size:11px">
+        <span style="color:var(--t2)">三系进度</span><span class="num" style="color:var(--act)">12 / 30 节点</span>
+      </div>
+      <div class="track2"><i></i></div>
+      <div class="micro">≥6 节点解锁三重融合 · 点满后回响 1:1 转星尘</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="btn btn-primary" style="width:100%">开始新轮回</div>
+  </div>
+</div>
+</body>
+</html>

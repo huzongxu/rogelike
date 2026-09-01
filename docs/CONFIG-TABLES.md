@@ -1,0 +1,194 @@
+# 策划配置表 · CONFIG-TABLES
+
+> 配置文件:[`public/config/balance.json`](../public/config/balance.json) —— 改完保存,**浏览器刷新即生效**(开发服务器无需重启)。
+> 规则:删除任意段或字段 = 使用内置默认值;**数值越界/类型错误 = 该字段回退默认值**(不会钳到边界,不会崩游戏,控制台告警)。
+> 单测:`tests/balance-config.test.ts`;加载器:`src/platform/balance.ts`。微信小游戏端暂不支持外置配置,自动使用内置默认值。
+> 开发准则:策划数值一律遵循 [`DESIGN-VALUES-SPEC.md`](./DESIGN-VALUES-SPEC.md) —— 数值入数据层规范文件、每个数值带备注、单一事实源。
+
+## energy · 体力
+
+| 字段 | 默认 | 单位 | 说明 | 建议范围 |
+|---|---|---|---|---|
+| max | 20 | 点 | 体力上限 | 10~60 |
+| regenSeconds | 360 | 秒/点 | 自然恢复速度(360=6 分钟,10 小时回满) | 60~1800 |
+| adGain | 5 | 点/次 | 看广告补体力 | 2~10 |
+| adLimit | 5 | 次/日 | 每日广告回体力次数 | 3~10 |
+| diamondRefillCost | 10 | 钻 | 钻石直接回满价格 | 5~30 |
+| stageCosts | [5,5,6,6,7,7,8] | 点/关 | 主线第 1~7 关体力消耗(超出 7 关取最后一项) | 每项 0~20 |
+| endlessCost | 3 | 点 | 无限关消耗 | 1~6 |
+
+## economy · 经济/商店/钻石
+
+| 字段 | 默认 | 单位 | 说明 |
+|---|---|---|---|
+| diamondPerAd | 1 | 钻/次 | 每次看完广告得钻石 |
+| diamondAdDaily | 10 | 钻/日 | 每日广告产钻上限 |
+| diamondTicketCost | 2 | 钻/券 | 钻石直购扭蛋券 |
+| shopRefreshAdLimit | 5 | 次/日 | 商店广告刷新每日上限 |
+| basePrice.common/rare/epic/legendary/hidden | 15/30/60/120/200 | 金 | 品质基础价(卡价/销毁回收/进化费共用基数) |
+| slotExpandBase | 100 | 金 | 槽位扩展首价:第 n 次 = base × growth^n |
+| slotExpandGrowth | 2.3 | - | 槽位价格增长系数 |
+| slotCap | 8 | 个 | 场内装备槽总数硬上限(基础 4 + 天赋 + 购买) |
+
+> 商店卡价公式:`basePrice × (1 + 已购数×0.12) × (1 + 章节×0.03)`;刷新价:`(8 + 章节×2) × 1.6^本章已刷次数`(曲线系数已入规范表 `src/data/shop.ts`,见 DESIGN-VALUES-SPEC.md 目录;未接 balance.json 热调)。
+
+## battle · 战斗框架
+
+| 字段 | 默认 | 单位 | 说明 |
+|---|---|---|---|
+| chapterSeconds | 60 | 秒/章 | 每章限时(同步 waves.chapterLength) |
+| chaptersPerStage | 20 | 章/关 | 每关卡章节数 |
+| echoRetainRate | 0.4 | - | 回响跨天保留比例(0.4=40% 入永久池) |
+| monsterCountBase | 30 | 只 | 每章怪物数量曲线基数(第 1 章) |
+| monsterCountGrowth | 1.15 | -/章 | 数量曲线增长率 |
+| echoRewardBase | 10 | 点 | 关卡回响奖励基数:N = base × N^exp |
+| echoRewardExp | 1.5 | - | 回响奖励指数 |
+| stageUnlockProgress | 0.5 | - | 关卡解锁门槛:前一关打到 ceil(章节数×此值) 章即解锁下一关(0.5=第 10/20 章);通关整关始终解锁 |
+| clearRewardGrowth | 0.15 | -/关 | 通关奖励成长:奖励 ×(1 + growth×(解锁前最高关-1)),通关越多奖励越好 |
+
+## waves · 生成节奏
+
+| 字段 | 默认 | 单位 | 说明 |
+|---|---|---|---|
+| chapterLength | 60 | 秒/章 | 同 battle.chapterSeconds(两者改一处即同步,显式配置以本段为准) |
+| spawnBase | 0.9 | 秒/只 | 第 1 章生成间隔基数 |
+| spawnEarlyDecay | 0.9 | -/章 | 前 earlyChapters 章每章间隔乘 0.9(-10%) |
+| spawnEarlyChapters | 5 | 章 | 新手曲线章数 |
+| spawnLateDecay | 0.96 | -/章 | 之后每章 -4% |
+| spawnIntervalMin | 0.18 | 秒 | 间隔下限(防数值墙) |
+| spawnMultiFrom | 6 | 章 | 第 N 章起一波多只(1 + wave÷N) |
+
+> 实际间隔 = 曲线值 ÷ 关卡密度(spawnScale) ÷ 章型密度,再钳到 spawnIntervalMin。
+
+## chapterTypes · 章型差异化
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| eliteChapters | [5,10,15] | 精英章位置(第几章) |
+| treasureChapters | [7,14] | 宝箱章位置 |
+| eliteSpawnScale | 1.3 | 精英章生成密度倍率 |
+| eliteBurst | 1.5 | 精英章开局 burst 倍率 |
+| eliteIntelBias | 0.3 | 精英章敌情倾向概率 |
+| treasureSpawnScale | 0.5 | 宝箱章密度倍率(<1 稀疏) |
+| treasureGoldMix | 0.25 | 宝箱章金怪替换概率 |
+| defaultIntelBias | 0.45 | 普通/宝箱章敌情倾向概率 |
+
+> 章型倍率只作用于本章局部,不折入全局曲线(数值墙标定铁律,勿在配置里"补偿"全局难度)。
+
+## gacha · 扭蛋
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| cost / cost10 | 1 / 10 | 单抽/十连消耗券数 |
+| rates[].value/weight | 55/30/12/3 | 品质权重(common/rare/epic/legendary/hidden,按权重归一化) |
+| epicPity | 10 | 第 N 抽必出史诗及以上 |
+| legendaryPity | 50 | 第 N 抽必出传奇(≥ epicPity) |
+| epicPityLegendaryChance | 0.3 | 史诗保底触发时升格传奇概率 |
+| duplicateStardust.* | 2/5/15/40/60 | 重复装备转星尘(按品质) |
+
+## menuLayout · 主菜单布局
+
+> 规范表:[`src/data/layoutMenu.ts`](../src/data/layoutMenu.ts)(唯一事实源,每个字段带四要素备注) / 纯几何:`src/ui/menuLayout.ts` `menuLayoutPure()` / 单测:`tests/menu-layout.test.ts`。
+> **不想手填数字?** 本段的数值可在浏览器里拖出来:`npm run dev:lab` → [`LAYOUT-LAB.md`](./LAYOUT-LAB.md)(dev-only 布局台,实时预览 + 导出本段 JSON)。
+> **单位:设计 px** —— 560 宽设计空间内的像素(宽恒 560,高按屏比在 996~1246 之间伸展);`*Src*`/`*Num`/`*Den` 类字段的单位是**源图像素**。
+> 分两层:`origin` 是决定区块位置/尺寸的**锚点**(改一个数 = 整块移动或缩放);`deco` 是区块**内部**的装饰偏移与贴图尺寸档。
+> **派生几何不在本表**(关卡行高/行距、列表分布、九宫格角深、套组卡宽、入口宽、标题条绘制宽),它们由 `origin` 算出——直接写死会随屏高与贴图失真,这是本项目布局的硬约束。
+> 越界处理:字段值落在"范围"外 → 回退默认并告警(不钳到边界);`rowMinH > rowMaxH` 时两者自动互换。
+
+### menuLayout.origin · 锚点
+
+| 字段 | 默认 | 范围 | 说明 |
+|---|---|---|---|
+| pad | 14 | 0~40 | 全界面统一边距(与 `ui.pad` 同值,改此处即改主菜单边距) |
+| entryH / entryY | 36 / 100 | 20~60 / 40~160 | 场外入口钮高度 / 入口行顶缘 Y |
+| setH | 50 | 34~90 | 武器套组卡高(低于 34 两行文字必压底板凸饰) |
+| setDescH | 46 | 30~90 | 套组说明板高 |
+| setGapY | 1 | 0~20 | 说明板与套组卡间隙;套组底缘 = 屏高 − setDescH − setH − 本值 |
+| sectionH | 32 | 0~60 | 分区标题条高(缺贴图时自动归零,退回纯文字标签) |
+| sectionSrcW / sectionSrcH | 512 / 73 | 1~2048 | 标题条源图宽高(条带端柱只能整图等比绘制 → 绘制宽由本比例反推) |
+| stageHdrY | 140 | 100~300 | 有标题条时"主线关卡"标题带顶缘 Y |
+| listYNoSection | 152 | 100~300 | 无标题条时列表顶缘 Y |
+| hdrBand | 4 | 0~20 | 标题条底缘 → 列表顶缘呼吸缝 |
+| setHdrGap | 13 | 0~40 | 套组标题带相对套组卡顶缘的上抬量 |
+| endlessGapSet / endlessGapSet2 | 29 / 13 | 0~80 | 有标题条时无限关钮与套组区的间隙基值 / 标题带占位(原式分别写死,故保持两个独立旋钮) |
+| endlessGapFlat | 34 | 0~80 | 无标题条时无限关钮与套组区的间隙 |
+| endlessW / endlessH | 260 / 48 | 120~560 / 30~80 | 无限关主按钮尺寸(水平居中) |
+| endlessListGap | 12 | 0~40 | 列表可用下界 = 主按钮顶缘 − 本值 |
+| rowMinH / rowMaxH / rowMaxGap | 72 / 84 / 30 | 40~120 / 40~160 / 0~60 | 关卡行展开三参数,交给 `spreadRows`(行越多越矮,富余落列表尾留白) |
+| phantomAnchor | 180 | 60~560 | 幻影榜筹码右锚宽(x = 屏宽 − 本值,w = 本值 − pad;热区有意宽于可见筹码) |
+| phantomY / phantomH | 64 / 24 | 20~160 / 14~60 | 幻影榜筹码顶缘 Y / 高(与货币行同基线) |
+| entryGap | 8 | 0~20 | 入口钮横向间距 |
+| entryCount | 6 | 1~12 | 入口钮个数(等宽 = (屏宽 − 2pad − entryGap×(本值−1)) / 本值) |
+| setGap | 8 | 0~20 | 套组卡横向间距 |
+| rowPlateF | 0.35 | 0.05~0.5 | 行底板九宫格角深系数(源图短边占比;行内容内缩量随之变) |
+| setBandNum / setBandDen | 20 / 124 | 0~200 / 1~512 | 套组卡贴边装饰带厚 = setH ×(本分子/本分母),文字落在带间净空 |
+| noteBandNum / noteBandDen | 8 / 45 | 0~200 / 1~512 | 说明板装饰带厚同口径(menu_note_plate 源图上下各 8 行、总高 45) |
+
+### menuLayout.deco · 装饰内缩与绘制档
+
+> 全部字段取值域 **−200~200**(设计 px;`noteCap*` 为源图行),越界回退默认。逐字段四要素备注见规范表源码。
+
+| 区块 | 字段 = 默认 |
+|---|---|
+| 标题横幅 | `banInset`=6 `banY`=6 `banH`=58 · 纹章 `crestOffX`=2 `crestOffY`=16 `crestW`=26 `crestH`=26 · 标题 `titleOffX`=34 `titleOffY`=36 · 赛季行 `seasonInset`=6 `seasonOffY`=24 · 体力/钻石行 `row2OffY`=47 `energyGap`=12 · 钻石图标 `gemOffX`=18 `gemOffY`=13 `gemW`=14 `gemH`=16 |
+| 货币条 | 底板 `stripY`=66 `stripH`=26 · 筹码 `chipH`=22 `chipX1`=6 `chipX2`=90 `chipX3`=188 `chipIconW`=15 `chipIconGap`=4 `chipProbePad`=20 `chipSlide`=5 `chipInnerGap`=4 `chipTailPad`=11 · 幻影筹码 `phChipProbeW`=40 `phChipPadAdd`=8 `phChipPadMin`=14 `phRightGap`=8 |
+| 关卡行 | 基线 `rowC1Off`=3 `rowC2Gap`=19 · 列 `rowTxOff`=54 `rowRightInset`=26 `descClipPad`=10 · 补星钮 `rowMakeupReserve`=66 `makeupW`=56 `makeupH`=26 `makeupRightGap`=2 · 徽章 `badgeOffX`=26 `badgeSize`=42 `badgeR`=18 `badgeStroke`=2 `badgeTextOffY`=6 · 通关勾 `checkOffX`=4 `checkOffY`=11 `checkSize`=13 `checkAdvance`=16 · 星数 `starSize`=13 `starGap`=2 `starOffX`=4 `starLift`=2 |
+| 分区标题 | `sectionTextPad`=30(标题条整图宽 − 本值)/ `listHintFallbackY`=144(缺条时文字基线 Y) |
+| 红点 | `dotR`=5 `dotInsetX`=8 `dotInsetY`=7(圆心相对宿主钮右上角) |
+| 套组卡 | 图标 `setIconOffX`=6 `setIconOffY`=9 `setIconW`=18 `setIconH`=18 · 选中态 `setFramePad`=2 `setBadgeInsetX`=16 `setBadgeOffY`=6 `setBadgeSize`=18 · 内容列 `setColPadL`=28 `setColPadR`=34 `setRow1Off`=12 `setRow2Gap`=15 · 赛季标记 `tagPad`=4 |
+| 说明板 | `noteCapNum`=20 `noteCapDen`=45(带厚下限,取 `noteBand` 与本换算的较大值)· `noteTopOff`=1 `noteInsetX`=12 `noteSlide`=6 `noteRow1Off`=12 `noteRow2Gap`=14 |
+
+> 只动 `deco` 不会移动任何区块,只改区块内部的对齐/避让;想让整块挪位置改 `origin`。缺贴图时相关尺寸按原"纯代码形状"回退口径,布局与接入贴图前逐像素一致。
+
+## menuSkin · 主菜单皮肤
+
+> 规范表:[`src/data/menuSkin.ts`](../src/data/menuSkin.ts)(唯一事实源,带四要素备注)/ 几何消费:`src/ui/menuLayout.ts` `menuLayoutPure()`(insets 加性增量)/ 绘制消费:`src/game.ts` `drawMenu()`(换图/显隐)/ 单测:`tests/menu-skin.test.ts` + `tests/lab-skin.test.ts`。
+> **不想手填数字?** `npm run dev:lab` 的「结构树 · 皮肤」面板直接点选操作:图层显隐、换图、四边间距,实时预览并导出本段 JSON(见 [`LAYOUT-LAB.md`](./LAYOUT-LAB.md))。
+> **整段缺省或 `{}` = 零画面变化**(本项目铁律);非法键/越界值 → 回退默认并告警,口径同 menuLayout。insets 每边 −100~100(取整)。
+> 拓扑固定:7 面板 13 层(标题横幅/货币条/筹码/分区标题条/关卡行/套组卡/说明板,除货币条无文字层外各图+文两层)。本段只能操作既有图层,不新增。
+
+### menuSkin.remap · 换图映射(资产键 → 资产键)
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| `<源键>: <目标键>` | `{}` | 运行时把源键的贴图换成目标键绘制,例 `"menu_note_plate": "menu_chip_plate"`(说明板改画筹码底板)。两键都须在资产清单内;恒等映射(`a→a`)被忽略。目标键自身被 `hidden` 时按缺图回退形状 |
+
+### menuSkin.insets · 图文四边间距(面板级加性增量)
+
+> 单位:设计 px。**加性**叠在 `deco` 派生的基准值上 —— `deco` 仍是唯一基准事实源,本段只表达"这张图/这段文字相对基准再挪多少",不移动任何区块、不碰命中热区。
+
+| 面板 | l(左)| r(右)| t / b(上 / 下)|
+|---|---|---|---|
+| title | 纹章、标题文字右移 | 赛季行左移 | 标题/赛季行/体力钻石行整体上下移(`t−b`)|
+| strip | 全部筹码右移 | 幻影筹码右锚左移 | 筹码行整体上下移 |
+| chip | 筹码图文内距加宽 | 筹码尾部留白加宽 | 筹码文字基线区收窄(`chipBase` 按 `chipY+t, chipH−t−b` 重算)|
+| section | 条内文字左右内缩加深 | 同左(两侧合并)| 条文竖直带收窄(`sectionTextBand`)|
+| row | 行文字、头像徽章右移 | 行右列左移(避让加深)| 行内文字竖直偏移(`rowC1Off += b−t`)|
+| setCard | 内容列、套组图标右移 | 内容列右内缩加深 | 卡内行基线上下移 |
+| note | 板内文字右移、最大宽收窄 | 最大宽收窄 | 板内行基线上下移 |
+
+### menuSkin.hidden / textHidden / layers
+
+| 字段 | 默认 | 说明 |
+|---|---|---|
+| `hidden` | `[]` | 资产键数组:整张图不绘制,走缺图契约(回退纯代码形状,与贴图接入前逐像素一致)。`isReady()` 对被隐藏键返回 false |
+| `textHidden` | `[]` | 面板 id 数组(`title`/`strip`/`chip`/`section`/`row`/`setCard`/`note`):只隐该面板文字,图与热区不动 |
+| `layers` | `{}` | 图层自定义命名(`"row.text": {"name": "…"}`),布局台展示用;运行时不消费,仅透传保存 |
+
+> 换图两种通道的分工:`remap` 写进本段**真生效**(浏览器+微信同源);布局台的「📁 本地文件」只是 dev 预览(刷新即失,绝不进导出)。
+
+## 暂未纳入(仍是代码常量,后续按需迁移)
+
+> 品质体系数值已按开发准则抽离至规范表 [`src/data/quality.ts`](../src/data/quality.ts)(全项目品质数值唯一出处),不在本清单;其中基础价/扭蛋概率/重复补偿等字段已有本文件的运行期覆盖项,规范表中的值为内置默认。
+>
+> 战斗侧数值(敌人成长、Boss 标定、玩家白值、场地实体、环境词缀参数)已抽离至规范表 `src/data/enemies.ts` / `combat.ts` / `field.ts` / `envAffixes.ts`,见 [DESIGN-VALUES-SPEC.md](./DESIGN-VALUES-SPEC.md) 目录;这些表目前是纯常量表,**未接本文件的 balance.json 热调覆盖**,改数走代码流程。
+
+- 词缀/天赋/套组/委托区域等结构型数据:数值已按准则抽离入表(`SET_BONUSES`/`COMBO_VALUES`/`TALENT_VALUES`/`COMMISSION_DECAY`/`EQUIPMENT_LEVEL_GROWTH`,见 [DESIGN-VALUES-SPEC.md](./DESIGN-VALUES-SPEC.md) 目录),仅剩纯结构性定义(接口形状),无数值缺口
+
+## 策划操作指引
+
+1. 打开 `public/config/balance.json`,按上表改字段值(保持 JSON 格式:键带英文双引号,数组/对象结构不变)。
+2. 保存后刷新游戏页面(F5)即生效;控制台会打印 `[balance] 策划配置已应用: energy, economy, ...`。
+3. 若某字段写错(越界/类型错误),控制台 `[balance] 部分配置字段非法已回退` 会列出被忽略的字段,该字段用默认值,其余字段正常生效。
+4. 想恢复某段默认:删除该段即可。
+5. 数值验证:`npm run test`(内置平衡模拟 `scripts/balance-sim.ts` 会用当前生效曲线跑长局)。

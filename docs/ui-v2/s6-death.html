@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .death-bg{position:absolute;inset:0;z-index:1;
+    background:
+      radial-gradient(70% 34% at 50% 18%, rgba(255,45,70,.20), transparent 70%),
+      radial-gradient(120% 55% at 50% -8%, rgba(200,60,90,.10), transparent 62%),
+      linear-gradient(180deg,#120A10 0%, #0B0E14 46%, #0A0D13 100%);}
+  .dtitle{margin-top:96px;text-align:center;position:relative;z-index:5}
+  .dtitle .cn{font-size:54px;font-weight:900;letter-spacing:.28em;text-indent:.28em;color:#FF4D5E;
+    text-shadow:0 0 26px rgba(255,77,94,.6), 0 2px 4px rgba(0,0,0,.8)}
+  .dtitle .en{margin-top:6px;font-size:11px;letter-spacing:.5em;text-indent:.5em;color:rgba(255,138,150,.55)}
+  .dsub{margin-top:14px;text-align:center;font-size:12px;color:var(--t2);position:relative;z-index:5}
+  .dsub b{color:var(--t1)}
+  .stats{margin:34px 40px 0;padding:6px 16px;position:relative;z-index:5}
+  .srow{display:flex;align-items:center;justify-content:space-between;height:46px;border-bottom:1px solid rgba(126,150,200,.10)}
+  .srow:last-child{border-bottom:0}
+  .srow .k{font-size:13px;color:var(--t2)}
+  .srow .v{font-size:15px;font-weight:800}
+  .srow.hero .v{color:var(--echo);font-size:18px;text-shadow:0 0 12px rgba(200,182,255,.45)}
+  .detail{margin:10px 40px 0;text-align:center;font-size:10px;color:var(--t3);position:relative;z-index:5}
+  .btns{margin:26px 40px 0;display:flex;flex-direction:column;gap:10px;position:relative;z-index:5}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="death-bg"></div>
+  <div class="dust v" style="left:16%;top:34%"></div>
+  <div class="dust" style="left:80%;top:26%"></div>
+  <div class="dust v" style="left:70%;top:58%"></div>
+
+  <div class="dtitle">
+    <div class="cn">阵亡</div>
+    <div class="en">YOU DIED</div>
+  </div>
+  <div class="dsub">第 3 关 · 章节 <b>9 / 20</b> &nbsp;·&nbsp; 生存 <b>8 分 24 秒</b> &nbsp;·&nbsp; 波次 <b>8</b></div>
+
+  <div class="glass stats">
+    <div class="srow hero"><span class="k">获得回响</span><span class="v">◈ 48</span></div>
+    <div class="srow"><span class="k">击杀</span><span class="v num">1,349</span></div>
+    <div class="srow"><span class="k">图鉴新词缀</span><span class="v" style="color:var(--dust)">+3</span></div>
+    <div class="srow"><span class="k">委托产出(离线)</span><span class="v" style="color:var(--gold)">✦ 62 · ❋ 4</span></div>
+  </div>
+
+  <div class="detail">回响 = 基础 1 + 生存 22 + 击杀 19,难度系数 ×1.2 · 今日池保留 60%</div>
+
+  <div class="btns">
+    <div class="btn btn-primary" style="width:100%">重开本章 &nbsp;R</div>
+    <div class="btn btn-secondary" style="width:100%;height:40px">天赋树 &nbsp;T</div>
+    <div class="btn btn-secondary" style="width:100%;height:36px;opacity:.8">返回主菜单</div>
+  </div>
+</div>
+</body>
+</html>

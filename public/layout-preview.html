@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>素材摆放预览 · 回响深渊</title>
+<style>
+  body { margin:0; background:#0b0e14; color:#cfd3ff; font-family:"Segoe UI",system-ui,sans-serif; display:flex; flex-direction:column; align-items:center; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; color:#e8d48b; }
+  p.sub { margin:0 0 16px; font-size:13px; opacity:.75; }
+  .toggle { margin-bottom:16px; display:flex; gap:8px; }
+  .toggle button { background:#2a2350; color:#cfd3ff; border:1px solid #5a4fa8; border-radius:8px; padding:6px 16px; cursor:pointer; font-size:13px; }
+  .toggle button.on { background:#5a4fa8; color:#fff; }
+  .wrap { display:flex; gap:24px; flex-wrap:wrap; justify-content:center; }
+  .panel { text-align:center; }
+  .panel img { height:88vh; border-radius:8px; box-shadow:0 0 40px rgba(90,60,200,.35); }
+  .panel .cap { margin-top:8px; font-size:12px; opacity:.7; }
+</style>
+</head>
+<body>
+  <h1>素材摆放预览 — 按主页布局</h1>
+  <p class="sub">左:素材单独摆放(透明底) · 右:叠加主页星空背景后的效果</p>
+  <div class="toggle">
+    <button id="bBoth" class="on">并排对比</button>
+    <button id="bBg">仅背景效果</button>
+    <button id="bAlpha">仅素材布局</button>
+  </div>
+  <div class="wrap">
+    <div class="panel" id="pAlpha"><img src="/layout-composed-alpha.png" alt="素材布局" /><div class="cap">素材摆放(透明底)</div></div>
+    <div class="panel" id="pBg"><img src="/layout-composed-bg.png" alt="背景效果" /><div class="cap">叠加背景效果</div></div>
+  </div>
+<script>
+  const bBg=document.getElementById('bBg'),bAlpha=document.getElementById('bAlpha'),bBoth=document.getElementById('bBoth');
+  const pBg=document.getElementById('pBg'),pAlpha=document.getElementById('pAlpha');
+  bBg.onclick=()=>{pBg.style.display='';pAlpha.style.display='none';bBg.classList.add('on');bAlpha.classList.remove('on');bBoth.classList.remove('on');};
+  bAlpha.onclick=()=>{pAlpha.style.display='';pBg.style.display='none';bAlpha.classList.add('on');bBg.classList.remove('on');bBoth.classList.remove('on');};
+  bBoth.onclick=()=>{pBg.style.display='';pAlpha.style.display='';bBoth.classList.add('on');bBg.classList.remove('on');bAlpha.classList.remove('on');};
+</script>
+</body>
+</html>

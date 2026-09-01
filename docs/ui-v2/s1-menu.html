@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .menu-wrap{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column}
+  .title-block{display:flex;justify-content:space-between;align-items:flex-start;padding:18px 16px 6px}
+  .side-col{display:flex;flex-direction:column;gap:8px}
+  .season{font-size:11px;color:var(--echo);letter-spacing:.14em;margin-top:5px}
+  .stages{flex:1;margin:6px 16px 0;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+  .stage .no{width:36px;height:36px;border-radius:6px;flex:none;display:flex;align-items:center;justify-content:center;
+    font-size:15px;font-weight:800;background:#1A2334;border:1px solid var(--line);color:var(--t2)}
+  .stage .info{flex:1;display:flex;flex-direction:column;gap:2px}
+  .stage .nm{font-size:14px;font-weight:700}
+  .stage .sub{font-size:10.5px;color:var(--t3)}
+  .stage .st{font-size:12px;font-weight:800;display:flex;align-items:center;gap:6px}
+  .st-clear{color:var(--act)} .st-go{color:var(--gold)} .st-lock{color:var(--t3)}
+  .stars{color:var(--gold);font-size:11px;letter-spacing:.1em}
+  .stage.current{background:rgba(255,215,106,.06);border-color:rgba(255,215,106,.45);
+    box-shadow:0 0 16px rgba(255,215,106,.10)}
+  .stage.current .no{background:#3A2F14;border-color:var(--gold);color:var(--gold);
+    box-shadow:0 0 10px rgba(255,215,106,.3)}
+  .prog{margin:10px 16px 0}
+  .prog .cap{display:flex;justify-content:space-between;margin-bottom:5px}
+  .track{height:6px;border-radius:3px;background:#131A28;border:1px solid var(--line);overflow:hidden;display:flex}
+  .track i{display:block;height:100%}
+  .respawn-hint{margin:8px 16px 0;font-size:10.5px;color:var(--t3);text-align:center}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="shafts"></div>
+  <div class="dust" style="left:8%;top:22%"></div>
+  <div class="dust v" style="left:86%;top:14%"></div>
+  <div class="dust" style="left:72%;top:64%"></div>
+  <div class="dust v" style="left:14%;top:78%"></div>
+
+  <div class="menu-wrap">
+    <div class="title-block">
+      <div>
+        <div class="h1">回响深渊</div>
+        <div class="season">SEASON Ⅰ · 赛季第 3 天</div>
+      </div>
+      <div class="side-col">
+        <div class="side-btn hl"><span class="ic" style="color:#F5A6C8">◉</span>扭蛋</div>
+        <div class="side-btn"><span class="ic" style="color:var(--echo)">✦</span>天赋</div>
+        <div class="side-btn"><span class="ic" style="color:var(--dust)">▤</span>通行证</div>
+      </div>
+    </div>
+
+    <div class="curbar">
+      <div class="cur gold"><span class="ic">✦</span><span class="num">1,280</span></div>
+      <div class="cur echo"><span class="ic">◈</span><span class="num">320</span></div>
+      <div class="cur dust"><span class="ic">❋</span><span class="num">45</span></div>
+      <div class="cur tket"><span class="ic">🎫</span><span class="num">23</span></div>
+    </div>
+
+    <div class="sec-title"><span>主线关卡 · 每日钻研一关</span><div class="rule"></div></div>
+
+    <div class="stages">
+      <div class="row stage">
+        <div class="no">1</div>
+        <div class="info"><div class="nm">初入尸潮</div><div class="sub">20 章 · 通关回响 +10</div></div>
+        <div class="st st-clear">✓ <span class="stars">★★★</span></div>
+      </div>
+      <div class="row stage">
+        <div class="no">2</div>
+        <div class="info"><div class="nm">荒野求生</div><div class="sub">20 章 · 通关回响 +28</div></div>
+        <div class="st st-clear">✓ <span class="stars">★★☆</span></div>
+      </div>
+      <div class="row stage current">
+        <div class="no">3</div>
+        <div class="info"><div class="nm">沼泽深处</div><div class="sub">20 章 · 进度 7/20 · 通关回响 +52</div></div>
+        <div class="st st-go">▶ 继续</div>
+      </div>
+      <div class="row stage locked">
+        <div class="no">4</div>
+        <div class="info"><div class="nm">熔岩裂谷</div><div class="sub">第 4 天解锁</div></div>
+        <div class="st st-lock">🔒</div>
+      </div>
+      <div class="row stage locked">
+        <div class="no">5</div>
+        <div class="info"><div class="nm">虚空深渊</div><div class="sub">第 5 天解锁</div></div>
+        <div class="st st-lock">🔒</div>
+      </div>
+      <div class="row stage locked">
+        <div class="no">6</div>
+        <div class="info"><div class="nm">星尘圣殿</div><div class="sub">第 6 天解锁</div></div>
+        <div class="st st-lock">🔒</div>
+      </div>
+      <div class="row stage locked">
+        <div class="no">7</div>
+        <div class="info"><div class="nm">深渊回响</div><div class="sub">第 7 天解锁 · Boss「回声之王」</div></div>
+        <div class="st st-lock">🔒</div>
+      </div>
+    </div>
+
+    <div class="prog">
+      <div class="cap"><span style="color:var(--echo)">今日回响池</span><span class="num" style="color:var(--echo)">◈ 96 / 150</span></div>
+      <div class="track"><i style="width:64%;background:linear-gradient(90deg,#7A6BC8,#C8B6FF);box-shadow:0 0 8px rgba(200,182,255,.7)"></i></div>
+      <div class="respawn-hint">次日保留 40% 进入跨天池 · 场内金币与卡牌清空</div>
+    </div>
+
+    <div class="footer">
+      <div class="btn btn-primary" style="width:100%">♾&nbsp;&nbsp;无限关 · 爽模式</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .cards{display:flex;gap:10px;margin:0 16px;position:relative;z-index:5}
+  .pcard{flex:1;height:196px;padding:0 0 8px;align-items:center;text-align:center}
+  .pcard .qname{font-size:10px;font-weight:800;letter-spacing:.2em;margin-top:7px}
+  .pcard .icon{width:44px;height:44px;margin:7px auto 5px;display:flex;align-items:center;justify-content:center;
+    border-radius:50%;background:rgba(255,255,255,.04);border:1px solid var(--line)}
+  .pcard .nm{font-size:14px;font-weight:800}
+  .pcard .kind{margin:4px auto 3px}
+  .pcard .stats{font-size:10.5px;color:var(--t2);line-height:1.5;padding:0 8px}
+  .pcard .buy{margin:auto 10px 0;height:30px;border-radius:4px;display:flex;align-items:center;justify-content:center;
+    gap:4px;font-size:13px;font-weight:800;background:#123528;border:1px solid var(--act);color:var(--act);
+    box-shadow:0 0 10px rgba(77,255,200,.15)}
+  .pcard .buy.no{background:#1A2028;border-color:rgba(255,255,255,.14);color:var(--t3);box-shadow:none}
+  .kind-chip{display:inline-flex;height:17px;padding:0 7px;border-radius:9px;align-items:center;
+    font-size:9.5px;font-weight:700;border:1px solid var(--line);color:var(--t2);background:rgba(255,255,255,.03)}
+  .slots{display:flex;gap:7px;margin:8px 16px 0;position:relative;z-index:5}
+  .slot{flex:1;height:38px;border-radius:5px;display:flex;align-items:center;justify-content:center;
+    font-size:10px;font-weight:800}
+  .slot.f{border:1px solid}
+  .slot.e{border:1px dashed rgba(126,150,200,.3);color:var(--t3);font-weight:400;font-size:9px}
+  .merge-row{display:flex;align-items:center;gap:10px;margin:0 16px;padding:10px 12px;position:relative;z-index:5}
+  .mini{width:34px;height:42px;border-radius:4px;background:var(--panel-2);border:1px solid;display:flex;
+    flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:8px;font-weight:700}
+  .arrow{color:var(--t3);font-size:15px}
+  .up-out{width:40px;height:50px;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:2px;font-size:9px;font-weight:800;background:rgba(192,108,255,.10);border:1px solid var(--q2);
+    box-shadow:0 0 14px rgba(192,108,255,.25)}
+  .mg-info{flex:1;display:flex;flex-direction:column;gap:3px}
+  .sel-row{display:flex;align-items:center;gap:10px;margin:8px 16px 0;padding:9px 12px;position:relative;z-index:5}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="shafts"></div>
+
+  <div class="topbar">
+    <div>
+      <div class="h1">章间商店</div>
+      <div class="cap" style="margin-top:3px">第 3 关 · 沼泽深处 · 第 3 章结束</div>
+    </div>
+    <div class="cur gold" style="height:30px;font-size:14px"><span class="ic">✦</span><span class="num">214</span></div>
+  </div>
+
+  <div class="sec-title"><span>卡牌 · 触发器 / 效果 / 修饰器</span><div class="rule"></div></div>
+
+  <div class="cards">
+    <div class="card q1 pcard">
+      <div class="qbar"></div>
+      <div class="qname qc1">稀有</div>
+      <div class="icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#4AA3FF" stroke-width="1.6">
+        <path d="M4 20 L14 10 M14 10 L18 4 L20 6 L14 10 M9 15 l-2 2 M6 12 l6 6" stroke-linejoin="round"/>
+        <circle cx="17" cy="17" r="1" fill="#4AA3FF" stroke="none"/></svg></div>
+      <div class="nm">飞刀投射</div>
+      <div class="kind"><span class="kind-chip">效果卡</span></div>
+      <div class="stats">伤害 38 · 3 发扇形<br>射程 640</div>
+      <div class="buy">45 ✦</div>
+    </div>
+    <div class="card q2 pcard">
+      <div class="qbar"></div>
+      <div class="qname qc2">史诗</div>
+      <div class="icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#C06CFF" stroke-width="1.6">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2 v3 M12 19 v3 M2 12 h3 M19 12 h3 M5 5 l2.2 2.2 M16.8 16.8 L19 19 M19 5 l-2.2 2.2 M7.2 16.8 L5 19"/></svg></div>
+      <div class="nm">火焰新星</div>
+      <div class="kind"><span class="kind-chip">效果卡</span></div>
+      <div class="stats">范围爆发 96 · 半径 130<br>点燃 2s</div>
+      <div class="buy">90 ✦</div>
+    </div>
+    <div class="card q3 pcard">
+      <div class="qbar"></div>
+      <div class="qname qc3">传奇</div>
+      <div class="icon"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FF9D2E" stroke-width="1.6">
+        <path d="M13 2 L6 13 h5 L9 22 L19 9 h-5 L16 2 Z" stroke-linejoin="round"/></svg></div>
+      <div class="nm">连锁闪电</div>
+      <div class="kind"><span class="kind-chip">效果卡</span></div>
+      <div class="stats">链跳 ×6 · 衰减 15%<br>麻痹 0.4s</div>
+      <div class="buy no">320 ✦</div>
+    </div>
+  </div>
+
+  <div class="sec-title"><span>武器槽位 · 点选管理</span><div class="rule"></div></div>
+
+  <div class="slots">
+    <div class="slot f" style="border-color:var(--q1);color:var(--q1);background:rgba(74,163,255,.08)">飞刀</div>
+    <div class="slot f" style="border-color:var(--q2);color:var(--q2);background:rgba(192,108,255,.08)">新星</div>
+    <div class="slot f" style="border-color:var(--q0);color:var(--q0);background:rgba(200,205,214,.06)">护盾</div>
+    <div class="slot e">空</div>
+    <div class="slot e">空</div>
+    <div class="slot e">空</div>
+  </div>
+
+  <div class="glass sel-row">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4AA3FF" stroke-width="1.8">
+      <path d="M4 20 L14 10 M14 10 L18 4 L20 6 L14 10" stroke-linejoin="round"/></svg>
+    <div style="flex:1">
+      <div style="font-size:12.5px;font-weight:800" class="qc1">飞刀投射 <span style="font-weight:400;color:var(--t3)">· 稀有</span></div>
+      <div class="micro">销毁返还 50% 价格(22 ✦)</div>
+    </div>
+    <div class="btn btn-danger">销毁</div>
+  </div>
+
+  <div class="sec-title"><span>三合一升品 · 同名同品质 ×3</span><div class="rule"></div></div>
+
+  <div class="glass merge-row">
+    <div class="mini" style="border-color:rgba(200,205,214,.5);color:var(--q0)">飞刀<span style="color:var(--t3)">普通</span></div>
+    <div class="mini" style="border-color:rgba(200,205,214,.5);color:var(--q0)">飞刀<span style="color:var(--t3)">普通</span></div>
+    <div class="mini" style="border-color:rgba(200,205,214,.5);color:var(--q0)">飞刀<span style="color:var(--t3)">普通</span></div>
+    <div class="arrow">→</div>
+    <div class="up-out">飞刀<span class="qc2">稀有</span><span style="color:var(--t3)">+25%</span></div>
+    <div class="mg-info">
+      <div style="font-size:12px;font-weight:800">升品后数值 +25%</div>
+      <div class="micro">传奇 ×3 → 隐藏卡(彩虹)</div>
+    </div>
+    <div class="btn btn-act-mini">升品</div>
+  </div>
+
+  <div class="cap" style="margin:10px 16px 0;text-align:center;position:relative;z-index:5">
+    价格 = 基础价 × (1 + 已购×0.12) × (1 + 章节×0.03) · 商店 40% 概率刷出已有卡同款
+  </div>
+
+  <div class="footer">
+    <div class="btn btn-primary" style="width:100%">▶&nbsp;&nbsp;开始第 4 章</div>
+  </div>
+</div>
+</body>
+</html>

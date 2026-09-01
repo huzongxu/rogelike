@@ -1,0 +1,185 @@
+/**
+ * 美术资源清单(key → assets/ 下文件名)。
+ * 命名与 `docs/ART-REQUIREMENTS.md` 一致;把图片按此命名丢进
+ * public/assets/(微信 minigame/assets/)即自动生效,缺图自动回退代码绘制。
+ */
+
+export const ASSET_MANIFEST: Record<string, string> = {
+  /* ---------- 背景 ---------- */
+  bg_menu: "bg_menu.png",
+  bg_outside: "bg_outside.png",
+  bg_shop: "bg_shop.png",
+  bg_stage_1: "bg_stage_1.png",
+  bg_stage_2: "bg_stage_2.png",
+  bg_stage_3: "bg_stage_3.png",
+  bg_stage_4: "bg_stage_4.png",
+  bg_stage_5: "bg_stage_5.png",
+  bg_stage_6: "bg_stage_6.png",
+  bg_stage_7: "bg_stage_7.png",
+
+  /* ---------- 货币 ---------- */
+  icon_gold: "icon_gold.png",
+  icon_echo: "icon_echo.png",
+  icon_stardust: "icon_stardust.png",
+  icon_ticket: "icon_ticket.png",
+  icon_fragment: "icon_fragment.png",
+
+  /* ---------- 品质卡框(商店卡/装备栏/扭蛋共用) ---------- */
+  frame_common: "frame_common.png",
+  frame_rare: "frame_rare.png",
+  frame_epic: "frame_epic.png",
+  frame_legendary: "frame_legendary.png",
+  frame_hidden: "frame_hidden.png",
+  card_soldout: "card_soldout.png",
+
+  /* ---------- 套组图标 ---------- */
+  icon_set_thorn: "icon_set_thorn.png",
+  icon_set_barrage: "icon_set_barrage.png",
+  icon_set_ember: "icon_set_ember.png",
+  icon_set_frost: "icon_set_frost.png",
+  icon_set_magma: "icon_set_magma.png",
+  icon_set_phantom: "icon_set_phantom.png",
+
+  /* ---------- 装备效果图标(键 = icon_fx_<EffectType>,战斗装备卡用) ---------- */
+  icon_fx_knife: "icon_fx_knife.png",
+  icon_fx_nova: "icon_fx_nova.png",
+  icon_fx_skeleton: "icon_fx_skeleton.png",
+  icon_fx_cloud: "icon_fx_cloud.png",
+  icon_fx_ray: "icon_fx_ray.png",
+  icon_fx_chain: "icon_fx_chain.png",
+  icon_fx_shield: "icon_fx_shield.png",
+  icon_fx_drain: "icon_fx_drain.png",
+  icon_fx_icelance: "icon_fx_icelance.png",
+  icon_fx_frost_ring: "icon_fx_frost_ring.png",
+  icon_fx_meteor: "icon_fx_meteor.png",
+  icon_fx_magma_trail: "icon_fx_magma_trail.png",
+  icon_fx_spirit_wolves: "icon_fx_spirit_wolves.png",
+  icon_fx_haunt_crown: "icon_fx_haunt_crown.png",
+
+  /* ---------- 头像框(预留:无头像界面,后续接) ---------- */
+  avatar_common: "avatar_common.png",
+  avatar_rare: "avatar_rare.png",
+  avatar_epic: "avatar_epic.png",
+  avatar_legendary: "avatar_legendary.png",
+  avatar_hidden: "avatar_hidden.png",
+
+  /* ---------- 玩家 ---------- */
+  player: "player.png",
+
+  /* ---------- 敌人(14 种,单帧;含金怪) ---------- */
+  enemy_chaser: "enemy_chaser.png",
+  enemy_swift: "enemy_swift.png",
+  enemy_tank: "enemy_tank.png",
+  enemy_elite: "enemy_elite.png",
+  enemy_reflector: "enemy_reflector.png",
+  enemy_splitter: "enemy_splitter.png",
+  enemy_hider: "enemy_hider.png",
+  enemy_devourer: "enemy_devourer.png",
+  enemy_shieldguard: "enemy_shieldguard.png",
+  enemy_summoner: "enemy_summoner.png",
+  enemy_splitling: "enemy_splitling.png",
+  enemy_god: "enemy_god.png",
+  enemy_boss: "enemy_boss.png",
+  enemy_goldkind: "enemy_goldkind.png",
+
+  /* ---------- UI:按钮 / 横幅 / 面板 / 页签 ---------- */
+  btn_close: "btn_close.png",
+  btn_back: "btn_back.png",
+  btn_primary: "btn_primary.png",
+  btn_minor: "btn_minor.png",
+  btn_danger: "btn_danger.png",
+  banner_title_gold_a: "banner_title_gold_a.png",
+  banner_title_gold_b: "banner_title_gold_b.png",
+  banner_title_gold_c: "banner_title_gold_c.png",
+  banner_title_iron: "banner_title_iron.png",
+  banner_large_navy_a: "banner_large_navy_a.png",
+  banner_large_navy_b: "banner_large_navy_b.png",
+  banner_large_red: "banner_large_red.png",
+  banner_large_purple: "banner_large_purple.png",
+  banner_mid_navy: "banner_mid_navy.png",
+  banner_mid_navy_b: "banner_mid_navy_b.png",
+  banner_mid_red: "banner_mid_red.png",
+  banner_mid_red_b: "banner_mid_red_b.png",
+  banner_mid_black: "banner_mid_black.png",
+  banner_mid_blue: "banner_mid_blue.png",
+  banner_mid_iron: "banner_mid_iron.png",
+  banner_mid_bronze: "banner_mid_bronze.png",
+  banner_purple_cosmic: "banner_purple_cosmic.png",
+  banner_title_abyss: "banner_title_abyss.png",
+  menu_title_plate: "menu_title_plate.png",
+  menu_strip_plate: "menu_strip_plate.png",
+  menu_row_plate: "menu_row_plate.png",
+  menu_row_plate_current: "menu_row_plate_current.png",
+  menu_set_plate: "menu_set_plate.png",
+  menu_set_plate_selected: "menu_set_plate_selected.png",
+  menu_chip_plate: "menu_chip_plate.png",
+  menu_section_strip: "menu_section_strip.png", // 主菜单分区标题条:整图 512:73 等比绘制(端柱+菱形纹不可九宫格)
+  menu_note_plate: "menu_note_plate.png",
+  hud_dock_top: "hud_dock_top.png",
+  hud_dock_bottom: "hud_dock_bottom.png",
+  panel_dark_corners: "panel_dark_corners.png",
+  panel_parchment: "panel_parchment.png",
+  panel_gearup: "panel_gearup.png",
+  tabs_talent_three: "tabs_talent_three.png",
+
+  /* ---------- UI:徽章 / 纹章 / 标记 ---------- */
+  badge_shield_bronze: "badge_shield_bronze.png",
+  badge_pennant_purple: "badge_pennant_purple.png",
+  badge_gem_purple: "badge_gem_purple.png",
+  badge_star_gold: "badge_star_gold.png",
+  badge_gear_lv: "badge_gear_lv.png",
+  badge_season: "badge_season.png",
+  icon_star_gold: "icon_star_gold.png",
+  crest_echo: "crest_echo.png",
+  emblem_flow_gold: "emblem_flow_gold.png",
+  mark_check_green: "mark_check_green.png",
+  frame_highlight_gold: "frame_highlight_gold.png",
+  icon_wechat_share: "icon_wechat_share.png",
+
+  /* ---------- 环境词缀 / 章节敌情图标 ---------- */
+  affix_space_warp: "affix_space_warp.png",
+  affix_heal_aura: "affix_heal_aura.png",
+  affix_time_dilation: "affix_time_dilation.png",
+  affix_reflect_field: "affix_reflect_field.png",
+  affix_death_chain: "affix_death_chain.png",
+  affix_mist: "affix_mist.png",
+  affix_boss: "affix_boss.png",
+  intel_horde: "intel_horde.png",
+  intel_armor: "intel_armor.png",
+  intel_mutant: "intel_mutant.png",
+  intel_elite: "intel_elite.png",
+
+  /* ---------- 条 / 分隔 ---------- */
+  bar_hp: "bar_hp.png",
+  bar_boss_hp: "bar_boss_hp.png",
+  bar_progress_blue: "bar_progress_blue.png",
+  bar_progress_gold: "bar_progress_gold.png",
+  bar_progress_purple: "bar_progress_purple.png",
+  bar_progress_teal: "bar_progress_teal.png",
+  bar_progress_blue_b: "bar_progress_blue_b.png",
+  bar_pass_nodes: "bar_pass_nodes.png",
+  divider_bar_dark: "divider_bar_dark.png",
+
+  /* ---------- 特效图标 / 投射物 ---------- */
+  fx_nova: "fx_nova.png",
+  fx_poison: "fx_poison.png",
+  fx_shield: "fx_shield.png",
+  fx_drain: "fx_drain.png",
+  fx_blast: "fx_blast.png",
+  fx_chain: "fx_chain.png",
+  fx_summon: "fx_summon.png",
+  proj_lightning: "proj_lightning.png",
+
+  /* ---------- 主角姿态(备用) / 主菜单入口 ---------- */
+  player_pose_1: "player_pose_1.png",
+  player_pose_2: "player_pose_2.png",
+  player_pose_4: "player_pose_4.png",
+  player_pose_5: "player_pose_5.png",
+  player_pose_6: "player_pose_6.png",
+  entry_gacha: "entry_gacha.png",
+  entry_talents: "entry_talents.png",
+  entry_pass: "entry_pass.png",
+  entry_quests: "entry_quests.png",
+  entry_forge: "entry_forge.png",
+  entry_gearup: "entry_gearup.png",
+};

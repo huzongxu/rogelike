@@ -1,0 +1,23 @@
+# 依赖与构建产物
+node_modules/
+dist/
+minigame/
+
+# AI 生图源图(一次性加工源,成品已入 public/assets;脚本见 scripts/)
+vibe_images/
+
+# 一次性去字/擦除脚本工作区
+text-erase/
+
+# 验证截图与临时输出
+.fx-shots/
+tmp_shots/
+tmp_fx_*.png
+
+# 备份与工具状态
+.bak-prelayout/
+.zcode/
+
+# 杂项
+*.log
+.DS_Store

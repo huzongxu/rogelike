@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .pity{display:flex;gap:8px;margin:0 16px;position:relative;z-index:5}
+  .pity .pb{flex:1;height:34px;border-radius:5px;background:var(--panel-2);border:1px solid var(--line);
+    display:flex;flex-direction:column;justify-content:center;gap:3px;padding:0 10px}
+  .pity .pb .t{display:flex;justify-content:space-between;font-size:9.5px;color:var(--t2)}
+  .pity .bar{height:4px;border-radius:2px;background:#131A28;overflow:hidden}
+  .pity .bar i{display:block;height:100%}
+  /* 扭蛋机 */
+  .machine{position:relative;height:308px;margin:6px 16px 0;z-index:5;display:flex;flex-direction:column;align-items:center}
+  .dome{position:relative;width:230px;height:172px;border-radius:115px 115px 26px 26px;
+    background:linear-gradient(165deg, rgba(120,150,220,.16), rgba(30,40,70,.10) 45%, rgba(120,150,220,.05));
+    border:1px solid rgba(140,170,255,.35);box-shadow:inset 0 -18px 34px rgba(0,0,0,.35), 0 0 26px rgba(120,150,255,.12);
+    overflow:hidden}
+  .dome::before{content:"";position:absolute;left:34px;top:14px;width:52px;height:96px;border-radius:50%;
+    background:linear-gradient(15deg, transparent, rgba(255,255,255,.14));transform:rotate(24deg)}
+  .cap{position:absolute;width:26px;height:26px;border-radius:50%;
+    box-shadow:0 3px 6px rgba(0,0,0,.4), inset 0 -3px 5px rgba(0,0,0,.28)}
+  .cap::after{content:"";position:absolute;left:2px;right:2px;top:50%;height:2px;background:rgba(0,0,0,.3)}
+  .body{width:250px;height:92px;margin-top:-8px;border-radius:14px;position:relative;
+    background:linear-gradient(180deg,#232C44,#141A2B);border:1px solid rgba(140,170,255,.28);
+    box-shadow:0 10px 24px rgba(0,0,0,.5)}
+  .knob{position:absolute;left:50%;top:26px;width:44px;height:44px;margin-left:-22px;border-radius:50%;
+    background:radial-gradient(circle at 36% 30%, #3A4668, #1A2236 70%);border:2px solid rgba(140,170,255,.4);
+    box-shadow:0 0 14px rgba(120,150,255,.2)}
+  .knob::after{content:"";position:absolute;left:50%;top:6px;width:4px;height:14px;margin-left:-2px;border-radius:2px;
+    background:var(--dust);box-shadow:0 0 8px var(--dust)}
+  .slot{position:absolute;right:26px;top:34px;width:40px;height:26px;border-radius:4px;background:#0A0D13;
+    border:1px solid rgba(140,170,255,.3)}
+  .base{width:290px;height:14px;border-radius:7px;margin-top:8px;
+    background:linear-gradient(90deg,transparent, rgba(77,255,200,.5), transparent);
+    box-shadow:0 0 22px rgba(77,255,200,.35)}
+  .pull-row{display:flex;gap:10px;margin:12px 16px 0;position:relative;z-index:5}
+  .recent{display:flex;gap:6px;margin:10px 16px 0;flex-wrap:wrap;position:relative;z-index:5}
+  .rchip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:12px;
+    font-size:11px;font-weight:700;background:var(--panel-2);border:1px solid}
+  .col-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:6px;
+    background:var(--panel-2);border:1px solid var(--line)}
+  .col-row .dot2{width:10px;height:10px;border-radius:50%;flex:none}
+</style>
+</head>
+<body>
+<div class="screen">
+  <div class="shafts"></div>
+
+  <div class="topbar">
+    <div class="h1">扭蛋机</div>
+    <div class="btn btn-mini">← 返回</div>
+  </div>
+
+  <div class="curbar" style="padding-bottom:6px">
+    <div class="cur tket"><span class="ic">🎫</span><span class="num">23</span></div>
+  </div>
+
+  <div class="pity">
+    <div class="pb">
+      <div class="t"><span>史诗保底</span><span class="num qc2">3 / 10</span></div>
+      <div class="bar"><i style="width:30%;background:#C06CFF;box-shadow:0 0 6px #C06CFF"></i></div>
+    </div>
+    <div class="pb">
+      <div class="t"><span>传奇保底</span><span class="num qc3">28 / 50</span></div>
+      <div class="bar"><i style="width:56%;background:#FF9D2E;box-shadow:0 0 6px #FF9D2E"></i></div>
+    </div>
+  </div>
+
+  <div class="machine">
+    <div class="dome">
+      <div class="cap" style="left:34px;top:96px;background:linear-gradient(180deg,#C06CFF 50%,#E8ECF4 50%)"></div>
+      <div class="cap" style="left:72px;top:112px;background:linear-gradient(180deg,#4AA3FF 50%,#E8ECF4 50%)"></div>
+      <div class="cap" style="left:108px;top:92px;background:linear-gradient(180deg,#FF9D2E 50%,#E8ECF4 50%)"></div>
+      <div class="cap" style="left:146px;top:110px;background:linear-gradient(180deg,#4DFFC8 50%,#E8ECF4 50%)"></div>
+      <div class="cap" style="left:178px;top:94px;background:linear-gradient(180deg,#C8CDD6 50%,#E8ECF4 50%)"></div>
+      <div class="cap" style="left:60px;top:136px;background:linear-gradient(180deg,#4AA3FF 50%,#E8ECF4 50%)"></div>
+      <div class="cap" style="left:128px;top:138px;background:linear-gradient(180deg,#C06CFF 50%,#E8ECF4 50%)"></div>
+    </div>
+    <div class="body">
+      <div class="knob"></div>
+      <div class="slot"></div>
+    </div>
+    <div class="base"></div>
+  </div>
+
+  <div class="pull-row">
+    <div class="btn btn-secondary" style="flex:1;height:40px">单抽 ×1</div>
+    <div class="btn btn-primary" style="flex:1.6;height:40px;font-size:14px">十连 ×10 · 保底</div>
+  </div>
+
+  <div class="recent">
+    <span class="micro" style="align-self:center">最近:</span>
+    <span class="rchip" style="border-color:rgba(192,108,255,.55);color:var(--q2)">火焰新星 · 史诗</span>
+    <span class="rchip" style="border-color:rgba(74,163,255,.5);color:var(--q1)">飞刀投射 · 稀有</span>
+    <span class="rchip" style="border-color:rgba(200,205,214,.4);color:var(--q0)">毒云 · 普通</span>
+  </div>
+
+  <div class="sec-title"><span>永久收藏 · 开局带入 1 件</span><div class="rule"></div></div>
+
+  <div style="display:flex;flex-direction:column;gap:7px;margin:0 16px;position:relative;z-index:5">
+    <div class="col-row">
+      <span class="dot2" style="background:var(--q3);box-shadow:0 0 8px var(--q3)"></span>
+      <div style="flex:1"><div style="font-size:12.5px;font-weight:800" class="qc3">连锁飞刀</div>
+      <div class="micro">传奇 · 收藏属性 伤害 +6%</div></div>
+      <div class="chip ok">带入中</div>
+    </div>
+    <div class="col-row">
+      <span class="dot2" style="background:var(--q2);box-shadow:0 0 8px var(--q2)"></span>
+      <div style="flex:1"><div style="font-size:12.5px;font-weight:800" class="qc2">荆棘新星</div>
+      <div class="micro">史诗 · 收藏属性 生命 +4%</div></div>
+      <div class="btn btn-mini" style="height:24px;font-size:11px">带入</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

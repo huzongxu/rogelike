@@ -1,0 +1,106 @@
+{
+  "$comment": "回响深渊 策划配置表 —— 字段说明/单位/建议范围见 docs/CONFIG-TABLES.md。删掉任意段或字段 = 使用内置默认值;改完保存后浏览器刷新生效。",
+  "energy": {
+    "max": 20,
+    "regenSeconds": 360,
+    "adGain": 5,
+    "adLimit": 5,
+    "diamondRefillCost": 10,
+    "stageCosts": [
+      5,
+      5,
+      6,
+      6,
+      7,
+      7,
+      8
+    ],
+    "endlessCost": 3
+  },
+  "economy": {
+    "diamondPerAd": 1,
+    "diamondAdDaily": 10,
+    "diamondTicketCost": 2,
+    "shopRefreshAdLimit": 5,
+    "basePrice": {
+      "common": 15,
+      "rare": 30,
+      "epic": 60,
+      "legendary": 120,
+      "hidden": 200
+    },
+    "slotExpandBase": 100,
+    "slotExpandGrowth": 2.3,
+    "slotCap": 8
+  },
+  "battle": {
+    "chapterSeconds": 60,
+    "chaptersPerStage": 20,
+    "echoRetainRate": 0.4,
+    "monsterCountBase": 30,
+    "monsterCountGrowth": 1.15,
+    "echoRewardBase": 10,
+    "echoRewardExp": 1.5,
+    "stageUnlockProgress": 0.5,
+    "clearRewardGrowth": 0.15
+  },
+  "waves": {
+    "chapterLength": 60,
+    "spawnBase": 0.9,
+    "spawnEarlyDecay": 0.9,
+    "spawnEarlyChapters": 5,
+    "spawnLateDecay": 0.96,
+    "spawnIntervalMin": 0.18,
+    "spawnMultiFrom": 6
+  },
+  "chapterTypes": {
+    "eliteChapters": [
+      5,
+      10,
+      15
+    ],
+    "treasureChapters": [
+      7,
+      14
+    ],
+    "eliteSpawnScale": 1.3,
+    "eliteBurst": 1.5,
+    "eliteIntelBias": 0.3,
+    "treasureSpawnScale": 0.5,
+    "treasureGoldMix": 0.25,
+    "defaultIntelBias": 0.45
+  },
+  "gacha": {
+    "cost": 1,
+    "cost10": 10,
+    "rates": [
+      {
+        "value": "common",
+        "weight": 55
+      },
+      {
+        "value": "rare",
+        "weight": 30
+      },
+      {
+        "value": "epic",
+        "weight": 12
+      },
+      {
+        "value": "legendary",
+        "weight": 3
+      }
+    ],
+    "epicPity": 10,
+    "legendaryPity": 50,
+    "epicPityLegendaryChance": 0.3,
+    "duplicateStardust": {
+      "common": 2,
+      "rare": 5,
+      "epic": 15,
+      "legendary": 40,
+      "hidden": 60
+    }
+  },
+  "menuSkin": {}
+}
