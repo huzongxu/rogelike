@@ -8,6 +8,8 @@ import { talentOf, ALL_TALENTS, type TalentId } from "../data/talents";
 import type { CommissionState } from "../data/commissions";
 import type { Equipment } from "../data/equipmentGen";
 import type { SetId } from "../data/sets";
+import type { HeroId } from "../data/heroes";
+import { applyHeroSelection, heroOfSetOrNull, normalizeHeroId } from "../data/heroes";
 import { ENERGY_MAX } from "../data/daily";
 import { calcPrestigePoints, PRESTIGE_OVERFLOW_STARDUST_RATE } from "../data/prestige";
 
@@ -66,7 +68,9 @@ export interface SaveData {
   /** 进行中的委托(按真实时间结算);双委托天赋可同时派遣 2 个 */
   commission: CommissionState | null;
   commission2: CommissionState | null;
-  /** 所选武器套组(主菜单配置;null = 无套组,通用卡池) */
+  /** 出战英雄(场外配置的唯一事实源;null = 不出战,通用卡池) */
+  selectedHero: HeroId | null;
+  /** 出战套组:selectedHero 的派生镜像,唯一写入路径是 applyHeroSelection */
   selectedSet: SetId | null;
   /** 首局引导是否已完成/跳过(true = 不再显示) */
   tutorialDone: boolean;
@@ -138,6 +142,7 @@ const EMPTY: SaveData = {
   fragments: 0,
   commission: null,
   commission2: null,
+  selectedHero: null,
   selectedSet: null,
   tutorialDone: false,
   energy: ENERGY_MAX,
@@ -182,7 +187,7 @@ export function loadSave(): SaveData {
     const raw = platform.getStorage(KEY);
     if (!raw) return { ...clone(EMPTY), energy: ENERGY_MAX }; // EMPTY 是导入期快照,体力上限以运行时配置为准
     const parsed = JSON.parse(raw);
-    return {
+    const s: SaveData = {
       points: Number(parsed.points) || 0,
       ownedTalents: Array.isArray(parsed.ownedTalents) ? parsed.ownedTalents : [],
       collection: {
@@ -213,6 +218,7 @@ export function loadSave(): SaveData {
       fragments: Number(parsed.fragments) || 0,
       commission: parsed.commission ?? null,
       commission2: parsed.commission2 ?? null,
+      selectedHero: normalizeHeroId(parsed.selectedHero),
       selectedSet: parsed.selectedSet ?? null,
       tutorialDone: !!parsed.tutorialDone,
       energy: Number(parsed.energy) || ENERGY_MAX,
@@ -235,6 +241,9 @@ export function loadSave(): SaveData {
       frames: Array.isArray(parsed.frames) ? parsed.frames.filter((n: unknown) => Number(n) >= 1 && Number(n) <= 7).map(Number) : [],
       makeUpDate: String(parsed.makeUpDate ?? ""),
     };
+    // 老档只写 selectedSet → 反查其英雄补齐;镜像恒经唯一写入路径同步(脏值在此归零)
+    applyHeroSelection(s, s.selectedHero ?? heroOfSetOrNull(s.selectedSet)?.id ?? null);
+    return s;
   } catch {
     return clone(EMPTY);
   }

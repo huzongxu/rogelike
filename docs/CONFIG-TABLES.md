@@ -123,6 +123,8 @@
 | rowPlateF | 0.35 | 0.05~0.5 | 行底板九宫格角深系数(源图短边占比;行内容内缩量随之变) |
 | setBandNum / setBandDen | 20 / 124 | 0~200 / 1~512 | 套组卡贴边装饰带厚 = setH ×(本分子/本分母),文字落在带间净空 |
 | noteBandNum / noteBandDen | 8 / 45 | 0~200 / 1~512 | 说明板装饰带厚同口径(menu_note_plate 源图上下各 8 行、总高 45) |
+| heroRise / heroClearance | 60 / 8 | 8~160 / 0~40 | 英雄展示带自 setY 向上生长的高 / 带顶缘与无限关钮底缘的最小间隙(缺标题条时间距只有 34 → 带高会被本值夹紧,此时 heroRise 拖不动属正常) |
+| heroBtnW / heroBtnH | 88 / 36 | 40~200 / 20~60 | 「更换英雄」按钮尺寸(带内右锚 + 垂直居中;高按 ×2 换算才跟手) |
 
 ### menuLayout.deco · 装饰内缩与绘制档
 
@@ -137,6 +139,7 @@
 | 红点 | `dotR`=5 `dotInsetX`=8 `dotInsetY`=7(圆心相对宿主钮右上角) |
 | 套组卡 | 图标 `setIconOffX`=6 `setIconOffY`=9 `setIconW`=18 `setIconH`=18 · 选中态 `setFramePad`=2 `setBadgeInsetX`=16 `setBadgeOffY`=6 `setBadgeSize`=18 · 内容列 `setColPadL`=28 `setColPadR`=34 `setRow1Off`=12 `setRow2Gap`=15 · 赛季标记 `tagPad`=4 |
 | 说明板 | `noteCapNum`=20 `noteCapDen`=45(带厚下限,取 `noteBand` 与本换算的较大值)· `noteTopOff`=1 `noteInsetX`=12 `noteSlide`=6 `noteRow1Off`=12 `noteRow2Gap`=14 |
+| 英雄展示带 | 内缩 `heroPadX`=10(立绘左缘 / 按钮右缘 / 图文列距共用一节)· 立绘 `heroPortW`=96 `heroPortH`=96 `heroPortOffX`=0 `heroPortOffY`=0(0 = 带内垂直居中;带高不足时按带高收缩保持正方形)· 图文列 `heroNameOffY`=34 `heroRow2Gap`=18 `heroRow3Gap`=16 |
 
 > 只动 `deco` 不会移动任何区块,只改区块内部的对齐/避让;想让整块挪位置改 `origin`。缺贴图时相关尺寸按原"纯代码形状"回退口径,布局与接入贴图前逐像素一致。
 
@@ -146,6 +149,7 @@
 > **不想手填数字?** `npm run dev:lab` 的「结构树 · 皮肤」面板直接点选操作:图层显隐、换图、四边间距,实时预览并导出本段 JSON(见 [`LAYOUT-LAB.md`](./LAYOUT-LAB.md))。
 > **整段缺省或 `{}` = 零画面变化**(本项目铁律);非法键/越界值 → 回退默认并告警,口径同 menuLayout。insets 每边 −100~100(取整)。
 > 拓扑固定:7 面板 13 层(标题横幅/货币条/筹码/分区标题条/关卡行/套组卡/说明板,除货币条无文字层外各图+文两层)。本段只能操作既有图层,不新增。
+> **面板位沿用**:`setCard` 那一行现在画的是「出战英雄展示带」(原套组卡已被它接管),皮肤仍按既有 `setCard` 键位作用于该带文字层,不新增面板 id。
 
 ### menuSkin.remap · 换图映射(资产键 → 资产键)
 
@@ -164,7 +168,7 @@
 | chip | 筹码图文内距加宽 | 筹码尾部留白加宽 | 筹码文字基线区收窄(`chipBase` 按 `chipY+t, chipH−t−b` 重算)|
 | section | 条内文字左右内缩加深 | 同左(两侧合并)| 条文竖直带收窄(`sectionTextBand`)|
 | row | 行文字、头像徽章右移 | 行右列左移(避让加深)| 行内文字竖直偏移(`rowC1Off += b−t`)|
-| setCard | 内容列、套组图标右移 | 内容列右内缩加深 | 卡内行基线上下移 |
+| setCard | 内容列、套组图标右移(仅供 `setBtns` 几何,该卡算而不画 → **画面无可见效果**)| 同左 | 同左 |
 | note | 板内文字右移、最大宽收窄 | 最大宽收窄 | 板内行基线上下移 |
 
 ### menuSkin.hidden / textHidden / layers
@@ -172,7 +176,7 @@
 | 字段 | 默认 | 说明 |
 |---|---|---|
 | `hidden` | `[]` | 资产键数组:整张图不绘制,走缺图契约(回退纯代码形状,与贴图接入前逐像素一致)。`isReady()` 对被隐藏键返回 false |
-| `textHidden` | `[]` | 面板 id 数组(`title`/`strip`/`chip`/`section`/`row`/`setCard`/`note`):只隐该面板文字,图与热区不动 |
+| `textHidden` | `[]` | 面板 id 数组(`title`/`strip`/`chip`/`section`/`row`/`setCard`/`note`):只隐该面板文字,图与热区不动。`setCard` 现对应英雄展示带的三行文字(带底板、「更换英雄」按钮与热区不受影响)|
 | `layers` | `{}` | 图层自定义命名(`"row.text": {"name": "…"}`),布局台展示用;运行时不消费,仅透传保存 |
 
 > 换图两种通道的分工:`remap` 写进本段**真生效**(浏览器+微信同源);布局台的「📁 本地文件」只是 dev 预览(刷新即失,绝不进导出)。
@@ -184,6 +188,7 @@
 > 战斗侧数值(敌人成长、Boss 标定、玩家白值、场地实体、环境词缀参数)已抽离至规范表 `src/data/enemies.ts` / `combat.ts` / `field.ts` / `envAffixes.ts`,见 [DESIGN-VALUES-SPEC.md](./DESIGN-VALUES-SPEC.md) 目录;这些表目前是纯常量表,**未接本文件的 balance.json 热调覆盖**,改数走代码流程。
 
 - 词缀/天赋/套组/委托区域等结构型数据:数值已按准则抽离入表(`SET_BONUSES`/`COMBO_VALUES`/`TALENT_VALUES`/`COMMISSION_DECAY`/`EQUIPMENT_LEVEL_GROWTH`,见 [DESIGN-VALUES-SPEC.md](./DESIGN-VALUES-SPEC.md) 目录),仅剩纯结构性定义(接口形状),无数值缺口
+- 英雄页几何与滚动手感:常量已入表但**未接 balance.json 热调**——滚动容器口径(点击判定阈值/惯性初速/减速度/边界橡皮筋/滑块宽)在 `src/ui/scrollList.ts`,页面分区与行高(列表带、详情区、立绘盒、确认按钮)在 `src/ui/heroSelectLayout.ts`,改数走"改表 → `npm test`"代码流程(单测:`tests/scroll-list.test.ts` + `tests/hero-select-layout.test.ts`)
 
 ## 策划操作指引
 

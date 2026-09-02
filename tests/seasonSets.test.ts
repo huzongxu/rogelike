@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { seasonTheme, setMutation, featuredSetId, isSeasonBoosted } from "../src/data/seasonSets";
-import { SETS, setBonusState, allSets, releasedSets, type SetId } from "../src/data/sets";
+import { SETS, setBonusState, allSets, releasedSets, seasonNewSets, type SetId } from "../src/data/sets";
 import { generateSetEquipment, type Equipment } from "../src/data/equipmentGen";
 import { makeTrigger, makeEffect, type EffectType } from "../src/data/affixes";
 import { Player } from "../src/entities/player";
@@ -74,15 +74,35 @@ describe("赛季联动词缀(setMutation)", () => {
     expect(setMutation(6, "thorn")).toBe(setMutation(1, "thorn"));
     expect(setMutation(7, "ember")).toBe(setMutation(2, "ember"));
   });
-  it("所有 patch 数值都在 ±15% 内(数值墙不回头)", () => {
-    for (const setId of ["thorn", "barrage", "ember"] as SetId[]) {
+  it("所有 patch 数值都在上限内:召唤物伤害 +25% 封顶,其余 ±15%(数值墙不回头)", () => {
+    for (const setId of allSets().map((s) => s.id)) {
       for (let season = 1; season <= 20; season++) {
-        const m = setMutation(season, setId)!;
-        for (const v of Object.values(m.patch)) {
-          expect(Math.abs(v - 1), `${season}/${setId}`).toBeLessThanOrEqual(0.15);
+        const m = setMutation(season, setId);
+        if (!m) continue;
+        for (const [k, v] of Object.entries(m.patch)) {
+          const cap = k === "summonMult" ? 0.25 : 0.15;
+          expect(Math.abs(v - 1), `S${season} ${setId} ${k}`).toBeLessThanOrEqual(cap);
         }
       }
     }
+  });
+  it("每套在自己的发布赛季都有专属词缀;赛季限定套过季回落 null", () => {
+    for (const season of [1, 2, 3, 4]) {
+      for (const setId of seasonNewSets(season)) {
+        const m = setMutation(season, setId);
+        expect(m, `S${season} ${setId} 应有赛季联动词缀`).not.toBeNull();
+        expect(m!.name.length).toBeGreaterThan(0);
+        expect(m!.desc.length).toBeGreaterThan(0);
+      }
+    }
+    // 非发布赛季:常驻三套仍走 5 条池轮换,赛季套组一律无词缀
+    expect(setMutation(3, "glacier")).toBeNull();
+    expect(setMutation(4, "blizzard")).toBeNull();
+    expect(setMutation(2, "plague")).toBeNull();
+    expect(setMutation(5, "cinderfang")).toBeNull();
+    expect(setMutation(1, "requiem")).toBeNull();
+    expect(setMutation(2, "veil")).toBeNull();
+    expect(setMutation(9, "thorn")).not.toBeNull();
   });
   it("未选套组返回 null", () => {
     expect(setMutation(1, null)).toBeNull();
@@ -114,21 +134,34 @@ describe("赛季联动词缀(setMutation)", () => {
 
 /* ---------- L3 赛季限定套组守卫 ---------- */
 
-describe("赛季限定套组(featuredSetId)", () => {
-  it("S1 = null(过渡赛季,frost 未发布)", () => {
+describe("赛季限定套组(featuredSetId / isSeasonBoosted)", () => {
+  it("featuredSetId = 当季代表套组(展示锚点),S1 与排期外赛季为 null", () => {
     expect(featuredSetId(1)).toBeNull();
-    expect(releasedSets(1)).toHaveLength(3);
-  });
-  it("S2 = 极北冰脉,S3 = 熔核教团;未实装的排期仍被守卫拦截", () => {
     expect(featuredSetId(2)).toBe("frost");
     expect(featuredSetId(3)).toBe("magma");
     expect(featuredSetId(4)).toBe("phantom");
     expect(featuredSetId(5)).toBeNull(); // 排期外
+  });
+  it("强化门控 = 当季新发布(每季 3 套全部受益),与代表套组解耦", () => {
+    for (const season of [1, 2, 3, 4]) {
+      const boosted = allSets().filter((s) => isSeasonBoosted(season, s.id)).map((s) => s.id).sort();
+      expect(boosted, `S${season} 受益套组`).toEqual(seasonNewSets(season).sort());
+      expect(boosted).toHaveLength(3);
+    }
+    expect(allSets().filter((s) => isSeasonBoosted(5, s.id))).toEqual([]); // 四季循环,无第 5 季新内容
+  });
+  it("套组只在自己的发布赛季被强化,过季回落 false", () => {
+    expect(isSeasonBoosted(1, "thorn")).toBe(true);
+    expect(isSeasonBoosted(2, "thorn")).toBe(false);
     expect(isSeasonBoosted(2, "frost")).toBe(true);
     expect(isSeasonBoosted(1, "frost")).toBe(false); // 赛季未到
-    expect(isSeasonBoosted(3, "frost")).toBe(false); // 赛季已过 → 赛后回落
-    expect(isSeasonBoosted(3, "magma")).toBe(true);
-    expect(isSeasonBoosted(2, "magma")).toBe(false);
+    expect(isSeasonBoosted(3, "frost")).toBe(false); // 赛季已过
+    expect(isSeasonBoosted(2, "glacier")).toBe(true);
+    expect(isSeasonBoosted(2, "blizzard")).toBe(true);
+    expect(isSeasonBoosted(3, "plague")).toBe(true);
+    expect(isSeasonBoosted(3, "cinderfang")).toBe(true);
+    expect(isSeasonBoosted(4, "requiem")).toBe(true);
+    expect(isSeasonBoosted(4, "veil")).toBe(true);
   });
 });
 
@@ -395,9 +428,16 @@ describe("环境词缀赛季倾向(rollEnvAffixes bias)", () => {
 /* ---------- S1 行为冻结 ---------- */
 
 describe("S1 行为冻结(回归红线)", () => {
-  it("常驻三套定义不变;全套组库 = 三套 + frost + magma + phantom", () => {
+  it("常驻三套定义不变;全套组库 = 4 季 × 3 套 = 12", () => {
     expect(SETS).toHaveLength(3);
-    expect(allSets()).toHaveLength(6);
+    expect(allSets()).toHaveLength(12);
+  });
+  it("发布门控:S1 只放开常驻三套,S4 起 12 套全部可选且永久保留", () => {
+    expect(releasedSets(1)).toHaveLength(3);
+    expect(releasedSets(2)).toHaveLength(6);
+    expect(releasedSets(3)).toHaveLength(9);
+    expect(releasedSets(4)).toHaveLength(12);
+    expect(releasedSets(9)).toHaveLength(12);
   });
   it("seasonId=1 的词缀与设计文档逐字一致", () => {
     expect(setMutation(1, "thorn")!.name).toBe("棘刺过载");

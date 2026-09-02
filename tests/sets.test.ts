@@ -8,8 +8,8 @@ import { Player } from "../src/entities/player";
 import { spawnEnemy } from "../src/entities/enemy";
 import { EquipmentEngine, type BattleContext, type Fx } from "../src/systems/equipmentEngine";
 import { makeTrigger, makeEffect, type EffectType } from "../src/data/affixes";
-import { generateSetEquipment, type Equipment } from "../src/data/equipmentGen";
-import { SETS, setDef, setOfEffect, setPieces, setBonusState, releasedSets, type SetId } from "../src/data/sets";
+import { generateSetEquipment, GENERIC_EFFECT_TYPES, type Equipment } from "../src/data/equipmentGen";
+import { SETS, setDef, setOfEffect, setsOfEffect, allSets, seasonNewSets, setReleaseSeason, isSetPiece, setPieces, setBonusState, releasedSets, type SetId } from "../src/data/sets";
 import { chapterIntel } from "../src/data/intel";
 import { EFFECTS } from "../src/data/affixes";
 import { vec2 } from "../src/core/math";
@@ -42,22 +42,37 @@ beforeEach(() => {
 });
 
 describe("套组定义与效果归属", () => {
-  it("3 套常驻武器套组,每套有 3/6 件套加成", () => {
-    expect(SETS).toHaveLength(3);
-    for (const s of SETS) {
-      expect(s.bonus3.name.length).toBeGreaterThan(0);
-      expect(s.bonus6.name.length).toBeGreaterThan(0);
+  it("12 套武器套组(4 季 × 3),每套有 3/6 件套加成", () => {
+    expect(SETS).toHaveLength(3); // 常驻三套(S1 视作首发)
+    const all = allSets();
+    expect(all).toHaveLength(12);
+    for (const s of all) {
+      expect(s.bonus3.name.length, s.id).toBeGreaterThan(0);
+      expect(s.bonus6.name.length, s.id).toBeGreaterThan(0);
+      expect(s.effects.length, s.id).toBeGreaterThanOrEqual(2);
     }
   });
-  it("14 种效果恰好各归属一套(无重叠无遗漏;S2/S3/S4 各 2 新效果)", () => {
-    const seen = new Set<EffectType>();
+  it("每季 3 个专属套组:S1 常驻 + S2/S3/S4 各 3 新套", () => {
+    expect(seasonNewSets(1).sort()).toEqual(["barrage", "ember", "thorn"]);
+    expect(seasonNewSets(2).sort()).toEqual(["blizzard", "frost", "glacier"]);
+    expect(seasonNewSets(3).sort()).toEqual(["cinderfang", "magma", "plague"]);
+    expect(seasonNewSets(4).sort()).toEqual(["phantom", "requiem", "veil"]);
+    expect(seasonNewSets(5)).toEqual([]); // 四季循环,无第 5 季新内容
+    expect(allSets().every((s) => setReleaseSeason(s.id) >= 1 && setReleaseSeason(s.id) <= 4)).toBe(true);
+  });
+  it("14 种效果各恰被 2 个套组认领(多对一归属,共 28 条链接)", () => {
+    expect(EFFECTS).toHaveLength(14);
+    let links = 0;
     for (const e of EFFECTS) {
-      const s = setOfEffect(e.type);
-      expect(s, `${e.type} 应归属某套`).not.toBeNull();
-      expect(seen.has(e.type)).toBe(false);
-      seen.add(e.type);
+      const owners = setsOfEffect(e.type);
+      expect(owners.length, `${e.type} 认领套数`).toBe(2);
+      expect(new Set(owners).size, `${e.type} 认领套不重复`).toBe(2);
+      for (const id of owners) expect(setDef(id).effects.includes(e.type)).toBe(true);
+      links += owners.length;
     }
-    expect(seen.size).toBe(14);
+    expect(links).toBe(28);
+    expect(setOfEffect("knife"), "首个认领套 = 展示/兜底用").not.toBeNull();
+    expect(setsOfEffect("nonexistent" as EffectType)).toEqual([]);
   });
   it("S2 赛季套组「极北冰脉」:发布门控与归属正确(DESIGN-SEASON-SETS L3)", () => {
     const frost = setDef("frost");
@@ -66,11 +81,11 @@ describe("套组定义与效果归属", () => {
     // 发布门控:S1 不出,S2 起永久可选
     expect(releasedSets(1).map((s) => s.id)).toEqual(["thorn", "barrage", "ember"]);
     expect(releasedSets(2).map((s) => s.id)).toContain("frost");
-    expect(releasedSets(5).length).toBe(6); // 发布后永久保留(frost + magma + phantom)
+    expect(releasedSets(5).length).toBe(12); // 发布后永久保留(四季 12 套)
     // 赛季套组的卡也全部归属本套
     for (let i = 0; i < 40; i++) {
       const eq = generateSetEquipment("frost", 5);
-      expect(setOfEffect(eq.effect.def.type)).toBe("frost");
+      expect(isSetPiece(eq, "frost")).toBe(true);
       for (const t of eq.triggers) expect(frost.triggers.includes(t.def.type)).toBe(true);
       for (const m of eq.modifiers) expect(frost.modifiers.includes(m.def.type)).toBe(true);
     }
@@ -104,11 +119,11 @@ describe("件数与档位", () => {
 });
 
 describe("套组专属卡池(generateSetEquipment)", () => {
-  it("效果/触发器/修饰器都来自本套定义", () => {
-    for (const setId of SETS.map((s) => s.id)) {
+  it("效果/触发器/修饰器都来自本套定义(全部 12 套)", () => {
+    for (const setId of allSets().map((s) => s.id)) {
       for (let i = 0; i < 40; i++) {
         const eq = generateSetEquipment(setId, 5);
-        expect(setOfEffect(eq.effect.def.type), `${eq.name} 效果应属于 ${setId}`).toBe(setId);
+        expect(isSetPiece(eq, setId), `${eq.name} 效果应属于 ${setId}`).toBe(true);
         for (const t of eq.triggers) {
           expect(setDef(setId).triggers.includes(t.def.type), `${t.def.name} 应在 ${setId} 亲和池`).toBe(true);
         }
@@ -116,6 +131,18 @@ describe("套组专属卡池(generateSetEquipment)", () => {
           expect(setDef(setId).modifiers.includes(m.def.type), `${m.def.name} 应在 ${setId} 亲和池`).toBe(true);
         }
       }
+    }
+  });
+  it("通用卡池可达性:仅专属效果池的三套(极北/熔核/亡影)靠本套卡池成型,其余每套至少含 1 个通用池效果", () => {
+    // 三套元老赛季套组效果完全专属(已知设计),它们的件只能从套组卡池刷出
+    const exclusivePool: SetId[] = ["frost", "magma", "phantom"];
+    for (const s of allSets()) {
+      const shared = s.effects.filter((e) => GENERIC_EFFECT_TYPES.includes(e));
+      if (exclusivePool.includes(s.id)) {
+        expect(shared, `${s.id} 应为纯专属效果池`).toHaveLength(0);
+        continue;
+      }
+      expect(shared.length, `${s.id} 无通用池效果,3 件档不可达`).toBeGreaterThanOrEqual(1);
     }
   });
   it("荆棘套生成护盾/汲取效果,弹幕套生成飞刀/射线效果", () => {
@@ -127,6 +154,19 @@ describe("套组专属卡池(generateSetEquipment)", () => {
     }
     expect([...seenThorn].sort()).toEqual(["drain", "shield"]);
     expect([...seenBarrage].sort()).toEqual(["knife", "ray"]);
+  });
+  it("共享效果的卡片同时计入两个认领套(多对一不失控:同一份装备只算一个套组的件)", () => {
+    // ray 被 barrage(弹幕)与 glacier(冰川界碑)共同认领
+    const ray = makeEquipment("ray");
+    expect(isSetPiece(ray, "barrage")).toBe(true);
+    expect(isSetPiece(ray, "glacier")).toBe(true);
+    expect(setPieces([ray, ray], "barrage")).toBe(2);
+    expect(setPieces([ray, ray], "glacier")).toBe(2);
+    // 一套装备同时是两套的件,但战斗里只有玩家选定的那个套组会激活加成
+    const both = setBonusState([makeEquipment("ray"), makeEquipment("ray"), makeEquipment("ray")], "glacier");
+    expect(both?.pieces).toBe(3);
+    expect(both?.bonus3).toBe(true);
+    expect(both?.bonus6).toBe(false);
   });
 });
 

@@ -81,6 +81,14 @@ export interface MenuLayoutOrigin {
   noteBandNum: number;
   /** 含义:说明板源图总高。单位:源图 px。依据:menu_note_plate 源图高 45。出处:薄边带模型 */
   noteBandDen: number;
+  /** 含义:英雄展示带自 setY 向上生长的高度(上界见 heroClearance)。单位:设计 px。依据:立绘 96 + 上下呼吸缝。出处:英雄系统 M4 */
+  heroRise: number;
+  /** 含义:展示带顶缘与无限关钮底缘的最小间隙(带高上界 = gapAboveSet − 本值)。单位:设计 px。依据:带再高必压主按钮。出处:英雄系统 M4 */
+  heroClearance: number;
+  /** 含义:「更换英雄」按钮宽。单位:设计 px。依据:四字 + 内距的最小可读档。出处:英雄系统 M4 */
+  heroBtnW: number;
+  /** 含义:「更换英雄」按钮高(带内垂直居中)。单位:设计 px。依据:与入口行同档的压缩触控高。出处:英雄系统 M4 */
+  heroBtnH: number;
 }
 
 /** 装饰内缩/基线偏移表(绘制层专用;几何仍由 menuLayoutPure 一次算出) */
@@ -245,6 +253,22 @@ export interface MenuLayoutDeco {
   noteRow1Off: number;
   /** 含义:说明板两行基线间距。单位:设计 px。出处:薄边带模型 */
   noteRow2Gap: number;
+  /** 含义:英雄展示带内缩(立绘左缘 / 按钮右缘 / 图文列间距共用同一节奏)。单位:设计 px。出处:英雄系统 M4 */
+  heroPadX: number;
+  /** 含义:英雄立绘盒宽(实图按 contain-fit 装入,永不裁切)。单位:设计 px。出处:英雄系统 M4 */
+  heroPortW: number;
+  /** 含义:英雄立绘盒高(带高不足时按带高收缩)。单位:设计 px。出处:英雄系统 M4 */
+  heroPortH: number;
+  /** 含义:立绘盒水平偏移(相对带左缘 + heroPadX)。单位:设计 px。出处:英雄系统 M4 */
+  heroPortOffX: number;
+  /** 含义:立绘盒竖直偏移(相对带内垂直居中;默认 0 = 居中,贴顶/贴底靠本值微调)。单位:设计 px。出处:英雄系统 M4 */
+  heroPortOffY: number;
+  /** 含义:英雄名基线相对带顶缘。单位:设计 px。出处:英雄系统 M4 */
+  heroNameOffY: number;
+  /** 含义:英雄名 → 称号·套组行基线间距。单位:设计 px。出处:英雄系统 M4 */
+  heroRow2Gap: number;
+  /** 含义:称号行 → 赛季说明行基线间距。单位:设计 px。出处:英雄系统 M4 */
+  heroRow3Gap: number;
 }
 
 export interface MenuLayoutTable {
@@ -287,6 +311,10 @@ export const MENU_LAYOUT_DEFAULTS: MenuLayoutTable = {
     setBandDen: 124,
     noteBandNum: 8,
     noteBandDen: 45,
+    heroRise: 60,
+    heroClearance: 8,
+    heroBtnW: 88,
+    heroBtnH: 36,
   },
   deco: {
     banInset: 6,
@@ -369,6 +397,14 @@ export const MENU_LAYOUT_DEFAULTS: MenuLayoutTable = {
     noteSlide: 6,
     noteRow1Off: 12,
     noteRow2Gap: 14,
+    heroPadX: 10,
+    heroPortW: 96,
+    heroPortH: 96,
+    heroPortOffX: 0,
+    heroPortOffY: 0,
+    heroNameOffY: 34,
+    heroRow2Gap: 18,
+    heroRow3Gap: 16,
   },
 };
 
@@ -407,6 +443,10 @@ export const MENU_LAYOUT_RANGE: Record<keyof MenuLayoutOrigin, [number, number]>
   setBandDen: [1, 512],
   noteBandNum: [0, 200],
   noteBandDen: [1, 512],
+  heroRise: [8, 160],
+  heroClearance: [0, 40],
+  heroBtnW: [40, 200],
+  heroBtnH: [20, 60],
 };
 
 const DECOS = Object.keys(MENU_LAYOUT_DEFAULTS.deco) as (keyof MenuLayoutDeco)[];

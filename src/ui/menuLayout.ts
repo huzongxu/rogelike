@@ -5,7 +5,9 @@
  * 本模块**无 DOM、无平台依赖**(只 `import type` 资源类型),因此可在 node 侧直接测;
  * 贴图固有尺寸由调用方经环境传入,角深换算与 AssetManager.nineMargin 同一公式(nineMarginPure 为镜像)。
  *
- * 纵向骨架:尾块贴底(说明板 → 套组卡 → 无限关钮),关卡列表 spreadRows 吃满剩余高度。
+ * 纵向骨架:尾块贴底(说明板 → 英雄展示带 → 无限关钮),关卡列表 spreadRows 吃满剩余高度。
+ * 英雄展示带自**未改动的 setY** 向上生长(套组卡那一带被它接管),带高受 heroClearance 夹紧;
+ * `setBtns/setBand` 等套组卡几何继续按原式计算(基线锚点),只是不再画。
  */
 
 import { spreadRows } from "./theme";
@@ -156,8 +158,22 @@ export interface MenuLayout {
   stageHdrY: number;
   setHdrY: number;
   rowMargin: number;
+  /** 套组卡几何 = 基线兼容锚点(布局测试逐字节比对),英雄展示带接管其视觉位置后**算而不画** */
   setBand: number;
   noteBand: number;
+  /** 英雄展示带:带高上界(gapAboveSet − heroClearance),heroRise 实际取值 = min(表值, 本值) */
+  heroMaxRise: number;
+  /** 展示带整块(从未改动的 setY 向上生长,底缘 = setY + setH) */
+  heroBand: MenuRect;
+  /** 「更换英雄」按钮(带内右侧,垂直居中) */
+  heroBtn: MenuRect;
+  /** 立绘盒(带内左侧,垂直居中 + heroPortOffY;带高不足时按带高收缩保持正方形) */
+  heroPort: MenuRect;
+  heroTextX: number;
+  heroTextMaxW: number;
+  heroRow1Y: number;
+  heroRow2Y: number;
+  heroRow3Y: number;
   /** 以下为原先只住在函数内的中间量(布局台需读) */
   pad: number;
   entryH: number;
@@ -221,6 +237,29 @@ export function menuLayoutPure(w: number, h: number, env: MenuLayoutEnv): MenuLa
   const rowMargin = nineMarginPure(env.rowPlateSize?.w ?? 0, env.rowPlateSize?.h ?? 0, rowW, rowH, o.rowPlateF);
   const setBand = Math.round(setH * (o.setBandNum / o.setBandDen));
   const noteBand = Math.round(setDescH * (o.noteBandNum / o.noteBandDen));
+
+  /* 英雄展示带:从未改动的 setY 向上生长,底缘吸收原套组卡那一行(带高不吞掉与无限关钮的呼吸缝) */
+  const heroMaxRise = Math.max(0, setY - o.heroClearance - (endlessBtn.y + o.endlessH));
+  const heroRise = Math.min(o.heroRise, heroMaxRise);
+  const heroBand: MenuRect = { x: pad, y: setY - heroRise, w: rowW, h: heroRise + setH };
+  const heroPortH = Math.min(dc.heroPortH, heroBand.h);
+  const heroPort: MenuRect = {
+    x: heroBand.x + dc.heroPadX + dc.heroPortOffX,
+    y: heroBand.y + Math.round((heroBand.h - heroPortH) / 2) + dc.heroPortOffY,
+    w: Math.min(dc.heroPortW, heroPortH),
+    h: heroPortH,
+  };
+  const heroBtn: MenuRect = {
+    x: heroBand.x + heroBand.w - dc.heroPadX - o.heroBtnW,
+    y: Math.round(heroBand.y + heroBand.h / 2 - o.heroBtnH / 2),
+    w: o.heroBtnW,
+    h: o.heroBtnH,
+  };
+  const heroTextX = heroPort.x + heroPort.w + dc.heroPadX;
+  const heroTextMaxW = heroBtn.x - dc.heroPadX - heroTextX;
+  const heroRow1Y = heroBand.y + dc.heroNameOffY;
+  const heroRow2Y = heroRow1Y + dc.heroRow2Gap;
+  const heroRow3Y = heroRow2Y + dc.heroRow3Gap;
 
   const ban: MenuRect = { x: pad - dc.banInset, y: dc.banY, w: w - pad * 2 + dc.banInset * 2, h: dc.banH };
   const noteTop = setY + setH + dc.noteTopOff;
@@ -373,6 +412,15 @@ export function menuLayoutPure(w: number, h: number, env: MenuLayoutEnv): MenuLa
     rowMargin,
     setBand,
     noteBand,
+    heroMaxRise,
+    heroBand,
+    heroBtn,
+    heroPort,
+    heroTextX,
+    heroTextMaxW,
+    heroRow1Y,
+    heroRow2Y,
+    heroRow3Y,
     pad,
     entryH,
     entryY,

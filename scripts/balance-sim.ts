@@ -32,7 +32,7 @@ import { vec2, type Vec2 } from "../src/core/math";
 
 export interface SimOptions {
   /** 使用的 Build */
-  build: "starter" | "chain" | "turret" | "thorn" | "godly" | "barrage4" | "ember4" | "thorn4" | "set_thorn" | "set_barrage" | "set_ember" | "set_frost" | "set_magma" | "set_phantom" | "frost4" | "magma4" | "phantom4" | "barrage6" | "combo_barrage" | "combo_rift" | "combo_thorn";
+  build: "starter" | "chain" | "turret" | "thorn" | "godly" | "barrage4" | "ember4" | "thorn4" | "set_thorn" | "set_barrage" | "set_ember" | "set_frost" | "set_magma" | "set_phantom" | "set_glacier" | "set_blizzard" | "set_plague" | "set_cinderfang" | "set_requiem" | "set_veil" | "shared6" | "frost4" | "magma4" | "phantom4" | "barrage6" | "combo_barrage" | "combo_rift" | "combo_thorn";
   /** 移动方式:挂机不动 / 绕圈风筝 */
   move: "idle" | "kite";
   /** 天赋加成(征服者):全局增伤/暴击/元素 */
@@ -163,6 +163,39 @@ export function buildEquipment(build: SimOptions["build"]): Equipment[] {
     case "set_phantom":
       // S4 赛季套组初始武器标定(DESIGN-SEASON-SETS §3.5):召唤流,对标 309-356s 带
       return [makeSetStarterEquipment("phantom")];
+    case "set_glacier":
+      // S2 冰川界碑初始武器(英雄系统:每季 3 套专属)
+      return [makeSetStarterEquipment("glacier")];
+    case "set_blizzard":
+      // S2 白啸霜刃初始武器
+      return [makeSetStarterEquipment("blizzard")];
+    case "set_plague":
+      // S3 熔毒瘟薪初始武器
+      return [makeSetStarterEquipment("plague")];
+    case "set_cinderfang":
+      // S3 炽牙雷殛初始武器
+      return [makeSetStarterEquipment("cinderfang")];
+    case "set_requiem":
+      // S4 镇魂安可初始武器:召唤流
+      return [makeSetStarterEquipment("requiem")];
+    case "set_veil":
+      // S4 雾缚噬灵初始武器:召唤 + 回复流
+      return [makeSetStarterEquipment("veil")];
+    case "shared6":
+      // 多对一归属回归:6 张射线(同时计入弹幕风暴与冰川界碑的 6 件档)
+      return ([
+        { id: 70, level: 4, quality: "epic", name: "脉冲射线", triggers: [makeTrigger("pulse", { interval: 1.1 })], effect: makeEffect("ray", { damage: 26, speed: 620, radius: 640, slow: 0.45, duration: 2 }, 4), modifiers: [] },
+      ] as Equipment[]).concat(
+        [71, 72, 73, 74, 75].map((id) => ({
+          id,
+          level: 4,
+          quality: "rare" as const,
+          name: `计件射线${id}`,
+          triggers: [makeTrigger("kill", { chance: 0.2 })],
+          effect: makeEffect("ray", { damage: 24, speed: 620, radius: 640 }, 4),
+          modifiers: [],
+        }))
+      );
     case "frost4":
       // 极北冰脉 4 件套:2 冰锥 + 2 霜环(锋寒射程 +12% / 极北威压 冰系×1.3·冰锥×1.25)
       return [

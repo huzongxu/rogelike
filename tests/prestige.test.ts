@@ -50,6 +50,7 @@ function mkSave(partial: Partial<SaveData> = {}): SaveData {
     fragments: 0,
     commission: null,
     commission2: null,
+    selectedHero: null,
     selectedSet: null,
     tutorialDone: false,
     energy: 20,

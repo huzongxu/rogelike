@@ -94,9 +94,11 @@ function triggerParams(t: TriggerType, level: number): Record<string, number> {
   }
 }
 
+/** 通用卡池可产出的效果(套组专属效果之外的基础 8 种;套组可达性校验的唯一出处) */
+export const GENERIC_EFFECT_TYPES: readonly EffectType[] = ["knife", "nova", "skeleton", "cloud", "ray", "chain", "shield", "drain"];
+
 function randomEffect(_q: Quality, level: number): EffectInstance {
-  const types: EffectType[] = ["knife", "nova", "skeleton", "cloud", "ray", "chain", "shield", "drain"];
-  const e = pick(types);
+  const e = pick(GENERIC_EFFECT_TYPES as EffectType[]);
   return makeEffect(e, effectParams(e, level), level);
 }
 
@@ -193,7 +195,8 @@ export function generateEquipment(level: number, quality?: Quality, fromDrop = f
 export function generateSetEquipment(setId: SetId, level: number, rareBonus = 0, modBias?: ModifierType): Equipment {
   const s = setDef(setId);
   const q = randomQuality(level, rareBonus);
-  const effect = makeEffect(pick(s.effects), effectParams(pick(s.effects), level), level);
+  const effectType = pick(s.effects);
+  const effect = makeEffect(effectType, effectParams(effectType, level), level);
   const triggers: TriggerInstance[] = [];
   const trigPool = shuffle<TriggerType>([...s.triggers]);
   for (let i = 0; i < qualityDef(q).triggers; i++) {
@@ -371,8 +374,14 @@ export const SET_STARTERS: Record<SetId, { name: string; desc: string }> = {
   barrage: { name: "寒霜风暴", desc: "全屏冰霜弹幕,减速控场" },
   ember: { name: "连闪天火", desc: "闪电链式连锁清群" },
   frost: { name: "极北权杖", desc: "霜环扩散控场,扫过减速收割" },
+  glacier: { name: "界碑冰棱", desc: "单束贯穿冰射线,点穿 + 护盾" },
+  blizzard: { name: "白啸霜刃", desc: "霜刀成幕齐射,冰锥补刀" },
   magma: { name: "熔核之心", desc: "陨星轰炸落点,余烬灼烧封路" },
+  plague: { name: "瘟薪熔炉", desc: "毒云铺地持续灼伤" },
+  cinderfang: { name: "炽牙雷殛", desc: "闪电链多咬,陨星收尾" },
   phantom: { name: "影群哨笛", desc: "灵狼成群协战,越战越多" },
+  requiem: { name: "镇魂安可", desc: "骷髅列阵前排,替玩家挡线" },
+  veil: { name: "雾缚噬灵", desc: "狼群缠斗,靠回复续航耗死对手" },
 };
 
 /**
@@ -446,6 +455,73 @@ export function makeSetStarterEquipment(setId: SetId): Equipment {
         triggers: [makeTrigger("pulse", { interval: 2.5 })],
         // 双灵狼 14 伤协战:召唤流开局最慢,靠狼群积累 + 12s 存活补偿(标定进 309-356s 带)
         effect: makeEffect("spirit_wolves", { count: 2, damage: 14, duration: 12 }, 1),
+        modifiers: [],
+      };
+    case "glacier":
+      return {
+        id: 9007,
+        level: 1,
+        quality: "common",
+        name: "界碑冰棱",
+        triggers: [makeTrigger("pulse", { interval: 1.2 })],
+        // 5 束贯穿冰棱(穿 3):与寒霜风暴(16 发帘幕)错位走"少发高伤成排点穿"
+        // 首版单束(34 伤/穿 1)第 1 章 50s 阵亡,清场宽度不足
+        effect: makeEffect("ray", { damage: 30, speed: 620, radius: 640, spread: 5, pierce: 3, slow: 0.5, duration: 2.4 }, 1),
+        modifiers: [],
+      };
+    case "blizzard":
+      return {
+        id: 9008,
+        level: 1,
+        quality: "common",
+        name: "白啸霜刃",
+        triggers: [makeTrigger("pulse", { interval: 1.05 })],
+        // 12 发飞刀幕 × 34 伤:第 1 章怪血 30-39 一发秒,频率略高于荆棘圆环以补 AOE 缺失
+        effect: makeEffect("knife", { damage: 34, speed: 560, radius: 640, spread: 12, pierce: 1 }, 1),
+        modifiers: [],
+      };
+    case "plague":
+      return {
+        id: 9009,
+        level: 1,
+        quality: "common",
+        name: "瘟薪熔炉",
+        triggers: [makeTrigger("pulse", { interval: 1.8 })],
+        // 毒云 15 dps × 4.5s = 67 伤/朵,半径 150 铺路:区域持续伤害流,清场靠地面
+        effect: makeEffect("cloud", { dps: 15, radius: 150, duration: 4.5 }, 1),
+        modifiers: [],
+      };
+    case "cinderfang":
+      return {
+        id: 9010,
+        level: 1,
+        quality: "common",
+        name: "炽牙雷殛",
+        triggers: [makeTrigger("pulse", { interval: 1.5 })],
+        // 闪电链 44 伤 5 跳:比连闪天火(50 伤 4 跳)多咬一目标、少一分单发
+        effect: makeEffect("chain", { damage: 44, jumps: 5, radius: 400 }, 1),
+        modifiers: [],
+      };
+    case "requiem":
+      return {
+        id: 9011,
+        level: 1,
+        quality: "common",
+        name: "镇魂安可",
+        triggers: [makeTrigger("pulse", { interval: 2.6 })],
+        // 双骷髅 13 伤 + 14s 存活:前排常驻,输出靠召唤物累积(与影群哨笛同为召唤档基准)
+        effect: makeEffect("skeleton", { count: 2, damage: 13, duration: 14 }, 1),
+        modifiers: [],
+      };
+    case "veil":
+      return {
+        id: 9012,
+        level: 1,
+        quality: "common",
+        name: "雾缚噬灵",
+        triggers: [makeTrigger("pulse", { interval: 2.8 })],
+        // 三狼 11 伤群围:数量换单发,配合本套回复轴打"耗死对手"
+        effect: makeEffect("spirit_wolves", { count: 3, damage: 11, duration: 10 }, 1),
         modifiers: [],
       };
   }

@@ -91,11 +91,11 @@ const CASES = [
 /* ==================== 1. 字段清单 ==================== */
 
 describe("字段清单", () => {
-  it("origin 33 + deco 80 = 113,且 id 唯一", () => {
-    expect(ORIGIN_KEYS.length).toBe(33);
-    expect(DECO_KEYS.length).toBe(80);
-    expect(ALL_FIELDS.length).toBe(113);
-    expect(new Set(ALL_FIELDS.map((f) => f.id)).size).toBe(113);
+  it("origin 37 + deco 88 = 125,且 id 唯一", () => {
+    expect(ORIGIN_KEYS.length).toBe(37);
+    expect(DECO_KEYS.length).toBe(88);
+    expect(ALL_FIELDS.length).toBe(125);
+    expect(new Set(ALL_FIELDS.map((f) => f.id)).size).toBe(125);
   });
 
   it("每个字段都有取值域、默认值在域内", () => {
@@ -305,11 +305,11 @@ describe("exportJson 闭环", () => {
     expect(dirtyFields(back)).toEqual(["origin.pad", "deco.banY"]);
   });
 
-  it("all=true 导出完整 113 字段", () => {
+  it("all=true 导出完整 125 字段", () => {
     resetAll();
     const payload = JSON.parse(exportJson(readValues(), { all: true })) as { menuLayout: Record<string, Record<string, number>> };
-    expect(Object.keys(payload.menuLayout.origin).length).toBe(33);
-    expect(Object.keys(payload.menuLayout.deco).length).toBe(80);
+    expect(Object.keys(payload.menuLayout.origin).length).toBe(37);
+    expect(Object.keys(payload.menuLayout.deco).length).toBe(88);
   });
 
   it("拖到取值上界也能被加载器接受(编辑器钳到边界的意义)", () => {
@@ -336,7 +336,7 @@ describe("exportJson 闭环", () => {
 describe("parseFieldDocs(直接吃 docs/CONFIG-TABLES.md)", () => {
   const docs = parseFieldDocs(CONFIG_MD);
 
-  it("113 字段全部拿到说明,且带区块", () => {
+  it("125 字段全部拿到说明,且带区块", () => {
     const missing = ALL_FIELDS.filter((f) => !docs.has(f.id)).map((f) => f.id);
     expect(missing).toEqual([]);
     for (const f of ALL_FIELDS) {
@@ -369,10 +369,10 @@ describe("parseFieldDocs(直接吃 docs/CONFIG-TABLES.md)", () => {
     expect(only.get("deco.banY")!.group).toContain("测试");
   });
 
-  it("buildFieldRows:113 行,可拖集合与手柄集合完全一致", () => {
+  it("buildFieldRows:125 行,可拖集合与手柄集合完全一致", () => {
     const { handles } = snapshot(1246, true);
     const rows = buildFieldRows(docs, handles);
-    expect(rows.length).toBe(113);
+    expect(rows.length).toBe(125);
     const draggable = new Set(rows.filter((r) => r.draggable).map((r) => r.id));
     expect([...draggable].sort()).toEqual([...new Set(handles.map((h) => h.id))].sort());
     for (const r of rows) {

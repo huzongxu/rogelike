@@ -739,6 +739,19 @@ export class EquipmentEngine {
         s.durationBonus += SET_BONUSES.magma3DurationSec; // 地火奔涌:持续 +1 秒
       } else if (sb.id === "phantom" && isSummonType(t)) {
         s.power *= SET_BONUSES.phantom3SummonPower; // 群影:召唤物伤害 +20%
+      } else if (sb.id === "glacier") {
+        s.radiusMult = (s.radiusMult ?? 1) * SET_BONUSES.glacier3RangeMult; // 界碑铭刻:效果射程 +10%
+      } else if (sb.id === "blizzard") {
+        s.splitExtra += SET_BONUSES.blizzard3SplitExtra; // 白啸:弹幕 +1
+        s.pierce += SET_BONUSES.blizzard3PierceExtra; // 白啸:穿透 +1
+      } else if (sb.id === "plague") {
+        s.radiusMult = (s.radiusMult ?? 1) * SET_BONUSES.plague3RadiusMult; // 瘟薪蔓延:效果范围 +12%
+      } else if (sb.id === "cinderfang") {
+        s.chainTargets += SET_BONUSES.cinderfang3ChainExtra; // 炽牙:连锁 +1 目标
+      } else if (sb.id === "requiem") {
+        s.summonExtra = (s.summonExtra ?? 0) + SET_BONUSES.requiem3SummonExtra; // 安可:召唤数量 +1
+      } else if (sb.id === "veil") {
+        s.healMult = (s.healMult ?? 1) * SET_BONUSES.veil3HealMult; // 雾噬:回复量 +25%
       }
     }
     if (sb && sb.pieces >= SET_PIECE_TIERS.tier2) {
@@ -759,6 +772,19 @@ export class EquipmentEngine {
       } else if (sb.id === "phantom" && isSummonType(t)) {
         s.power *= SET_BONUSES.phantom6SummonPower; // 亡者行军·极:召唤伤害 ×1.5
         s.summonExtra = (s.summonExtra ?? 0) + (s.summonExtra ?? 0) + 1; // 召唤数量翻倍(赠量翻倍再+1 保底)
+      } else if (sb.id === "glacier") {
+        if (t === "ray" || t === "frost_ring") s.power *= SET_BONUSES.glacier6PowerMult; // 冰川裁断·极:射线与霜环 ×1.6
+      } else if (sb.id === "blizzard") {
+        if (t === "knife" || t === "icelance") s.power *= SET_BONUSES.blizzard6PowerMult; // 白啸霜刃·极:飞刀与冰锥 ×1.6
+      } else if (sb.id === "plague") {
+        if (t === "cloud" || t === "nova" || t === "magma_trail") s.power *= SET_BONUSES.plague6PowerMult; // 熔毒瘟薪·极:三种地面伤害 ×1.6
+      } else if (sb.id === "cinderfang") {
+        if (t === "chain" || t === "meteor") s.power *= SET_BONUSES.cinderfang6PowerMult; // 雷殛·极:闪电链与陨星 ×1.5
+      } else if (sb.id === "requiem" && isSummonType(t)) {
+        s.power *= SET_BONUSES.requiem6SummonPower; // 镇魂安可·极:召唤物伤害 ×1.5
+      } else if (sb.id === "veil") {
+        s.healMult = (s.healMult ?? 1) * SET_BONUSES.veil6HealMult; // 雾缚噬灵·极:回复量翻倍
+        s.lifesteal += SET_BONUSES.veil6Lifesteal; // 并附带吸血
       }
     }
     // 赛季联动词缀(DESIGN-SEASON-SETS L2):选套且 3 件套激活时叠放(门槛随 3/6 档位制),stat 级 ±15% 内

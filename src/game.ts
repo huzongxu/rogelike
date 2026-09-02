@@ -12,6 +12,9 @@ import { skinBar, drawBar, skinHeader, iconText, skinIconButton, skinButtonBase,
 import { HUD_TOP_H, HUD_BOT_H, HUD_PAD, battleBandY, pickTicker, equipRowLayout } from "./ui/hud";
 import { shopLayoutPure, SHOP_BOTTOM, SHOP_ROW_BOTTOM } from "./ui/shop";
 import { menuLayoutPure, type MenuLayout } from "./ui/menuLayout";
+import { heroSelectLayout, HERO_ROW_GAP, HERO_ROW_H, type HeroSelectLayout } from "./ui/heroSelectLayout";
+import { dragScrollFrom, flickOf, inertiaNext, SCROLL_TAP_SLOP } from "./ui/scrollList";
+import { drawHeroPortrait } from "./ui/heroPortrait";
 import { snapshotMenuLayout } from "./data/layoutMenu";
 import { menuSkinTable, snapshotMenuSkin } from "./data/menuSkin";
 import { type Vec2, vec2, clamp, rand } from "./core/math";
@@ -70,8 +73,9 @@ import { makeTrigger, makeEffect, makeModifier, effectDef, triggerDef, TRIGGERS,
 import { qualityDef, GACHA_EQUIPMENT_BASE_LEVEL, type Quality } from "./data/quality";
 import { shopCardPrice, shopRefreshPrice, MERGE_FEE_MULT, DESTROY_REFUND_RATE, DUPLICATE_OFFER_CHANCE, SET_OFFER_BIAS } from "./data/shop";
 import { PASS_TIERS, PASS_PREMIUM_MULT, calcPassProgress } from "./data/pass";
-import { setOfEffect, setDef, setBonusState, releasedSets, type SetId } from "./data/sets";
+import { isSetPiece, setDef, setBonusState, releasedSets, type SetId } from "./data/sets";
 import { seasonTheme, setMutation, isSeasonBoosted } from "./data/seasonSets";
+import { allHeroes, applyHeroSelection, heroDef, heroSkillLines, releasedHeroes, showcaseHero, type HeroId } from "./data/heroes";
 import { comboStates, COMBOS } from "./data/combos";
 import { chapterIntel } from "./data/intel";
 import { chapterTypeInfo, chapterTypeLabel } from "./data/chapters";
@@ -263,7 +267,7 @@ interface DmgNum {
   maxTtl: number;
 }
 
-type GameState = "menu" | "playing" | "gameover" | "victory" | "prestige" | "fusion" | "commission" | "gacha" | "shop" | "pass" | "daily" | "energy" | "season" | "leaderboard" | "gearup";
+type GameState = "menu" | "playing" | "gameover" | "victory" | "prestige" | "fusion" | "commission" | "gacha" | "shop" | "pass" | "daily" | "energy" | "season" | "leaderboard" | "gearup" | "heroes";
 
 interface Rect {
   x: number;
@@ -369,6 +373,16 @@ export class Game {
   private selectedWeaponId: number | null = null;
   /** 本次出战武器套组(主菜单选择;null = 无套组,通用卡池) */
   private selectedSet: SetId | null = null;
+
+  /* ---------- 英雄选择页(上列表下详情;出战英雄的事实源在 save.selectedHero) ---------- */
+  /** 列表滚动位(内容上移 px;拖出边界时为阻尼显示值) */
+  private heroScroll = 0;
+  /** 列表惯性速度(px/s,offset 空间;0 = 未甩动) */
+  private heroVel = 0;
+  /** 详情区预览英雄(点行即换;「确定出战」才写入存档) */
+  private heroPreview: HeroId | null = null;
+  /** 拖拽手势记录(null = 未在拖) */
+  private heroDrag: { startY: number; startOffset: number; lastOffset: number; lastT: number; vel: number; moved: boolean } | null = null;
   /** 首局引导(教学横幅;仅主线第 1 关且未完成时启用) */
   private guide = new Onboarding();
   /** 美术资源(贴图加载;缺图自动回退代码绘制) */
@@ -485,6 +499,9 @@ export class Game {
     // 菜单入口:选择主线关卡或无限关后开始一局
     this.state = "menu";
 
+    this.canvas.addEventListener?.("pointerdown", (e) => this.beginHeroDrag(this.toLogical(e.clientX, e.clientY)));
+    this.canvas.addEventListener?.("pointermove", (e) => this.moveHeroDrag(this.toLogical(e.clientX, e.clientY)));
+    this.canvas.addEventListener?.("pointercancel", () => this.cancelHeroDrag());
     this.canvas.addEventListener?.("pointerup", (e) => this.onPointerUp(e));
     window.addEventListener("keydown", (e) => this.onKey(e));
     // 微信小游戏没有 PointerEvent:用触摸模拟点击(短按且无明显位移视为点击)
@@ -497,16 +514,23 @@ export class Game {
           tapX = ts[0].x;
           tapY = ts[0].y;
           tapT = Date.now();
+          this.beginHeroDrag(this.screenToContent(ts[0].x, ts[0].y));
         }
       });
+      platform.onTouchMove((ts) => {
+        if (ts.length) this.moveHeroDrag(this.screenToContent(ts[0].x, ts[0].y));
+      });
       platform.onTouchEnd((ts) => {
-        if (ts.length) {
-          const d = Math.hypot(ts[0].x - tapX, ts[0].y - tapY);
-          if (Date.now() - tapT < 400 && d < 24) {
-            const p = this.screenToContent(ts[0].x, ts[0].y);
-            this.handleTap(p.x, p.y);
-          }
+        // 空触摸列表 = touchcancel(浏览器适配层复用同一回调)
+        if (!ts.length) {
+          this.cancelHeroDrag();
+          return;
         }
+        const p = this.screenToContent(ts[0].x, ts[0].y);
+        // 拖拽已消费本次手势时不再判定点击:短按位移阈值是屏幕 px,列表行是设计 px,两者不同源
+        const consumed = !this.endHeroDrag();
+        const d = Math.hypot(ts[0].x - tapX, ts[0].y - tapY);
+        if (!consumed && Date.now() - tapT < 400 && d < 24) this.handleTap(p.x, p.y);
       });
     }
 
@@ -572,6 +596,7 @@ export class Game {
 
   private onPointerUp(e: PointerEvent): void {
     const p = this.toLogical(e.clientX, e.clientY);
+    if (!this.endHeroDrag()) return;
     this.handleTap(p.x, p.y);
   }
 
@@ -666,6 +691,8 @@ export class Game {
       this.onGearUpClick(p);
     } else if (this.state === "leaderboard") {
       this.onLeaderboardClick(p);
+    } else if (this.state === "heroes") {
+      this.onHeroesClick(p);
     } else if (this.state === "energy") {
       this.onEnergyClick(p);
     } else if (this.state === "playing") {
@@ -1071,7 +1098,10 @@ export class Game {
       }
     }
 
-    // gameover / victory / prestige / fusion / commission / gacha / shop / menu / season / daily / leaderboard / energy 均为暂停态,世界停止更新
+    // 英雄选择页:暂停态但列表惯性仍需逐帧推进(与 draw 同读一个 layout 源)
+    if (this.state === "heroes") this.updateHeroScroll(dt);
+
+    // gameover / victory / prestige / fusion / commission / gacha / shop / menu / season / daily / leaderboard / energy / heroes 均为暂停态,世界停止更新
     if (
       this.state === "gameover" ||
       this.state === "victory" ||
@@ -1086,6 +1116,7 @@ export class Game {
       this.state === "gearup" ||
       this.state === "leaderboard" ||
       this.state === "energy" ||
+      this.state === "heroes" ||
       this.state === "menu"
     ) {
       return;
@@ -2356,7 +2387,7 @@ export class Game {
       g.fillText(afford ? `购买 ${price}金` : `¥${price}`, icx, r.y + r.h - 14);
       g.textAlign = "left";
       // 套组专属卡标记(属于当前出战套组)
-      if (this.selectedSet && setOfEffect(eq.effect.def.type) === this.selectedSet) {
+      if (this.selectedSet && isSetPiece(eq, this.selectedSet)) {
         const s = setDef(this.selectedSet);
         g.fillStyle = hexA(s.color, 0.18);
         g.fillRect(r.x + r.w - 40, r.y + 8, 34, 15);
@@ -3245,6 +3276,7 @@ export class Game {
     if (this.state === "energy") this.drawEnergy(g, w, h);
     if (this.state === "season") this.drawSeason(g, w, h);
     if (this.state === "leaderboard") this.drawLeaderboard(g, w, h);
+    if (this.state === "heroes") this.drawHeroes(g, w, h);
     // 教学横幅浮在所有界面之上(playing/shop 都有教学提示)
     this.drawGuideBanner(g, w);
     this.drawJoystick(g);
@@ -4158,6 +4190,259 @@ export class Game {
     }
   }
 
+  /* ---------- 出战英雄选择页(上列表下详情;第 13 屏) ---------- */
+
+  /** 英雄页几何单一出口:draw、命中测试与惯性都读这一个源(滚动位为唯一变量) */
+  private heroLayout(): HeroSelectLayout {
+    return heroSelectLayout(this.logicalW, this.logicalH, allHeroes(), this.save.seasonId, this.heroScroll);
+  }
+
+  private heroIn(p: Vec2, r: { x: number; y: number; w: number; h: number }): boolean {
+    return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  }
+
+  /** 进入英雄页:预览对齐存档,并把已出战那行滚进视口居中 */
+  private openHeroes(): void {
+    this.heroVel = 0;
+    this.heroDrag = null;
+    this.heroPreview = this.save.selectedHero;
+    this.state = "heroes";
+    const id = this.save.selectedHero;
+    if (!id) return;
+    const L = this.heroLayout();
+    const idx = allHeroes().findIndex((hh) => hh.id === id);
+    const step = HERO_ROW_H + HERO_ROW_GAP;
+    this.heroScroll = clamp(idx * step - (L.list.h - step) / 2, 0, L.maxScroll);
+  }
+
+  /** 只有落在列表视口内的按下才接管为滚动手势 */
+  private beginHeroDrag(p: Vec2): void {
+    if (this.state !== "heroes") return;
+    if (!this.heroIn(p, this.heroLayout().list)) return;
+    this.heroVel = 0;
+    this.heroDrag = {
+      startY: p.y,
+      startOffset: this.heroScroll,
+      lastOffset: this.heroScroll,
+      lastT: performance.now(),
+      vel: 0,
+      moved: false,
+    };
+  }
+
+  private moveHeroDrag(p: Vec2): void {
+    const d = this.heroDrag;
+    if (!d || this.state !== "heroes") return;
+    const L = this.heroLayout();
+    const now = performance.now();
+    const { display, settled } = dragScrollFrom(d.startOffset, p.y - d.startY, L.contentH, L.list.h);
+    const inst = ((settled - d.lastOffset) / Math.max(1, now - d.lastT)) * 1000;
+    d.vel = d.vel * 0.5 + inst * 0.5;
+    d.lastOffset = settled;
+    d.lastT = now;
+    if (Math.abs(p.y - d.startY) > SCROLL_TAP_SLOP) d.moved = true;
+    this.heroScroll = display;
+  }
+
+  /**
+   * 松手:硬钳回边界并决定是否甩惯性。返回 false = 手势已被拖拽消费,调用方必须放弃点击判定
+   * (微信端的位移阈值算的是屏幕 px,列表行算的是设计 px,两者不同源,不能只靠那边兜)。
+   */
+  private endHeroDrag(): boolean {
+    const d = this.heroDrag;
+    this.heroDrag = null;
+    if (!d || this.state !== "heroes") return true;
+    this.heroScroll = d.lastOffset;
+    this.heroVel = flickOf(d.vel);
+    return !d.moved;
+  }
+
+  private cancelHeroDrag(): void {
+    const d = this.heroDrag;
+    this.heroDrag = null;
+    if (!d || this.state !== "heroes") return;
+    this.heroScroll = d.lastOffset;
+    this.heroVel = 0;
+  }
+
+  /** 逐帧推进惯性(拖拽期间由手势接管,不叠加) */
+  private updateHeroScroll(dt: number): void {
+    if (this.heroDrag || this.heroVel === 0) return;
+    const L = this.heroLayout();
+    const next = inertiaNext({ offset: this.heroScroll, vel: this.heroVel }, dt, L.contentH, L.list.h);
+    this.heroScroll = next.offset;
+    this.heroVel = next.vel;
+  }
+
+  private onHeroesClick(p: Vec2): void {
+    const L = this.heroLayout();
+    if (this.heroIn(p, L.backBtn)) {
+      this.state = "menu";
+      return;
+    }
+    if (this.heroIn(p, L.list)) {
+      for (const row of L.rows) {
+        if (!row.released || !this.heroIn(p, row.rect)) continue;
+        this.heroPreview = row.id;
+        return;
+      }
+      return; // 行间距/缓冲行:落在列表内就不往下走
+    }
+    if (this.heroIn(p, L.clearBtn)) {
+      this.commitHero(null);
+    } else if (this.heroIn(p, L.confirm)) {
+      this.commitHero(this.heroPreview);
+    }
+  }
+
+  /** 出战英雄唯一落盘路径(派生镜像 selectedSet 由 applyHeroSelection 同步) */
+  private commitHero(id: HeroId | null): void {
+    applyHeroSelection(this.save, id);
+    persistSave(this.save);
+    this.heroVel = 0;
+    this.heroDrag = null;
+    this.state = "menu";
+  }
+
+  private drawHeroes(g: CanvasRenderingContext2D, w: number, h: number): void {
+    const pad = ui.pad;
+    const now = performance.now();
+    const L = this.heroLayout();
+    const seasonId = this.save.seasonId;
+    g.fillStyle = "rgba(8,10,16,0.86)";
+    g.fillRect(0, 0, w, h);
+    this.panelPad(g, w, h);
+    g.textAlign = "left";
+    g.fillStyle = theme.gold;
+    g.font = F(fs.title, true);
+    g.fillText(`出战英雄 · S${seasonId}「${seasonTheme(seasonId).name}」`, pad, 36);
+    g.fillStyle = theme.textSecondary;
+    g.font = F(fs.muted);
+    g.fillText(`已解锁 ${releasedHeroes(seasonId).length}/${allHeroes().length} · 后面赛季的英雄解锁后可继续出战`, pad, 56);
+
+    // 列表(裁剪到视口:缓冲行不越界可见,也不可点)
+    g.save();
+    g.beginPath();
+    g.rect(L.list.x, L.list.y, L.list.w, L.list.h);
+    g.clip();
+    for (const row of L.rows) {
+      const hero = heroDef(row.id);
+      const active = row.id === this.heroPreview;
+      const current = row.id === this.save.selectedHero;
+      g.fillStyle = active ? "rgba(90,200,250,0.14)" : "rgba(255,255,255,0.05)";
+      g.fillRect(row.rect.x, row.rect.y, row.rect.w, row.rect.h);
+      g.strokeStyle = active ? theme.select : "rgba(255,255,255,0.15)";
+      g.strokeRect(row.rect.x, row.rect.y, row.rect.w, row.rect.h);
+      drawHeroPortrait(this.assets, g, hero, row.portrait, { now, locked: !row.released });
+      g.font = F(fs.body, true);
+      g.fillStyle = row.released ? theme.textPrimary : theme.textMuted;
+      g.fillText(hero.name, row.textX, row.nameY);
+      g.font = F(fs.micro);
+      g.fillStyle = row.released ? theme.textSecondary : theme.textMuted;
+      const sub = row.released ? `${hero.title} · ${setDef(hero.setId).name}` : `S${hero.releaseSeason} 解锁`;
+      g.fillText(this.fitOne(sub, row.badge.x - row.textX - 10), row.textX, row.subY);
+      // 右缘徽标:当前出战者标「出战」,其余标首发赛季
+      const b = row.badge;
+      const cx = b.x + b.w / 2;
+      const cy = b.y + b.h / 2;
+      g.fillStyle = current ? hexA(theme.gold, 0.2) : row.released ? hexA(hero.accentColor, 0.16) : "rgba(255,255,255,0.05)";
+      g.beginPath();
+      g.arc(cx, cy, b.w / 2, 0, Math.PI * 2);
+      g.fill();
+      if (current) {
+        g.strokeStyle = theme.gold;
+        g.beginPath();
+        g.arc(cx, cy, b.w / 2, 0, Math.PI * 2);
+        g.stroke();
+      }
+      g.fillStyle = current ? theme.gold : row.released ? hero.accentColor : theme.textMuted;
+      g.font = F(fs.micro, true);
+      g.textAlign = "center";
+      g.fillText(current ? "出战" : `S${hero.releaseSeason}`, cx, rowTextY(b.y, b.h, fs.micro));
+      g.textAlign = "left";
+    }
+    g.restore();
+
+    // 滚动条
+    g.fillStyle = "rgba(255,255,255,0.08)";
+    g.fillRect(L.track.x, L.track.y, L.track.w, L.track.h);
+    if (L.thumb) {
+      g.fillStyle = hexA(theme.select, 0.6);
+      g.fillRect(L.thumb.x, L.thumb.y, L.thumb.w, L.thumb.h);
+    }
+
+    // 详情面板
+    const d = L.detail;
+    g.fillStyle = "rgba(255,255,255,0.04)";
+    g.fillRect(d.x, d.y, d.w, d.h);
+    g.strokeStyle = "rgba(255,255,255,0.12)";
+    g.strokeRect(d.x, d.y, d.w, d.h);
+    const preview = this.heroPreview ? heroDef(this.heroPreview) : null;
+    if (!preview) {
+      g.textAlign = "center";
+      g.fillStyle = theme.textSecondary;
+      g.font = F(fs.section, true);
+      g.fillText("不出战", d.x + d.w / 2, d.y + 180);
+      g.font = F(fs.muted);
+      g.fillText("通用卡池 · 无套组加成", d.x + d.w / 2, d.y + 206);
+      g.textAlign = "left";
+    } else {
+      drawHeroPortrait(this.assets, g, preview, L.portrait, { now });
+      g.fillStyle = theme.textPrimary;
+      g.font = F(fs.title, true);
+      g.fillText(this.fitOne(preview.name, L.loreW), L.textX, L.nameY);
+      g.fillStyle = preview.accentColor;
+      g.font = F(fs.muted);
+      g.fillText(this.fitOne(`${preview.title} · ${setDef(preview.setId).name}`, L.loreW), L.textX, L.titleY);
+      g.fillStyle = theme.textSecondary;
+      g.font = F(fs.muted);
+      const lore = this.fitLines(preview.lore, L.loreW).slice(0, 3);
+      for (let i = 0; i < lore.length; i++) g.fillText(lore[i], L.textX, L.loreY + i * 18);
+      g.fillStyle = theme.gold;
+      g.font = F(fs.micro, true);
+      g.fillText("技能详情", L.portrait.x, L.skillLabelY);
+      const lines = heroSkillLines(preview.id, seasonId);
+      for (let i = 0; i < L.skillRows.length; i++) {
+        const sr = L.skillRows[i];
+        const line = lines[i];
+        if (!line) continue;
+        g.fillStyle = "rgba(255,255,255,0.04)";
+        g.fillRect(sr.rect.x, sr.rect.y, sr.rect.w, sr.rect.h);
+        g.fillStyle = hexA(preview.accentColor, 0.16);
+        g.fillRect(sr.chip.x, sr.chip.y, sr.chip.w, sr.chip.h);
+        g.fillStyle = preview.accentColor;
+        g.font = F(fs.micro, true);
+        g.textAlign = "center";
+        g.fillText(line.tag, sr.chip.x + sr.chip.w / 2, rowTextY(sr.chip.y, sr.chip.h, fs.micro));
+        g.textAlign = "left";
+        const tx = sr.rect.x + 68;
+        g.font = F(fs.body, true);
+        g.fillStyle = theme.textPrimary;
+        g.fillText(this.fitOne(line.label, sr.descW), tx, sr.labelY);
+        g.font = F(fs.micro);
+        g.fillStyle = theme.textMuted;
+        g.fillText(this.fitOne(line.desc, sr.descW), tx, sr.descY);
+      }
+    }
+
+    // 右上返回(与命中测试同读 L.backBtn)
+    const B = L.backBtn;
+    if (!skinButtonBase(g, this.assets, "btn_minor", B.x, B.y, B.w, B.h, 8)) {
+      g.fillStyle = "#2a3d55";
+      g.fillRect(B.x, B.y, B.w, B.h);
+      g.strokeStyle = "rgba(255,255,255,0.3)";
+      g.strokeRect(B.x, B.y, B.w, B.h);
+    }
+    g.fillStyle = "#cfcfcf";
+    g.font = F(fs.muted);
+    g.textAlign = "center";
+    g.fillText("返回", B.x + B.w / 2, rowTextY(B.y, B.h, fs.muted));
+    g.textAlign = "left";
+
+    primaryButton(g, L.confirm.x, L.confirm.y, L.confirm.w, L.confirm.h, preview ? "确定出战" : "确认不出战", true, this.assets);
+    minorButton(g, L.clearBtn.x, L.clearBtn.y, L.clearBtn.w, L.clearBtn.h, "不出战", theme.textSecondary, this.assets);
+  }
+
   /**
    * 主菜单布局(几何单一出口,见 src/ui/menuLayout.ts):本方法只供给运行时环境 ——
    * 表快照 + 本次参与排布的关卡/套组数量 + 贴图就绪状态;draw 与 hit-test 共用同一返回值。
@@ -4430,63 +4715,51 @@ export class Game {
       g.fill();
     }
 
-    // 武器套组选择(需求优化 v2):点击切换,点已选套组取消(通用卡池)
-    sectionHeader(L.setHdrY, L.setY - 12, "武器套组 · 出战构筑", theme.textPrimary);
-    for (const b of L.setBtns) {
-      const s = setDef(b.id);
-      const sel = this.save.selectedSet === s.id;
-      // 套组卡底板:选中/常态两套贴图;缺图回退原平面填充+描边
-      const setPlate = this.assets.drawNineUniform(g, sel ? "menu_set_plate_selected" : "menu_set_plate", b.x, b.y, b.w, b.h);
-      if (!setPlate) {
-        g.fillStyle = sel ? hexA(s.color, 0.22) : "rgba(255,255,255,0.05)";
-        g.fillRect(b.x, b.y, b.w, b.h);
-        g.strokeStyle = sel ? s.color : "rgba(255,255,255,0.16)";
-        g.lineWidth = sel ? 2 : 1;
-        g.strokeRect(b.x, b.y, b.w, b.h);
-      }
-      this.assets.draw(g, `icon_set_${b.id}`, b.x + D.setIconOffX, b.y + b.h / 2 - D.setIconOffY, D.setIconW, D.setIconH);
-      if (sel && !setPlate) this.assets.draw(g, "frame_highlight_gold", b.x - D.setFramePad, b.y - D.setFramePad, b.w + D.setFramePad * 2, b.h + D.setFramePad * 2);
-      if (sel) this.assets.draw(g, "badge_star_gold", b.x + b.w - D.setBadgeInsetX, b.y - D.setBadgeOffY, D.setBadgeSize, D.setBadgeSize);
-      // 内容只能落在上下装饰带之间的净空带;图标居左,文字组整组水平居中(图4 反馈:文字居中)
-      if (!hiddenText.includes("setCard")) {
-        const colX = b.x + D.setColPadL;
-        const colW = b.w - D.setColPadR;
-        const colCx = colX + colW / 2;
-        const y1 = b.y + L.setBand + D.setRow1Off; // 首行基线
-        const y2 = y1 + D.setRow2Gap; // 次行基线
-        // 赛季限定标记:当季金色「本赛季」(享 70% 商店偏向 + 专属词缀),往季灰色「S{n}」
-        let tag = "";
-        let tagColor = "#8f9bb3";
-        if (s.releaseSeason) {
-          const boosted = isSeasonBoosted(this.save.seasonId, s.id);
-          tagColor = boosted ? "#ffd76a" : "#8f9bb3";
-          tag = boosted ? "本赛季" : `S${s.releaseSeason}`;
-        }
-        g.font = F(fs.micro, true);
-        const tagW = tag ? g.measureText(tag).width + D.tagPad : 0;
-        g.font = F(fs.body, true);
-        const name = this.fitOne(`${s.name}${sel ? " ✓" : ""}`, Math.max(1, colW - tagW));
-        let cx = colCx - (tagW + g.measureText(name).width) / 2;
-        if (tag) {
-          g.fillStyle = tagColor;
-          g.font = F(fs.micro, true);
-          g.fillText(tag, cx, y1);
-          cx += tagW;
-        }
-        g.fillStyle = s.color;
-        g.font = F(fs.body, true);
-        g.fillText(name, cx, y1);
-        g.fillStyle = sel ? "#cfcfcf" : "#8f9bb3";
-        g.font = F(fs.micro);
-        g.textAlign = "center";
-        g.fillText(this.fitOne(s.desc, colW), colCx, y2);
-        g.textAlign = "left";
-      }
+    // 出战英雄展示带:接管原套组卡那一行(L.setBtns 仍按原式算 = 基线兼容锚点,算而不画)
+    sectionHeader(L.setHdrY, L.setY - 12, "出战英雄", theme.textPrimary);
+    const hero = showcaseHero(this.save);
+    const band = L.heroBand;
+    if (!this.assets.drawNineUniform(g, hero ? "menu_set_plate_selected" : "menu_set_plate", band.x, band.y, band.w, band.h)) {
+      g.fillStyle = hero ? hexA(hero.accentColor, 0.14) : "rgba(255,255,255,0.05)";
+      g.fillRect(band.x, band.y, band.w, band.h);
+      g.strokeStyle = hero ? hexA(hero.accentColor, 0.55) : "rgba(255,255,255,0.16)";
+      g.lineWidth = 1;
+      g.strokeRect(band.x, band.y, band.w, band.h);
     }
-    if (this.save.selectedSet) {
-      const s = setDef(this.save.selectedSet);
-      const st = SET_STARTERS[this.save.selectedSet];
-      const mut = setMutation(this.save.seasonId, this.save.selectedSet);
+    if (hero) {
+      drawHeroPortrait(this.assets, g, hero, L.heroPort, { now: performance.now() });
+    } else {
+      g.strokeStyle = "rgba(255,255,255,0.18)";
+      g.lineWidth = 1;
+      g.strokeRect(L.heroPort.x, L.heroPort.y, L.heroPort.w, L.heroPort.h);
+    }
+    // 文字层沿用 setCard 面板开关(皮肤拓扑本批不新增面板)
+    if (!hiddenText.includes("setCard")) {
+      const set = hero ? setDef(hero.setId) : null;
+      const starter = set ? SET_STARTERS[set.id] : null;
+      const mut = set ? setMutation(this.save.seasonId, set.id) : null;
+      g.font = F(fs.body, true);
+      g.fillStyle = hero ? theme.textPrimary : theme.textMuted;
+      g.fillText(this.fitOne(hero ? `${hero.name} · ${hero.title}` : "未选出战英雄", L.heroTextMaxW), L.heroTextX, L.heroRow1Y);
+      g.font = F(fs.micro);
+      g.fillStyle = hero ? hero.accentColor : theme.textMuted;
+      g.fillText(
+        this.fitOne(set ? `${set.name} · ${set.desc}` : "点右侧「更换英雄」,套组构筑随英雄出战", L.heroTextMaxW),
+        L.heroTextX,
+        L.heroRow2Y
+      );
+      g.fillStyle = theme.textSecondary;
+      g.fillText(
+        this.fitOne(starter ? `初始武器:${starter.name}${mut ? ` · 赛季联动:${mut.name}` : ""}` : "初始武器:随机通用卡池", L.heroTextMaxW),
+        L.heroTextX,
+        L.heroRow3Y
+      );
+    }
+    minorButton(g, L.heroBtn.x, L.heroBtn.y, L.heroBtn.w, L.heroBtn.h, hero ? "更换英雄" : "选择英雄", hero ? hero.accentColor : theme.textSecondary, this.assets);
+    if (hero) {
+      const s = setDef(hero.setId);
+      const st = SET_STARTERS[hero.setId];
+      const mut = setMutation(this.save.seasonId, hero.setId);
       // 说明板:贴屏底通铺(高 = setDescH);文字左右对称内缩避开两端紫色端饰(图5 反馈:左右间距相等)
       this.assets.drawNineUniform(g, "menu_note_plate", D.note.x, D.note.y, D.note.w, D.note.h);
       if (!hiddenText.includes("note")) {
@@ -4494,7 +4767,7 @@ export class Game {
         g.fillStyle = "#8f9bb3";
         g.font = F(fs.micro);
         g.fillText(
-          this.fitOne(`商店偏向刷「${s.name}」卡 · 3 件:${s.bonus3.name} / 6 件:${s.bonus6.name}${mut ? ` · 赛季联动:${mut.name}(${mut.desc})` : ""}`, D.noteMaxW),
+          this.fitOne(`出战「${hero.name}」· 商店偏向刷「${s.name}」卡 · 3 件:${s.bonus3.name} / 6 件:${s.bonus6.name}${mut ? ` · 赛季联动:${mut.name}(${mut.desc})` : ""}`, D.noteMaxW),
           D.noteX,
           n1
         );
@@ -4552,13 +4825,10 @@ export class Game {
       this.startEndless();
       return;
     }
-    // 武器套组切换(点已选套组取消 → 通用卡池)
-    for (const b of L.setBtns) {
-      if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) {
-        this.save.selectedSet = this.save.selectedSet === b.id ? null : b.id;
-        persistSave(this.save);
-        return;
-      }
+    // 出战英雄展示带:「更换英雄」→ 英雄选择页(L.setBtns 仍算但不画 = 基线兼容锚点)
+    if (p.x >= L.heroBtn.x && p.x <= L.heroBtn.x + L.heroBtn.w && p.y >= L.heroBtn.y && p.y <= L.heroBtn.y + L.heroBtn.h) {
+      this.openHeroes();
+      return;
     }
   }
 

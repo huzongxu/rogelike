@@ -130,15 +130,19 @@ describe("pushOutOfPillar / isInPool(§3.2)", () => {
 /* ---------- 3. 强度标定(§3.4:地形是摩擦,不是墙) ----------
  * 标定方法学(重要):新手局带商店成长,商店抽卡吃共享种子流——障碍几何扰动事件时序后,
  * 抽卡序列整体重排,单种子 ON/OFF 波次差被商店混沌淹没(对照臂自身即在 6/21 两谷间摆荡,
- * 噪声地板 ±15 波)。故单种子对比不可测,一律用多种子聚合:比均值与失败谷占比,不比单种子。 */
+ * 噪声地板 ±15 波)。故单种子对比不可测,一律用多种子聚合:比均值与失败谷占比,不比单种子。
+ * 样本量下限 64:该分布是双峰的(≈85% 种子止步 5–8 章,少数冲到 15–21 章),24 粒种子时
+ * 均值标准误(SE≈0.5 章)与 ±1 章阈值同量级,断言退化成掷硬币;64 粒把 SE 压到 ≈0.3 章,
+ * ≤1 章阈值约合 3 倍标准误,才是有判别力的守卫(实测 |ON−OFF| 均值差 ≤0.25 章)。 */
 
 describe("地形标定(§3.4)", () => {
   it(
-    "新手局:24 种子聚合,开障碍后均值回落 ≤1 章、失败谷(≤10 波)占比不恶化",
+    "新手局:64 种子聚合,开障碍后均值回落 ≤1 章、失败谷(≤10 波)占比不恶化",
     () => {
+      const SEEDS = 64;
       const offW: number[] = [];
       const onW: number[] = [];
-      for (let seed = 1; seed <= 24; seed++) {
+      for (let seed = 1; seed <= SEEDS; seed++) {
         const off = runSim({ build: "set_barrage", move: "kite", shopGrowth: true, set: "barrage", maxSeconds: 1200, seed });
         const on = runSim({ build: "set_barrage", move: "kite", shopGrowth: true, set: "barrage", maxSeconds: 1200, seed, obstacles: true });
         offW.push(off.wave);
@@ -150,10 +154,13 @@ describe("地形标定(§3.4)", () => {
       const meanOn = mean(onW);
       const failOff = fail(offW);
       const failOn = fail(onW);
-      console.log(`[新手/地形] OFF 均值 ${meanOff.toFixed(1)} 失败谷 ${failOff}/24 | ON 均值 ${meanOn.toFixed(1)} 失败谷 ${failOn}/24`);
-      // 平均回落 ≤1 章(标定时实测 0.7);失败谷占比允许 ≤3 粒种子噪声(实测 +1)
+      console.log(`[新手/地形] OFF 均值 ${meanOff.toFixed(1)} 失败谷 ${failOff}/${SEEDS} | ON 均值 ${meanOn.toFixed(1)} 失败谷 ${failOn}/${SEEDS}`);
+      // 空转守卫:两臂均值都须停在第一章谷之上,否则模拟本身已塌,差值断言会 trivially 成立
+      expect(meanOff, "对照臂均值异常塌陷(先查模拟/装备生成,别调阈值)").toBeGreaterThanOrEqual(6);
+      expect(meanOn, "障碍臂均值异常塌陷(先查地形生成/毒池 dps,别调阈值)").toBeGreaterThanOrEqual(6);
+      // 平均回落 ≤1 章(64 种子实测 0.25 以内);失败谷噪声带 6 粒 ≈ 样本量的 9%
       expect(meanOff - meanOn, "均值回落超 1 章(回调数量/毒池 dps,不动生成曲线)").toBeLessThanOrEqual(1);
-      expect(failOn, "失败谷占比系统性恶化").toBeLessThanOrEqual(failOff + 3);
+      expect(failOn, "失败谷占比系统性恶化").toBeLessThanOrEqual(failOff + 6);
     },
     300_000
   );

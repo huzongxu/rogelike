@@ -109,7 +109,8 @@ export const QUALITY_MAX_LEVEL = tierFieldMap("maxLevel");
 | [`src/data/envAffixes.ts`](../src/data/envAffixes.ts) | 环境词缀 | 词缀定义表 + 数值参数(反伤比例/治疗光环/时间膨胀倍率/迷雾节奏/死亡连锁半径与击退)、每局抽取规则 |
 | [`src/data/shop.ts`](../src/data/shop.ts) | 商店 | 卡价曲线(已购/章节递增)、刷新价曲线(基础/章节/指数底数)、合成补位费、销毁回收率、援助概率、套组卡池偏向 |
 | [`src/data/season.ts`](../src/data/season.ts) | 赛季壳 | 赛季天数、星尘兑换率、星数口径(生命达标线/补星价/三星奖励)、每日首通倍率、赛季分算法 |
-| [`src/data/sets.ts`](../src/data/sets.ts) | 套组 | 件数激活档位(3/6 件)、全部套装联动数值(棘肤回血/冷却、齐射分裂/加速、余烬扩散、锋寒射程、地火持续、群影召唤、六件质变倍率) |
+| [`src/data/sets.ts`](../src/data/sets.ts) | 套组(12 套)| 件数激活档位(3/6 件)、`SET_BONUSES` 32 键全部套装联动数值(棘肤回血/冷却、齐射分裂/加速、余烬扩散、锋寒射程、地火持续、群影召唤、六件质变倍率 + 6 新套冰川界碑/白啸霜刃/熔毒瘟薪/炽牙雷殛/镇魂安可/雾缚噬灵)、每套效果清单与发布季 |
+| [`src/data/heroes.ts`](../src/data/heroes.ts) | 英雄(12 位 = 12 套组的角色包装)| 名号/称号/文案四要素、`setId` 双射映射;**无数值**(伤害/被动/主动一律不落地),`releaseSeason`/`themeIndex`/`accentColor` 全部从 `sets` + `seasonSets` 派生,技能详情 4 行(初始武器/三件套/六件套/赛季联动)运行时读源表拼装 |
 | [`src/data/combos.ts`](../src/data/combos.ts) | 跨套组合技 | 弹幕风暴(分裂数/伤害比/弹速/触发间隔减成)、深渊裂隙(加时/血池持续与回血比/池上限)、荆棘光环(反伤比/治疗倍率) |
 | [`src/data/talents.ts`](../src/data/talents.ts) | 天赋树 | 19 项天赋效果数值(经验/离线增效/委托加速/稀有加成/生命/护盾/伤害/冷却/暴击/元素/背水),解锁价备注在定义表 |
 | [`src/data/commissions.ts`](../src/data/commissions.ts) | 委托挂机 | 收益衰减曲线(2h 全额 → 4h 衰减至 50% → 保底)、领取提醒门槛 |

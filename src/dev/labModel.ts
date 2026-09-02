@@ -353,6 +353,24 @@ export function buildHandles(L: MenuLayout, ctx: HandleContext): Handle[] {
     }
   }
 
+  /* --- 英雄展示带(接管原套组卡那一带;setBtns 几何仍是基线锚点,只是不再画卡) --- */
+  {
+    const band = L.heroBand;
+    const port = L.heroPort;
+    const btn = L.heroBtn;
+    // 带高被 heroClearance 夹紧时拖 heroRise 画面不动 → 与 stageHdrY 同一口径:环境相关手柄
+    if (band.h - L.setH < L.heroMaxRise) add("英雄展示带", "y", band.y, band.x + 30, origin("heroRise", -1));
+    add("英雄展示带", "x", port.x, band.y + 10, deco("heroPadX", 1));
+    add("英雄展示带", "x", port.x, band.y + 26, deco("heroPortOffX", 1));
+    add("英雄展示带", "y", port.y, port.x + 42, deco("heroPortOffY", 1));
+    add("更换英雄按钮", "x", btn.x, btn.y + 10, origin("heroBtnW", -1));
+    // 按钮在带内垂直居中 → 顶缘对 btnH 的雅可比是 −½
+    add("更换英雄按钮", "y", btn.y, btn.x + 20, origin("heroBtnH", -1, 2));
+    add("英雄图文列", "y", L.heroRow1Y, L.heroTextX + 8, deco("heroNameOffY", 1));
+    add("英雄图文列", "y", L.heroRow2Y, L.heroTextX + 24, deco("heroRow2Gap", 1));
+    add("英雄图文列", "y", L.heroRow3Y, L.heroTextX + 40, deco("heroRow3Gap", 1));
+  }
+
   return out;
 }
 
@@ -386,6 +404,9 @@ export function buildGuides(L: MenuLayout, ctx: HandleContext): Guide[] {
   for (const r of L.rows) g.push(rect(`行 #${r.id}`, "layout", r));
   for (const b of L.setBtns) g.push(rect(`套组 ${b.id}`, "layout", b));
   g.push(rect("note 说明板", "layout", d.note));
+  g.push(rect("heroBand 英雄展示带", "layout", L.heroBand));
+  g.push(rect("heroPort 立绘盒", "layout", L.heroPort));
+  g.push(rect("heroBtn 更换英雄按钮", "hit", L.heroBtn));
   /* 派生参考 */
   g.push(rect("列表顶缘 listY", "guide", { x: 0, y: L.listY, w: ctx.w, h: 0 }));
   g.push(rect("列表可用下界", "guide", { x: 0, y: listBottomY(L), w: ctx.w, h: 0 }));
@@ -463,6 +484,7 @@ const DECO_GROUP_PREFIXES: [string, string][] = [
   ["set", "套组卡"],
   ["tag", "套组卡 · 赛季标记"],
   ["note", "说明板"],
+  ["hero", "英雄展示带"],
 ];
 
 /** 按声明顺序的最长前缀匹配(故 chipX* 归"筹码"、chipSlide 亦同;row2OffY 必须排在 row* 前) */
@@ -577,5 +599,7 @@ export function derivedReadout(L: MenuLayout): { label: string; value: string }[
     { label: "setBand / noteBand", value: `${L.setBand} / ${L.noteBand}` },
     { label: "noteCap / noteMaxW", value: `${L.d.noteCap} / ${Math.round(L.d.noteMaxW)}` },
     { label: "setY / 卡底 / 屏底", value: `${Math.round(L.setY)} / ${Math.round(L.setY + L.setH)} / ${Math.round(L.d.note.y + L.d.note.h)}` },
+    { label: "heroBand 高 / 夹紧上界", value: `${L.heroBand.h} / ${L.heroMaxRise + L.setH}` },
+    { label: "heroTextMaxW(图文列可用宽)", value: `${Math.round(L.heroTextMaxW)}` },
   ];
 }

@@ -108,4 +108,58 @@ describe("套组初始武器平衡(需求:选套组即定本局基调)", () => {
     expect(r.seconds).toBeGreaterThanOrEqual(60);
     expect(r.kills).toBeGreaterThan(20);
   }, 60000);
+
+  it("冰川界碑初始武器「界碑冰棱」:第 1 章内可清场不死", () => {
+    const r = runSim({ build: "set_glacier", move: "kite", set: "glacier", maxSeconds: 60, seed: 31 });
+    console.log("[界碑冰棱/kite]\n" + formatReport(r));
+    expect(r.seconds).toBeGreaterThanOrEqual(60);
+    expect(r.kills).toBeGreaterThan(25);
+  }, 60000);
+
+  it("白啸霜刃初始武器「白啸霜刃」:分裂弹幕,第 1 章内可清场不死", () => {
+    const r = runSim({ build: "set_blizzard", move: "kite", set: "blizzard", maxSeconds: 60, seed: 32 });
+    console.log("[白啸霜刃/kite]\n" + formatReport(r));
+    expect(r.seconds).toBeGreaterThanOrEqual(60);
+    expect(r.kills).toBeGreaterThan(25);
+  }, 60000);
+
+  it("熔毒瘟薪初始武器「瘟薪熔炉」:持续伤害,第 1 章内可清场不死", () => {
+    const r = runSim({ build: "set_plague", move: "kite", set: "plague", maxSeconds: 60, seed: 33 });
+    console.log("[瘟薪熔炉/kite]\n" + formatReport(r));
+    expect(r.seconds).toBeGreaterThanOrEqual(60);
+    expect(r.kills).toBeGreaterThan(25);
+  }, 60000);
+
+  it("炽牙雷殛初始武器「炽牙雷殛」:弹跳清场,第 1 章内可清场不死", () => {
+    const r = runSim({ build: "set_cinderfang", move: "kite", set: "cinderfang", maxSeconds: 60, seed: 34 });
+    console.log("[炽牙雷殛/kite]\n" + formatReport(r));
+    expect(r.seconds).toBeGreaterThanOrEqual(60);
+    expect(r.kills).toBeGreaterThan(25);
+  }, 60000);
+
+  it("镇魂安可初始武器「镇魂安可」:召唤流,击杀门槛低于伤害型", () => {
+    const r = runSim({ build: "set_requiem", move: "kite", set: "requiem", maxSeconds: 60, seed: 35 });
+    console.log("[镇魂安可/kite]\n" + formatReport(r));
+    expect(r.seconds).toBeGreaterThanOrEqual(60);
+    expect(r.kills).toBeGreaterThan(15);
+  }, 60000);
+
+  it("雾缚噬灵初始武器「雾缚噬灵」:召唤 + 回复流,存活门槛优先于击杀", () => {
+    const r = runSim({ build: "set_veil", move: "kite", set: "veil", maxSeconds: 60, seed: 36 });
+    console.log("[雾缚噬灵/kite]\n" + formatReport(r));
+    expect(r.seconds).toBeGreaterThanOrEqual(60);
+    expect(r.kills).toBeGreaterThan(15);
+  }, 60000);
+
+  it("多对一归属回归:同一份射线卡只激活一个套组(冰川/弹幕分别跑,强度相近不失控)", () => {
+    const asBarrage = runSim({ build: "shared6", move: "kite", set: "barrage", maxSeconds: 120, seed: 37 });
+    const asGlacier = runSim({ build: "shared6", move: "kite", set: "glacier", maxSeconds: 120, seed: 37 });
+    console.log("[shared6/barrage]\n" + formatReport(asBarrage) + `\n  总伤害 ${Math.round(asBarrage.totalDamage)}`);
+    console.log("[shared6/glacier]\n" + formatReport(asGlacier) + `\n  总伤害 ${Math.round(asGlacier.totalDamage)}`);
+    // 两套都只算一次件数(6 件档各自成立),且都活着打完 2 章
+    expect(asBarrage.seconds).toBeGreaterThanOrEqual(120);
+    expect(asGlacier.seconds).toBeGreaterThanOrEqual(120);
+    // 失控守卫:同场两套同时开火会让伤害翻倍,这里两者都应在同一量级
+    expect(asGlacier.totalDamage).toBeLessThan(asBarrage.totalDamage * 2.5);
+  }, 120000);
 });

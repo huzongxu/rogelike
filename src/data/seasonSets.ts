@@ -1,10 +1,10 @@
 /**
  * 赛季套组轮换(DESIGN-SEASON-SETS.md)—— 给玩家每个赛季的新鲜感。
  * L1 主题层:每赛季一个主题(名称/主色/环境词缀倾向),纯风味,零引擎;
- * L2 套组赛季词缀:每赛季三套常驻套组各得一条确定性「赛季联动」加成(stat 级 ±15% 内,
- *   4 件套激活时生效)+ 商店刷本套卡时的修饰器倾向;
- * L3 赛季限定套组:featuredSetId 按 seasonId 给出当季套组(P2 起实装新套组后生效,
- *   实装前由 allSets 存在性守卫返回 null,保证 S1 行为冻结)。
+ * L2 套组赛季词缀:常驻三套各按 5 条池轮换;当季新发布的套组(英雄系统批次后每季 3 套)
+ *   另得一条专属「赛季联动」词缀(stat 级 ±15% 内,3 件套激活时生效)+ 商店刷本套卡的修饰器倾向;
+ * L3 赛季限定套组:releaseSeason 决定归属赛季(到赛季即永久可选);featuredSetId 只作
+ *   「当季代表套组」的展示/文案锚点,不再是强化门控(门控走 isSeasonBoosted)。
  *
  * 铁律:全部 seasonId → 纯函数,同赛季恒同配置(与幻影榜同纪律);
  *       所有 patch 只作用于玩家侧,绝不折入怪物曲线(数值墙不回头)。
@@ -12,7 +12,7 @@
 
 import type { ModifierType } from "./affixes";
 import type { SetId } from "./sets";
-import { allSets } from "./sets";
+import { allSets, setReleaseSeason } from "./sets";
 
 /* ---------- L1 赛季主题 ---------- */
 
@@ -119,8 +119,8 @@ const MUTATION_POOLS: Record<BaseSetId, readonly SeasonMutation[]> = {
 };
 
 /**
- * 赛季限定套组的当季专属词缀(比常驻套稍强:双 patch,强化"本赛季玩新套"动机)。
- * 仅当该套组是当季 featured(featuredSetId 命中)时生效,赛季翻页后自动回落 null。
+ * 赛季套组的当季专属词缀(比常驻套稍强:双 patch,强化"本赛季玩新套"动机)。
+ * 仅当该套组属于当季新发布(featuredSetId/isSeasonBoosted 命中)时生效,赛季翻页后自动回落 null。
  */
 const FEATURED_MUTATIONS: Partial<Record<SetId, SeasonMutation>> = {
   frost: {
@@ -129,17 +129,53 @@ const FEATURED_MUTATIONS: Partial<Record<SetId, SeasonMutation>> = {
     patch: { dmgMult: 1.1, intervalMult: 0.92 },
     modifierBias: "haste",
   },
+  glacier: {
+    name: "界碑寒压",
+    desc: "效果射程 +12%,触发间隔 -8%",
+    patch: { rangeMult: 1.12, intervalMult: 0.92 },
+    modifierBias: "pierce",
+  },
+  blizzard: {
+    name: "白啸潮",
+    desc: "效果伤害 +10%",
+    patch: { dmgMult: 1.1 },
+    modifierBias: "split",
+  },
   magma: {
     name: "过热地脉",
     desc: "效果持续 +15%",
     patch: { durationMult: 1.15 },
     modifierBias: "duration",
   },
+  plague: {
+    name: "瘟火同焚",
+    desc: "效果持续 +12%,效果伤害 +8%",
+    patch: { durationMult: 1.12, dmgMult: 1.08 },
+    modifierBias: "duration",
+  },
+  cinderfang: {
+    name: "雷殛余温",
+    desc: "触发间隔 -10%,效果伤害 +8%",
+    patch: { intervalMult: 0.9, dmgMult: 1.08 },
+    modifierBias: "chain",
+  },
   phantom: {
     name: "亡影谢幕",
     desc: "召唤物伤害 +25%",
     patch: { summonMult: 1.25 },
     modifierBias: "power",
+  },
+  requiem: {
+    name: "安可返场",
+    desc: "召唤物伤害 +15%",
+    patch: { summonMult: 1.15 },
+    modifierBias: "duration",
+  },
+  veil: {
+    name: "雾噬回响",
+    desc: "生命回复 +15%,触发间隔 -8%",
+    patch: { healMult: 1.15, intervalMult: 0.92 },
+    modifierBias: "lifesteal",
   },
 };
 
@@ -152,25 +188,30 @@ export function setMutation(seasonId: number, setId: SetId | null): SeasonMutati
   const pool = MUTATION_POOLS[setId as BaseSetId];
   if (pool) return pool[(Math.max(1, Math.floor(seasonId)) - 1) % pool.length];
   const fm = FEATURED_MUTATIONS[setId];
-  if (fm && featuredSetId(seasonId) === setId) return fm;
+  if (fm && isSeasonBoosted(seasonId, setId)) return fm;
   return null;
 }
 
 /* ---------- L3 赛季限定套组 ---------- */
 
 /**
- * 赛季 → 当季限定套组排期(全部实装后此表即为轮换依据;排期外赛季 = null)。
+ * 赛季 → 当季代表套组(展示/文案锚点;全部实装后此表即为锚点依据;排期外赛季 = null)。
+ * 不再充当强化门控 —— 门控走 isSeasonBoosted。
  */
 const FEATURED_BY_SEASON: Record<number, SetId> = { 2: "frost", 3: "magma", 4: "phantom" };
 
-/** 当季限定套组(S1 = null;套组未实装 = null;实装后赛季内恒定) */
+/** 当季代表套组(S1 = null;套组未实装 = null;实装后赛季内恒定) */
 export function featuredSetId(seasonId: number): SetId | null {
   const id = FEATURED_BY_SEASON[Math.max(1, Math.floor(seasonId))];
   if (!id) return null;
   return allSets().some((s) => s.id === id) ? id : null;
 }
 
-/** 赛季套组当季是否被强化(商店偏向 60%→70% + 专属词缀) */
+/**
+ * 套组当季是否被强化(商店偏向 60%→70% + 专属词缀)。
+ * 判据 = 该套组的发布赛季就是当前赛季:每季 3 套新英雄/新套同季受益,过季自动回落。
+ * 常驻三套视作 S1 发布(与英雄系统的 releaseSeason 派生一致)。
+ */
 export function isSeasonBoosted(seasonId: number, setId: SetId): boolean {
-  return featuredSetId(seasonId) === setId;
+  return setReleaseSeason(setId) === Math.max(1, Math.floor(seasonId));
 }
