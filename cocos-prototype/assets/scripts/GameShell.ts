@@ -29,10 +29,12 @@ import { ShopModel, type ShopAction, type ShopWorld } from "./shop/ShopModel";
 import { ShopView } from "./shop/ShopView";
 import { HeroSelectModel, type HeroAction, type HeroSaveView } from "./heroes/HeroSelectModel";
 import { HeroSelectView } from "./heroes/HeroSelectView";
+import { LeaderboardView } from "./leaderboard/LeaderboardView";
+import { buildLeaderboardContent, leaderboardScreenLayout, type LeaderboardAction, type LeaderboardSaveView } from "./leaderboard/LeaderboardModel";
 
 const { ccclass } = _decorator;
 
-/** 后续阶段才落地的屏幕(键 = 菜单入口 id + phantom/fusion):点下去先给一条轻提示,不做假动作 */
+/** 后续阶段才落地的屏幕(键 = 尚未接入的菜单入口 id + fusion):点下去先给一条轻提示,不做假动作 */
 const PENDING_SCREEN: Record<string, string> = {
     commission: "委托尚未开放",
     gacha: "扭蛋尚未开放",
@@ -40,7 +42,6 @@ const PENDING_SCREEN: Record<string, string> = {
     pass: "通行证尚未开放",
     daily: "每日尚未开放",
     gearup: "升级尚未开放",
-    phantom: "幻影榜尚未开放",
     fusion: "融合尚未开放",
 };
 
@@ -138,6 +139,8 @@ export class GameShell extends Component {
     /** 英雄选择屏:账本(滚动位/预览/热区)与视图;出战只经 model.commit 写回 sim.save */
     private heroesModel: HeroSelectModel | null = null;
     private heroesView: HeroSelectView | null = null;
+    /** 幻影榜屏:纯只读,视图直读存档派生的 content(无常驻模型实例) */
+    private leaderboardView: LeaderboardView | null = null;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
     private overlay: Node | null = null;
@@ -194,7 +197,9 @@ export class GameShell extends Component {
             // 商店与英雄屏的图标/立绘在 sync 时才换上:换引用 + 当前屏补排一次
             this.shopView?.setFrames(this.frames);
             this.heroesView?.setFrames(this.frames);
+            this.leaderboardView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
+            if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             this.refreshMenu();
         });
     }
@@ -205,6 +210,7 @@ export class GameShell extends Component {
         this.buildMenuScreen();
         this.buildShopScreen();
         this.buildHeroesContent();
+        this.buildLeaderboardScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
@@ -214,8 +220,9 @@ export class GameShell extends Component {
             menu: () => this.refreshMenu(),
             shop: () => this.shopView?.sync(),
             heroes: () => this.syncHeroes(),
+            leaderboard: () => this.syncLeaderboard(),
         };
-        (["battle", "menu", "shop", "heroes"] as ScreenKey[]).forEach((key) => {
+        (["battle", "menu", "shop", "heroes", "leaderboard"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
             const refresh = hooks[key];
@@ -381,8 +388,10 @@ export class GameShell extends Component {
                 if (a.index === ECHO_CHIP_INDEX) this.watchAdForEcho();
                 return;
             case "phantom":
+                this.openLeaderboard();
+                return;
             case "entry":
-                this.toast(PENDING_SCREEN[a.kind === "entry" ? a.entry : "phantom"]);
+                this.toast(PENDING_SCREEN[a.entry]);
                 return;
         }
     }
@@ -646,6 +655,48 @@ export class GameShell extends Component {
         // 阻尼位(拖出边界显示的 offset)恒在此收回:与 Web 松手即硬钳同一结果
         const snapped = m.scroll.snap(g);
         if (moved || snapped) view.sync();
+    }
+
+    /* ================= 幻影榜屏(Phase 4 首屏:纯只读,零写入) ================= */
+
+    /**
+     * 幻影榜屏装配。三层分工与商店/英雄同构:
+     *  ① 几何全部来自共享层 `game/ui/leaderboardLayout()`(经 `leaderboardScreenLayout` 单一出口),
+     *     顶/底锚用整屏高 `logicalH()`,与视图内 `placeRect` 的默认 H 同源;
+     *  ② 文案与命中来自 cc-free 的 `leaderboard/LeaderboardModel.ts`,直读存档派生;
+     *  ③ 本屏纯只读:没有任何写回存档的路径,`onLeaderboardAction` 只有「返回」一个出口。
+     * 无常驻模型实例(状态全在存档侧),视图每轮 sync 现算 content。
+     */
+    private buildLeaderboardScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:leaderboard");
+        if (!node) return;
+        node.removeAllChildren();
+        this.leaderboardView = new LeaderboardView(node, this.frames, {
+            layout: () => leaderboardScreenLayout(DESIGN_W, logicalH()),
+            content: () => buildLeaderboardContent(this.leaderboardSave()),
+            onAction: (a) => this.onLeaderboardAction(a),
+        });
+        this.leaderboardView.sync();
+    }
+
+    /** 本屏要读的存档字段就这四项;投影成窄切片交给纯函数 */
+    private leaderboardSave(): LeaderboardSaveView {
+        const s = this.save();
+        return { seasonId: s.seasonId, stageStars: s.stageStars, seasonBest: s.seasonBest, frames: s.frames };
+    }
+
+    /** 进屏:切屏即触发路由 refresh 钩子 → syncLeaderboard(现算一帧几何与文案) */
+    private openLeaderboard(): void {
+        this.router.show("leaderboard");
+    }
+
+    private syncLeaderboard(): void {
+        this.leaderboardView?.sync();
+    }
+
+    /** 热区 → 玩法。纯只读屏只有返回一个动作(对标 Web onLeaderboardClick 的 hitPanelBack) */
+    private onLeaderboardAction(a: LeaderboardAction): void {
+        if (a.kind === "back") this.router.show("menu");
     }
 
     /* ================= 主循环 ================= */

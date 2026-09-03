@@ -137,7 +137,36 @@ export interface ViewTable {
      * 写在绘制路径里的内联字面量迁到 Cocos 时一律落这张表(默认值逐项对标 Web)。
      */
     phase3: Phase3Params;
+    /**
+     * Phase 4 成长系统屏的呈现常量(首屏:幻影榜)。口径同 phase3:Web 绘制路径里的
+     * 内联字面量迁到 Cocos 时一律落表,默认值逐项对标 Web。
+     */
+    phase4: Phase4Params;
 }
+
+/** 含义:Phase 4 成长系统屏的呈现参数.单位:尺寸设计 px / 颜色为 CSS 串 */
+export interface Phase4Params {
+    /** 幻影榜玩家行底(Web drawLeaderboard rgba(255,215,106,0.10)) */
+    lbRowPlayer: string;
+    /** 幻影榜幽灵行底(rgba(255,255,255,0.05),与 phase3.heroRowIdle 同值,按屏分键便于独立调表) */
+    lbRowGhost: string;
+    /** 幻影榜幽灵行描边(rgba(255,255,255,0.15)) */
+    lbRowGhostStroke: string;
+    /** 幽灵行名次文字色(Web #e8e8e8) */
+    lbGhostRank: string;
+    /** 返回钮缺图回退底 / 描边(Web drawLeaderboard #2a3d55 + rgba(255,255,255,0.3)) */
+    lbBackFallbackBg: string;
+    lbBackFallbackStroke: string;
+}
+
+export const PHASE4_DEFAULTS: Phase4Params = {
+    lbRowPlayer: "rgba(255,215,106,0.10)",
+    lbRowGhost: "rgba(255,255,255,0.05)",
+    lbRowGhostStroke: "rgba(255,255,255,0.15)",
+    lbGhostRank: "#E8E8E8",
+    lbBackFallbackBg: "#2A3D55",
+    lbBackFallbackStroke: "rgba(255,255,255,0.3)",
+};
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */
 export interface Phase3Params {
@@ -347,6 +376,7 @@ export const FALLBACK: ViewTable = {
     backdrop: { coverAlpha: 0.55, dimColor: "rgba(11,14,20,0.35)" },
     menu: { ...MENU_PRESENTATION_DEFAULTS },
     phase3: { ...PHASE3_DEFAULTS },
+    phase4: { ...PHASE4_DEFAULTS },
     lab: {
         ...LAB_OVERLAY_DEFAULTS,
         screenHeights: [...LAB_OVERLAY_DEFAULTS.screenHeights],
@@ -421,6 +451,7 @@ export function loadViewTable(): Promise<ViewTable> {
                 },
                 menu: typedMerge(FALLBACK.menu, raw.menu),
                 phase3: typedMerge(FALLBACK.phase3, raw.phase3),
+                phase4: typedMerge(FALLBACK.phase4, raw.phase4),
                 lab: (() => {
                     const lab = typedMerge(FALLBACK.lab, raw.lab);
                     const src = (raw.lab && typeof raw.lab === "object" ? raw.lab : {}) as Record<string, unknown>;
