@@ -341,7 +341,29 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 ### Phase 4 — 成长系统屏
 `drawGacha` `drawPass` `drawDaily` `drawSeason` `drawLeaderboard` `drawGearUp` `drawPrestige` `drawFusion` `drawCommission(+Panel)`。含 `data/gacha.ts` 的 `drawGacha`/`drawGacha10` 贴图优先通道。
 
-验收：每屏一张对标截图 + 一次完整交互闭环（进入→操作→返回，`overlayFrom` 语义正确）；广告位 `adBusy` 期间世界不推进。
+**九屏共同事实（2026-09-03 实测，源 `src/game.ts` + 共享层）**：均为暂停态；`watchAd` 置 `adBusy`，期间 `update` 早退、点击全吞；行高一律走共享 `theme.spreadRows` / `rowTextY`，面板底走 `panelPad` 九宫贴图；**九屏都没有共享层纯布局函数**（`game/ui/menuLayout.ts` 只管菜单侧入口钮），其中五屏在 `game.ts` 内已有"单一出口私有 layout 方法"（draw 与 click 同源，搬迁即可）：`gachaLayout` `dailyLayout` `prestigeLayout` `fusionLayout` `commissionLayout`；pass / season / leaderboard / gearup 的矩形内联在 `draw*` 里，需先抽成 cc-free 纯函数。九屏均无 Canvas 渐变（唯一 `createLinearGradient` 在 HUD dock）、无滚动惯性，`ui/scrollList.ts` 本期用不上。
+
+**Cocos 侧接线点**：`GameShell.PENDING_SCREEN` 现有九条占位轻提示（`"××尚未开放"`，菜单入口在 `onMenuAction` 分发、融合在商店工具钮分发），逐屏换成真实 `router.show(...)`；`core/ScreenRouter.ts` 的 `SCREEN_KEYS` 当前为 battle/menu/shop/heroes，按屏增键。`drawAvatarFrame` 住在 Web 侧 `src/ui/skin.ts`（Canvas2D），不在共享层 —— 排行屏的关卡框徽标按 Phase 3 立绘同款处置：贴图优先、缺图回退代码形状。
+
+**逐屏形态（数量一律写"由什么门控"，不钉死数字）**：
+
+| 屏 | 入口 | 返回 | 结构与门控变量 | 超屏 | 广告 | 写入面 | 时序/动效 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 排行 leaderboard | 仅菜单幻影榜钮 | → menu；无 Esc 分支 | 幽灵行数 = `PHANTOM_COUNT`，玩家行按 `rankAmong` 插位（未入榜则列末尾）；`save.frames` 非空时玩家行加框徽标 | 否 | 无 | **零写入**（纯只读） | 无 |
+| 每日 daily | 菜单钮 / 键 b | Esc 或钮 → menu | 恒三组：宝箱（`DAILY_BOXES`）+ 每日天赋（`save.dailyTalents`，每日从 6 池 roll 3）+ 补领行；态由 `dailyBoxClaimed`/`dailyTalentClaimed`/`makeUpDate`/`dailyClearedDate==today` 门控 | 否 | 最密：宝箱全广告、天赋首次免费余广告、补领广告 | 领取产出 + `daily*` 标记 + `points`/`dayEcho`/`adWatchCount` | 跨天 `checkDailyReset` 清零 |
+| 通行证 pass | 菜单钮 / 键 p | → menu；无 Esc 分支 | 档位数 = `PASS_TIERS` 常量；行态由 `save.passTier`（已领）与进度 `points + dayEcho + 星数×2` 门控；贴底总进度条 | 否 | 未激活时看广告 → `premiumPassSeason = seasonId`（赛季翻页后失效） | `passTier` + 产出 | 无；**命中语义特殊：任意行点击 = 顺序领第 `passTier` 档，行 rect 未参与命中** |
+| 升级 gearup | 菜单钮 / 键 u | Esc 或钮 → menu | 行数 = `min(save.ownedGear.length, 14)`，超出**硬截断**并提示"仅显示前 14 件"，无滚动；每行 5 星徽（`GEAR_UPGRADE_MAX`）+ 升级钮（`gearUpgradeCost(lv)`，`lv = save.gearLevels[name]`） | 否 | 无 | `stardust`(-) / `gearLevels` | 无；行文本靠 `measureText` 截断（230/320px），Cocos 侧要换成 Label 溢出策略 |
+| 扭蛋 gacha | 菜单钮 / 键 g（`openGacha` 清空结果） | → menu；不用 `overlayFrom` | 固定段：抽卡钮 + 钻石换券行 + 双保底条 + 最近抽取（存 8 显 ≤5）+ 收藏列表 n = `save.ownedGear.length`；`rowsTop` 随最近结果数 0–5 下移 | **唯一溢出风险屏**：收藏列表无滚动无截断，条数增长即溢出底边 | 每日 1 次广告免费抽（`dailyGachaAdUsed`） | `gachaTicket`/`gachaPity*`/`ownedGear`/`stardust`/`selectedGearId`/`diamond`/`collection` | 无抽卡动画，结果即时入列表 |
+| prestige | 菜单天赋钮 / 键 t / 结算屏天赋钮 | **无返回钮、无 Esc**，唯一出口"开始新轮回" → `startNewRun` | 三系页签 + 当前路线恒 10 节点；条件块自底向上叠（`owns(targeted_search)` → 触发器钮组、`owns(blueprint)` → 效果钮组），列表被压缩；可购由派生 `availablePoints`（= points − Σ已购 cost）与 tier 门控 | 否 | 无 | `ownedTalents`（points 不扣减）；`runConfig` 两项仅会话不落盘 | 无 |
+| 委托 commission | 菜单钮 / 键 c（`openCommission("menu")`） | Esc 或钮 → `overlayFrom` | **双形态互斥**：进行中槽 > 0 时只画 1–2 个面板（第二槽需 `double_commission` 天赋，`panelH` 恒定）并 return；否则画区域行（`REGIONS`，锁定由 prestiges/天赋门控）+ 难度钮（`DIFFICULTIES`）+ 开始钮 + 碎片兑换钮（`fragments ≥ 10` 才画） | 否 | 无 | `commission`/`commission2`/`fragments` + 按区域产出 | **实时时序**：`Date.now` 累计、时数文本每帧变、前段满额进度条、上限封顶（`eternal_factory` 解除）→ Cocos 侧需周期刷新文本与进度 |
+| 融合 fusion | **仅商店右上工具钮**（装备 ≥ 2），`openFusion("shop")` → `overlayFrom = "shop"` | Esc（无 `pendingHidden` 时）或钮 → `overlayFrom`，实际恒回 shop | 行数 = `player.equipment.length`（槽上限随 `slot1/2` + `extra_gear` 增长，局内态非存档）；底部面板三形态：未选提示 / 双选预览 / 三选且 `tripleUnlocked`（天赋 ≥ 6）三重面板 | 否 | 无 | `stardust`(-cost)/`fusionPity`/`collection`；成品入 `player.equipment`（不落盘） | 无动画；保底 `HIDDEN_PITY_N` 触发 `drawHiddenChoice` 弹层（Esc 被禁、只响应卡片）—— 该弹层属 Phase 5 |
+| 赛季 season | **无手动入口**：`syncSeason`（任意状态跑）检出 `seasonStartAt` 满周期 → 写 `seasonSummary`，仅当 `state == "menu"` 时自动弹 | Esc 或钮 → `closeSeason` → menu | 单面板 + 贴底按钮；数值取翻页瞬间的 `seasonScore(stageStars, seasonBest)` | 否 | 无 | 写入发生在**进屏前**：`stardust`+ / `seasonId`+1 / `seasonStartAt` 顺延 / `stageStars` 清零 / `seasonBest = 0` | 无 |
+
+**验收**：每屏一张对标截图（`.probe/web-p4-*.png` 为 Web 基准，684×1217 同口径）+ 一次完整交互闭环（进入 → 操作 → 返回，`overlayFrom` 语义正确）；广告位 `adBusy` 期间世界不推进。逐屏的结构断言按上表的门控变量分档写（例：排行屏行数 = `PHANTOM_COUNT + 1` 且玩家行插位等于 `rankAmong`；升级屏行数 = `min(ownedGear, 14)` 且超出时出现截断提示），不写死数字。几何抽出的纯布局函数须与 `draw*`/`hit*` 同源，并按 Phase 3 的口径断言每条文本带落在 `0..560`。
+
+**派单顺序（一屏一单，子 agent 150 turn 上限扛不住多屏）**：排行 → 每日 → 通行证 → 升级 → 扭蛋 → prestige → 委托 → 融合 → 赛季。理由是先用只读零写入的排行屏把"抽纯布局 + Cocos 视图 + 路由增键 + 热区分发 + 测试"这条链跑通，再依次引入广告与写入、文字测量截断、溢出风险、条件块压缩、实时时序、跨屏 `overlayFrom`，最后做没有手动入口、需要构造触发条件的赛季屏。
+
+**本期尚未核实、动到该屏前要先测的**：扭蛋溢出的具体条数阈值（按 `spreadRows` 推算，未截图实测）；`startNewRun → restart` 是否必然使 `save.prestiges + 1`（`+1` 写在 `settleRun`，调用链未逐行核）；装备槽上限中 `extra_gear → runSlotBonus` 的注入路径；委托时长文案与 `COMMISSION_MAX_HOURS`、衰减曲线参数的一致性；`balance.json` 当前是否实际覆盖了 daily/gacha 常量（`applyBalance` 钩子存在，覆盖值未查）；`rollDailyTalents` 的所属模块与纯函数性。
 
 ### Phase 5 — 流程屏与覆盖层
 `drawGameOver` `drawVictory` `drawConfirm` `drawTriplePanel` `drawHiddenChoice` `drawSectionHeader` `drawSlamWarn` + `Overlay` 常驻层。
