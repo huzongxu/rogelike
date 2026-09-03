@@ -10,7 +10,7 @@ import { input } from "./core/input";
 import { theme, hexA, fs, F, ui, spreadRows, rowTextY, confirmRects } from "@game/ui/theme";
 import { panel, primaryButton, dangerButton, minorButton, minorButtonBg } from "./ui/themePaint";
 import { skinBar, drawBar, skinHeader, iconText, skinIconButton, skinButtonBase, drawAvatarFrame, drawQualityFrame } from "./ui/skin";
-import { HUD_TOP_H, HUD_BOT_H, HUD_PAD, battleBandY, pickTicker, equipRowLayout } from "@game/ui/hud";
+import { HUD_TOP_H, HUD_BOT_H, HUD_PAD, pickTicker, equipRowLayout } from "@game/ui/hud";
 import { shopLayoutPure, SHOP_BOTTOM, SHOP_ROW_BOTTOM } from "@game/ui/shop";
 import { menuLayoutPure, type MenuLayout } from "@game/ui/menuLayout";
 import { heroSelectLayout, HERO_ROW_GAP, HERO_ROW_H, type HeroSelectLayout } from "@game/ui/heroSelectLayout";
@@ -18,39 +18,13 @@ import { dragScrollFrom, flickOf, inertiaNext, SCROLL_TAP_SLOP } from "@game/ui/
 import { drawHeroPortrait } from "./ui/heroPortrait";
 import { snapshotMenuLayout } from "@game/data/layoutMenu";
 import { menuSkinTable, snapshotMenuSkin } from "@game/data/menuSkin";
-import { type Vec2, vec2, clamp, rand } from "@game/core/math";
+import { type Vec2, vec2, clamp } from "@game/core/math";
 import { FxLayer } from "./core/fxLayer";
-import { Player, xpToNext, PLAYER_BASE } from "@game/entities/player";
+import { xpToNext, PLAYER_BASE } from "@game/entities/player";
 import {
-  spawnEnemy,
-  randomEnemyKind,
-  updateEnemy,
-  updateSpecial,
-  updateBoss,
-  updateSkill,
-  applySlow,
-  knockback,
-  reflectDamage,
-  shieldguardDamageMult,
-  splitBabies,
-  skillSplitBabies,
-  deathSummonSpecs,
-  auraMultAt,
-  tryRevive,
   BOSS_SLAM,
-  bossHpMult,
   ENEMY_DEFS,
-  type Enemy,
-  type SkillTelegraph,
 } from "@game/entities/enemy";
-import { type Projectile, updateProjectile, projectileHits, steerHoming } from "@game/entities/projectile";
-import { type Cloud, type Minion, spawnCloud, spawnGem, type Gem, type Obstacle, rollChapterObstacles, pushOutOfPillar, isInPool, spawnBurnPool, tickObstacleTtl, OBSTACLE } from "@game/entities/objects";
-import {
-  EquipmentEngine,
-  type BattleContext,
-  type Fx,
-} from "@game/systems/equipmentEngine";
-import { WaveManager, seasonMonsterDefFor, type ArenaRect } from "@game/systems/waves";
 import { SEASON_MONSTERS } from "@game/data/seasonMonsters";
 import {
   generateEquipment,
@@ -62,25 +36,21 @@ import {
   slotExpandCost,
   SHOP_SLOT_CAP,
   makeStarterEquipment,
-  makeSetStarterEquipment,
   SET_STARTERS,
   thornPairOffer,
-  buildHasThorn,
-  buildHasHeal,
-  equipmentHasThornTrigger,
   type Equipment,
 } from "@game/data/equipmentGen";
 import { makeTrigger, makeEffect, makeModifier, effectDef, triggerDef, TRIGGERS, EFFECTS, MODIFIERS } from "@game/data/affixes";
 import { qualityDef, GACHA_EQUIPMENT_BASE_LEVEL, type Quality } from "@game/data/quality";
 import { shopCardPrice, shopRefreshPrice, MERGE_FEE_MULT, DESTROY_REFUND_RATE, DUPLICATE_OFFER_CHANCE, SET_OFFER_BIAS } from "@game/data/shop";
 import { PASS_TIERS, PASS_PREMIUM_MULT, calcPassProgress } from "@game/data/pass";
-import { isSetPiece, setDef, setBonusState, releasedSets, type SetId } from "@game/data/sets";
+import { isSetPiece, setDef, setBonusState, releasedSets } from "@game/data/sets";
 import { seasonTheme, setMutation, isSeasonBoosted } from "@game/data/seasonSets";
 import { allHeroes, applyHeroSelection, heroDef, heroSkillLines, releasedHeroes, showcaseHero, type HeroId } from "@game/data/heroes";
 import { comboStates, COMBOS } from "@game/data/combos";
 import { chapterIntel } from "@game/data/intel";
 import { chapterTypeInfo, chapterTypeLabel } from "@game/data/chapters";
-import { Onboarding, type GuideCtx } from "@game/systems/onboarding";
+import { Onboarding } from "@game/systems/onboarding";
 import {
   BUILDER_ROUTE,
   EFFICIENT_ROUTE,
@@ -89,22 +59,11 @@ import {
   talentOf,
   routeOf,
   routeCost,
-  slotBonusFor,
-  firstXpScaleFor,
   offlineBonusFor,
   commissionSpeedFor,
   commissionTimeScaleFor,
   uncappedCommissionFor,
-  autoPickupFor,
   rareBonusFor,
-  maxHpMultFor,
-  startShieldFor,
-  globalDamageMultFor,
-  cdrScaleFor,
-  critFor,
-  elementalMultFor,
-  desperateMultFor,
-  TALENT_VALUES,
   type TalentId,
 } from "@game/data/talents";
 import { loadSave, persistSave, resetSave, calcPrestigePoints, availablePoints, type SaveData } from "./systems/save";
@@ -170,42 +129,8 @@ import type { EffectType, HiddenAffixType, TriggerType } from "@game/data/affixe
 import {
   envAffixDef,
   rollEnvAffixes,
-  deathChainDamage,
-  REFLECT_FIELD_RATE,
-  HEAL_AURA_RATE,
-  TIME_DILATION_MULT,
-  MIST_CYCLE,
-  MIST_VISIBLE,
-  DEATH_CHAIN_RADIUS,
-  DEATH_CHAIN_KNOCKBACK,
   type EnvAffixType,
 } from "@game/data/envAffixes";
-import {
-  CONTACT_HIT_CD,
-  COMBO_WINDOW,
-  COMBO_FRENZY_EVERY,
-  FRENZY_DURATION,
-  FRENZY_PULSE_MULT,
-  REFLECT_BUDGET_HP_PCT,
-  THORN_HEAL_PCT,
-  GOLD_PER_XP,
-  BOSS_GOLD,
-  ELITE_GEM_COUNT,
-  DROP_SCATTER,
-  GEM_PICK_RADIUS_BONUS,
-  GEM_MAGNET_RADIUS,
-  MINION_SIGHT,
-  MINION_ATTACK_RANGE,
-  MINION_HIT_KNOCKBACK,
-  MINION_HEAL_ON_HIT_PCT,
-  MINION_FOLLOW_LEASH,
-  REVIVE_SHIELD_SECONDS,
-  REVIVE_CLEAR_RADIUS,
-  BOSS_SPAWN_OFFSET_X,
-  BOSS_SPAWN_OFFSET_Y,
-  BOSS_SPAWN_INSET,
-} from "@game/data/combat";
-import { BOSS_WEAK_HP_MULT } from "@game/data/enemies";
 import {
   REGIONS,
   DIFFICULTIES,
@@ -227,12 +152,10 @@ import {
   stageOf,
   CHAPTER_SECONDS,
   CHAPTERS_PER_STAGE,
-  CHAPTER_ARENA,
   splitEcho,
   stageEchoReward,
   STAGE_UNLOCK_PROGRESS,
   CLEAR_REWARD_GROWTH,
-  stageClearedAtFinalChapter,
   makeUpReward,
   type StageDef,
   type StageRewards,
@@ -246,26 +169,16 @@ import {
   type GachaResult,
 } from "@game/data/gacha";
 
-/** 实体上限(保证小游戏性能) */
-const LIMITS = { enemies: 340, projectiles: 420, clouds: 44, minions: 24, gems: 300 }; // 弹幕 420:组合技分裂子弹+品质高频下 260 会挤掉存活主弹幕(重构标定)
+import { BattleWorld, type BattleRunInputs, type BattleWorldHost } from "@game/systems/battleWorld";
 
-/**
- * 原地移除满足条件的元素。
- * 注意:不能用 arr = arr.filter(...) 重新赋值 —— 词缀引擎的 BattleContext 持有数组的
- * 原始引用,重新赋值会让引擎看到陈旧数组(飞刀打不进新数组、引擎看不到新敌人)。
- */
-function removeIf<T>(arr: T[], pred: (x: T) => boolean): void {
-  for (let i = arr.length - 1; i >= 0; i--) {
-    if (pred(arr[i])) arr.splice(i, 1);
-  }
-}
-
-interface DmgNum {
-  pos: Vec2;
-  value: string;
-  color: string;
-  ttl: number;
-  maxTtl: number;
+/** 开发演示(?demo=triple):三重融合素材(击杀+飞刀+连锁 / 脉冲+飞刀 / 移动+新星)+ 续航件,验证关卡通关用 */
+function DEMO_TRIPLE_EQUIPMENT(): Equipment[] {
+  return [
+    { id: 9101, level: 5, quality: "epic" as Quality, name: "连锁飞刀", triggers: [makeTrigger("kill", { chance: 0.5 })], effect: makeEffect("knife", { damage: 40, speed: 600, radius: 640 }, 5), modifiers: [makeModifier("chain", { targets: 3 })] },
+    { id: 9102, level: 5, quality: "rare" as Quality, name: "脉冲飞刀", triggers: [makeTrigger("pulse", { interval: 1.5 })], effect: makeEffect("knife", { damage: 28, speed: 560, radius: 640 }, 5), modifiers: [] },
+    { id: 9103, level: 5, quality: "rare" as Quality, name: "移动新星", triggers: [makeTrigger("move", { distance: 400 })], effect: makeEffect("nova", { damage: 50, radius: 140 }, 5), modifiers: [] },
+    { id: 9104, level: 5, quality: "rare" as Quality, name: "汲取脉冲", triggers: [makeTrigger("pulse", { interval: 2 })], effect: makeEffect("drain", { heal: 40 }, 5), modifiers: [] },
+  ];
 }
 
 type GameState = "menu" | "playing" | "gameover" | "victory" | "prestige" | "fusion" | "commission" | "gacha" | "shop" | "pass" | "daily" | "energy" | "season" | "leaderboard" | "gearup" | "heroes";
@@ -293,52 +206,10 @@ export class Game {
   private viewH = 996;
   private dpr = 1;
 
-  private player = new Player();
-  private enemies: Enemy[] = [];
-  /** 批 4 技能预警(震击/脉冲/轰炸):实体层触发时生成,本层持有倒计时/渲染/引爆(不占 bossSlamCharge,三阶段机零触碰) */
-  private skillTelegraphs: { t: SkillTelegraph; total: number; src: Enemy | null }[] = [];
-  /** 技能预警余烬节流(与 Boss 震击余烬同口径:0.05s 共享窗,控粒子预算) */
-  private telegraphFxAcc = 0;
-  private projectiles: Projectile[] = [];
-  private clouds: Cloud[] = [];
-  private minions: Minion[] = [];
-  private gems: Gem[] = [];
-  private fx: Fx[] = [];
-  private dmgNums: DmgNum[] = [];
-  /** 通用粒子/发光层(纯视觉,只读模拟状态;见 core/fxLayer) */
+  /** 通用粒子/发光层(纯视觉,只读模拟状态;见 core/fxLayer)。宿主持有,构造时注入世界层的特效桥 */
   private fxLayer = new FxLayer();
-  /** 陨星 telegraph 余烬发射节流(全局共享,控住粒子预算) */
-  private meteorEmberAcc = 0;
-  /** 陨星坠落期(倒计时后 60%)流星本体火尾发射节流 */
-  private meteorFallAcc = 0;
-  /** 领域云(毒云/灼烧/回血池/霜环)氛围粒子节流(全场共享) */
-  private cloudFxAcc = 0;
-  /** 召唤物魂火拖影节流(全场共享) */
-  private minionFxAcc = 0;
-  /** 敌人氛围特效节流(震击预警余烬/狂暴火光,全场共享) */
-  private enemyFxAcc = 0;
-  /** 批 4 冲锋蓄力火花节流(全场共享;冲刺拖影无节流,同投射物先例) */
-  private chargeFxAcc = 0;
 
-  private engine = new EquipmentEngine();
-  private waves = new WaveManager();
-
-  /* ---------- 反射伤害预算(防止高爆发 Build 被反伤自毁) ---------- */
-  private reflectBudget = 0;
-  private reflectTimer = 0;
-
-  /* ---------- 连杀狂潮(战斗爽感:连杀触发全装备加速) ---------- */
-  private comboCount = 0;
-  private comboTimer = 0;
-  private frenzyTimer = 0;
-
-  /* ---------- 主线关卡(赛季关卡式) ---------- */
-  /** 当前关卡(null = 无限关) */
-  private currentStage: StageDef | null = null;
-  private bossSpawned = false;
-  private bossDead = false;
-  /** Boss 阶段横幅(策划案 V3 §3.2:P2/P3 切换提示) */
-  private bossBanner: { text: string; ttl: number } | null = null;
+  /* ---------- 主线关卡(赛季关卡式;进行态见下方 world 透传访问器) ---------- */
   /** 通关奖励(胜利界面展示) */
   private stageReward: StageRewards | null = null;
   /** 通关掉落的新收藏装备数(胜利界面展示;重复的转为星尘) */
@@ -351,29 +222,12 @@ export class Game {
   private seasonSummary: { id: number; score: number; stardust: number } | null = null;
   /** 开发演示:三重融合素材(URL ?demo=triple) */
   private demoTriple = false;
-  /** 自主控制(挂机):角色自动移动/战斗,手动输入可覆盖;F6 切换 */
-  private autoMove = true;
 
-  /* ---------- 章节制(需求优化 v2:20 章 × 60 秒,有限竞技场) ---------- */
-  private chapter = 1;
-  private chapterTimer = 0;
-  /** 本章竞技场边界(框定区域) */
-  private arena: ArenaRect = { x0: 0, y0: 0, x1: CHAPTER_ARENA.w, y1: CHAPTER_ARENA.h };
-  /** 本章地形(策划案 V3 §6 / DESIGN-S4 §3):石柱挡路 + 毒池 DoT;每章重生成 */
-  private obstacles: Obstacle[] = [];
-  /** 毒池伤害累积计时(0.25s tick;离开毒池清零) */
-  private poolTickAcc = 0;
-
-  /* ---------- 场内金币经济(替代经验/升级) ---------- */
-  private gold = 0;
-  /** 已购买卡数(商店价格递增曲线) */
-  private totalBought = 0;
+  /* ---------- 场内金币经济(商店买卡;金币与已购数由世界层持有) ---------- */
   /** 商店当前三张卡 */
   private shopOffers: (Equipment | null)[] = [];
   /** 商店中选中的武器 id(用于销毁/管理) */
   private selectedWeaponId: number | null = null;
-  /** 本次出战武器套组(主菜单选择;null = 无套组,通用卡池) */
-  private selectedSet: SetId | null = null;
 
   /* ---------- 英雄选择页(上列表下详情;出战英雄的事实源在 save.selectedHero) ---------- */
   /** 列表滚动位(内容上移 px;拖出边界时为阻尼显示值) */
@@ -391,26 +245,15 @@ export class Game {
   /** 引导横幅位置(命中测试,每帧重建) */
   private guideBanner: { x: number; y: number; w: number; h: number; skip: { x: number; y: number; w: number; h: number } } | null = null;
 
-  /** 本章竞技场:宽 560 标定;纵向收窄到上下坞之间(人物/怪物活动范围不越栏) */
-  private chapterArena(_ch: number): ArenaRect {
-    const band = battleBandY(this.worldH());
-    return { x0: 0, y0: band.y0, x1: this.logicalW, y1: band.y1 };
-  }
-
   /* ---------- 扭蛋机(战场外抽卡) ---------- */
   /** 最近一次抽取结果(展示用,保留最近 8 条) */
   private gachaResults: GachaResult[] = [];
-
-  /* ---------- 环境词缀(策划案 4.2:每局随机 1-3 个) ---------- */
-  private envAffixes: EnvAffixType[] = [];
 
   private state: GameState = "menu";
   /** 幻影榜:本局名次提升到的名次(结算面板提示「已超越幻影第 N 名」;null = 无提升) */
   private rankImprovedTo: number | null = null;
   /** 头像框:本局新解锁的关卡框(胜利面板提示;null = 无) */
   private frameUnlockedThisRun: number | null = null;
-  private kills = 0;
-  private elapsed = 0;
   private last = 0;
 
   /* ---------- 广告驱动商业化(弹壳特攻队思维) ---------- */
@@ -418,8 +261,6 @@ export class Game {
   private adBusy = false;
   /** 死亡结算挂起:死亡后先给"看广告复活"机会,放弃(重开/菜单/天赋)时才结算 */
   private pendingSettle = false;
-  /** 本局已用广告复活次数(默认上限 1,每日天赋「不屈」+1) */
-  private reviveUsed = 0;
   /** 本局结算是否已领取"广告 ×2 回响" */
   private doubleClaimed = false;
   /** 本章商店免费刷新是否已用(之后刷新走广告/钻石) */
@@ -430,6 +271,98 @@ export class Game {
 
   /* ---------- 转生与天赋(策划案 5.2/5.4) ---------- */
   private save: SaveData = loadSave();
+
+  /* ================= 战场世界(共享层 BattleWorld;Web 与 Cocos 同一份推进与结算) ================= */
+
+  /** 战场实体与结算:见 cocos-prototype/assets/scripts/game/systems/battleWorld.ts */
+  private world!: BattleWorld<FxLayer>;
+
+  /** 局外配置:世界层每帧现取,存档数组被整体替换(每日重置/购天赋)时不会读到陈旧引用 */
+  private readonly runInputs: BattleRunInputs = {
+    ownedTalents: () => this.save.ownedTalents,
+    owns: (id) => this.owns(id),
+    ownedGear: () => this.save.ownedGear,
+    gearLevels: () => this.save.gearLevels,
+    dailyTalentClaimed: () => this.save.dailyTalentClaimed,
+    seasonId: () => this.save.seasonId,
+    selectedSet: () => this.save.selectedSet ?? null,
+    selectedGearForRun: () => {
+      const sel = this.save.ownedGear.find((g) => g.id === this.save.selectedGearId);
+      // 微信引擎无 structuredClone:与 Cocos 侧同用 JSON 深拷贝,避免局内改动回流永久收藏
+      return sel ? (JSON.parse(JSON.stringify(sel)) as Equipment) : null;
+    },
+    makeStarterEquipment: () => this.makeStarter(),
+    tutorialDone: () => this.save.tutorialDone,
+    onTutorialFinished: () => {
+      this.save.tutorialDone = true;
+      persistSave(this.save);
+    },
+    recordEnemySeen: (id) => {
+      const seen = this.save.collection.enemies;
+      if (!seen.includes(id)) seen.push(id);
+    },
+    recordEquipmentSeen: (eq) => this.recordEquipment(eq),
+    recordStageFurthest: (stageId, chapter) => {
+      const furthest = this.save.stageFurthest[stageId] ?? 0;
+      if (chapter > furthest) {
+        this.save.stageFurthest[stageId] = chapter;
+        persistSave(this.save);
+      }
+    },
+    // 开发演示:http://host/?demo=triple 直接指定开局装备清单(绕过 收藏件 > 套组初始 > 默认初始 优先级)
+    openingEquipmentOverride: () => (this.demoTriple ? DEMO_TRIPLE_EQUIPMENT() : null),
+  };
+
+  /** 世界层事件回报:入账、转场、商店与广告闸门全部留在宿主 */
+  private readonly battleHost: BattleWorldHost = {
+    worldHeight: () => this.worldH(),
+    input,
+    fx: this.fxLayer,
+    onDamage: () => {
+      /* Canvas2D 渲染层逐帧读 world.dmgNums,无需即时通知 */
+    },
+    onPlayerDown: () => this.onDeath(),
+    onChapterShop: () => this.openShop(),
+    onStageCleared: () => this.victory(),
+    onStageFailed: () => this.onDeath(),
+  };
+
+  /* ---------- 战场进行态透传(绘制层与 HUD 沿用 this.xxx 口径;数组身份由世界层原地 mutate 保持) ---------- */
+  private get player() { return this.world.player; }
+  private get enemies() { return this.world.enemies; }
+  private get skillTelegraphs() { return this.world.skillTelegraphs; }
+  private get projectiles() { return this.world.projectiles; }
+  private get clouds() { return this.world.clouds; }
+  private get minions() { return this.world.minions; }
+  private get gems() { return this.world.gems; }
+  private get fx() { return this.world.fx; }
+  private get dmgNums() { return this.world.dmgNums; }
+  private get obstacles() { return this.world.obstacles; }
+  private get arena() { return this.world.arena; }
+  private get engine() { return this.world.engine; }
+  private get waves() { return this.world.waves; }
+  private get gold() { return this.world.gold; }
+  private set gold(v: number) { this.world.gold = v; }
+  private get totalBought() { return this.world.totalBought; }
+  private set totalBought(v: number) { this.world.totalBought = v; }
+  private get kills() { return this.world.kills; }
+  private get elapsed() { return this.world.elapsed; }
+  private get chapter() { return this.world.chapter; }
+  private get chapterTimer() { return this.world.chapterTimer; }
+  private get comboCount() { return this.world.comboCount; }
+  private get frenzyTimer() { return this.world.frenzyTimer; }
+  private get reviveUsed() { return this.world.reviveUsed; }
+  private get bossSpawned() { return this.world.bossSpawned; }
+  private get bossDead() { return this.world.bossDead; }
+  private get bossBanner() { return this.world.bossBanner; }
+  private get currentStage() { return this.world.currentStage; }
+  private set currentStage(v: StageDef | null) { this.world.currentStage = v; }
+  private get envAffixes() { return this.world.envAffixes; }
+  private set envAffixes(v: EnvAffixType[]) { this.world.envAffixes = v; }
+  private get selectedSet() { return this.world.selectedSet; }
+  private get autoMove() { return this.world.autoMove; }
+  private set autoMove(v: boolean) { this.world.autoMove = v; }
+
   /** 本局结算所得回响点数(用于结算界面展示) */
   private pointsEarnedThisRun = 0;
   /** 本局结算转化所得星尘(天赋树点满后,用于结算界面展示) */
@@ -475,6 +408,8 @@ export class Game {
     }
     this.canvas = platform.createCanvas();
     this.g = this.canvas.getContext("2d")!;
+    // 战场世界:实体推进与战斗结算走两端共用的共享层,本文件只做屏幕状态机/存档/渲染/入账
+    this.world = new BattleWorld<FxLayer>({ inputs: this.runInputs, host: this.battleHost, fxLayer: this.fxLayer });
     this.resize();
     window.addEventListener("resize", () => this.resize());
     // 美术贴图异步加载(缺图自动回退,不阻塞启动)
@@ -882,204 +817,11 @@ export class Game {
     }
   }
 
-  /* ================= 战斗上下文(词缀引擎 → 世界) ================= */
-
-  private ctx: BattleContext = (() => {
-    const game = this; // 捕获 Game 实例(对象字面量 getter 的 this 指向字面量自身)
-    return {
-      player: game.player,
-      enemies: game.enemies,
-      projectiles: game.projectiles,
-      clouds: game.clouds,
-      minions: game.minions,
-      globalPulseMult: 1,
-      // 套组生效状态实时结算(买卡/升品/销毁后自动更新)
-      get setBonus() {
-        return setBonusState(game.player.equipment, game.selectedSet);
-      },
-      // 赛季联动词缀(DESIGN-SEASON-SETS L2):同 setBonus 口径实时结算
-      get seasonMutation() {
-        return setMutation(game.save.seasonId, game.selectedSet);
-      },
-      // 跨套组合技激活状态(策划案 V3 §5):同 setBonus 口径实时结算
-      get comboActive() {
-        return comboStates(game.player.equipment);
-      },
-      addFx: (f) => game.emitFx(f),
-      damageEnemy: (e, dmg, o) => game.damageEnemy(e, dmg, o.source, o.lifesteal ?? 0, o.knockbackPower ?? 0, o.from),
-      healPlayer: (v) => game.player.heal(v),
-      addPlayerShield: (a, d) => game.player.addShield(a, d),
-      onBossPhase: (ph) => game.showBossPhase(ph),
-    };
-  })();
-
-  private hasEnv(t: EnvAffixType): boolean {
-    return this.envAffixes.includes(t);
-  }
-
-  /** 元素类效果(元素精通加成:火焰新星/冰霜射线/生成毒云/闪电链) */
-  private isElementalEffect(eq: Equipment): boolean {
-    const t = eq.effect.def.type;
-    return t === "nova" || t === "ray" || t === "cloud" || t === "chain";
-  }
-
-  /** 荆棘反伤回血流:同时拥有 受击/受伤触发 + 吸血/汲取/护盾 时激活 */
-  private isThornBuild(): boolean {
-    return buildHasThorn(this.player.equipment) && buildHasHeal(this.player.equipment);
-  }
-
-  /** 施加反射伤害(每秒上限 = 最大生命 15%,防止高爆发 Build 自毁) */
-  private applyReflect(dmg: number): void {
-    const taken = Math.max(0, Math.min(dmg, this.reflectBudget));
-    this.reflectBudget -= taken;
-    if (taken > 0) {
-      this.player.takeDamage(taken);
-      this.spawnDmg(this.player.pos, taken, "#4fc3f7");
-    }
-  }
-
-  private damageEnemy(
-    e: Enemy,
-    dmg: number,
-    source: Equipment,
-    lifesteal: number,
-    knockbackPower: number,
-    from?: Vec2,
-    fromSplit = false
-  ): void {
-    // 隐匿者:隐身时不可被命中(策划案 4.3)
-    if (e.hidden) return;
-    // 护盾卫士:正面免疫(正面 60° 内伤害减免 80%,多方向/AOE 可绕过)
-    if (from) {
-      const fm = shieldguardDamageMult(e, from);
-      dmg = Math.round(dmg * fm);
-      if (fm < 1) this.emitShieldBlock(e); // 正面被挡:盾面金属火花(纯装饰)
-    }
-    if (dmg <= 0) return;
-    // 征服者天赋:全局增伤 / 绝境爆发(生命<20% +50%)/ 暴击 / 元素精通(火冰毒电 +15%)
-    let mult = globalDamageMultFor(this.save.ownedTalents);
-    // 收藏图鉴攻击加成(通关刷装备 → 永久基础数值)× 每日天赋「战意」
-    const cb = collectionBonus(this.save.ownedGear, this.save.gearLevels);
-    mult *= (1 + cb.atkPct / 100) * this.dailyDmgMult();
-    if (this.owns("desperate") && this.player.hp / this.player.maxHp < TALENT_VALUES.desperateHpThreshold) {
-      mult *= desperateMultFor(this.save.ownedTalents);
-    }
-    const crit = critFor(this.save.ownedTalents);
-    const critRate = crit.rate + (this.hasDailyTalent("crit10") ? dailyTalentOf("crit10").value : 0);
-    if (critRate > 0 && Math.random() < critRate) {
-      mult *= crit.mult;
-      this.spawnDmg(e.pos, 0, "#ff2d8f"); // 暴击标记(伤害数字上方)
-    }
-    if (this.owns("elemental") && this.isElementalEffect(source)) {
-      mult *= elementalMultFor(this.save.ownedTalents);
-    }
-    // 荆棘反伤回血流:受击/受伤触发的效果伤害 +50%(故意挨打 → 反伤输出,高风险高回报)
-    if (this.isThornBuild() && equipmentHasThornTrigger(source)) {
-      mult *= 1.5;
-    }
-    dmg = Math.round(dmg * mult);
-    if (dmg <= 0) return;
-    // 反伤领域:所有敌人受击时反弹 12% 伤害(策划案 4.2;反射者自带 25% 不叠加)
-    if (this.hasEnv("reflect_field") && e.kind !== "reflector") {
-      const reflected = Math.max(1, Math.round(dmg * REFLECT_FIELD_RATE));
-      this.applyReflect(reflected);
-    }
-    // 反射者:反弹部分伤害给目标(策划案 4.3;受每秒预算限制)
-    const reflected = reflectDamage(e, dmg);
-    if (reflected > 0) {
-      this.applyReflect(reflected);
-      // 镜片碎屑:提示"打我会还手"(Boss 15% 反每击触发,过密不出;纯装饰)
-      if (e.kind !== "boss") {
-        this.fxLayer.burst({
-          x: e.pos.x, y: e.pos.y, count: 4, color: "#4fc3f7",
-          speed: [80, 240], size: [1, 2.2], life: [0.12, 0.3], halo: 2.6, drag: 4,
-        });
-      }
-    }
-    e.hp -= dmg;
-    this.spawnDmg(e.pos, Math.round(dmg), "#ffd7a0");
-    if (lifesteal > 0) this.player.heal(dmg * lifesteal);
-    if (knockbackPower > 0 && from) knockback(e, from, knockbackPower);
-    if (e.hp <= 0) {
-      if (tryRevive(e)) {
-        // 还魂体(批 3):首次致死原地复活(回半血),不记击杀不掉落;魂火重燃(纯装饰)
-        this.fxLayer.burst({
-          x: e.pos.x, y: e.pos.y, count: 14, color: "#9b6cff",
-          speed: [60, 200], size: [1.6, 3.4], life: [0.3, 0.6], halo: 2.6, drag: 2, gravity: -60,
-        });
-        this.fxLayer.ring({ x: e.pos.x, y: e.pos.y, r0: e.def.radius, r1: e.def.radius + 30, life: 0.4, color: "rgba(155,108,255,0.8)", width: 2.5 });
-        return;
-      }
-      this.killEnemy(e, source, fromSplit);
-    }
-  }
-
-  private killEnemy(e: Enemy, source: Equipment, fromSplit = false): void {
-    this.kills += 1;
-    // 图鉴:记录遭遇过的敌人(主题怪记 variantId,基线怪记 kind)
-    const seen = this.save.collection.enemies;
-    const enemyId = e.def.variantId ?? e.kind;
-    if (!seen.includes(enemyId)) seen.push(enemyId);
-    // Boss 死亡标记(通关判定)
-    if (e.kind === "boss") this.bossDead = true;
-    // 连杀狂潮:累计连杀,每 10 连杀触发 2 秒狂潮(击杀反馈 + 弹幕加速)
-    this.comboCount += 1;
-    this.comboTimer = COMBO_WINDOW;
-    if (this.comboCount % COMBO_FRENZY_EVERY === 0) this.frenzyTimer = FRENZY_DURATION;
-    this.emitFx({ type: "explosion", pos: vec2(e.pos.x, e.pos.y), radius: e.isElite ? 40 : 22, ttl: 0.22, maxTtl: 0.22 });
-    // 死亡连锁:敌人死亡时爆炸,波及周围敌人(策划案 4.2,鼓励 AOE)
-    if (this.hasEnv("death_chain")) {
-      const dmg = deathChainDamage(e);
-      for (const other of this.enemies) {
-        if (other === e || other.hp <= 0 || other.hidden) continue;
-        const d = Math.hypot(other.pos.x - e.pos.x, other.pos.y - e.pos.y);
-        if (d <= DEATH_CHAIN_RADIUS + other.def.radius) {
-          this.damageEnemy(other, dmg, source, 0, DEATH_CHAIN_KNOCKBACK, e.pos);
-        }
-      }
-      this.emitFx({ type: "explosion", pos: vec2(e.pos.x, e.pos.y), radius: DEATH_CHAIN_RADIUS, ttl: 0.3, maxTtl: 0.3 });
-    }
-    // 分裂体:死亡后分裂出幼体(策划案 4.3);批 4 deathSplit 覆盖式优先(无技能 = 回落基线)
-    const babies = skillSplitBabies(e) ?? splitBabies(e);
-    for (const baby of babies) {
-      if (this.enemies.length < LIMITS.enemies) {
-        this.enemies.push(spawnEnemy(baby.kind, baby.pos, this.waves.wave));
-      }
-    }
-    // 分裂飞溅:尸体裂开的黄绿体液 + 冲击环(纯装饰)
-    if (babies.length > 0) {
-      this.fxLayer.burst({
-        x: e.pos.x, y: e.pos.y, count: 10, color: "#c0ca33",
-        speed: [60, 200], size: [1.6, 3.4], life: [0.25, 0.5], halo: 2.6, drag: 2, gravity: 120,
-      });
-      this.fxLayer.ring({ x: e.pos.x, y: e.pos.y, r0: e.def.radius, r1: e.def.radius + 26, life: 0.3, color: "rgba(192,202,51,0.8)", width: 2 });
-    }
-    // 批 4 死亡召唤(万骸指挥):尸体处生成子怪(与周期召唤同通道:LIMITS 门 + 传送门)
-    for (const spec of deathSummonSpecs(e)) {
-      if (this.enemies.length >= LIMITS.enemies) break;
-      this.enemies.push(spawnEnemy(spec.kind, spec.pos, this.waves.wave, spec.def));
-      this.emitSummonFx(spec.pos, spec.def?.color ?? "#ff8a65");
-    }
-    // 主题怪机制(批 2):余烬孕体死亡后在尸体处留灼烧池(与批 4 火带同通道:超上限先消散最早一只)
-    const mech = e.def.mech;
-    if (mech?.type === "deathPool") {
-      this.dropBurnPool(e.pos, mech.radius, mech.duration, mech.cap, e.def.radius);
-    }
-    // 掉落金币(场内货币,替代经验宝石;每日天赋「淘金」+50%)
-    const gemCount = e.isElite ? ELITE_GEM_COUNT : 1;
-    const goldValue = Math.round((e.kind === "boss" ? BOSS_GOLD : e.def.xp * GOLD_PER_XP) * this.dailyGoldMult());
-    for (let i = 0; i < gemCount; i++) {
-      this.gems.push(spawnGem(vec2(e.pos.x + rand(-DROP_SCATTER, DROP_SCATTER), e.pos.y + rand(-DROP_SCATTER, DROP_SCATTER)), goldValue));
-    }
-    if (this.gems.length > LIMITS.gems) this.gems.splice(0, this.gems.length - LIMITS.gems);
-    this.engine.onKill(this.ctx, e, { fromSplit, source });
-  }
-
   /* ================= 主循环更新 ================= */
 
   private update(dt: number): void {
     input.update();
-    this.elapsed += dt;
+    this.world.beginFrame(dt);
 
     // 每日重置(跨天清零每日广告/宝箱/天赋计数;任何状态下都执行)
     this.checkDailyReset();
@@ -1091,7 +833,7 @@ export class Game {
 
     // 首局引导(教学横幅;playing/shop 状态下驱动,暂停态不推进)
     if ((this.state === "playing" || this.state === "shop") && this.guide.enabled) {
-      this.guide.update(this.guideCtx(), dt);
+      this.guide.update(this.world.guideCtx(this.state === "playing", this.state === "shop"), dt);
       // 引导全部走完 → 存档永久关闭
       if (this.guide.finished && !this.save.tutorialDone) {
         this.save.tutorialDone = true;
@@ -1123,98 +865,8 @@ export class Game {
       return;
     }
 
-    this.updatePlayer(dt);
-    // 连杀狂潮:连杀 3 秒无新击杀则断连;每 10 连杀触发 2 秒狂潮(全装备触发加速)
-    this.comboTimer -= dt;
-    if (this.comboTimer <= 0) this.comboCount = 0;
-    if (this.frenzyTimer > 0) this.frenzyTimer -= dt;
-    // 反射伤害预算每秒重置(上限 = 最大生命 15%)
-    this.reflectTimer -= dt;
-    if (this.reflectTimer <= 0) {
-      this.reflectTimer = 1;
-      this.reflectBudget = Math.round(this.player.maxHp * REFLECT_BUDGET_HP_PCT);
-    }
-    // 时间膨胀(环境词缀)×2 × 冷却缩减(天赋)×0.9 × 狂潮×0.6 × 每日天赋「疾咒」×0.85 合成全局脉冲间隔倍率
-    this.ctx.globalPulseMult =
-      (this.hasEnv("time_dilation") ? TIME_DILATION_MULT : 1) * cdrScaleFor(this.save.ownedTalents) * (this.frenzyTimer > 0 ? FRENZY_PULSE_MULT : 1) * this.dailyCdrMult();
-    this.engine.update(this.ctx, dt);
-    this.updateEnemies(dt);
-    // 批 4 技能预警:倒计时/引爆/余烬(独立于 Boss 三阶段的附加层管线)
-    this.tickTelegraphs(dt);
-    this.emitTelegraphFx(dt);
-    this.updateProjectiles(dt);
-    this.updateClouds(dt);
-    this.updateMinions(dt);
-    this.updateGems(dt);
-
-    // Boss 战期间(已生成未击杀)停止生成新怪,聚焦 Boss 单挑
-    const bossActive = this.bossSpawned && !this.bossDead;
-    // 章型差异化(策划案 V3 §3.1):本章生成密度倍率 + 金怪混入,仅主线关卡生效(无限关保持原样)
-    const ct = this.currentStage ? chapterTypeInfo(this.chapter, this.currentStage.bossChapter) : null;
-    const baseScale = bossActive ? 0 : this.currentStage?.spawnScale ?? 1;
-    const spawnScale = baseScale * (ct?.spawnScaleMult ?? 1);
-    this.waves.update(dt, this.enemies, this.player.pos, spawnScale, this.arena, this.spawnIntel(), this.owns("god_challenge"), ct?.goldMix ?? 0, this.save.seasonId);
-
-    // 章节计时:每章 60 秒结束 → 章间商店(玩家手动开始下一章)
-    this.chapterTimer += dt;
-    if (this.chapterTimer >= CHAPTER_SECONDS) {
-      this.chapterEnd();
-      return;
-    }
-
-    // 主线关卡:Boss 生成与通关判定(第 bossChapter 章)
-    if (this.currentStage) {
-      if (!this.bossSpawned && this.waves.wave >= (this.currentStage.bossChapter ?? 9999)) {
-        this.bossSpawned = true;
-        const p = this.player.pos;
-        const bossPos = vec2(clamp(p.x + BOSS_SPAWN_OFFSET_X, this.arena.x0 + BOSS_SPAWN_INSET, this.arena.x1 - BOSS_SPAWN_INSET), clamp(p.y + BOSS_SPAWN_OFFSET_Y, this.arena.y0 + BOSS_SPAWN_INSET, this.arena.y1 - BOSS_SPAWN_INSET));
-        const boss = spawnEnemy("boss", bossPos, this.waves.wave, seasonMonsterDefFor("boss", this.save.seasonId, this.waves.wave));
-        // Boss 独立血量曲线:随关卡增长对标玩家输出成长(标定:第 1 关 ≈20s、第 7 关 ≈40s 击杀)
-        boss.maxHp = boss.hp = Math.round(boss.maxHp * bossHpMult(this.currentStage.id));
-        // 偶数关弱化变体(策划案 V3 §3.1):hp×0.7、跳过 P2、无死亡分裂
-        if (this.currentStage.id % 2 === 0) {
-          boss.bossVariant = "weak";
-          boss.maxHp = boss.hp = Math.round(boss.maxHp * BOSS_WEAK_HP_MULT);
-        }
-        this.enemies.push(boss);
-        this.emitFx({ type: "nova", pos: vec2(bossPos.x, bossPos.y), radius: 140, ttl: 0.5, maxTtl: 0.5 });
-      }
-      if (this.currentStage.bossChapter && this.bossDead) {
-        this.victory();
-        return;
-      }
-    }
-
-    this.tickFx(dt);
-    this.tickDmg(dt);
-    if (this.bossBanner) {
-      this.bossBanner.ttl -= dt;
-      if (this.bossBanner.ttl <= 0) this.bossBanner = null;
-    }
-
-    // 限制敌人数量
-    if (this.enemies.length > LIMITS.enemies) {
-      this.enemies.splice(0, this.enemies.length - LIMITS.enemies);
-    }
-  }
-
-  /** 章节结束 → 章间商店(无限关不设上限);末章按关底结算规则判定通关/判负 */
-  private chapterEnd(): void {
-    this.chapterTimer = 0;
-    const st = this.currentStage;
-    if (st && this.chapter >= CHAPTERS_PER_STAGE) {
-      if (!stageClearedAtFinalChapter(st, this.bossDead)) {
-        // 有 Boss 的关第 20 章超时未杀 Boss → 阵亡结算(挑战失败;复活机会同死亡)
-        this.player.hp = 0;
-        this.player.alive = false;
-        this.onDeath();
-        return;
-      }
-      // 无 Boss 关撑过末章(或有 Boss 关已击杀但结算落在本章末尾)→ 通关
-      this.victory();
-      return;
-    }
-    this.openShop();
+    // 战场推进与结算:见 @game/systems/battleWorld(章末/死亡/通关经 battleHost 回报回本文件)
+    this.world.advance(dt);
   }
 
   /** 商店卡等级:局内章节 + 已解锁最高关卡(数值墙:通关越后面,解锁越高级装备) */
@@ -1266,21 +918,16 @@ export class Game {
 
   /** 进入章间商店 */
   private openShop(): void {
-    this.recordStageProgress();
     this.refreshShopOffers();
     this.chapterRefreshes = 0; // 进店重置刷新成本阶梯
     this.state = "shop";
   }
 
-  /** 记录本关打到过的最远章节(进度制解锁依据;商店/通关/阵亡结算三处调用) */
+  /** 记录本关打到过的最远章节(进度制解锁依据;章末由世界层记,阵亡结算在本文件补记) */
   private recordStageProgress(): void {
     const st = this.currentStage;
     if (!st) return;
-    const furthest = this.save.stageFurthest[st.id] ?? 0;
-    if (this.chapter > furthest) {
-      this.save.stageFurthest[st.id] = this.chapter;
-      persistSave(this.save);
-    }
+    this.runInputs.recordStageFurthest(st.id, this.chapter);
   }
 
   /** 商店卡价格:基础价 × (1 + 已购递增) × (1 + 章节递增);曲线系数见 data/shop 规范表 */
@@ -1335,8 +982,8 @@ export class Game {
    *  2 张需支付金币补位(基础价×2);3 张免费 —— 场内强化已移除,成长 = 买卡凑套 + 进化升品。 */
   private mergeCards(eq: Equipment): void {
     const pool = this.player.equipment;
-    const key = this.cardTypeKey(eq);
-    const same = pool.filter((x) => this.cardTypeKey(x) === key);
+    const key = this.world.cardTypeKey(eq);
+    const same = pool.filter((x) => this.world.cardTypeKey(x) === key);
     if (same.length < 2) return;
     const upgrade = qualityUpgrade(eq.quality);
     if (!upgrade) return; // 隐藏已是最高
@@ -1360,267 +1007,6 @@ export class Game {
     }
     this.player.equipment = pool.filter((x) => !removeIds.has(x.id));
     this.recordEquipment(keep);
-  }
-
-  private updatePlayer(dt: number): void {
-    const p = this.player;
-    if (!p.alive) {
-      // 死亡:先给"看广告复活"机会,入账延后到放弃(重开/菜单/天赋)时
-      this.onDeath();
-      return;
-    }
-    p.movedThisFrame = 0;
-    const before = vec2(p.pos.x, p.pos.y);
-    const a = this.arena;
-    // 纵向空气墙顶到上下坞边(按半径钳制:身体贴栏不越栏);坞高变化时 arena 随之变化
-    const yMin = a.y0 + PLAYER_BASE.radius, yMax = a.y1 - PLAYER_BASE.radius;
-    if (input.isMoving) {
-      // 手动输入覆盖自动控制
-      const mv = input.moveDir;
-      p.pos.x = clamp(p.pos.x + mv.x * PLAYER_BASE.speed * p.speedMult * dt, a.x0 + 30, a.x1 - 30);
-      p.pos.y = clamp(p.pos.y + mv.y * PLAYER_BASE.speed * p.speedMult * dt, yMin, yMax);
-    } else if (this.autoMove) {
-      // 自主控制(挂机):贴身才躲(避免小竞技场里自陷包围),平时顺时针巡场
-      const nearest = this.nearestEnemy(p.pos, 110);
-      let mvx = 0;
-      let mvy = 0;
-      if (nearest) {
-        const dx = p.pos.x - nearest.pos.x;
-        const dy = p.pos.y - nearest.pos.y;
-        const d = Math.hypot(dx, dy) || 1;
-        mvx = dx / d;
-        mvy = dy / d;
-        // 切向漂移,避免直线后退被包围
-        const side = Math.sin(this.elapsed * 2.3) > 0 ? 1 : -1;
-        mvx += (-dy / d) * side * 0.6;
-        mvy += (dx / d) * side * 0.6;
-        const l = Math.hypot(mvx, mvy) || 1;
-        mvx /= l;
-        mvy /= l;
-      } else {
-        // 无近敌:顺时针巡场,保持覆盖全屏清怪
-        const ang = this.elapsed * 0.4;
-        mvx = Math.cos(ang);
-        mvy = Math.sin(ang);
-      }
-      p.pos.x = clamp(p.pos.x + mvx * PLAYER_BASE.speed * p.speedMult * dt, a.x0 + 30, a.x1 - 30);
-      p.pos.y = clamp(p.pos.y + mvy * PLAYER_BASE.speed * p.speedMult * dt, yMin, yMax);
-    }
-    p.pos.x = clamp(p.pos.x, a.x0 + 30, a.x1 - 30);
-    p.pos.y = clamp(p.pos.y, yMin, yMax);
-    // 临时障碍(批 2 灼烧池)倒计时:到期消散;地形障碍(无 ttl)不受影响
-    tickObstacleTtl(this.obstacles, dt);
-    // 石柱推挤(地形占位不挡路:最小位移推出)
-    for (const ob of this.obstacles) pushOutOfPillar(p.pos, PLAYER_BASE.radius, ob);
-    // 毒池/灼烧池 DoT:6 点/秒(0.25s tick × 1.5),不走受击管线(是地形不是攻击,不触发受击类装备)
-    if (isInPool(p.pos, this.obstacles)) {
-      this.poolTickAcc += dt;
-      while (this.poolTickAcc >= OBSTACLE.poolTick) {
-        this.poolTickAcc -= OBSTACLE.poolTick;
-        p.takeDamage(OBSTACLE.poolDps * OBSTACLE.poolTick);
-      }
-    } else {
-      this.poolTickAcc = 0;
-    }
-    p.movedThisFrame = Math.hypot(p.pos.x - before.x, p.pos.y - before.y);
-    p.update(dt);
-  }
-
-  private updateEnemies(dt: number): void {
-    const p = this.player;
-    // 光环载体预筛(批 4):每帧一次,圈内派生乘数见 auraMultAt(现表 ≤ 2 载体,扫描成本可忽略)
-    const auraCarriers = this.enemies.filter((a) => a.hp > 0 && a.def.skill?.aura !== undefined);
-    for (const e of this.enemies) {
-      if (e.hp <= 0) continue;
-      // 治疗光环:敌人每秒回复 2% 生命(策划案 4.2)
-      if (this.hasEnv("heal_aura")) {
-        e.hp = Math.min(e.maxHp, e.hp + e.maxHp * HEAL_AURA_RATE * dt);
-      }
-      // 隐匿迷雾:所有敌人周期性隐身(策划案 4.2)
-      if (this.hasEnv("mist")) {
-        e.hiddenTimer += dt;
-        const t = e.hiddenTimer % MIST_CYCLE;
-        e.hidden = t >= MIST_VISIBLE;
-      }
-      // 光环派生乘数(批 4):速度入移动尾参,伤害乘接触伤害;无载体 = undefined,基线路径零开销
-      const aura = auraCarriers.length > 0 ? auraMultAt(e, auraCarriers) : undefined;
-      // 批 4 精英/首领技能(附加层:先技能后 kind 移动)。
-      // 预警入 skillTelegraphs 由本层倒计时/渲染/引爆;火带落池走 dropBurnPool(cap 取载体表值)
-      updateSkill(e, dt, p.pos, PLAYER_BASE.radius, this.arena, {
-        spawnChild: (kind, pos, def) => {
-          if (this.enemies.length < LIMITS.enemies) {
-            this.enemies.push(spawnEnemy(kind, pos, this.waves.wave, def));
-            this.emitSummonFx(pos, def?.color ?? "#ff8a65"); // 技能召唤:传送门色 = 子怪皮色
-          }
-        },
-        onTelegraph: (t) => this.skillTelegraphs.push({ t, total: t.charge, src: e }),
-        // 冲锋单次撞击:走受击管线(触发受击类装备)+ 可选减速/落点燃池(撞击点快照)
-        onChargeHit: (dmg, pos, slow, ignite) => {
-          this.player.takeDamage(dmg);
-          this.engine.onHurt(this.ctx, dmg, e);
-          this.spawnDmg(p.pos, dmg, e.def.color);
-          if (slow) this.player.applySlow(slow.factor, slow.duration);
-          if (ignite) this.dropBurnPool(pos, ignite.radius, ignite.duration, 6, e.def.radius);
-          this.fxLayer.burst({
-            x: pos.x, y: pos.y, count: 10, color: e.def.color,
-            speed: [80, 260], size: [1.4, 3], life: [0.2, 0.45], halo: 2.8, drag: 2.2,
-          });
-          this.fxLayer.addShake(3);
-        },
-        onDropPool: (pos, radius, duration) => this.dropBurnPool(pos, radius, duration, e.def.skill?.fireTrail?.cap ?? 6, e.def.radius),
-      });
-      updateEnemy(e, p.pos, PLAYER_BASE.radius, dt, aura?.speed ?? 1);
-      // 特化机制:隐匿者隐身 / 召唤师召怪(策划案 4.3)
-      updateSpecial(e, dt, (kind, pos) => {
-        if (this.enemies.length < LIMITS.enemies) {
-          this.enemies.push(spawnEnemy(kind, pos, this.waves.wave));
-          this.emitSummonFx(pos, "#ff8a65"); // 召唤师:橙色传送门
-        }
-      });
-      // Boss 三阶段(策划案 V3 §3.2):阶段推进 + 召唤 + 地面震击
-      updateBoss(e, dt, p.pos, {
-        spawnChild: (kind, cpos) => {
-          if (this.enemies.length < LIMITS.enemies) {
-            this.enemies.push(spawnEnemy(kind, cpos, this.waves.wave));
-            this.emitSummonFx(cpos, "#ff5050"); // Boss 召唤:血红传送门
-          }
-        },
-        onPhaseChange: (phase) => this.ctx.onBossPhase?.(phase),
-        onSlam: (pos, radius, damage) => this.bossSlam(pos, radius, damage),
-      });
-      // 敌人机制装饰特效(隐身进出/登场/震击预警余烬/狂暴火光;纯视觉)
-      this.emitEnemyFx(e, dt);
-      const d = Math.hypot(e.pos.x - p.pos.x, e.pos.y - p.pos.y);
-      const rr = e.def.radius + PLAYER_BASE.radius;
-      if (d <= rr && e.hitCooldown <= 0) {
-        e.hitCooldown = CONTACT_HIT_CD;
-        // 光环伤害派生乘数(批 4):乘数 = 1 时与基线字节一致
-        const cdmg = Math.max(1, Math.round(e.def.contactDmg * (aura?.dmg ?? 1)));
-        this.player.takeDamage(cdmg);
-        this.engine.onHurt(this.ctx, cdmg, e);
-        this.spawnDmg(p.pos, cdmg, "#ff6b6b");
-        // 撕咬反馈:玩家身边红色血屑 + 轻震屏(纯装饰)
-        this.fxLayer.burst({
-          x: p.pos.x, y: p.pos.y, count: 5, color: "#ff6b6b",
-          speed: [60, 190], size: [1.2, 2.6], life: [0.15, 0.35], halo: 2.6, drag: 4,
-        });
-        this.fxLayer.addShake(1.4);
-        // 主题怪机制(批 2):凝滞之触命中即冻结玩家脚步(冰蓝碎屑 = 减速可读反馈)
-        if (e.def.mech?.type === "slowOnHit") {
-          this.player.applySlow(e.def.mech.factor, e.def.mech.duration);
-          this.fxLayer.burst({
-            x: p.pos.x, y: p.pos.y, count: 6, color: "#9be8ff",
-            speed: [40, 130], size: [1.4, 2.8], life: [0.25, 0.5], halo: 2.4, drag: 3,
-          });
-        }
-        // 荆棘反伤回血流:每次挨打回 2% 最大生命(故意挨打 → 回血联动)
-        if (this.isThornBuild()) {
-          this.player.heal(Math.max(1, Math.round(this.player.maxHp * THORN_HEAL_PCT)));
-        }
-      }
-    }
-    // 石柱统一推挤 pass(DESIGN-S4 §3.2):敌人不寻路,最小位移推出石柱
-    for (const e of this.enemies) {
-      if (e.hp <= 0) continue;
-      for (const ob of this.obstacles) pushOutOfPillar(e.pos, e.def.radius, ob);
-    }
-    removeIf(this.enemies, (e) => e.hp <= 0);
-  }
-
-  /** Boss 阶段切换(策划案 V3 §3.2):阶段横幅 + Boss 身上预警波特效 */
-  private showBossPhase(phase: 2 | 3): void {
-    this.bossBanner = { text: phase === 2 ? "阶段二 · 地面震击" : "阶段三 · 狂暴", ttl: 2 };
-    const boss = this.enemies.find((e) => e.kind === "boss" && e.hp > 0);
-    if (boss) this.emitFx({ type: "nova", pos: vec2(boss.pos.x, boss.pos.y), radius: 120, ttl: 0.5, maxTtl: 0.5 });
-  }
-
-  /** 通用震击引爆:冲击波 + 碎屑 + 震屏,半径内玩家走受击管线(触发受击类装备)。Boss 三阶段与批 4 技能预警共用 */
-  private detonateSlam(pos: Vec2, radius: number, dmg: number, src: Enemy | null, burstColor: string): void {
-    this.emitFx({ type: "nova", pos: vec2(pos.x, pos.y), radius, ttl: 0.4, maxTtl: 0.4 });
-    // 引爆强化反馈:碎屑飞溅 + 强震屏(纯装饰)
-    this.fxLayer.burst({
-      x: pos.x, y: pos.y, count: 18, color: burstColor,
-      speed: [120, 380], size: [1.6, 3.6], life: [0.3, 0.6], halo: 3, drag: 1.6, gravity: 160,
-    });
-    this.fxLayer.addShake(6);
-    const p = this.player;
-    if (Math.hypot(p.pos.x - pos.x, p.pos.y - pos.y) <= radius + PLAYER_BASE.radius) {
-      p.takeDamage(dmg);
-      this.engine.onHurt(this.ctx, dmg, src);
-      this.spawnDmg(p.pos, dmg, "#ff6b6b");
-      if (this.isThornBuild()) p.heal(Math.max(1, Math.round(p.maxHp * THORN_HEAL_PCT)));
-    }
-  }
-
-  /** Boss 地面震击引爆(策划案 V3 §3.2 P2):震点半径内玩家受伤(走受击管线,触发受击类装备) */
-  private bossSlam(pos: Vec2, radius: number, dmg: number): void {
-    this.detonateSlam(pos, radius, dmg, this.enemies.find((e) => e.kind === "boss" && e.hp > 0) ?? null, "#ff5050");
-  }
-
-  /** 灼烧池落位(批 2 余烬孕体死亡池 / 批 4 火带共用通道):超上限先消散最早一只;DoT 复用毒池口径 */
-  private dropBurnPool(pos: Vec2, radius: number, duration: number, cap: number, ringR0: number): void {
-    const burns = this.obstacles.filter((o) => o.burn);
-    if (burns.length >= cap) {
-      const idx = this.obstacles.indexOf(burns[0]);
-      if (idx >= 0) this.obstacles.splice(idx, 1);
-    }
-    this.obstacles.push(spawnBurnPool(pos, radius, duration));
-    this.fxLayer.burst({
-      x: pos.x, y: pos.y, count: 12, color: "#ff9d2e",
-      speed: [40, 160], size: [1.6, 3.2], life: [0.3, 0.6], halo: 2.6, drag: 2.5, gravity: -40,
-    });
-    this.fxLayer.ring({ x: pos.x, y: pos.y, r0: ringR0, r1: radius, life: 0.45, color: "rgba(255,157,46,0.7)", width: 2 });
-  }
-
-  /** 批 4 技能预警倒计时与引爆(震击/脉冲/轰炸共用管线;归零即结算后移除) */
-  private tickTelegraphs(dt: number): void {
-    for (const st of this.skillTelegraphs) {
-      st.t.charge -= dt;
-      if (st.t.charge > 0) continue;
-      const t = st.t;
-      const src = st.src && st.src.hp > 0 ? st.src : null;
-      if (t.global) {
-        // 全场雾型:无半径判定,全体上减速(伤害 = 0)
-        if (t.slow) this.player.applySlow(t.slow.factor, t.slow.duration);
-      } else {
-        this.detonateSlam(t.pos, t.radius, t.damage, src, t.color);
-        if (t.slow) {
-          const p = this.player;
-          if (Math.hypot(p.pos.x - t.pos.x, p.pos.y - t.pos.y) <= t.radius + PLAYER_BASE.radius) {
-            p.applySlow(t.slow.factor, t.slow.duration);
-          }
-        }
-      }
-    }
-    removeIf(this.skillTelegraphs, (st) => st.t.charge <= 0);
-  }
-
-  /** 技能预警余烬(蓄力过半后外沿加窜火星;与 Boss 震击余烬同风格,独立节流窗) */
-  private emitTelegraphFx(dt: number): void {
-    if (this.skillTelegraphs.length === 0) return;
-    const gap = 0.05;
-    this.telegraphFxAcc = Math.min(gap * 6, this.telegraphFxAcc + dt);
-    while (this.telegraphFxAcc >= gap) {
-      this.telegraphFxAcc -= gap;
-      for (const st of this.skillTelegraphs) {
-        const t = st.t;
-        if (t.global) continue;
-        const prog = 1 - t.charge / st.total;
-        const a = rand(0, Math.PI * 2);
-        const rr = Math.sqrt(rand(0, 1)) * t.radius;
-        this.fxLayer.burst({
-          x: t.pos.x + Math.cos(a) * rr, y: t.pos.y + Math.sin(a) * rr, count: 1,
-          color: t.color, speed: [8, 30], size: [1.4, 2.8], life: [0.35, 0.7], halo: 3, gravity: -50, drag: 0.6,
-        });
-        if (prog > 0.55) {
-          const a2 = rand(0, Math.PI * 2);
-          this.fxLayer.burst({
-            x: t.pos.x + Math.cos(a2) * t.radius, y: t.pos.y + Math.sin(a2) * t.radius, count: 1,
-            color: "#ff8a3c", speed: [12, 40], size: [1.2, 2.2], life: [0.25, 0.5], halo: 2.8, gravity: -70, drag: 0.8,
-          });
-        }
-      }
-    }
   }
 
   /** 震击预警圈渲染:基线 Boss 红圈(字节级保留)+ 批 4 技能预警(圈色 = 载体色;全场雾型 = 战场 tint) */
@@ -1656,298 +1042,10 @@ export class Game {
     }
   }
 
-  private updateProjectiles(dt: number): void {
-    for (const proj of this.projectiles) {
-      updateProjectile(proj, dt);
-      // 追踪转向(冰锥 icelance):朝最近未命中活敌转 homing rad/s
-      if (proj.homing) steerHoming(proj, this.enemies, dt);
-      if (proj.ttl <= 0) continue;
-      // 空间扭曲:投射物轨迹正弦弯曲,难以命中(策划案 4.2)
-      if (this.hasEnv("space_warp")) {
-        const sp = Math.hypot(proj.vel.x, proj.vel.y) || 1;
-        const wobble = Math.sin((this.elapsed + proj.id * 1.7) * 4) * 110 * dt;
-        proj.pos.x += (-proj.vel.y / sp) * wobble;
-        proj.pos.y += (proj.vel.x / sp) * wobble;
-      }
-      // FX 拖尾:位置定稿(含空间扭曲偏移)后按距离补粒子
-      this.emitProjTrail(proj);
-      // 石柱阻挡(DESIGN-S4 §3.2):命中即消亡,连锁/穿透/爆炸不触发
-      if (this.obstacles.length > 0) {
-        let blocked = false;
-        for (const ob of this.obstacles) {
-          if (ob.kind === "pillar" && projectileHits(proj, { pos: ob.pos, radius: ob.radius })) {
-            blocked = true;
-            break;
-          }
-        }
-        if (blocked) {
-          proj.ttl = -1;
-          continue;
-        }
-      }
-      for (const e of this.enemies) {
-        if (e.hp <= 0 || proj.hit.has(e.id)) continue;
-        if (projectileHits(proj, { pos: e.pos, radius: e.def.radius })) {
-          proj.hit.add(e.id);
-          // 吞噬投射:基线吞噬者(策划案 4.3)+ 批 4 技能载体(极渊之颚);吸收比例 = 表值,基线 0.5
-          if (e.kind === "devourer" || e.def.skill?.devour) {
-            const healRate = e.def.skill?.devour?.healRate ?? 0.5;
-            const healed = Math.round(proj.damage * healRate);
-            e.hp = Math.min(e.maxHp, e.hp + healed);
-            this.spawnDmg(e.pos, healed, "#26a69a");
-            // 吞噬吸收:投射物在命中点被吞没(载体色内收),纯装饰
-            this.fxLayer.burst({
-              x: proj.pos.x, y: proj.pos.y, count: 5, color: e.def.color,
-              speed: [30, 110], size: [1.2, 2.4], life: [0.2, 0.4], halo: 2.6, drag: 3,
-            });
-            this.fxLayer.ring({ x: e.pos.x, y: e.pos.y, r0: e.def.radius + 14, r1: e.def.radius * 0.5, life: 0.3, color: hexA(e.def.color, 0.8), width: 2 });
-            proj.ttl = -1;
-            break;
-          }
-          this.damageEnemy(e, proj.damage, proj.source, proj.lifesteal, 30, proj.pos, proj.splitChild === true);
-          this.emitHitSpark(proj);
-          if (proj.kind === "ray" && proj.slow) applySlow(e, proj.slow, proj.slowDuration ?? 2);
-          if (proj.explode) this.engine.explode(proj.source, this.ctx, proj.pos, proj.explode, {
-            power: 1, haste: 0, durationBonus: 0, chainTargets: 0, splitExtra: 0, lifesteal: proj.lifesteal, pierce: 0,
-          });
-          // 连锁:弹向最近的其他敌人
-          if (proj.chainLeft > 0) {
-            const next = this.nearestEnemy(proj.pos, 300, proj.hit);
-            if (next) {
-              proj.chainLeft -= 1;
-              const dx = next.pos.x - proj.pos.x;
-              const dy = next.pos.y - proj.pos.y;
-              const l = Math.hypot(dx, dy) || 1;
-              const sp = Math.hypot(proj.vel.x, proj.vel.y);
-              proj.vel.x = (dx / l) * sp;
-              proj.vel.y = (dy / l) * sp;
-            }
-          } else if (proj.pierce > 0) {
-            proj.pierce -= 1;
-          } else {
-            proj.ttl = -1;
-            break;
-          }
-        }
-      }
-    }
-    removeIf(this.projectiles, (p) => p.ttl <= 0);
-    if (this.projectiles.length > LIMITS.projectiles) {
-      this.projectiles.splice(0, this.projectiles.length - LIMITS.projectiles);
-    }
-  }
-
-  private updateClouds(dt: number): void {
-    for (const c of this.clouds) {
-      c.ttl -= dt;
-      c.tickAcc += dt;
-      if (c.meteor) {
-        // 陨星 telegraph:倒计时由消散通路引爆,不做周期 tick;此处只补落点余烬(纯装饰)
-        this.emitMeteorTelegraph(c, dt);
-        continue;
-      }
-      if (c.ring) {
-        // 霜环(极北冰脉):半径逐帧扩张,扫到的敌人一次性伤害 + 减速(每敌一次)
-        c.radius += c.ring.expandSpeed * dt;
-        for (const e of this.enemies) {
-          if (e.hp <= 0 || c.ring.hits.has(e.id)) continue;
-          if (Math.hypot(e.pos.x - c.pos.x, e.pos.y - c.pos.y) <= c.radius + e.def.radius) {
-            c.ring.hits.add(e.id);
-            this.damageEnemy(e, Math.round(c.dps), c.source, 0, 0);
-            if (c.ring.slow) applySlow(e, c.ring.slow, c.ring.slowDuration);
-          }
-        }
-        this.emitCloudAmbient(c, dt);
-        continue;
-      }
-      this.emitCloudAmbient(c, dt);
-      if (c.tickAcc >= 0.25) {
-        c.tickAcc = 0;
-        if (c.heals) {
-          // 回血池(组合技「深渊裂隙」):只治疗玩家,不伤敌
-          const p = this.player;
-          if (p.alive && Math.hypot(p.pos.x - c.pos.x, p.pos.y - c.pos.y) <= c.radius + PLAYER_BASE.radius) {
-            p.heal(c.dps * 0.25);
-          }
-          continue;
-        }
-        for (const e of this.enemies) {
-          if (e.hp <= 0) continue;
-          const d = Math.hypot(e.pos.x - c.pos.x, e.pos.y - c.pos.y);
-          if (d <= c.radius + e.def.radius) {
-            this.damageEnemy(e, Math.round(c.dps * 0.25), c.source, 0, 0);
-          }
-        }
-      }
-    }
-    for (const c of this.clouds) {
-      if (c.ttl <= 0 && c.meteor) {
-        // 陨星落点引爆(熔核教团):AOE 伤害 + 留灼烧余烬小云(爆炸修饰器走下方通用消散通路)
-        for (const e of this.enemies) {
-          if (e.hp <= 0) continue;
-          if (Math.hypot(e.pos.x - c.pos.x, e.pos.y - c.pos.y) <= c.radius + e.def.radius) {
-            this.damageEnemy(e, Math.round(c.dps), c.source, 0, 60, c.pos);
-          }
-        }
-        const burn = spawnCloud({
-          pos: vec2(c.pos.x, c.pos.y),
-          radius: c.meteor.burnRadius,
-          dps: c.meteor.burnDps,
-          duration: c.meteor.burnDuration,
-          source: c.source,
-          fxEmber: true,
-        });
-        this.clouds.push(burn);
-        this.emitFx({ type: "explosion", pos: vec2(c.pos.x, c.pos.y), radius: c.radius, ttl: 0.3, maxTtl: 0.3 });
-        this.emitMeteorImpact(c);
-      }
-    }
-    for (const c of this.clouds) {
-      if (c.ttl <= 0 && c.explode) {
-        this.engine.explode(c.source, this.ctx, c.pos, c.explode, {
-          power: 1, haste: 0, durationBonus: 0, chainTargets: 0, splitExtra: 0, lifesteal: 0, pierce: 0,
-        });
-      }
-    }
-    removeIf(this.clouds, (c) => c.ttl <= 0);
-  }
-
-  private updateMinions(dt: number): void {
-    const p = this.player;
-    for (const m of this.minions) {
-      m.ttl -= dt;
-      m.attackCd -= dt;
-      this.emitMinionFx(m, dt);
-      const target = this.nearestEnemy(m.pos, MINION_SIGHT);
-      if (target && m.attackCd <= 0) {
-        const d = Math.hypot(target.pos.x - m.pos.x, target.pos.y - m.pos.y);
-        if (d <= MINION_ATTACK_RANGE) {
-          m.attackCd = m.attackInterval;
-          this.damageEnemy(target, m.damage, m.source, 0, MINION_HIT_KNOCKBACK, m.pos);
-          if (m.healOnHit) this.player.heal(Math.round(m.damage * MINION_HEAL_ON_HIT_PCT));
-        } else {
-          // 追击目标
-          const dx = target.pos.x - m.pos.x;
-          const dy = target.pos.y - m.pos.y;
-          const l = Math.hypot(dx, dy) || 1;
-          m.pos.x += (dx / l) * m.speed * dt;
-          m.pos.y += (dy / l) * m.speed * dt;
-        }
-      } else if (!target) {
-        // 跟随玩家
-        const dx = p.pos.x - m.pos.x;
-        const dy = p.pos.y - m.pos.y;
-        const l = Math.hypot(dx, dy) || 1;
-        if (l > MINION_FOLLOW_LEASH) {
-          m.pos.x += (dx / l) * m.speed * dt;
-          m.pos.y += (dy / l) * m.speed * dt;
-        }
-      }
-    }
-    removeIf(this.minions, (m) => m.ttl <= 0);
-    if (this.minions.length > LIMITS.minions) {
-      this.minions.splice(0, this.minions.length - LIMITS.minions);
-    }
-  }
-
-  /** 金币吸附与拾取(替代经验宝石;场内金币 → 商店买卡) */
-  private updateGems(dt: number): void {
-    const p = this.player;
-    const autoPick = autoPickupFor(this.save.ownedTalents); // 自动拾取:全屏吸附
-    const magnetR = autoPick ? 99999 : GEM_MAGNET_RADIUS;
-    for (const gem of this.gems) {
-      if (gem.delay > 0) {
-        gem.delay -= dt;
-        continue;
-      }
-      const d = Math.hypot(gem.pos.x - p.pos.x, gem.pos.y - p.pos.y);
-      if (d < magnetR && d > 1) {
-        gem.pos.x += ((p.pos.x - gem.pos.x) / d) * gem.magnet * dt;
-        gem.pos.y += ((p.pos.y - gem.pos.y) / d) * gem.magnet * dt;
-      }
-      if (d <= PLAYER_BASE.radius + GEM_PICK_RADIUS_BONUS) {
-        gem.picked = true;
-        this.gold += gem.value; // 金币
-      }
-    }
-    removeIf(this.gems, (g) => g.picked);
-  }
-
-  private nearestEnemy(from: Vec2, range: number, exclude?: Set<number>): Enemy | null {
-    let best: Enemy | null = null;
-    let bestD = range * range;
-    for (const e of this.enemies) {
-      if (e.hp <= 0 || e.hidden) continue; // 隐匿者:隐身时不可被瞄准
-      if (exclude?.has(e.id)) continue;
-      const d = Math.hypot(e.pos.x - from.x, e.pos.y - from.y);
-      if (d < bestD) {
-        bestD = d;
-        best = e;
-      }
-    }
-    return best;
-  }
-
-  /** 开始下一章(章间商店 → 新一章:清场、换竞技场、回到中心) */
-  /** 开始下一章(章间商店 → 新一章:清场、换竞技场、回到中心,章节开局刷一波怪) */
+  /** 开始下一章(章间商店 → 新一章):战场清理与开局刷怪走世界层,本层只做转场 */
   private nextChapter(): void {
-    this.chapter += 1;
-    this.chapterTimer = 0;
-    this.arena = this.chapterArena(this.chapter);
-    this.enemies.length = 0;
-    this.skillTelegraphs.length = 0;
-    this.projectiles.length = 0;
-    this.clouds.length = 0;
-    this.minions.length = 0;
-    this.gems.length = 0;
-    this.fxLayer.reset();
-    this.bossSpawned = false;
-    this.bossBanner = null;
-    this.player.pos = vec2((this.arena.x0 + this.arena.x1) / 2, (this.arena.y0 + this.arena.y1) / 2);
-    // 地形重生成(策划案 V3 §6):与"清场换章"同节奏;第 1 章与 Boss 章净空
-    this.obstacles = rollChapterObstacles(this.chapter, this.arena, Math.random, this.currentStage?.bossChapter);
-    this.poolTickAcc = 0;
-    // 章节开局先刷一波怪,避免开局空场(密集度反馈;本章主力敌种加权 + 血量加成)
-    // 章型差异化(策划案 V3 §3.1):精英章密度/burst 提升、宝箱章混入金怪;仅主线关卡生效
-    const ct = this.currentStage ? chapterTypeInfo(this.chapter, this.currentStage.bossChapter) : null;
-    const burst = Math.round((6 + Math.floor(this.chapter / 3)) * (ct?.burstMult ?? 1));
-    const intel = this.spawnIntel();
-    for (let i = 0; i < burst; i++) {
-      let kind = randomEnemyKind(this.chapter, this.owns("god_challenge"));
-      if (intel.prefer && Math.random() < intel.bias) kind = intel.prefer;
-      if (ct && ct.goldMix > 0 && Math.random() < ct.goldMix) kind = "goldkind";
-      const e = spawnEnemy(kind, this.chapterEdgePos(), this.chapter, seasonMonsterDefFor(kind, this.save.seasonId, this.chapter));
-      if (intel.hpBuff > 0 && kind === intel.prefer) {
-        const buffed = Math.round(e.maxHp * (1 + intel.hpBuff));
-        e.maxHp = buffed;
-        e.hp = buffed;
-      }
-      this.enemies.push(e);
-    }
+    this.world.nextChapter();
     this.state = "playing";
-  }
-
-  /** 本章敌情(克制导向):主力敌种 +40% 血量、45% 生成倾向;精英章强制主力为精英(策划案 V3 §3.1) */
-  private spawnIntel() {
-    const i = chapterIntel(this.chapter, this.save.seasonId);
-    const ct = this.currentStage ? chapterTypeInfo(this.chapter, this.currentStage.bossChapter) : null;
-    const forced = ct?.intelPrefer ?? null;
-    return { prefer: forced ?? i.prefer, hpBuff: 0.4, bias: forced ? ct!.intelBias : 0.45 };
-  }
-
-  /** 首局引导上下文(每帧组装,供教学步骤条件判断) */
-  private guideCtx(): GuideCtx {
-    return {
-      playing: this.state === "playing",
-      shop: this.state === "shop",
-      elapsed: this.elapsed,
-      chapter: this.chapter,
-      kills: this.kills,
-      equipmentCount: this.player.equipment.length,
-      hasSet: !!this.selectedSet,
-      setInfo: this.selectedSet ? setDef(this.selectedSet).name : "",
-      mergesAvailable: this.mergeGroups().length,
-    };
   }
 
   /** 委托是否已完成待领取(有效收益窗口 ≥2h 提醒;0/双委托任一满足) */
@@ -2029,21 +1127,6 @@ export class Game {
     return this.save.dailyTalentClaimed.includes(id);
   }
 
-  /** 本局每日天赋全局伤害倍率(战意 +20%) */
-  private dailyDmgMult(): number {
-    return this.hasDailyTalent("dmg20") ? 1 + dailyTalentOf("dmg20").value : 1;
-  }
-
-  /** 本局每日天赋全局脉冲间隔(疾咒 -15%) */
-  private dailyCdrMult(): number {
-    return this.hasDailyTalent("cd15") ? 1 - dailyTalentOf("cd15").value : 1;
-  }
-
-  /** 本局每日天赋金币掉落倍率(淘金 +50%) */
-  private dailyGoldMult(): number {
-    return this.hasDailyTalent("gold50") ? 1 + dailyTalentOf("gold50").value : 1;
-  }
-
   /** 本局广告复活次数上限(默认 1 次;每日天赋「不屈」额外 +1) */
   private reviveLimit(): number {
     return 1 + (this.hasDailyTalent("extra_revive") ? dailyTalentOf("extra_revive").value : 0);
@@ -2074,15 +1157,7 @@ export class Game {
 
   /** 广告复活:满血复活回战斗(本局限次;复活成功不触发死亡结算) */
   private revive(): void {
-    const p = this.player;
-    p.alive = true;
-    p.hp = p.maxHp;
-    p.shield = 0;
-    p.shieldTtl = 0;
-    p.addShield(p.maxHp, REVIVE_SHIELD_SECONDS); // 2 秒无敌盾,避免复活被贴身围杀
-    // 清掉贴身的敌人,给喘息空间
-    removeIf(this.enemies, (e) => Math.hypot(e.pos.x - p.pos.x, e.pos.y - p.pos.y) < REVIVE_CLEAR_RADIUS);
-    this.reviveUsed += 1;
+    this.world.revive(); // 满血 + 短无敌盾 + 清贴身敌人 + 复活计数(世界层)
     this.pendingSettle = false;
     this.rankImprovedTo = null; // 复活后死亡结算取消,幻影名次提示作废(下次死亡重算)
     this.state = "playing";
@@ -2091,6 +1166,7 @@ export class Game {
   /** 死亡:进入结算界面并挂起入账(给"看广告复活"机会;放弃时才真正结算) */
   private onDeath(): void {
     this.state = "gameover";
+    this.world.over = true; // 世界层结束标记:与 Cocos 宿主的推进闸门同口径(本端闸门是 state)
     this.pendingSettle = true;
     // 预计算本局所得(展示用;实际入账在放弃时 settleRun)
     const gained = calcPrestigePoints(this.elapsed, this.kills, 1);
@@ -2163,33 +1239,6 @@ export class Game {
     g.textAlign = "left";
   }
 
-  /** 本章竞技场边缘随机出生点(开局刷怪用) */
-  private chapterEdgePos(): Vec2 {
-    const a = this.arena;
-    const side = Math.floor(Math.random() * 4);
-    if (side === 0) return vec2(rand(a.x0 + 40, a.x1 - 40), a.y0 + 40);
-    if (side === 1) return vec2(rand(a.x0 + 40, a.x1 - 40), a.y1 - 40);
-    if (side === 2) return vec2(a.x0 + 40, rand(a.y0 + 40, a.y1 - 40));
-    return vec2(a.x1 - 40, rand(a.y0 + 40, a.y1 - 40));
-  }
-
-  /** 商店三合一升品:可合并的卡组(同名同品质 ≥2;2 张保底 + 金币,3 张免费) */
-  /** 卡牌类型键(效果+品质)——"2 张同效果同品质即可进化",触发器不再参与判定 */
-  private cardTypeKey(eq: Equipment): string {
-    return eq.effect.def.type + "|" + eq.quality;
-  }
-
-  private mergeGroups(): { name: string; quality: Quality; count: number; sample: Equipment }[] {
-    const map = new Map<string, { name: string; quality: Quality; count: number; sample: Equipment }>();
-    for (const eq of this.player.equipment) {
-      const key = this.cardTypeKey(eq);
-      const g = map.get(key);
-      if (g) g.count += 1;
-      else map.set(key, { name: eq.effect.def.name, quality: eq.quality, count: 1, sample: eq });
-    }
-    return [...map.values()].filter((g) => g.count >= 2).slice(0, 4);
-  }
-
   /**
    * 章间商店布局(重设计):纯几何来自 src/ui/shop.ts(固定几何,与屏高无关),
    * 此层只附业务身份(武器行/强化/销毁附 id,进化行附 group)。
@@ -2197,7 +1246,7 @@ export class Game {
    */
   private shopLayout() {
     const eqs = this.player.equipment.slice(0, 8);
-    const groups = this.mergeGroups();
+    const groups = this.world.mergeGroups();
     const P = shopLayoutPure(eqs.length, groups.length);
     const weaponRows = P.weaponRows.slice(0, eqs.length).map((r, i) => ({ ...r, id: eqs[i].id }));
     return {
@@ -2575,81 +1624,24 @@ export class Game {
 
   /** 开始一局(关卡/无限关共用;调用方先设置 currentStage 与 envAffixes) */
   private startRun(): void {
-    this.player = new Player();
-    this.applyTalentBonuses();
-    // 原地清空(保持数组的身份),否则 BattleContext 会继续持有旧数组
-    this.enemies.length = 0;
-    this.skillTelegraphs.length = 0;
-    this.projectiles.length = 0;
-    this.clouds.length = 0;
-    this.minions.length = 0;
-    this.gems.length = 0;
-    this.fx.length = 0;
-    this.dmgNums.length = 0;
-    this.fxLayer.reset();
-    this.ctx.player = this.player; // 同步 ctx 中的 player 引用
-    this.engine.reset();
-    this.waves = new WaveManager();
-    this.kills = 0;
-    this.elapsed = 0;
-
+    // 世界准备:玩家/天赋加成/实体清场/引擎与波次/竞技场与地形/金币/套组/开局装备(共享层)
+    this.world.startRun();
     this.pointsEarnedThisRun = 0;
     this.stardustEarnedThisRun = 0;
     this.rankImprovedTo = null; // 幻影榜提示每局重置
     this.frameUnlockedThisRun = null;
     // 广告驱动:局内广告状态重置(复活/双倍/商店免费刷新)
-    this.reviveUsed = 0;
     this.doubleClaimed = false;
     this.chapterRefreshes = 0;
     this.pendingSettle = false;
     this.fusA = null;
     this.fusB = null;
     this.fusC = null;
-    this.comboCount = 0;
-    this.comboTimer = 0;
-    this.frenzyTimer = 0;
-    this.bossSpawned = false;
-    this.bossDead = false;
-    this.bossBanner = null;
     this.stageReward = null;
-    // 章节制与金币经济初始化
-    this.chapter = 1;
-    this.chapterTimer = 0;
-    this.gold = 0;
-    this.totalBought = 0;
     this.shopOffers = [];
-    this.arena = this.chapterArena(1);
-    // 地形:第 1 章新手区净空(规则返回空);显式重置保证重开局一致
-    this.obstacles = rollChapterObstacles(1, this.arena, Math.random, this.currentStage?.bossChapter);
-    this.poolTickAcc = 0;
-    // 出战套组(主菜单选择,场外配置带入)
-    this.selectedSet = this.save.selectedSet ?? null;
     // 首局引导:仅主线第 1 关且未完成时启用(前 5 分钟教学;死亡重打会重新引导)
     this.guide.enabled = !this.save.tutorialDone && this.currentStage?.id === 1;
     this.guide.reset();
-    if (this.demoTriple) {
-      // 开发演示:三重融合素材(击杀+飞刀+连锁 / 脉冲+飞刀 / 移动+新星)+ 续航件(验证关卡通关用)
-      this.player.equipment.push(
-        { id: 9101, level: 5, quality: "epic" as Quality, name: "连锁飞刀", triggers: [makeTrigger("kill", { chance: 0.5 })], effect: makeEffect("knife", { damage: 40, speed: 600, radius: 640 }, 5), modifiers: [makeModifier("chain", { targets: 3 })] },
-        { id: 9102, level: 5, quality: "rare" as Quality, name: "脉冲飞刀", triggers: [makeTrigger("pulse", { interval: 1.5 })], effect: makeEffect("knife", { damage: 28, speed: 560, radius: 640 }, 5), modifiers: [] },
-        { id: 9103, level: 5, quality: "rare" as Quality, name: "移动新星", triggers: [makeTrigger("move", { distance: 400 })], effect: makeEffect("nova", { damage: 50, radius: 140 }, 5), modifiers: [] },
-        { id: 9104, level: 5, quality: "rare" as Quality, name: "汲取脉冲", triggers: [makeTrigger("pulse", { interval: 2 })], effect: makeEffect("drain", { heal: 40 }, 5), modifiers: [] }
-      );
-      for (const e of this.player.equipment) this.recordEquipment(e);
-    } else {
-      // 开局带入收藏装备(永久收藏,扭蛋产出);否则默认初始武器
-      const sel = this.save.ownedGear.find((g) => g.id === this.save.selectedGearId);
-      if (sel) {
-        const gear = JSON.parse(JSON.stringify(sel)) as Equipment;
-        this.player.equipment.push(gear);
-        this.recordEquipment(gear);
-      } else {
-        // 套组初始武器(需求:选套组即定本局基调);无套组用默认/蓝图初始武器
-        const starter = this.selectedSet ? makeSetStarterEquipment(this.selectedSet) : this.makeStarter();
-        this.player.equipment.push(starter);
-        this.recordEquipment(starter);
-      }
-    }
     // 开发预览:http://host/?fxdemo=meteor 开局追加飞刀+陨星演示件,直观预览 FX 层样板(不动存档)
     if (typeof window !== "undefined" && /[?&]fxdemo=meteor/.test(window.location.search)) {
       const demoGear: Equipment[] = [
@@ -2713,6 +1705,7 @@ export class Game {
   private victory(): void {
     const st = this.currentStage;
     if (!st) return;
+    this.world.over = true; // 世界层结束标记:本局不再推进(本端闸门是 state)
     const r = st.rewards;
     // 幻影榜名次快照(§4.3):星数入账前记名次,入账后比较
     const lbBoard = phantomBoard(this.save.seasonId);
@@ -2801,20 +1794,6 @@ export class Game {
     return this.save.ownedTalents.includes(id);
   }
 
-  /** 把天赋效果应用到新轮回的玩家身上(征服者:生命/护盾;构筑师:槽位/首级经验;收藏基础数值 + 每日天赋) */
-  private applyTalentBonuses(): void {
-    this.player.slotBonus = slotBonusFor(this.save.ownedTalents);
-    this.player.firstXpScale = firstXpScaleFor(this.save.ownedTalents);
-    // 基础生命 = 基础 × 生命强化天赋 × 收藏图鉴(通关刷装备的永久基础数值)× 每日天赋「坚韧」
-    const cb = collectionBonus(this.save.ownedGear);
-    let hpMult = maxHpMultFor(this.save.ownedTalents) * (1 + cb.hpPct / 100);
-    if (this.hasDailyTalent("hp30")) hpMult *= 1 + dailyTalentOf("hp30").value;
-    this.player.maxHp = Math.round(PLAYER_BASE.maxHp * hpMult);
-    this.player.hp = this.player.maxHp;
-    const shield = startShieldFor(this.save.ownedTalents);
-    if (shield > 0) this.player.addShield(shield, 9999);
-  }
-
   /** 回响点结算(需求优化 v2:跨天保留 40% 永久,60% 入本日池,次日清空) */
   private settleEcho(total: number): void {
     const { permanent, day } = splitEcho(total);
@@ -2854,348 +1833,12 @@ export class Game {
     if (availablePoints(this.save) < node.cost) return;
     if (!isTierUnlocked(this.save.ownedTalents, node.tier, routeOf(id))) return;
     this.save.ownedTalents.push(id);
-    this.applyTalentBonuses();
+    this.world.applyTalentBonuses();
     persistSave(this.save);
   }
 
   private startNewRun(): void {
     this.restart();
-  }
-
-  /* ================= 特效与伤害数字 ================= */
-
-  private tickFx(dt: number): void {
-    for (const f of this.fx) f.ttl -= dt;
-    removeIf(this.fx, (f) => f.ttl <= 0);
-    this.fxLayer.tick(dt);
-  }
-
-  /**
-   * Fx 事件唯一入口:入队 + 按类型补粒子/冲击环(纯视觉,不回写模拟状态)。
-   * 粒子池满时 fxLayer 直接丢弃新请求,尸潮峰值不会拖帧。
-   */
-  private emitFx(f: Fx): void {
-    this.fx.push(f);
-    const { x, y } = f.pos;
-    const r = f.radius ?? 40;
-    switch (f.type) {
-      case "explosion":
-        this.fxLayer.burst({
-          x, y, count: Math.round(clamp(r * 0.3, 5, 14)), color: "#ffb040",
-          speed: [70, 240], size: [1.4, 3.2], life: [0.22, 0.45], drag: 2.4, gravity: 140,
-        });
-        this.fxLayer.ring({ x, y, r0: r * 0.3, r1: r, life: 0.24, color: "rgba(255,180,80,0.85)", width: 2.5 });
-        break;
-      case "nova":
-        this.fxLayer.ring({ x, y, r0: r * 0.15, r1: r, life: 0.42, color: "rgba(255,140,60,0.9)", width: 4 });
-        this.fxLayer.burst({
-          x, y, count: 12, color: "#ff7a3c", speed: [120, 320],
-          size: [1.6, 3.6], life: [0.3, 0.6], drag: 1.8, gravity: 90,
-        });
-        this.fxLayer.addShake(3);
-        break;
-      case "lightning":
-        this.fxLayer.burst({
-          x, y, count: 8, color: "#bfeaff", speed: [140, 340],
-          size: [1, 2.2], life: [0.12, 0.28], halo: 2.6, drag: 5,
-        });
-        break;
-      case "heal":
-        this.fxLayer.burst({
-          x, y, count: 6, color: "#8dffc0", speed: [10, 60],
-          size: [1.4, 2.8], life: [0.5, 0.9], halo: 3, drag: 0.6, gravity: -110,
-        });
-        break;
-      case "shield":
-        this.fxLayer.ring({ x, y, r0: 16, r1: 30, life: 0.3, color: "rgba(90,200,250,0.9)", width: 2.5 });
-        break;
-      case "knife":
-        this.fxLayer.burst({
-          x, y, count: 3, color: "#fff0b8", speed: [60, 190],
-          size: [1, 2.2], life: [0.08, 0.18], halo: 2.4, drag: 7,
-        });
-        break;
-    }
-  }
-
-  /** 投射物拖尾:每移动固定像素补一个发光粒子,与帧率无关 */
-  private emitProjTrail(p: Projectile): void {
-    // 冰锥是 kind="knife" 的追踪弹,按来源效果区分(否则会误用金色飞刀条带)
-    const icelance = p.source?.effect.def.type === "icelance";
-    const gap = p.kind === "ray" ? 8 : 6;
-    const acc = (p.trailAcc ?? 0) + Math.hypot(p.pos.x - p.prevPos.x, p.pos.y - p.prevPos.y);
-    if (acc < gap) {
-      p.trailAcc = acc;
-      return;
-    }
-    p.trailAcc = acc - gap;
-    if (icelance) this.fxLayer.trail(p.pos.x, p.pos.y, "#a5e8ff", p.radius * 0.8, 0.32, 3.0, 2);
-    // 飞刀:小间距 + 低抖动 + 大光晕,粒子互相叠成连续软条带
-    else if (p.kind === "knife") this.fxLayer.trail(p.pos.x, p.pos.y, "#ffd76a", p.radius * 0.7, 0.3, 3.0, 2);
-    else this.fxLayer.trail(p.pos.x, p.pos.y, "#7fd8ff", p.radius * 0.9, 0.26, 2.2);
-  }
-
-  /** 弹道命中火花:朝来向反方向扇形迸溅 */
-  private emitHitSpark(p: Projectile): void {
-    const back = Math.atan2(-p.vel.y, -p.vel.x);
-    this.fxLayer.burst({
-      x: p.pos.x, y: p.pos.y, count: p.kind === "knife" ? 5 : 3,
-      color: p.kind === "knife" ? "#fff2c0" : "#cdf2ff",
-      speed: [110, 300], size: [1, 2.4], life: [0.1, 0.24], halo: 2.6,
-      angle: [back - 1.1, back + 1.1], spread: 0.5, drag: 5, gravity: 220,
-    });
-  }
-
-  /**
-   * 陨星 telegraph:落点内热余烬上冒 + 环内旋涡火屑;倒计时后 60% 开始
-   * 从右上方斜坠一颗流星本体(短命亮核 + 沿轨迹反向的粗火尾),让"要砸了"提前可读。
-   * 本体纯装饰:模拟里没有飞行物,这里只是按 progress 插值出一条光迹。
-   */
-  private emitMeteorTelegraph(c: Cloud, dt: number): void {
-    const progress = 1 - clamp(c.ttl / c.maxTtl, 0, 1);
-    const gap = 0.03;
-    this.meteorEmberAcc = Math.min(gap * 8, this.meteorEmberAcc + dt);
-    const n = Math.floor(this.meteorEmberAcc / gap);
-    if (n > 0) {
-      this.meteorEmberAcc -= n * gap;
-      for (let i = 0; i < n; i++) {
-        const a = rand(0, Math.PI * 2);
-        const rr = Math.sqrt(rand(0, 1)) * c.radius;
-        this.fxLayer.burst({
-          x: c.pos.x + Math.cos(a) * rr, y: c.pos.y + Math.sin(a) * rr, count: 1,
-          color: "#ff8a3c", speed: [8, 42], size: [1.2, 2.8], life: [0.5, 1],
-          halo: 3.2, drag: 1.1, gravity: -76,
-        });
-        // 环内旋涡火屑(隔一发补一颗,控预算)
-        if (i % 2 === 0) {
-          const sa = rand(0, Math.PI * 2);
-          const srr = c.radius * rand(0.55, 0.95);
-          this.fxLayer.burst({
-            x: c.pos.x + Math.cos(sa) * srr, y: c.pos.y + Math.sin(sa) * srr, count: 1,
-            color: "#ffb040", speed: [70, 150], size: [1.4, 3], life: [0.3, 0.55],
-            halo: 2.8, drag: 1.6, orbit: { cx: c.pos.x, cy: c.pos.y },
-          });
-        }
-      }
-    }
-    // 坠落期:彗头 + 粗火尾
-    if (progress >= 0.4) {
-      const t = (progress - 0.4) / 0.6;
-      const e = t * t; // 越接近落点越快
-      const mx = c.pos.x + 170 * (1 - e);
-      const my = c.pos.y - 520 * (1 - e);
-      const fGap = 0.016;
-      this.meteorFallAcc = Math.min(fGap * 4, this.meteorFallAcc + dt);
-      const fn = Math.floor(this.meteorFallAcc / fGap);
-      if (fn > 0) {
-        this.meteorFallAcc -= fn * fGap;
-        for (let i = 0; i < fn; i++) {
-          this.fxLayer.burst({
-            x: mx, y: my, count: 1, color: "#ffd9a0",
-            speed: [0, 14], size: [10, 15], life: [0.05, 0.09], halo: 2.6, drag: 2,
-          });
-          // 火尾指向起飞点方向(轨迹反向),散开拖长
-          const back = Math.atan2(-520, 170);
-          this.fxLayer.burst({
-            x: mx, y: my, count: 2, color: "#ff8a3c",
-            speed: [50, 170], size: [3, 7], life: [0.22, 0.5], halo: 3.2,
-            angle: [back - 0.5, back + 0.5], spread: 0.4, drag: 1.2,
-          });
-        }
-      }
-    }
-  }
-
-  /** 陨星引爆:白闪 + 双层火环 + 火星抛射 + 短镜头震动 */
-  private emitMeteorImpact(c: Cloud): void {
-    const { x, y } = c.pos;
-    this.fxLayer.burst({
-      x, y, count: 26, color: "#ff9a3c", speed: [140, 480],
-      size: [2, 5], life: [0.32, 0.8], halo: 3.4, drag: 1.5, gravity: 320,
-    });
-    this.fxLayer.burst({
-      x, y, count: 12, color: "#fff2c8", speed: [60, 220],
-      size: [2.5, 5], life: [0.16, 0.32], halo: 4,
-    });
-    this.fxLayer.ring({ x, y, r0: 0, r1: c.radius * 0.9, life: 0.18, color: "rgba(255,240,200,0.85)", fill: true });
-    this.fxLayer.ring({ x, y, r0: c.radius * 0.2, r1: c.radius * 1.15, life: 0.36, color: "rgba(255,170,70,0.95)", width: 5 });
-    this.fxLayer.addShake(5);
-  }
-
-  /**
-   * 领域云氛围粒子(纯装饰):霜环沿扩张外沿洒冰点;
-   * 普通云按来源分三类 —— 回血池柔绿光点缓升、灼烧/熔岩火苗上窜、毒云绿雾缓升膨胀。
-   * 全场共享 cloudFxAcc 节流,多云叠加也不会爆粒子预算。
-   */
-  private emitCloudAmbient(c: Cloud, dt: number): void {
-    const gap = 0.05;
-    this.cloudFxAcc = Math.min(gap * 6, this.cloudFxAcc + dt);
-    if (this.cloudFxAcc < gap) return;
-    this.cloudFxAcc -= gap;
-    const a = rand(0, Math.PI * 2);
-    if (c.ring) {
-      // 霜环:粒子贴在当前外沿,随环扩张向外飘
-      this.fxLayer.burst({
-        x: c.pos.x + Math.cos(a) * c.radius, y: c.pos.y + Math.sin(a) * c.radius, count: 1,
-        color: "#bfeaff", speed: [4, 20], size: [1.2, 2.4], life: [0.3, 0.55], halo: 2.6, drag: 1,
-      });
-      return;
-    }
-    const rr = Math.sqrt(rand(0, 1)) * c.radius;
-    const x = c.pos.x + Math.cos(a) * rr;
-    const y = c.pos.y + Math.sin(a) * rr;
-    if (c.heals) {
-      this.fxLayer.burst({ x, y, count: 1, color: "#8dffc0", speed: [6, 26], size: [1.2, 2.2], life: [0.6, 1], halo: 3, gravity: -46, drag: 0.5 });
-    } else if (c.fxEmber || c.source?.effect.def.type === "magma_trail") {
-      this.fxLayer.burst({ x, y, count: 1, color: "#ff8a3c", speed: [10, 36], size: [1.2, 2.6], life: [0.4, 0.8], halo: 3.2, gravity: -60, drag: 0.8 });
-    } else {
-      this.fxLayer.burst({ x, y, count: 1, color: "#7ee877", speed: [4, 18], size: [2.4, 5], life: [0.7, 1.2], halo: 2.2, gravity: -26, drag: 0.6, endScale: 1.5 });
-    }
-  }
-
-  /**
-   * 召唤物 FX(纯装饰):出场一次性爆点 + 冲击环(骨白/幽紫/灰蓝按来源区分),
-   * 亡影与灵狼额外留奔跑魂火拖影(共享 minionFxAcc 节流)。
-   */
-  private emitMinionFx(m: Minion, dt: number): void {
-    if (!m.fxSpawned) {
-      m.fxSpawned = true;
-      const color = m.shade ? "#9fb0cc" : m.source?.effect.def.type === "spirit_wolves" ? "#c9a6ff" : "#e8f4ff";
-      const count = m.source?.effect.def.type === "spirit_wolves" ? 10 : 8;
-      this.fxLayer.burst({
-        x: m.pos.x, y: m.pos.y, count, color, speed: [16, 110],
-        size: [1.4, 3], life: [0.3, 0.6], halo: 2.8, drag: 2, gravity: -30,
-      });
-      this.fxLayer.ring({ x: m.pos.x, y: m.pos.y, r0: 6, r1: 20, life: 0.25, color, width: 2 });
-      return;
-    }
-    if (m.shade || m.source?.effect.def.type === "spirit_wolves") {
-      const gap = 0.22;
-      this.minionFxAcc = Math.min(gap * 4, this.minionFxAcc + dt);
-      if (this.minionFxAcc < gap) return;
-      this.minionFxAcc -= gap;
-      this.fxLayer.trail(m.pos.x, m.pos.y, m.shade ? "#8f9bb3" : "#c9a6ff", 2.2, 0.35, 2.6, 4);
-    }
-  }
-
-  /** 召唤传送门(纯装饰):小怪落点一次性环 + 上浮粒子;召唤师橙、Boss 血红 */
-  private emitSummonFx(pos: Vec2, color: string): void {
-    this.fxLayer.ring({ x: pos.x, y: pos.y, r0: 4, r1: 22, life: 0.35, color, width: 2 });
-    this.fxLayer.burst({
-      x: pos.x, y: pos.y, count: 6, color, speed: [20, 90],
-      size: [1.4, 2.8], life: [0.3, 0.6], halo: 2.8, gravity: -50, drag: 1,
-    });
-  }
-
-  /** 护盾卫士正面格挡(纯装饰):盾面朝向一侧溅出金属火花 */
-  private emitShieldBlock(e: Enemy): void {
-    const sx = e.pos.x + e.facing.x * (e.def.radius + 3);
-    const sy = e.pos.y + e.facing.y * (e.def.radius + 3);
-    const back = Math.atan2(e.facing.y, e.facing.x);
-    this.fxLayer.burst({
-      x: sx, y: sy, count: 4, color: "#cfd8dc", speed: [90, 260],
-      size: [1, 2.2], life: [0.1, 0.26], halo: 2.4, angle: [back - 0.9, back + 0.9], drag: 5, gravity: 240,
-    });
-  }
-
-  /**
-   * 敌人机制装饰特效(纯视觉,不参与结算):
-   * 精英/神/Boss/召唤师登场爆点;隐匿者与神之敌隐身进出紫色烟雾过渡;
-   * Boss 震击蓄力期预警区余烬(过半后外沿加窜火星)、P3 狂暴周身火光。
-   * 氛围类共享 enemyFxAcc 节流。
-   */
-  private emitEnemyFx(e: Enemy, dt: number): void {
-    if (!e.fxSpawned) {
-      e.fxSpawned = true;
-      if (e.isElite || e.kind === "god" || e.kind === "boss" || e.kind === "summoner") {
-        const color = e.kind === "god" ? "#ff2d8f" : e.kind === "boss" ? "#ff2d2d" : e.kind === "summoner" ? "#ff8a65" : "#e05040";
-        const big = e.kind === "god" || e.kind === "boss";
-        this.fxLayer.burst({
-          x: e.pos.x, y: e.pos.y, count: big ? 16 : 8, color,
-          speed: big ? [40, 180] : [20, 100], size: [1.6, 3.4], life: [0.3, 0.7], halo: 3, drag: 1.6, gravity: -40,
-        });
-        this.fxLayer.ring({ x: e.pos.x, y: e.pos.y, r0: e.def.radius * 0.4, r1: e.def.radius + (big ? 30 : 14), life: 0.35, color, width: 2 });
-        if (big) this.fxLayer.addShake(3);
-      }
-    }
-    // 隐匿者/神之敌/批 4 隐身周期载体:隐身进出过渡(紫烟)
-    if ((e.kind === "hider" || e.kind === "god" || e.def.skill?.hideCycle) && e.hidden !== e.fxHidden) {
-      e.fxHidden = e.hidden;
-      if (e.hidden) {
-        this.fxLayer.burst({
-          x: e.pos.x, y: e.pos.y, count: 6, color: "#b388ff", speed: [6, 26],
-          size: [2.2, 4.6], life: [0.5, 0.9], halo: 2.4, drag: 1.2, endScale: 1.6,
-        });
-      } else {
-        this.fxLayer.burst({
-          x: e.pos.x, y: e.pos.y, count: 7, color: "#d1b3ff", speed: [16, 70],
-          size: [1.6, 3.2], life: [0.3, 0.6], halo: 2.8, drag: 1.6,
-        });
-        this.fxLayer.ring({ x: e.pos.x, y: e.pos.y, r0: 6, r1: e.def.radius + 10, life: 0.3, color: "rgba(209,179,255,0.8)", width: 2 });
-      }
-    }
-    // 批 4 冲锋:windup 原地蓄力火花(共享节流)/ 冲刺拖影(无节流,同投射物先例)
-    const cst = e.skillState;
-    if (e.def.skill?.charge && cst?.skillDashing) {
-      if (cst.chargePhase === 2) {
-        this.fxLayer.trail(e.pos.x, e.pos.y, e.def.color, e.def.radius * 0.5, 0.3, 2.6, 3);
-      } else if (cst.chargePhase === 1) {
-        const gap = 0.05;
-        this.chargeFxAcc = Math.min(gap * 6, this.chargeFxAcc + dt);
-        while (this.chargeFxAcc >= gap) {
-          this.chargeFxAcc -= gap;
-          const a = rand(0, Math.PI * 2);
-          const rr = e.def.radius * rand(0.5, 1.0);
-          this.fxLayer.burst({
-            x: e.pos.x + Math.cos(a) * rr, y: e.pos.y + Math.sin(a) * rr, count: 1,
-            color: e.def.color, speed: [6, 24], size: [1.3, 2.6], life: [0.25, 0.5], halo: 2.8, gravity: -55, drag: 0.8,
-          });
-        }
-      }
-    }
-    // Boss 氛围:震击预警余烬 / 狂暴火光(全场共享节流)
-    if (e.kind !== "boss") return;
-    const telegraphing = e.bossSlamCharge > 0 && e.bossSlamPos !== null;
-    const frenzy = e.bossPhase === 3;
-    if (!telegraphing && !frenzy) return;
-    const gap = 0.05;
-    this.enemyFxAcc = Math.min(gap * 6, this.enemyFxAcc + dt);
-    while (this.enemyFxAcc >= gap) {
-      this.enemyFxAcc -= gap;
-      if (telegraphing && e.bossSlamPos) {
-        const prog = 1 - e.bossSlamCharge / BOSS_SLAM.charge;
-        const a = rand(0, Math.PI * 2);
-        const rr = Math.sqrt(rand(0, 1)) * BOSS_SLAM.radius;
-        this.fxLayer.burst({
-          x: e.bossSlamPos.x + Math.cos(a) * rr, y: e.bossSlamPos.y + Math.sin(a) * rr, count: 1,
-          color: "#ff5050", speed: [8, 30], size: [1.4, 2.8], life: [0.35, 0.7], halo: 3, gravity: -50, drag: 0.6,
-        });
-        if (prog > 0.55) {
-          const a2 = rand(0, Math.PI * 2);
-          this.fxLayer.burst({
-            x: e.bossSlamPos.x + Math.cos(a2) * BOSS_SLAM.radius, y: e.bossSlamPos.y + Math.sin(a2) * BOSS_SLAM.radius, count: 1,
-            color: "#ff8a3c", speed: [12, 40], size: [1.2, 2.2], life: [0.25, 0.5], halo: 2.8, gravity: -70, drag: 0.8,
-          });
-        }
-      } else if (frenzy) {
-        const a = rand(0, Math.PI * 2);
-        const rr = e.def.radius * rand(0.6, 1.1);
-        this.fxLayer.burst({
-          x: e.pos.x + Math.cos(a) * rr, y: e.pos.y + Math.sin(a) * rr, count: 1,
-          color: "#ff2d8f", speed: [10, 40], size: [1.4, 2.8], life: [0.3, 0.6], halo: 3.2, gravity: -60, drag: 0.8,
-        });
-      }
-    }
-  }
-
-  private tickDmg(dt: number): void {
-    for (const d of this.dmgNums) d.ttl -= dt;
-    removeIf(this.dmgNums, (d) => d.ttl <= 0);
-  }
-
-  private spawnDmg(pos: Vec2, value: number, color: string): void {
-    this.dmgNums.push({ pos: vec2(pos.x + rand(-6, 6), pos.y - 6), value: String(value), color, ttl: 0.6, maxTtl: 0.6 });
-    if (this.dmgNums.length > 200) this.dmgNums.splice(0, this.dmgNums.length - 200);
   }
 
   /* ================= 渲染 ================= */
@@ -3737,7 +2380,7 @@ export class Game {
       commission: this.commissionReady(),
       intel: true,
       env: this.envAffixes.length > 0,
-      thorn: this.isThornBuild(),
+      thorn: this.world.isThornBuild(),
     });
     g.textAlign = "left";
     if (kind === "combo") {
