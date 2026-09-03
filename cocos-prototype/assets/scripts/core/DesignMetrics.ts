@@ -1,4 +1,4 @@
-import { view, Node, UITransform, ResolutionPolicy } from "cc";
+import { Node, UITransform, Vec3, view, ResolutionPolicy } from "cc";
 
 export const DESIGN_W = 560;
 export const DESIGN_H_MIN = 996;
@@ -61,4 +61,17 @@ export function coverRect(r: Rect, srcW: number, srcH: number): Rect {
     const w = srcW * scale;
     const h = srcH * scale;
     return { x: r.x - (w - r.w) / 2, y: r.y - (h - r.h) / 2, w, h };
+}
+
+/**
+ * 引擎指针坐标(UI 空间,左下原点)→ 设计空间(左上原点)。
+ * 换算交给承载节点的 UITransform 矩阵,缩放与信箱不需要宿主手写;
+ * 但前提是该节点铺满整屏(placeRect(node, fullRect())),否则纵向零点就不是屏幕顶缘。
+ * 所有屏幕的指针判定都走这一个出口(布局台与摇杆的私有版本已在 Phase 3 收敛到此)。
+ */
+export function toDesignSpace(node: Node, loc: { x: number; y: number }): { x: number; y: number } {
+    const ui = node.getComponent(UITransform);
+    if (!ui) return { x: 0, y: 0 };
+    const local = ui.convertToNodeSpaceAR(new Vec3(loc.x, loc.y, 0));
+    return { x: local.x + DESIGN_W / 2, y: logicalH() / 2 - local.y };
 }

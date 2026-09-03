@@ -250,6 +250,10 @@ web-desktop 构建里 `cc` 是全局对象，可直接内省真实节点树：
 
 `setFrameSize(430,932)` 后 visibleSize 为 560×1213.77，可稳定复现竖屏；桌面窗口下看到的横向裁切是 FIXED_WIDTH 下的取景结果，不是布局缺陷。
 
+**两端取景对齐的精确口径**：Web 侧 `window.game` 已暴露 `offX / offY / scale / logicalW / logicalH`，桌面窗口下 `logicalW × logicalH` 就是 `560 × 996`（与 Cocos 侧 `worldH()` 的钳制值同源）。所以在页面内按 `drawImage(canvas, round(offX), round(offY), round(560*scale), round(996*scale), 0, 0, …)` 裁一次，得到的图与 Cocos 侧同一设计矩形逐像素可比（实测均为 684×1217）。`evaluate_script` 的 `filePath` 落的是**返回值字符串**，多层 `JSON.stringify` 会写成双重编码，node 侧解码要按 `typeof === "string"` 再 parse 一次。
+
+已归档的 Web 基准图在 `.probe/`（gitignored，随取随重生成）：`web-menu.png` / `shop.png` / `heroes.png` / `web-battle-crop.png`，即 Phase 1/3 逐屏对标的对照面。
+
 ### 7.4 已通过的骨架验收
 - 启动链：`loadBalance` + `loadViewTable` + `loadFrames` 并行完成 → `buildLayers()` → 读档 → `router.show("battle")`，`ready === true`。
 - 背景：`Cover p0,0 s694x1214 op140` + `Dim s560x1214`，居中与压暗均对标 Web。
@@ -305,10 +309,20 @@ web-desktop 构建里 `cc` 是全局对象，可直接内省真实节点树：
 
 **与 Web 工作台的已知分歧**：参考带画实线（`Graphics` 无虚线）；`menu_section_strip` / `crest_echo` / `menu_title_plate` / `menu_strip_plate` 按 Web 口径整图绘制，故不在边距标注列；`MenuLayoutView` 只给几何与占位文案，逐行锁定/通关减淡、英雄立绘、实时货币与红点判定留待 Phase 3；边距列只在 Cocos 侧产生实际效果（Web 侧角深自动推导）。
 
-### Phase 3 — 菜单 / 商店 / 英雄
+### Phase 3 — 菜单 / 商店 / 英雄（已落地）
 `drawMenu` `drawShop` `drawHeroes` + `ui/{menuLayout,shop,heroSelectLayout,scrollList,heroPortrait}.ts` 的矩形包与滚动容器节点化。
 
-验收：三屏与 Web 截图对标；主菜单文字无遮挡（行板内缩语义由 `box` 局部矩形保证）；英雄列表 12 项滚动惯性手感与 Web 一致；`selectedHero` 变更 → `selectedSet` 派生镜像同步。
+三屏的 Web 实测形态（`.probe/` 基准图，560×996 逻辑矩形）：主菜单 = 标题带 + 赛季行 + 三枚货币 chip + 幻影榜 + 六入口行 + 分区条 + **7 行关卡**（带 ✓ 通关减淡与"20 章·Boss / 扭蛋券×N"）+ 无限关带 + 英雄带 + 底部套组注记两行；商店 = 顶部信息带（章间商店 / 本章敌情 / 套组与推荐 / 金币 / 槽位 / 卡价随购买递增）+ 四按钮行（刷新 10 金 / 融合 / 重开 / 主页）+ **3 张卡**（贴图 + 名 + 品质 + 效果串 + 价格）+ 槽位扩容条 + 武器管理段（含空态文案）+ 进化段（含空态文案）+ 底部下一章节敌情与推荐套组两行 + "开始第 N 章"主按钮；英雄页 = 上半列表 + 下半详情区（立绘 + 技能详情 4 条：初始武器 / 三件套 / 六件套 / 赛季联动）+ 底部"不出战 / 确定出战"双带。
+
+英雄列表的行数由赛季门控决定，不是固定 12：S1 存档"已解锁 3/12"时 `heroLayout()` 出 6 行、屏内可见 5 行（未解锁项画成灰态"S2 解锁"）。996 屏高下这一档放得下，滚动与惯性要到高屏或解锁数增长才被触发——两端仍须共用 `scrollList` 的同一批函数，只是验收不能只靠"拖一下看看"来判。
+
+验收实测（全绿）：`npm test` 43 套件 / 1100 用例（新增 `tests/cocos-phase3.test.ts` 772 行 / 6 组 / 32 例）、`npm run build`、`npm run build:cocos` 均通过；`HeroSelectView` / `HeroSelectModel` / `MenuContentModel` / `ShopView` 及 `openHeroes` / `tickHeroScroll` / `syncHeroes` / `onHeroAction` 全部命中 `build/web-desktop/assets/main/index.js`。新增文件与目录的 `.meta` 齐备。`src/**`、共享层 `game/**`、`tests/battle-fingerprint.test.ts` 全程零改动。
+
+三屏的落地分工：几何与文案构建放 cc-free 的 `menu/MenuContentModel.ts`、`shop/ShopModel.ts`、`heroes/HeroSelectModel.ts`（可 node 直测），节点与绘制放 `menu/MenuLayoutView.ts`、`shop/ShopView.ts`、`heroes/HeroSelectView.ts`，共用新抽的 `ui/PanelKit.ts`（九宫格底板 / 文本带 / 图标位 / 行数裁剪）。`GameShell` 只保留装配与热区→玩法的分发：`buildShopScreen` / `openShop` / `closeShop` / `onShopAction` 与 `openHeroes` / `syncHeroes` / `onHeroAction` / `tickHeroScroll`，`heroes` 与 `shop` 并入 `buildScreens` 的 per-screen refresh 表，惯性由 `update(dt)` 在路由闸门前驱动。章间商店从"直接开下一章"改为真弹商店、买完再续下一章。滚动数学全部调 `game/ui/scrollList.ts` 的 `dragScrollFrom` / `flickOf` / `inertiaNext` / `SCROLL_TAP_SLOP`，出战只经 `applyHeroSelection`。
+
+**尚未在本期闭环的验收项**（受 §7.3 的引擎起不来所限）：三屏与 `.probe/` 基准图的逐像素对标；1246 档的底锚与 restZone 取景；拖拽与甩动的手感、`Mask` 边缘裁切、单指 `touchId` 与触屏/微信滑动手势是否互斥；立绘入表后晚到贴图的换上时机。
+
+**与 Web 的已知分歧**（均为有意）：英雄立绘 Web 是 `drawHeroPortrait` 程序化动画（呼吸 + 未解锁灰剪影），`hero_*` 不在 `ASSET_MANIFEST`，Cocos 侧退化为"主色方块 + 名字首字"、无动画；「不出战」在 Web 即刻落盘回菜单，这里先落预览位、由「确定」一次性写入，误触可撤销；未解锁行的徽标底色用 `hexA(textMuted,0.16)`，Web 是 `rgba(255,255,255,0.05)`；面板底走 `panel_dark_corners` 九宫格（Web 由 `panelPad` 自绘）；滚动多一条 `snap()` 回弹路径，终态与 Web 松手硬钳一致；三屏的底色/行色/滚动条已表化到 `viewTable` 的 `phase3.*`，默认值与 Web 逐档相同，改表只影响 Cocos 端。
 
 ### Phase 4 — 成长系统屏
 `drawGacha` `drawPass` `drawDaily` `drawSeason` `drawLeaderboard` `drawGearUp` `drawPrestige` `drawFusion` `drawCommission(+Panel)`。含 `data/gacha.ts` 的 `drawGacha`/`drawGacha10` 贴图优先通道。

@@ -9,6 +9,8 @@ import { MENU_PRESENTATION_DEFAULTS, type MenuPresentationParams } from "../game
 import { isSkinHidden, isSkinTextHidden, resolveSkinKey } from "../game/dev/labSkin";
 import type { MenuPanelId } from "../game/data/menuSkin";
 import type { SetId } from "../game/data/sets";
+import { menuChipRects, type MenuRowContent, type MenuTextContent } from "./MenuContentModel";
+import { placeText, textBand } from "../ui/PanelKit";
 
 /**
  * 主菜单的**表驱动几何视图**(Phase 2 落地:布局台的"画面";Phase 3 补逐屏内容)。
@@ -23,47 +25,13 @@ import type { SetId } from "../game/data/sets";
  * 缺图与皮肤 `hidden` 走同一条代码回退链路(§4.1.3)。所有 Label 直接挂在 Page 上、
  * 用设计空间绝对矩形定位,因此不存在"子局部矩形忘传 box"这一类错位(R5 的形态在此被绕开)。
  *
- * 本批未接的通道:英雄立绘(drawHeroPortrait 的宿主画笔)、逐行锁定/通关减淡、
- * 实时货币与红点判定 —— 均由宿主经 `MenuTextContent` 注入或留待 Phase 3。
+ * Phase 3 接上的通道:逐行锁定/通关减淡、实时货币与红点判定、补星文案与委托红点。
+ * 文案与状态一律由宿主经 `menu/MenuContentModel.ts:buildMenuContent()` 注入 ——
+ * 布局台与玩家版共用同一个构建函数,所以工作台里改表看到的画面就是玩家画面。
  */
 
-/** 每行需要宿主给的文字与状态;几何仍由视图按表算 */
-export interface MenuRowContent {
-  id: number;
-  name: string;
-  desc: string;
-  /** 头像徽章资产键(品质框);null = 走代码圆/方块回退 */
-  badgeKey: string | null;
-  badgeText: string;
-  /** 当前可挑战 → 用高亮行板 */
-  current: boolean;
-  /** 该行是否显示补星钮(决定右列避让与 makeupRect) */
-  makeup: boolean;
-}
-
-/** 宿主注入的文案与开关;布局台给一份占位内容即可跑通"改表即改画" */
-export interface MenuTextContent {
-  title: string;
-  seasonLine: string;
-  energyLine: string;
-  /** 三枚货币筹码:图标键 + 文案 */
-  chips: { iconKey: string; text: string }[];
-  phantomText: string;
-  sectionText: string;
-  rows: MenuRowContent[];
-  /** 六个场外入口:底板键 + 文案(顺序即列序) */
-  entries: { plateKey: string; label: string }[];
-  endlessText: string;
-  heroLines: string[];
-  heroBtnText: string;
-  /** 出战英雄主色(展示带描边/强调文字);null = 未选出战 */
-  accent: string | null;
-  noteLines: string[];
-  /** 每日入口是否亮红点 */
-  showDot: boolean;
-  /** 当前出战套组(金星标只画在这张卡上) */
-  selectedSet: SetId | null;
-}
+/** 文案与状态类型住在 cc-free 的 MenuContentModel 里(纯函数才能被 node 侧测试直接消费) */
+export type { MenuAction, MenuRowContent, MenuRowState, MenuTextContent } from "./MenuContentModel";
 
 /** 一个可热换的贴图块:有图走 Sprite,无图走同节点的 Graphics 回退描形 */
 interface Plate {
@@ -74,6 +42,8 @@ interface Plate {
 
 interface RowNodes {
   root: Node;
+  /** 锁定/通关行的整行减淡档(对标 Web 未解锁行 globalAlpha) */
+  op: UIOpacity;
   plate: Plate;
   badge: Plate;
   badgeText: Label | null;
@@ -81,12 +51,6 @@ interface RowNodes {
   desc: Label;
   makeup: Plate;
   makeupText: Label;
-}
-
-/** 基线 Y → 文本盒:Cocos 的 Label 按盒定位,Web 的 fillText 按基线绘制 */
-function baselineRect(x: number, baseY: number, w: number, px: number, lift: number): MenuRect {
-  const h = Math.round(px * 1.25);
-  return { x, y: Math.round(baseY - px * lift), w, h };
 }
 
 const CENTER = Label.HorizontalAlign.CENTER;
@@ -100,7 +64,7 @@ export class MenuLayoutView {
   private setIds: SetId[] = [];
   private rows = new Map<number, RowNodes>();
   private chips: { plate: Plate; icon: Plate; text: Label }[] = [];
-  private entries: { plate: Plate; text: Label }[] = [];
+  private entries: { plate: Plate; icon: Plate; text: Label }[] = [];
   private heroLines: Label[] = [];
   private noteLines: Label[] = [];
   private insetCache = new Map<string, SpriteFrame>();
@@ -120,6 +84,7 @@ export class MenuLayoutView {
   private heroBtn: { plate: Plate; text: Label };
   private notePlate: Plate;
   private dot: Plate;
+  private dotCommission: Plate;
 
   constructor(parent: Node, frames: Map<string, SpriteFrame>) {
     this.frames = frames;
@@ -147,6 +112,7 @@ export class MenuLayoutView {
     this.notePlate = this.plate("NotePlate", this.page);
     for (let i = 0; i < 2; i++) this.noteLines.push(label(`NoteLine${i}`, this.page, "", FS.micro, HEX.textSecondary));
     this.dot = this.plate("Dot", this.page);
+    this.dotCommission = this.plate("DotCommission", this.page);
   }
 
   /** 资源流式到位后由宿主补调:换图与缺图回退形状随就绪态变化 */
@@ -284,45 +250,46 @@ export class MenuLayoutView {
     this.cur = L;
     const skin = snapshotMenuSkin();
     const m = this.menuParams();
-    const lift = m.baselineLift;
-    const textOff = (panel: MenuPanelId) => isSkinTextHidden(skin, panel);
+        const textOff = (panel: MenuPanelId) => isSkinTextHidden(skin, panel);
     (this.page.getComponent(UITransform) || this.page.addComponent(UITransform)).setContentSize(DESIGN_W, logicalH());
     this.page.setPosition(0, 0, 0);
 
     /* --- 标题横幅 --- */
     this.showPlate(this.banner, "menu_title_plate", L.d.ban, "stretch");
     this.showPlate(this.crest, "crest_echo", L.d.crest, "stretch");
-    placeRect(this.titleText.node, baselineRect(L.d.titlePos.x, L.d.titlePos.y, L.d.ban.w - 80, m.titlePx, lift));
+    placeText(this.titleText.node, textBand(L.d.titlePos.x, L.d.titlePos.y, L.d.ban.w - 80, m.titlePx));
     this.titleText.fontSize = m.titlePx;
     this.titleText.color = hexToColor(m.titleColor);
     bindLabel(this.titleText, c.title);
-    placeRect(this.seasonText.node, baselineRect(L.d.seasonPos.x - m.rightColumnW, L.d.seasonPos.y, m.rightColumnW, m.subPx, lift));
+    placeText(this.seasonText.node, textBand(L.d.seasonPos.x - m.rightColumnW, L.d.seasonPos.y, m.rightColumnW, m.subPx), "right");
     this.seasonText.fontSize = m.subPx;
     bindLabel(this.seasonText, c.seasonLine);
-    placeRect(this.row2Text.node, baselineRect(L.d.seasonPos.x - m.rightColumnW, L.d.row2Y, m.rightColumnW, m.subPx, lift));
+    placeText(this.row2Text.node, textBand(L.d.seasonPos.x - m.rightColumnW, L.d.row2Y, m.rightColumnW, m.subPx), "right");
     this.row2Text.fontSize = m.subPx;
     bindLabel(this.row2Text, c.energyLine);
     for (const lb of [this.titleText, this.seasonText, this.row2Text]) lb.node.active = !textOff("title");
 
     /* --- 货币条 + 三枚筹码 + 幻影榜 --- */
     this.showPlate(this.strip, "menu_strip_plate", L.d.strip, "stretch");
-    const chipW = Math.max(24, L.d.chipXs.length > 1 ? L.d.chipXs[1] - L.d.chipXs[0] - 4 : L.d.strip.w / 3);
+    // 筹码矩形走 MenuContentModel 的同一出口:点击热区与画面必然同坐标
+    const chipRects = menuChipRects(L);
     L.d.chipXs.forEach((x, i) => {
       const slot = this.chips[i];
       if (!slot) return;
       const icon = c.chips[i];
+      const box = chipRects[i];
       slot.plate.root.active = !!icon;
       slot.icon.root.active = !!icon;
       slot.text.node.active = !!icon && !textOff("chip");
       if (!icon) return;
-      this.showPlate(slot.plate, "menu_chip_plate", { x: x - L.d.chipSlide, y: L.d.chipY, w: chipW, h: L.d.chipH }, "slice");
+      this.showPlate(slot.plate, "menu_chip_plate", box, "slice");
       const ih = m.chipIconH;
-      this.showPlate(slot.icon, icon.iconKey, { x, y: L.d.chipBase.y + Math.round((L.d.chipBase.h - ih) / 2), w: L.d.chipIconW, h: ih }, "stretch");
-      placeRect(slot.text.node, baselineRect(x + L.d.chipIconW + L.d.chipIconGap, L.d.chipBase.y + L.d.chipBase.h - 2, chipW, m.subPx, lift));
+      this.showPlate(slot.icon, icon.iconKey, { x: box.x + L.d.chipSlide, y: L.d.chipBase.y + Math.round((L.d.chipBase.h - ih) / 2), w: L.d.chipIconW, h: ih }, "stretch");
+      placeText(slot.text.node, textBand(x + L.d.chipIconW + L.d.chipIconGap, L.d.chipBase.y + L.d.chipBase.h - 2, box.w, m.subPx));
       bindLabel(slot.text, icon.text);
     });
     this.showPlate(this.phantom.plate, "menu_chip_plate", L.phantomBtn, "slice");
-    placeRect(this.phantom.text.node, baselineRect(L.phantomBtn.x + 4, L.phantomBtn.y + L.phantomBtn.h - 4, L.phantomBtn.w, m.subPx, lift));
+    placeText(this.phantom.text.node, textBand(L.phantomBtn.x + 4, L.phantomBtn.y + L.phantomBtn.h - 4, L.phantomBtn.w, m.subPx));
     bindLabel(this.phantom.text, c.phantomText);
     this.phantom.text.node.active = !textOff("chip");
 
@@ -340,10 +307,13 @@ export class MenuLayoutView {
 
     /* --- 关卡行 --- */
     const seen = new Set<number>();
+    const p3 = viewTable().phase3;
     L.rows.forEach((r) => {
       seen.add(r.id);
       const content = c.rows.find((x) => x.id === r.id);
       const n = this.ensureRow(r.id);
+      // 逐行状态:未解锁整行减淡(对标 Web 未解锁行 globalAlpha),通关行轻微减淡
+      n.op.opacity = !content || content.unlocked ? 255 : content.cleared ? p3.menuRowClearedAlpha : p3.menuRowLockedAlpha;
       this.showPlate(n.plate, content?.current ? m.currentRowPlate : "menu_row_plate", r, "slice");
       const cy = r.y + r.h / 2;
       const badgeBox: Rect = { x: r.x + L.rowMargin + L.d.badgeOffX - L.d.badgeSize / 2, y: cy - L.d.badgeSize / 2, w: L.d.badgeSize, h: L.d.badgeSize };
@@ -357,9 +327,9 @@ export class MenuLayoutView {
       const c1 = Math.round(cy - L.d.rowC1Off);
       const rightX = r.x + r.w - L.rowMargin - L.d.rowRightInset - (content?.makeup ? L.d.rowMakeupReserve : 0);
       const tw = Math.max(20, rightX - L.d.descClipPad - textX);
-      placeRect(n.name.node, baselineRect(textX, c1, tw, m.bodyPx, lift));
+      placeText(n.name.node, textBand(textX, c1, tw, m.bodyPx));
       bindLabel(n.name, content?.name ?? `第 ${r.id} 关`);
-      placeRect(n.desc.node, baselineRect(textX, c1 + L.d.rowC2Gap, tw, m.subPx, lift));
+      placeText(n.desc.node, textBand(textX, c1 + L.d.rowC2Gap, tw, m.subPx));
       bindLabel(n.desc, content?.desc ?? "");
       n.name.node.active = !textOff("row");
       n.desc.node.active = !textOff("row");
@@ -369,6 +339,7 @@ export class MenuLayoutView {
         const mk = L.makeupRect(r, L.rowMargin);
         this.showPlate(n.makeup, "btn_minor", mk, "slice");
         placeRect(n.makeupText.node, mk);
+        bindLabel(n.makeupText, content.makeupText);
       }
     });
     for (const [id, n] of this.rows) {
@@ -377,18 +348,28 @@ export class MenuLayoutView {
       this.rows.delete(id);
     }
 
-    /* --- 六个场外入口 + 红点 --- */
+    /* --- 六个场外入口 + 两枚红点 --- */
     [L.commissionBtn, L.gachaBtn, L.talentBtn, L.passBtn, L.dailyBtn, L.gearupBtn].forEach((b, i) => {
       const slot = this.entries[i] ?? this.addEntry();
       const src = c.entries[i];
       this.showPlate(slot.plate, src?.plateKey ?? "btn_minor", b, "slice");
+      // 入口图标:左端 h-12 见方(对标 Web skinIconButton 的 ih = h - 12 / x + 4)
+      const ih = b.h - 12;
+      const iconOn = !!src?.iconKey && ih >= 8;
+      slot.icon.root.active = iconOn;
+      if (iconOn) this.showPlate(slot.icon, src.iconKey, { x: b.x + 4, y: b.y + (b.h - ih) / 2, w: ih, h: ih }, "stretch");
       placeRect(slot.text.node, { x: b.x, y: b.y, w: b.w, h: b.h });
       slot.text.node.getComponent(Label)!.verticalAlign = Label.VerticalAlign.CENTER;
+      slot.text.fontSize = m.bodyPx;
+      slot.text.isBold = true;
       bindLabel(slot.text, src?.label ?? "");
     });
-    const dot = L.d.dotRect(L.dailyBtn);
+    const dailyDot = L.d.dotRect(L.dailyBtn);
     this.dot.root.active = c.showDot;
-    if (c.showDot) this.showPlate(this.dot, "", { x: dot.cx - dot.r, y: dot.cy - dot.r, w: dot.r * 2, h: dot.r * 2 }, "dot");
+    if (c.showDot) this.showPlate(this.dot, "", { x: dailyDot.cx - dailyDot.r, y: dailyDot.cy - dailyDot.r, w: dailyDot.r * 2, h: dailyDot.r * 2 }, "dot");
+    const commDot = L.d.dotRect(L.commissionBtn);
+    this.dotCommission.root.active = c.showCommissionDot;
+    if (c.showCommissionDot) this.showPlate(this.dotCommission, "", { x: commDot.cx - commDot.r, y: commDot.cy - commDot.r, w: commDot.r * 2, h: commDot.r * 2 }, "dot");
 
     /* --- 无限关主按钮 --- */
     this.showPlate(this.endless.plate, "btn_primary", L.endlessBtn, "slice");
@@ -411,7 +392,7 @@ export class MenuLayoutView {
       const lb = this.heroLines[i];
       if (!lb) return;
       const y = [L.heroRow1Y, L.heroRow2Y, L.heroRow3Y][i];
-      placeRect(lb.node, baselineRect(L.heroTextX, y, Math.max(20, L.heroTextMaxW), i === 0 ? m.bodyPx : m.subPx, lift));
+      placeText(lb.node, textBand(L.heroTextX, y, Math.max(20, L.heroTextMaxW), i === 0 ? m.bodyPx : m.subPx));
       bindLabel(lb, t);
       lb.color = hexToColor(i === 1 && c.accent ? c.accent : i === 0 ? HEX.textPrimary : HEX.textSecondary);
       lb.node.active = !textOff("setCard");
@@ -430,7 +411,7 @@ export class MenuLayoutView {
       const t = c.noteLines[i];
       lb.node.active = noteOn && t !== undefined && !textOff("note");
       if (!lb.node.active) return;
-      placeRect(lb.node, baselineRect(L.d.noteX, L.d.noteRow1Y + i * L.d.noteRow2Gap, Math.max(20, L.d.noteMaxW), m.subPx, lift));
+      placeText(lb.node, textBand(L.d.noteX, L.d.noteRow1Y + i * L.d.noteRow2Gap, Math.max(20, L.d.noteMaxW), m.subPx));
       bindLabel(lb, t ?? "");
       lb.color = hexToColor(i === 1 && c.accent ? c.accent : m.noteColor);
     });
@@ -444,6 +425,7 @@ export class MenuLayoutView {
     const badge = this.plate("Badge", root);
     const n: RowNodes = {
       root,
+      op: root.addComponent(UIOpacity),
       plate: this.plate("Plate", root),
       badge,
       badgeText: label("BadgeText", root, "", FS.micro, HEX.textPrimary, { hAlign: CENTER }),
@@ -458,9 +440,13 @@ export class MenuLayoutView {
     return n;
   }
 
-  private addEntry(): { plate: Plate; text: Label } {
+  private addEntry(): { plate: Plate; icon: Plate; text: Label } {
     const i = this.entries.length;
-    const slot = { plate: this.plate(`Entry${i}`, this.page), text: label(`EntryText${i}`, this.page, "", FS.micro, HEX.textPrimary) };
+    const slot = {
+      plate: this.plate(`Entry${i}`, this.page),
+      icon: this.plate(`EntryIcon${i}`, this.page),
+      text: label(`EntryText${i}`, this.page, "", FS.micro, HEX.textPrimary),
+    };
     this.entries.push(slot);
     return slot;
   }

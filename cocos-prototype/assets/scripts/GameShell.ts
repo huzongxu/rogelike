@@ -1,11 +1,11 @@
-import { _decorator, Component, Label, Node, Sprite, SpriteFrame, UIOpacity, UITransform, resources } from "cc";
-import { DESIGN_W, coverRect, fullRect, placeRect, refreshDesignResolution, worldH } from "./core/DesignMetrics";
+import { _decorator, Component, Graphics, Label, Node, SpriteFrame, resources } from "cc";
+import { DESIGN_W, fullRect, logicalH, placeRect, refreshDesignResolution, toDesignSpace, worldH } from "./core/DesignMetrics";
 import { ScreenRouter, ScreenKey } from "./core/ScreenRouter";
 import { loadBalance } from "./core/ConfigChannel";
-import { loadViewTable, viewTable, borderOf } from "./core/ViewTable";
+import { loadViewTable, viewTable } from "./core/ViewTable";
 import { readSave, writeSave } from "./core/SaveChannel";
 import { showRewardedAd } from "./core/AdChannel";
-import { FS, HEX, UI, label, makeNode, sliced, solidRect } from "./ui/Widgets";
+import { HEX, UI, bindLabel, hexToColor, label, makeNode, solidRect } from "./ui/Widgets";
 import { ASSET_MANIFEST } from "./game/data/assets";
 import { applyBalance as applyDaily } from "./game/data/daily";
 import { applyBalance as applyStages } from "./game/data/stages";
@@ -15,28 +15,39 @@ import { applyBalance as applyGacha } from "./game/data/gacha";
 import { applyBalance as applyEconomy } from "./game/data/equipmentGen";
 import { applyBalance as applyMenuLayoutTable } from "./game/data/layoutMenu";
 import { applyMenuSkin } from "./game/data/menuSkin";
-import { normalizeSave } from "./core/SaveModel";
+import { normalizeSave, type SaveModel } from "./core/SaveModel";
 import { STAGES } from "./game/data/stages";
-import { releasedSets } from "./game/data/sets";
-import { canStarMakeup } from "./game/data/season";
-import { showcaseHero } from "./game/data/heroes";
-import type { SetId } from "./game/data/sets";
+import { canStarMakeup, STAR_MAKEUP_COST, THREE_STAR_TICKETS } from "./game/data/season";
 import { BattleSim } from "./battle/BattleSim";
 import { BattleWorldView } from "./battle/BattleWorldView";
 import { HudView } from "./battle/HudView";
 import { FxView } from "./battle/FxView";
 import { JoystickView } from "./battle/JoystickView";
-import { MenuLayoutView, type MenuTextContent } from "./menu/MenuLayoutView";
+import { MenuLayoutView } from "./menu/MenuLayoutView";
+import { buildMenuContent, hitMenu, menuRowStates, menuSetIds, type MenuAction, type MenuRowState, type MenuTextContent } from "./menu/MenuContentModel";
 import { LayoutLab } from "./dev/LayoutLab";
+import { ShopModel, type ShopAction, type ShopWorld } from "./shop/ShopModel";
+import { ShopView } from "./shop/ShopView";
+import { HeroSelectModel, type HeroAction, type HeroSaveView } from "./heroes/HeroSelectModel";
+import { HeroSelectView } from "./heroes/HeroSelectView";
 
 const { ccclass } = _decorator;
 
-/** 主菜单三行:验证贴图九宫格、字阶、点击路由三条链路(菜单屏 Phase 3 前的骨架内容) */
-const MENU_ROWS: { text: string; to: ScreenKey | null }[] = [
-    { text: "继续冒险", to: "battle" },
-    { text: "英雄", to: "heroes" },
-    { text: "看广告领回响", to: null },
-];
+/** 后续阶段才落地的屏幕(键 = 菜单入口 id + phantom/fusion):点下去先给一条轻提示,不做假动作 */
+const PENDING_SCREEN: Record<string, string> = {
+    commission: "委托尚未开放",
+    gacha: "扭蛋尚未开放",
+    talent: "天赋尚未开放",
+    pass: "通行证尚未开放",
+    daily: "每日尚未开放",
+    gearup: "升级尚未开放",
+    phantom: "幻影榜尚未开放",
+    fusion: "融合尚未开放",
+};
+
+/** 回响筹码下标:点它走激励视频领回响(三枚筹码 = 券/回响/星尘) */
+const ECHO_CHIP_INDEX = 1;
+
 
 /**
  * HUD 构建期一次性读取的贴图(坞板九宫格 / 徽章 / 横幅 / 14 张装备卡效果图标):
@@ -156,6 +167,22 @@ export class GameShell extends Component {
     private labOn = false;
     private lab: LayoutLab | null = null;
     private menuView: MenuLayoutView | null = null;
+    /** 玩家版的指针热区(布局台版由浮层的 Capture 接管,不重复绑) */
+    private menuPointer: Node | null = null;
+    /** 激励视频在途标记:一次未看完前不接受第二次点击 */
+    private adPending = false;
+    /** 章间商店:账本与视图(战场状态经 ShopWorld 切片接入) */
+    private shopModel: ShopModel | null = null;
+    private shopView: ShopView | null = null;
+    /** 英雄选择屏:账本(滚动位/预览/热区)与视图;出战只经 model.commit 写回 sim.save */
+    private heroesModel: HeroSelectModel | null = null;
+    private heroesView: HeroSelectView | null = null;
+    /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
+    private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
+    private overlay: Node | null = null;
+    private toastNode: Node | null = null;
+    private toastLabel: Label | null = null;
+    private toastLeft = 0;
 
     onLoad(): void {
         refreshDesignResolution();
@@ -201,25 +228,39 @@ export class GameShell extends Component {
         this.router.show(this.labOn ? "menu" : "battle");
         // 其余世界美术后台流式加载:每帧从 frames 读取,到位即自动换上(语义 = Web assets.beginLoad())
         this.loadFrames(restFrameKeys()).then(() => {
-            // 背景是一次性设置,贴图流到位后补刷一次
+            // 背景与视图贴图就绪态都是一次性读取,流到位后补刷一次
             if (!this.ready) return;
             this.refreshBackdrop();
+            this.menuView?.setFrames(this.frames);
+            // 商店与英雄屏的图标/立绘在 sync 时才换上:换引用 + 当前屏补排一次
+            this.shopView?.setFrames(this.frames);
+            this.heroesView?.setFrames(this.frames);
+            if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.lab) this.lab.sync();
+            else this.refreshMenu();
         });
     }
 
     private buildLayers(): void {
         this.buildScreens();
         this.buildBattle();
-        this.buildMenuContent();
+        this.buildMenuScreen();
+        this.buildShopScreen();
         this.buildHeroesContent();
-        makeNode("Overlay", this.worldLayer);
+        this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
+    /** 屏幕注册表:每屏一个节点 + 一个 refresh 回调(路由切屏时即刷新实时数值) */
     private buildScreens(): void {
-        (["battle", "menu", "heroes"] as ScreenKey[]).forEach((key) => {
+        const hooks: Partial<Record<ScreenKey, () => void>> = {
+            menu: () => this.refreshMenu(),
+            shop: () => this.shopView?.sync(),
+            heroes: () => this.syncHeroes(),
+        };
+        (["battle", "menu", "shop", "heroes"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
+            const refresh = hooks[key];
             this.router.register(key, {
                 active: false,
                 onShow: () => {
@@ -228,7 +269,9 @@ export class GameShell extends Component {
                 onHide: () => {
                     node.active = false;
                 },
-                refresh: () => {},
+                refresh: () => {
+                    if (refresh) refresh();
+                },
             });
         });
     }
@@ -265,8 +308,8 @@ export class GameShell extends Component {
                 // 死亡/通关结算屏属 Phase 5:先停住世界推进(sim.over),不做入账交互
                 onDeath: () => {},
                 onVictory: () => {},
-                // 章间商店屏属 Phase 3:暂直接开下一章,不中断战斗节奏
-                onChapterShop: () => this.sim.nextChapter(),
+                // 章末 → 弹章间商店屏(买完/关闭后回到战斗并继续下一章)
+                onChapterShop: () => this.openShop(),
             },
         });
         this.joystick.onToggleAuto = () => this.sim.toggleAuto();
@@ -282,171 +325,395 @@ export class GameShell extends Component {
         this.worldView.setBackdrop(this.frames.has(key) ? key : "bg_outside");
     }
 
-    /* ================= 菜单/英雄(骨架内容,Phase 3 重写) ================= */
+    /* ================= 主菜单屏(表驱动:布局台与玩家版共用同一视图与同一内容构建) ================= */
 
-    private buildMenuContent(): void {
+    /**
+     * 菜单屏装配。两条纪律:
+     *  ① 画面只由 `MenuLayoutView` 画(几何全部来自 `menuLayoutPure`),玩家版与工作台版
+     *     用的是同一个视图实例 —— 骨架版 MENU_ROWS 已在 Phase 3 删除;
+     *  ② 文案与状态只由 `buildMenuContent` 给(存档驱动),所以布局台里拖手柄看到的
+     *     行/筹码/红点就是玩家真实进度下的那一套。
+     */
+    private buildMenuScreen(): void {
         const menu = this.screenLayer.getChildByName("Screen:menu");
         if (!menu) return;
-        if (this.labOn) {
-            // 工作台版:表驱动视图接管画面,浮层按同一份布局产物放手柄
-            menu.removeAllChildren();
-            this.buildLabMenu(menu);
+        menu.removeAllChildren();
+        this.menuPointer = null;
+        const save = this.save();
+        this.menuView = new MenuLayoutView(menu, this.frames);
+        this.menuView.setEnv(STAGES.map((s) => s.id), menuSetIds(save));
+        this.menuView.refresh(this.menuContent());
+        if (!this.labOn) {
+            this.bindMenuPointer(menu);
             return;
         }
-        this.buildMenuSkeleton(menu);
-    }
-
-    /** 表驱动菜单视图 + 布局台浮层:两者读同一张内存表,拖手柄即改画面 */
-    private buildLabMenu(menu: Node): void {
-        const save = normalizeSave(readSave());
-        this.menuView = new MenuLayoutView(menu, this.frames);
-        this.menuView.setEnv(STAGES.map((s) => s.id), releasedSets(save.seasonId).map((s) => s.id));
+        // 工作台版:浮层按同一份布局产物放手柄, Capture 在最上层接管指针
         this.lab = new LayoutLab({
             screen: menu,
             view: this.menuView,
             frames: this.frames,
-            content: () => this.labContent(),
+            content: () => this.menuContent(),
             stageIds: STAGES.map((s) => s.id),
-            setIds: releasedSets(save.seasonId).map((s) => s.id) as SetId[],
-            makeupRows: (L) => L.rows.map((r) => canStarMakeup(save.stageStars[r.id] ?? 0)),
-            selectedSet: (save.selectedSet ?? null) as SetId | null,
+            setIds: menuSetIds(save),
+            makeupRows: () => this.menuRows().map((r) => r.makeup),
+            selectedSet: save.selectedSet ?? null,
         });
         this.lab.mount();
         (globalThis as Record<string, unknown>).__lab = this.lab;
     }
 
-    /** 工作台版的占位文案:够看清几何就行,实时数值与状态判定归 Phase 3 */
-    private labContent(): MenuTextContent {
-        const save = normalizeSave(readSave());
-        const hero = showcaseHero(save);
-        const sets = releasedSets(save.seasonId);
-        const set = sets.find((s) => s.id === save.selectedSet) ?? sets[0] ?? null;
-        const stage = this.sim ? this.sim.currentStage : null;
-        return {
-            title: "回响深渊",
-            seasonLine: `第 ${save.seasonId} 季`,
-            energyLine: `体力 ${Math.max(0, Math.round(save.energy))} · 钻石 ${Math.max(0, Math.round(save.diamond))}`,
-            chips: [
-                { iconKey: "icon_gold", text: String(Math.round(save.points)) },
-                { iconKey: "icon_echo", text: String(Math.round(save.dayEcho)) },
-                { iconKey: "icon_stardust", text: String(Math.round(save.stardust)) },
-            ],
-            phantomText: "幻影榜",
-            sectionText: "主线关卡",
-            rows: STAGES.map((s) => ({
-                id: s.id,
-                name: s.name,
-                desc: s.desc,
-                badgeKey: "badge_shield_bronze",
-                badgeText: String(s.id),
-                current: stage ? stage.id === s.id : false,
-                makeup: canStarMakeup(save.stageStars[s.id] ?? 0),
-            })),
-            entries: [
-                { plateKey: "btn_minor", label: "委托" },
-                { plateKey: "btn_minor", label: "扭蛋" },
-                { plateKey: "btn_minor", label: "天赋" },
-                { plateKey: "btn_minor", label: "通行证" },
-                { plateKey: "btn_minor", label: "每日" },
-                { plateKey: "btn_minor", label: "升级" },
-            ],
-            endlessText: stage ? "进入无限关" : "继续主线",
-            heroLines: [
-                hero ? `${hero.name} · ${hero.title}` : "未选出战英雄",
-                set ? `${set.name} · ${set.desc}` : "点右侧「更换英雄」,套组构筑随英雄出战",
-                "初始武器:随机通用卡池",
-            ],
-            heroBtnText: hero ? "更换英雄" : "选择英雄",
-            accent: hero ? hero.accentColor : null,
-            noteLines: set ? [`出战「${hero ? hero.name : "—"}」· 商店偏向刷「${set.name}」卡`, `${set.bonus3.name} / ${set.bonus6.name}`] : [],
-            showDot: true,
-            selectedSet: (save.selectedSet ?? null) as SetId | null,
-        };
+    /** 实时重算一屏:切回菜单、广告入账、补星后都走它(工作台版的刷新由 LayoutLab.sync 负责) */
+    private refreshMenu(): void {
+        if (!this.menuView || this.labOn) return;
+        this.menuView.refresh(this.menuContent());
     }
 
-    /** Phase 1 记录的骨架验收内容(三行九宫格 + 金色标题);Phase 3 由表驱动视图替换 */
-    private buildMenuSkeleton(menu: Node): void {
-        // 菜单屏自己的满幅立绘 + 压暗(每个屏幕的背景挂在 Screen:<key> 下,不跨屏漏画)
-        const bgFrame = this.frames.get("bg_menu");
-        if (bgFrame) {
-            const node = makeNode("Cover", menu);
-            const sp = node.addComponent(Sprite);
-            sp.spriteFrame = bgFrame;
-            sp.sizeMode = Sprite.SizeMode.CUSTOM;
-            const op = node.addComponent(UIOpacity);
-            const t = viewTable().backdrop;
-            op.opacity = Math.round(t.coverAlpha * 255);
-            placeRect(node, coverRect(fullRect(), bgFrame.width, bgFrame.height));
-            solidRect("Dim", menu, fullRect(), t.dimColor);
-        }
-        label("Title", menu, "回响深渊", FS.display, HEX.gold, {
-            bold: true,
-            rect: { x: 0, y: 140, w: DESIGN_W, h: FS.display + 12 },
-            hAlign: Label.HorizontalAlign.CENTER,
+    /** 本屏读的是战斗层持有的同一份内存存档;sim 未就绪时回落 localStorage 归一化结果 */
+    private save(): SaveModel {
+        return this.sim ? this.sim.save : normalizeSave(readSave());
+    }
+
+    /** 逐行状态(解锁/通关/星数/补星):画面与点击判定共读这一份 */
+    private menuRows(): MenuRowState[] {
+        return menuRowStates(this.save(), STAGES.map((s) => s.id));
+    }
+
+    private menuContent(): MenuTextContent {
+        if (this.sim) this.sim.syncEnergy();
+        return buildMenuContent({
+            save: this.save(),
+            now: Date.now(),
+            currentStageId: this.sim && this.sim.currentStage ? this.sim.currentStage.id : null,
+            stageIds: STAGES.map((s) => s.id),
         });
-        MENU_ROWS.forEach((row, i) => {
-            const y = 260 + i * (UI.rowMax + 12);
-            const w = DESIGN_W - UI.pad * 2;
-            const node = this.rowNode(menu, { x: UI.pad, y, w, h: UI.rowMax }, "menu_row_plate");
-            label("RowText", node, row.text, FS.title, HEX.textPrimary, {
-                bold: true,
-                rect: { x: 20, y: Math.round(UI.rowMax / 2 - FS.title / 2) - 4, w: w - 40, h: FS.title + 12 },
-                box: { w, h: UI.rowMax },
-            });
-            node.on(Node.EventType.TOUCH_END, () => {
-                if (row.to) {
-                    this.router.show(row.to);
+    }
+
+    /** 玩家版的整屏热区:一次 hitMenu 判定,宿主只把动作翻译成玩法,不在这里重算几何 */
+    private bindMenuPointer(menu: Node): void {
+        const cap = makeNode("MenuPointer", menu);
+        placeRect(cap, fullRect());
+        cap.on(Node.EventType.TOUCH_END, (e: { getUILocation(): { x: number; y: number } }) => {
+            const L = this.menuView ? this.menuView.layout() : null;
+            if (!L) return;
+            const p = toDesignSpace(cap, e.getUILocation());
+            const act = hitMenu(L, this.menuRows(), p.x, p.y);
+            if (act) this.onMenuAction(act);
+        }, this);
+        this.menuPointer = cap;
+    }
+
+    private onMenuAction(a: MenuAction): void {
+        const sim = this.sim;
+        if (!sim) return;
+        switch (a.kind) {
+            case "stage": {
+                const row = this.menuRows().find((r) => r.id === a.id);
+                if (!row) return;
+                if (!row.unlocked) {
+                    this.toast(`第${a.id}关尚未解锁`);
                     return;
                 }
-                showRewardedAd((ok) => {
-                    if (ok && this.sim) {
-                        this.sim.save.points += 100;
-                        this.sim.persist();
-                    }
-                });
-            }, this);
-        });
-    }
-
-    private rowNode(parent: Node, rect: { x: number; y: number; w: number; h: number }, frameKey: string): Node {
-        const frame = this.frames.get(frameKey);
-        if (frame) {
-            return sliced("Row", parent, frame, rect, borderOf(frameKey, frame.width, frame.height)).node;
+                if (!sim.startStage(a.id)) {
+                    this.toast("体力不足,稍后再试或改打无限关");
+                    return;
+                }
+                this.refreshBackdrop();
+                this.router.show("battle");
+                return;
+            }
+            case "makeup":
+                this.starMakeup(a.id);
+                return;
+            case "endless":
+                if (!sim.startEndless()) {
+                    this.toast("体力不足,无法进入无限关");
+                    return;
+                }
+                this.refreshBackdrop();
+                this.router.show("battle");
+                return;
+            case "hero":
+                this.openHeroes();
+                return;
+            case "chip":
+                // 三枚筹码 = 券/回响/星尘,只有回响筹码挂激励视频入口
+                if (a.index === ECHO_CHIP_INDEX) this.watchAdForEcho();
+                return;
+            case "phantom":
+            case "entry":
+                this.toast(PENDING_SCREEN[a.kind === "entry" ? a.entry : "phantom"]);
+                return;
         }
-        const node = makeNode("Row", parent);
-        node.addComponent(UITransform).setContentSize(rect.w, rect.h);
-        placeRect(node, rect);
-        return node;
     }
 
+    /** 补星(钻石出口):5◆ 直接记 3 星 + 一次性 3 星券与关卡框,与 Web starMakeup 同一入账口径 */
+    private starMakeup(id: number): void {
+        const save = this.save();
+        if (!canStarMakeup(save.stageStars[id] ?? 0)) return;
+        if (save.diamond < STAR_MAKEUP_COST) {
+            this.toast("钻石不足,补星需要 " + STAR_MAKEUP_COST + "◆");
+            return;
+        }
+        save.diamond -= STAR_MAKEUP_COST;
+        save.stageStars[id] = 3;
+        save.gachaTicket += THREE_STAR_TICKETS;
+        if (!save.frames.includes(id)) save.frames.push(id);
+        this.sim.persist();
+        this.refreshMenu();
+        this.toast(`补星完成 · 扭蛋券 +${THREE_STAR_TICKETS}`);
+    }
+
+    /** 激励视频领回响:非微信宿主按模拟时长判定完整观看;入账走存档唯一写路径 */
+    private watchAdForEcho(): void {
+        if (this.adPending) return;
+        this.adPending = true;
+        const gain = viewTable().phase3.echoAdGain;
+        showRewardedAd((ok) => {
+            this.adPending = false;
+            if (!ok) {
+                this.toast("广告未看完,回响未入账");
+                return;
+            }
+            this.save().points += gain;
+            this.sim.persist();
+            this.refreshMenu();
+            this.toast(`回响 +${gain}`);
+        });
+    }
+
+    /* ---------- 轻提示:Overlay 上一条暗底胶囊,ttl 到点收起(未接入屏幕的兜底反馈) ---------- */
+
+    private toast(text: string): void {
+        const t = viewTable().phase3;
+        const w = DESIGN_W - UI.pad * 2;
+        if (!this.toastNode || !this.toastNode.isValid) {
+            const node = makeNode("Toast", this.overlay ?? this.worldLayer);
+            node.addComponent(Graphics);
+            const g = node.getComponent(Graphics)!;
+            g.fillColor = hexToColor(t.hintBg);
+            g.roundRect(-w / 2, -t.hintH / 2, w, t.hintH, t.hintH / 2);
+            g.fill();
+            placeRect(node, { x: UI.pad, y: t.hintY, w, h: t.hintH });
+            const lb = label("ToastText", node, "", t.hintPx, t.hintFg, {
+                bold: true,
+                hAlign: Label.HorizontalAlign.CENTER,
+                rect: { x: 0, y: 0, w, h: t.hintH },
+                box: { w, h: t.hintH },
+            });
+            lb.verticalAlign = Label.VerticalAlign.CENTER;
+            this.toastNode = node;
+            this.toastLabel = lb;
+        }
+        bindLabel(this.toastLabel!, text);
+        this.toastNode.active = true;
+        this.toastLeft = t.hintTtl;
+    }
+
+    /** 提示条计时:壳层在路由闸门之前调用,保证非战斗屏上也会自己收起 */
+    private tickToast(dt: number): void {
+        if (this.toastLeft <= 0) return;
+        this.toastLeft -= dt;
+        if (this.toastLeft <= 0 && this.toastNode && this.toastNode.isValid) this.toastNode.active = false;
+    }
+
+    /* ================= 章间商店屏 ================= */
+
+    /**
+     * 商店屏装配。账本(货品/价目/购买/刷新/槽位/销毁/进化)在 `shop/ShopModel.ts`,
+     * 节点摆在 `shop/ShopView.ts`;这里只做两件事:把 BattleSim 的战场状态投影成
+     * ShopWorld 切片,以及把模型回报的热区动作翻译成玩法。
+     */
+    private buildShopScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:shop");
+        const sim = this.sim;
+        if (!node || !sim) return;
+        node.removeAllChildren();
+        const world: ShopWorld = {
+            // getter 而非引用:开局时世界层会换掉装备数组的实例,取到的一直是活的那一份
+            get equipment() {
+                return sim.player.equipment;
+            },
+            gold: () => sim.gold,
+            setGold: (v) => {
+                sim.world.gold = v;
+            },
+            slots: () => sim.player.slots,
+            runSlotBonus: () => sim.player.runSlotBonus,
+            addRunSlot: () => {
+                sim.player.runSlotBonus += 1;
+            },
+            chapter: () => sim.chapter,
+            seasonId: () => sim.save.seasonId,
+            highestStage: () => sim.save.highestStage,
+            selectedSet: () => sim.save.selectedSet ?? null,
+            ownedTalents: () => sim.save.ownedTalents,
+            totalBought: () => sim.world.totalBought,
+            addTotalBought: () => {
+                sim.world.totalBought += 1;
+            },
+            recordEquipment: (eq) => sim.world.recordEquipment(eq),
+            cardTypeKey: (eq) => sim.world.cardTypeKey(eq),
+            mergeGroups: () => sim.world.mergeGroups(),
+        };
+        this.shopModel = new ShopModel(world);
+        this.shopView = new ShopView(node, this.frames, this.shopModel, worldH(), (a) => this.onShopAction(a));
+        this.shopView.sync();
+    }
+
+    /** 章末进商店:刷三张货 + 复位本章刷新阶梯,再切屏(战斗推进由路由闸门自然暂停) */
+    private openShop(): void {
+        if (!this.shopModel) return;
+        this.shopModel.open();
+        this.router.show("shop");
+    }
+
+    /** 离开商店:next = 继续下一章,否则回主菜单(本局金币与章节进度按 Web 口径留在场内) */
+    private closeShop(next: boolean): void {
+        if (next && this.sim) this.sim.nextChapter();
+        this.refreshBackdrop();
+        this.router.show(next ? "battle" : "menu");
+    }
+
+    private onShopAction(a: ShopAction): void {
+        const m = this.shopModel;
+        const sim = this.sim;
+        if (!m || !sim) return;
+        switch (a.kind) {
+            case "tool":
+                if (a.id === "refresh") {
+                    if (!m.refresh()) this.toast("金币不足,刷新不了");
+                } else if (a.id === "fusion") {
+                    this.toast(PENDING_SCREEN.fusion);
+                } else if (a.id === "restart") {
+                    this.restartRun();
+                    return;
+                } else {
+                    this.closeShop(false);
+                    return;
+                }
+                break;
+            case "slot":
+                if (!m.buySlot()) this.toast("金币不足或槽位已满");
+                break;
+            case "card":
+                if (!m.buy(a.index)) this.toast(sim && m.freeSlots() <= 0 ? "槽位已满,先销毁一件" : "金币不足");
+                break;
+            case "weapon":
+                m.selectWeapon(a.id);
+                break;
+            case "destroy":
+                m.destroy(a.id);
+                break;
+            case "merge":
+                if (!m.merge(a.sample)) this.toast("金币不足,升不了品");
+                break;
+            case "next":
+                this.closeShop(true);
+                return;
+        }
+        this.shopView?.sync();
+    }
+
+    /** 重开本局(商店「重开」钮):与 Web restart() 同一口径 —— 当前关带门控豁免重开,无限关重掷词缀 */
+    private restartRun(): void {
+        const sim = this.sim;
+        if (!sim) return;
+        const ok = sim.currentStage ? sim.startStage(sim.currentStage.id, true) : sim.startEndless();
+        if (!ok) {
+            this.toast("体力不足,无法重开");
+            return;
+        }
+        this.refreshBackdrop();
+        this.router.show("battle");
+    }
+
+    /**
+     * 英雄选择屏装配。三层分工与商店屏同构:
+     *  ① 几何全部来自共享层 `game/ui/heroSelectLayout()`(经 `model.layout` 单一出口),
+     *     顶/底锚用整屏高 `logicalH()`,与 `HeroSelectView` 内 `placeRect` 的默认 H 同源;
+     *  ② 滚动位、预览、热区判定全在 `heroes/HeroSelectModel.ts`,本文件不碰 offset;
+     *  ③ 出战写回只经 `model.commit()` → `applyHeroSelection` 这一条路径,存档通道与
+     *     菜单/商店一致(读写 `this.sim.save` + `sim.persist()`,不另起第二份存档)。
+     */
     private buildHeroesContent(): void {
-        const heroes = this.screenLayer.getChildByName("Screen:heroes");
-        if (!heroes) return;
-        label("Title", heroes, "英雄", FS.title, HEX.textPrimary, {
-            bold: true,
-            rect: { x: 0, y: 64, w: DESIGN_W, h: FS.title + 12 },
-            hAlign: Label.HorizontalAlign.CENTER,
+        const node = this.screenLayer.getChildByName("Screen:heroes");
+        if (!node) return;
+        node.removeAllChildren();
+        const model = new HeroSelectModel();
+        this.heroesModel = model;
+        this.heroesView = new HeroSelectView(node, this.frames, model, {
+            layout: () => model.layout(this.heroSave(), DESIGN_W, logicalH()),
+            onAction: (a) => this.onHeroAction(a),
+            changed: () => this.syncHeroes(),
         });
-        label("Hint", heroes, "12 名英雄 · 12 套武器套组(待接入)", FS.muted, HEX.textMuted, {
-            rect: { x: 0, y: 110, w: DESIGN_W, h: FS.muted + 12 },
-            hAlign: Label.HorizontalAlign.CENTER,
-        });
-        const back = makeNode("Back", heroes);
-        back.addComponent(UITransform).setContentSize(UI.backW, UI.backH);
-        placeRect(back, { x: UI.pad, y: 16, w: UI.backW, h: UI.backH });
-        label("BackText", back, "返回", FS.body, HEX.textSecondary, {
-            rect: { x: 0, y: 8, w: UI.backW, h: FS.body + 12 },
-            box: { w: UI.backW, h: UI.backH },
-            hAlign: Label.HorizontalAlign.CENTER,
-        });
-        back.on(Node.EventType.TOUCH_END, () => this.router.show("menu"), this);
+        this.heroesView.sync();
+    }
+
+    /** 本屏要读的存档字段就这三项;切片对象复用,滚动期间不逐帧分配 */
+    private heroSave(): HeroSaveView {
+        const s = this.save();
+        this.heroSlice.selectedHero = s.selectedHero;
+        this.heroSlice.selectedSet = s.selectedSet;
+        this.heroSlice.seasonId = s.seasonId;
+        return this.heroSlice;
+    }
+
+    /** 进屏:预览对齐存档 + 把当前出战那行滚到视口居中,再切屏(路由顺带 refresh 一次) */
+    private openHeroes(): void {
+        if (!this.heroesModel) return;
+        this.heroesModel.open(this.heroSave(), DESIGN_W, logicalH());
+        this.router.show("heroes");
+    }
+
+    private syncHeroes(): void {
+        this.heroesView?.sync();
+    }
+
+    /**
+     * 热区 → 玩法。与 Web `onHeroesClick` 有一处刻意的差别:「不出战」在 Web 是即刻落盘
+     * 回菜单,这里先落到预览位,由「确定」一次性写入,于是误触可撤销(四个热区共用同一条 confirm 出口)。
+     */
+    private onHeroAction(a: HeroAction): void {
+        const m = this.heroesModel;
+        if (!m) return;
+        switch (a.kind) {
+            case "back":
+                this.router.show("menu");
+                return;
+            case "row":
+            case "clear":
+                if (m.apply(a)) this.syncHeroes();
+                return;
+            case "confirm":
+                m.commit(this.save());
+                this.sim?.persist();
+                this.router.show("menu");
+                return;
+        }
+    }
+
+    /**
+     * 逐帧驱动列表惯性(共享层的纪律是「时间是入参」,视图不会自己推进)。
+     * dt 不钳:惯性是解析积分 + 触界即停,长帧只会一次走完,不会穿过边界。
+     */
+    private tickHeroScroll(dt: number): void {
+        const m = this.heroesModel;
+        const view = this.heroesView;
+        if (!m || !view || this.router.current !== "heroes") return;
+        const g = m.scroll.geometry(m.layout(this.heroSave(), DESIGN_W, logicalH()));
+        const moved = m.scroll.tick(dt, g);
+        // 阻尼位(拖出边界显示的 offset)恒在此收回:与 Web 松手即硬钳同一结果
+        const snapped = m.scroll.snap(g);
+        if (moved || snapped) view.sync();
     }
 
     /* ================= 主循环 ================= */
 
     update(dt: number): void {
-        // 布局台在菜单屏上工作(blocksPlay 为真),所以排在推进世界之前
+        // 布局台、轻提示与英雄列表惯性都工作在非战斗屏上(blocksPlay 为真),所以排在推进世界之前
         if (this.lab) this.lab.tick();
+        this.tickToast(dt);
+        this.tickHeroScroll(dt);
         if (!this.ready || this.router.blocksPlay()) return;
         const step = Math.min(dt, viewTable().battle.maxFrameDt);
         this.joystick.update();

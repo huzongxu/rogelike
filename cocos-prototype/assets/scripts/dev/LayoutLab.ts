@@ -80,6 +80,13 @@ interface UiTouchEvent {
     getUIEvent?(): { shiftKey?: boolean } | null;
 }
 
+/**
+ * DOM 侧栏用到的宿主对象类型:Cocos 侧 tsconfig 故意不带 DOM lib,所以这里不引
+ * HTMLElement 之类的全局类型,统一记作 Dom(= any)。这些对象只在 sys.isBrowser 且
+ * globalThis.document 存在时才拿到,全部经 globalThis 取,与 labMode() 同一口径。
+ */
+type Dom = any;
+
 export class LayoutLab {
     private o: LabOptions;
     private root!: Node;
@@ -102,21 +109,21 @@ export class LayoutLab {
     private previews = new Set<string>();
     private previewBackup = new Map<string, SpriteFrame | null>();
     private bundle = { balanceText: "{}", viewTableText: "{}" };
-    private panel: HTMLElement | null = null;
+    private panel: Dom | null = null;
     private refs = {
-        inputs: new Map<string, HTMLInputElement>(),
-        rows: new Map<string, HTMLElement>(),
-        vis: new Map<string, HTMLInputElement>(),
-        names: new Map<string, HTMLInputElement>(),
-        remap: new Map<string, HTMLSelectElement>(),
-        badge: new Map<string, HTMLElement>(),
-        clear: new Map<string, HTMLElement>(),
-        insets: new Map<string, HTMLInputElement>(),
-        status: null as HTMLElement | null,
-        readout: null as HTMLElement | null,
-        list: null as HTMLElement | null,
-        bal: null as HTMLElement | null,
-        vt: null as HTMLElement | null,
+        inputs: new Map<string, Dom>(),
+        rows: new Map<string, Dom>(),
+        vis: new Map<string, Dom>(),
+        names: new Map<string, Dom>(),
+        remap: new Map<string, Dom>(),
+        badge: new Map<string, Dom>(),
+        clear: new Map<string, Dom>(),
+        insets: new Map<string, Dom>(),
+        status: null as Dom | null,
+        readout: null as Dom | null,
+        list: null as Dom | null,
+        bal: null as Dom | null,
+        vt: null as Dom | null,
     };
 
     constructor(opts: LabOptions) {
@@ -430,7 +437,7 @@ export class LayoutLab {
         box.appendChild(body);
 
         /* 虚拟屏高 */
-        const hInput = this.el("input", { type: "number", min: String(lab.minScreenH), max: String(lab.maxScreenH), step: "1", value: String(this.screenH), style: NUM }) as HTMLInputElement;
+        const hInput = this.el("input", { type: "number", min: String(lab.minScreenH), max: String(lab.maxScreenH), step: "1", value: String(this.screenH), style: NUM }) as Dom;
         hInput.addEventListener("change", () => {
             const v = Number(hInput.value) || this.screenH;
             this.screenH = Math.min(lab.maxScreenH, Math.max(lab.minScreenH, v));
@@ -465,7 +472,7 @@ export class LayoutLab {
         /* 九宫格边距 → viewTable.nineSlice.keys */
         const nine = this.el("div", { style: "margin-top:10px;font-size:11px;color:#c8c2b1" }, this.el("div", { text: "九宫格边距(→ viewTable.json 的 nineSlice.keys;留空 = 按源图短边 × factor 自动推导)" }));
         for (const key of MENU_NINE_KEYS) {
-            const input = this.el("input", { type: "number", min: "0", step: "1", style: NUM, title: `${key} 边距,0 = 自动` }) as HTMLInputElement;
+            const input = this.el("input", { type: "number", min: "0", step: "1", style: NUM, title: `${key} 边距,0 = 自动` }) as Dom;
             input.value = this.table.borders[key] ? String(this.table.borders[key]) : "";
             input.placeholder = `自动 ${borderFor(this.table, key, 0, 0) || "?"}`;
             input.addEventListener("change", () => {
@@ -546,7 +553,7 @@ export class LayoutLab {
         for (const p of SKIN_TREE) {
             const insetRow = this.el("div", { style: "display:flex;align-items:center;gap:4px;margin:4px 0 4px 6px;font-size:11px;color:#8f9bb3" }, this.text(`${p.label} 四边间距`));
             for (const side of ["t", "r", "b", "l"] as const) {
-                const input = this.el("input", { type: "number", min: "-100", max: "100", step: "1", style: "width:44px;font-size:11px;background:#0b0e14;color:#e6e6e6;border:1px solid #232a3d", title: `${p.label} ${side} 边间距增量` }) as HTMLInputElement;
+                const input = this.el("input", { type: "number", min: "-100", max: "100", step: "1", style: "width:44px;font-size:11px;background:#0b0e14;color:#e6e6e6;border:1px solid #232a3d", title: `${p.label} ${side} 边间距增量` }) as Dom;
                 this.refs.insets.set(`${p.id}.${side}`, input);
                 input.addEventListener("change", () => {
                     const patch = {} as Partial<SkinInsets>;
@@ -595,7 +602,7 @@ export class LayoutLab {
 
     private fieldRow(id: string, key: string, step: number, min: number, max: number, def: number, draggable: boolean, group: string): any {
         const [section, field] = id.split(".");
-        const input = this.el("input", { type: "number", step: String(step), min: String(min), max: String(max), style: "width:62px;font-size:12px;background:#0b0e14;color:#e6e6e6;border:1px solid #232a3d" }) as HTMLInputElement;
+        const input = this.el("input", { type: "number", step: String(step), min: String(min), max: String(max), style: "width:62px;font-size:12px;background:#0b0e14;color:#e6e6e6;border:1px solid #232a3d" }) as Dom;
         this.refs.inputs.set(id, input);
         const commit = (v: number) => {
             applyValue(section as "origin" | "deco", field, v);
@@ -644,7 +651,7 @@ export class LayoutLab {
     private applyFilter(q: string): void {
         const list = this.refs.list;
         if (!list) return;
-        const kids = Array.from(list.children) as HTMLElement[];
+        const kids = Array.from(list.children) as Dom[];
         const shown: boolean[] = [];
         for (const node of kids) {
             const id = node.getAttribute("data-id");
@@ -677,7 +684,7 @@ export class LayoutLab {
             const isDirty = dirty.has(f.id);
             row.style.background = isDirty ? "rgba(255,215,106,0.08)" : "";
             row.style.borderLeftColor = this.selected === f.id ? viewTable().lab.colors.drag : "transparent";
-            const reset = row.lastElementChild as HTMLElement | null;
+            const reset = row.lastElementChild as Dom | null;
             if (reset) reset.style.display = isDirty ? "" : "none";
         }
         for (const node of buildSkinTree(this.skin)) {
@@ -728,7 +735,7 @@ export class LayoutLab {
     /* ==================== 双通道换图 · 通道二:本地预览 ==================== */
 
     /** 选一张本地图顶掉某个资产键:只改内存帧表,刷新即失,绝不进导出 */
-    private async previewLocal(key: string, file: File): Promise<void> {
+    private async previewLocal(key: string, file: Dom): Promise<void> {
         const url = (globalThis as Record<string, any>).URL.createObjectURL(file);
         const ext = /\.(\w+)$/.exec(file.name)?.[1] ?? "png";
         const frame = await new Promise<SpriteFrame | null>((resolve) => {

@@ -131,7 +131,96 @@ export interface ViewTable {
     menu: MenuPresentationParams;
     /** 布局台浮层自身参数:手柄尺寸/拾取半径/配色/虚拟屏高档位,?lab=1 时消费 */
     lab: LabOverlayParams;
+    /**
+     * Phase 3 三屏(主菜单玩家版 / 章间商店 / 英雄选择)的呈现常量。
+     * 项目规则 docs/DESIGN-VALUES-SPEC.md:视图文件里不留裸数字与裸色,凡 Web 侧
+     * 写在绘制路径里的内联字面量迁到 Cocos 时一律落这张表(默认值逐项对标 Web)。
+     */
+    phase3: Phase3Params;
 }
+
+/** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */
+export interface Phase3Params {
+    /** 主菜单锁定关卡行整体不透明度(Web drawMenu 未解锁行 globalAlpha 0.55) */
+    menuRowLockedAlpha: number;
+    /** 主菜单已通关关卡行不透明度(通关只换常态板,减淡档留给"看得见但不在焦点") */
+    menuRowClearedAlpha: number;
+    /** 点回响筹码看一次激励视频入账的回响 */
+    echoAdGain: number;
+    /** 屏幕尚未接入时的提示条停留时长(秒) */
+    hintTtl: number;
+    /** 提示条字号 / 条高 / 底槽距顶缘 */
+    hintPx: number;
+    hintH: number;
+    hintY: number;
+    /** 提示条底色 / 文字色 */
+    hintBg: string;
+    hintFg: string;
+    /** 商店与英雄屏的全屏暗底(Web drawShop rgba(8,10,16,0.82) / drawHeroes 0.86) */
+    shopDim: string;
+    panelDim: string;
+    /** 禁态按钮底 / 描边(Web 商店刷新钮禁态 #1A1F2A + rgba(255,255,255,0.15)) */
+    buttonDisabledBg: string;
+    buttonDisabledStroke: string;
+    /** 商店列表垫底带色(Web rgba(255,255,255,0.03)) 与分区条高(drawSectionHeader 26) */
+    listZone: string;
+    sectionBarH: number;
+    /** 分区条缺图回退底 / 描边(Web rgba(11,14,20,0.85) + rgba(255,215,106,0.25)) */
+    sectionFallbackBg: string;
+    sectionFallbackStroke: string;
+    /** 英雄列表行:预览高亮底 / 常态底 / 描边 / 未解锁底 */
+    heroRowSel: string;
+    heroRowIdle: string;
+    heroRowStroke: string;
+    /** 滚动条轨道与滑块(Web rgba(255,255,255,0.08) / hexA(select,0.6)) */
+    scrollTrack: string;
+    scrollThumb: string;
+    /** 英雄详情面板底 / 描边 */
+    detailBg: string;
+    detailStroke: string;
+    /** 行内小立绘与详情立绘缺图时的占位底(alpha 分量已含在色串里) */
+    portraitFallback: string;
+    /** 次级按钮正文色(Web 各处 skinButton 的 #cfcfcf) */
+    buttonText: string;
+    /** 商店售罄卡框的描边色(Web drawShop 的 #3a465c) */
+    /** 顶信息条套组进度胶囊:宽 / 高(Web drawBar(g,bx,52,90,6)) */
+    setBarW: number;
+    setBarH: number;
+    soldOutFrame: string;
+}
+
+export const PHASE3_DEFAULTS: Phase3Params = {
+    menuRowLockedAlpha: 140,
+    menuRowClearedAlpha: 235,
+    echoAdGain: 100,
+    hintTtl: 1.6,
+    hintPx: 13,
+    hintH: 34,
+    hintY: 40,
+    hintBg: "rgba(10,13,20,0.94)",
+    hintFg: "#FFD76A",
+    shopDim: "rgba(8,10,16,0.82)",
+    panelDim: "rgba(8,10,16,0.86)",
+    buttonDisabledBg: "#1A1F2A",
+    buttonDisabledStroke: "rgba(255,255,255,0.15)",
+    listZone: "rgba(255,255,255,0.03)",
+    sectionBarH: 26,
+    sectionFallbackBg: "rgba(11,14,20,0.85)",
+    sectionFallbackStroke: "rgba(255,215,106,0.25)",
+    heroRowSel: "rgba(90,200,250,0.14)",
+    heroRowIdle: "rgba(255,255,255,0.05)",
+    heroRowStroke: "rgba(255,255,255,0.15)",
+    scrollTrack: "rgba(255,255,255,0.08)",
+    scrollThumb: "rgba(90,200,250,0.6)",
+    detailBg: "rgba(255,255,255,0.04)",
+    detailStroke: "rgba(255,255,255,0.12)",
+    portraitFallback: "rgba(255,255,255,0.06)",
+    buttonText: "#CFCFCF",
+    soldOutFrame: "#3A465C",
+    setBarW: 90,
+    setBarH: 6,
+};
+
 
 export const FALLBACK: ViewTable = {
     nineSlice: { factor: 0.35, keys: {} },
@@ -257,6 +346,7 @@ export const FALLBACK: ViewTable = {
     },
     backdrop: { coverAlpha: 0.55, dimColor: "rgba(11,14,20,0.35)" },
     menu: { ...MENU_PRESENTATION_DEFAULTS },
+    phase3: { ...PHASE3_DEFAULTS },
     lab: {
         ...LAB_OVERLAY_DEFAULTS,
         screenHeights: [...LAB_OVERLAY_DEFAULTS.screenHeights],
@@ -330,6 +420,7 @@ export function loadViewTable(): Promise<ViewTable> {
                             : FALLBACK.backdrop.dimColor,
                 },
                 menu: typedMerge(FALLBACK.menu, raw.menu),
+                phase3: typedMerge(FALLBACK.phase3, raw.phase3),
                 lab: (() => {
                     const lab = typedMerge(FALLBACK.lab, raw.lab);
                     const src = (raw.lab && typeof raw.lab === "object" ? raw.lab : {}) as Record<string, unknown>;

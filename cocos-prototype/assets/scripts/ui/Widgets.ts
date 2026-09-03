@@ -1,4 +1,4 @@
-import { Color, Graphics, Label, Layers, Node, Sprite, SpriteFrame, UITransform } from "cc";
+import { Color, Graphics, HorizontalTextAlignment, Label, Layers, Node, Sprite, SpriteFrame, UITransform } from "cc";
 import { placeRect, Rect } from "../core/DesignMetrics";
 
 /** 字阶令牌,与 src/ui/theme.ts 的 fs 同源 */
@@ -80,7 +80,7 @@ export function label(
     text: string,
     px: number,
     color: string,
-    opts?: { bold?: boolean; rect?: Rect; hAlign?: Label.HorizontalAlign; wrap?: boolean; box?: { w: number; h: number } }
+    opts?: { bold?: boolean; rect?: Rect; hAlign?: HorizontalTextAlignment; wrap?: boolean; box?: { w: number; h: number } }
 ): Label {
     const node = makeNode(name, parent);
     const lb = node.addComponent(Label);
