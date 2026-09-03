@@ -1,18 +1,20 @@
 /**
- * 面板套件(宿主侧):商店屏与英雄屏共用的三种底 —— 可热换贴图底板、品质卡框、居中文本。
+ * 面板套件(宿主侧):商店屏与英雄屏共用的三种底 —— 可热换贴图底板、品质卡框、一行文本的落位。
  *
  * 为什么要单独一个文件:Phase 1 的坞板与 Phase 2 的菜单底板各自把"有图走九宫格、
  * 缺图走暗底 + 细描边"这条回退链路写了一遍。章间商店与英雄页要画十几块底板,
  * 再复制一遍就成了第四套实现 —— 这里收敛成一处,边距仍走 `core/ViewTable.borderOf`。
  *
  * 坐标约定与全局一致:进来的矩形一律是**左上原点设计像素**,只在 placeRect 那一处换算。
- * 挂在底板节点内部的文本走"子局部矩形",必须同时把盒尺寸交给 label(否则文字飞出屏幕)。
+ * 文本只有 `placeLine` 一个入口:x 走 Web fillText 的对齐锚点(左/中/右),父节点是行、卡、
+ * 按钮这类容器时把它的尺寸作为 box 传进来(子局部矩形),否则参照系错一档、文字整体平移。
  */
 
-import { Graphics, Label, Node, Sprite, SpriteFrame } from "cc";
+import { Graphics, Node, Sprite, SpriteFrame } from "cc";
 import { DESIGN_W, logicalH, placeRect, Rect } from "../core/DesignMetrics";
 import { borderOf, viewTable } from "../core/ViewTable";
-import { HEX, hexToColor, label, makeNode } from "./Widgets";
+import { alignAx, anchorBand, type TextAlign } from "./TextBand";
+import { HEX, hexToColor, makeNode } from "./Widgets";
 import { hexA } from "../game/ui/theme";
 
 /** key:边距 → 克隆过 inset 的帧;同一张源图只克隆一次(视图每轮 refresh 都在热路径上) */
@@ -32,22 +34,18 @@ function insetFrame(key: string, sf: SpriteFrame, border: number): SpriteFrame {
 }
 
 /**
- * 文本盒:Web 的 `fillText(t, x, baseline)` 基线口径 → 左上原点设计像素矩形。
- * 盒顶 = 基线 − 字号 × lift,lift 走 `viewTable().menu.baselineLift`(系统字体基线近似,表可调)。
+ * 一行文本落位,口径 = Web 的 `ctx.textAlign` + `fillText(t, x, baseY)`:
+ * **x 随对齐取锚点**(left 起笔 / center 中心 / right 末笔),maxW 是容器内宽(已扣内缩)。
+ * 布局函数交回来的就是这些锚点值,折盒的那一步在 `ui/TextBand.ts:anchorBand`,全工程只此一处。
+ *
+ * 纵向顶锚 + 按对齐取横向锚点:Label 的 overflow=NONE 会把 contentSize 改成文字实宽,
+ * 锚点不随对齐走就会出现"左对齐文字被摆到盒中心"(与 Web 差半个盒宽)。
+ *
+ * `box` = 所在父节点尺寸:屏幕节点上的文本省略(全屏参照),行 / 卡 / 按钮内部的文本必传,
+ * 漏传即 R5"子局部矩形忘传 box"—— 文字整体飞出屏幕。
  */
-export function textBand(x: number, baseY: number, w: number, px: number): Rect {
-  const lift = viewTable().menu.baselineLift;
-  return { x, y: Math.round(baseY - px * lift), w, h: Math.round(px * 1.25) };
-}
-
-/**
- * 文本落位:横向按对齐取锚点(左 0 / 中 0.5 / 右 1),纵向顶锚。
- * 必须按对齐取锚点 —— Label 的 overflow=NONE 会把 contentSize 改成文字实宽,
- * 锚点为 0.5 时左对齐文字会被摆到文本盒的中心(与 Web 的 fillText 起点差半个盒宽)。
- */
-export function placeText(node: Node, r: Rect, align: "left" | "center" | "right" = "left"): void {
-  const ax = align === "left" ? 0 : align === "center" ? 0.5 : 1;
-  placeRect(node, r, DESIGN_W, logicalH(), ax, 1);
+export function placeLine(node: Node, x: number, baseY: number, maxW: number, px: number, align: TextAlign = "left", box?: { w: number; h: number }): void {
+  placeRect(node, anchorBand(x, baseY, maxW, px, align, viewTable().menu.baselineLift), box?.w ?? DESIGN_W, box?.h ?? logicalH(), alignAx(align), 1);
 }
 
 /** 一块可热换的底板:有图走贴图(九宫格或整图),缺图走暗底 + 描边 */
@@ -164,34 +162,6 @@ export function flatBox(name: string, parent: Node): { node: Node; draw: (r: Rec
     placeRect(node, r);
   };
   return { node, draw };
-}
-
-export interface TextOpts {
-  bold?: boolean;
-  align?: "left" | "center" | "right";
-  /** 盒尺寸(= 所在父节点的尺寸);子局部矩形必传,否则文字飞出屏幕 */
-  box: { w: number; h: number };
-  /** 行高倍数(默认按字号 ×1.25,与 label() 同源) */
-  lineHeight?: number;
-  /** 多行正文的顶对齐 */
-  top?: boolean;
-}
-
-/**
- * 底板内部的一行文本:矩形用**父节点局部坐标**(左上原点),盒尺寸交给 label。
- * 返回 Label 以便每帧 bindLabel;align 用锚点表达(placeRect 的单一换算点支持任意锚点)。
- */
-export function boxText(name: string, parent: Node, r: Rect, text: string, px: number, color: string, o: TextOpts): Label {
-  const ax = o.align === "center" ? 0.5 : o.align === "right" ? 1 : 0;
-  const ay = o.top ? 1 : 0.5;
-  const lb = label(name, parent, text, px, color, {
-    bold: o.bold,
-    hAlign: ax === 0.5 ? Label.HorizontalAlign.CENTER : ax === 1 ? Label.HorizontalAlign.RIGHT : Label.HorizontalAlign.LEFT,
-  });
-  lb.verticalAlign = o.top ? Label.VerticalAlign.TOP : Label.VerticalAlign.CENTER;
-  if (o.lineHeight) lb.lineHeight = o.lineHeight;
-  placeRect(lb.node, r, o.box.w, o.box.h, ax, ay);
-  return lb;
 }
 
 /* ================= 量字与折行(近似量字:与 HudView 同一档系数,系数本身走表) ================= */

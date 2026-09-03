@@ -132,7 +132,10 @@ placeRect(node, r, W = DESIGN_W, H = logicalH()):
   position = (r.x + r.w/2 - W/2,  H/2 - (r.y + r.h/2))
 ```
 
-**必须遵守的推论**：`placeRect` 只对"父节点与设计空间同心"的节点成立。子节点内的局部矩形（行内文字、按钮内文字）必须把父节点尺寸传进去，即 `label(..., { rect, box: { w: parentW, h: parentH } })`。漏传 `box` 的表现是子文字整体飞到屏幕外。
+**必须遵守的两条口径**：
+
+1. `placeRect` 只对"父节点与设计空间同心"的节点成立。子节点内的局部矩形（行内文字、按钮内文字）必须把父节点尺寸传进去，即 `placeLine(node, x, baseY, maxW, px, align, { w: parentW, h: parentH })`。漏传父尺寸的表现是子文字整体飞到屏幕外。
+2. 一行文本只有 `ui/PanelKit.placeLine` 一个入口，它的 `x` 沿用 Web `ctx.textAlign` + `fillText(t, x, baseY)` 的语义 —— 随对齐表示**起笔 / 中心 / 末笔**，`maxW` 是容器内宽。锚点折成盒的那一步集中在 cc-free 的 `ui/TextBand.ts:anchorBand`，`tests/cocos-phase3.test.ts` 第 7 节按两张布局表的全网格断言每条文本带落在 `0..560`。把锚点当盒左沿用，表现就是右对齐与居中的标签整体右移半个盒宽。
 
 设计分辨率：`view.setDesignResolutionSize(560, designHeight, FIXED_WIDTH)`，宽度恒 560，高度按窗口比例取整并钳到 `[996, 1246]`；战场高度另钳 `WORLD_H_CAP = 996`，与 Web 版"战场锁 560×996"同源。多出的高度用于顶部/底部坞与休息区，`drawRestZone` 的等价逻辑由坞节点的自然高度承担。
 
@@ -320,7 +323,9 @@ web-desktop 构建里 `cc` 是全局对象，可直接内省真实节点树：
 
 三屏的落地分工：几何与文案构建放 cc-free 的 `menu/MenuContentModel.ts`、`shop/ShopModel.ts`、`heroes/HeroSelectModel.ts`（可 node 直测），节点与绘制放 `menu/MenuLayoutView.ts`、`shop/ShopView.ts`、`heroes/HeroSelectView.ts`，共用新抽的 `ui/PanelKit.ts`（九宫格底板 / 文本带 / 图标位 / 行数裁剪）。`GameShell` 只保留装配与热区→玩法的分发：`buildShopScreen` / `openShop` / `closeShop` / `onShopAction` 与 `openHeroes` / `syncHeroes` / `onHeroAction` / `tickHeroScroll`，`heroes` 与 `shop` 并入 `buildScreens` 的 per-screen refresh 表，惯性由 `update(dt)` 在路由闸门前驱动。章间商店从"直接开下一章"改为真弹商店、买完再续下一章。滚动数学全部调 `game/ui/scrollList.ts` 的 `dragScrollFrom` / `flickOf` / `inertiaNext` / `SCROLL_TAP_SLOP`，出战只经 `applyHeroSelection`。
 
-**尚未在本期闭环的验收项**（受 §7.3 的引擎起不来所限）：三屏与 `.probe/` 基准图的逐像素对标；1246 档的底锚与 restZone 取景；拖拽与甩动的手感、`Mask` 边缘裁切、单指 `touchId` 与触屏/微信滑动手势是否互斥；立绘入表后晚到贴图的换上时机。
+真机文本带复测（`430×766` 取景 → 设计 `560×998`，参照系 = `Canvas.getBoundingBoxToWorld()`，逐屏 `cc.game.step` 后遍历 `activeInHierarchy` 的 `cc.Label`）：战斗 13 / 主菜单 40 / 商店 47 / 英雄 32 枚活动标签的包围盒全部落在 560 宽内。落位口径按 §3 收敛到 `placeLine` 之后，商店屏原越界的 9 条（顶栏金币与槽位止于 546、卡价提示 546、分区右注 536、卡三居中三行 538、槽位条与进化空态 538、开始下一章 538）与英雄页详情副行 532 一并归位；英雄页行内立绘首字与名字起笔的间距从重叠 1px 变为 27px（首字带 39..61，名字起笔 88），行徽标回到徽章圆心。node 侧由 `tests/cocos-phase3.test.ts` 第 7 节（4 例，全表 36 例）按两张布局表的全网格兜住同类回归。
+
+**尚未在本期闭环的验收项**：三屏与 `.probe/` 基准图的逐像素对标；1246 档的底锚与 restZone 取景；拖拽与甩动的手感、`Mask` 边缘裁切、单指 `touchId` 与触屏/微信滑动手势是否互斥；立绘入表后晚到贴图的换上时机。
 
 **与 Web 的已知分歧**（均为有意）：英雄立绘 Web 是 `drawHeroPortrait` 程序化动画（呼吸 + 未解锁灰剪影），`hero_*` 不在 `ASSET_MANIFEST`，Cocos 侧退化为"主色方块 + 名字首字"、无动画；「不出战」在 Web 即刻落盘回菜单，这里先落预览位、由「确定」一次性写入，误触可撤销；未解锁行的徽标底色用 `hexA(textMuted,0.16)`，Web 是 `rgba(255,255,255,0.05)`；面板底走 `panel_dark_corners` 九宫格（Web 由 `panelPad` 自绘）；滚动多一条 `snap()` 回弹路径，终态与 Web 松手硬钳一致；三屏的底色/行色/滚动条已表化到 `viewTable` 的 `phase3.*`，默认值与 Web 逐档相同，改表只影响 Cocos 端。
 
@@ -349,7 +354,7 @@ web-desktop 构建里 `cc` 是全局对象，可直接内省真实节点树：
 | R2 | 152 张 PNG 全量入 `resources` | 包体超限、首屏变慢 | Phase 6 前保持按需镜像；分组进 bundle（战斗/皮肤/背景），背景与皮肤走远程资源 |
 | R3 | 微信小游戏端资源与广告 API | 上线受阻 | `AdChannel` 已按端分流；Phase 6 用 `scripts/smoke-wechat.cjs` 的思路补 Cocos 版冒烟 |
 | R4 | `Label` 每帧改文本 | 明显掉帧 | 全量走 `bindLabel`；Phase 1 加命中率打点 |
-| R5 | 子局部矩形忘传 `box` | 文字飞出屏幕 | 骨架已验证该形态；`label()` 的 `box` 为唯一入口，Code Review 检查所有 `rect` 调用 |
+| R5 | 文本落位口径：子局部矩形忘传父尺寸 / 把对齐锚点当盒左沿 | 文字飞出屏幕，或右对齐与居中标签整体右移半个盒宽（越出 560 右界、压住相邻文本） | 三屏文本统一走 `ui/PanelKit.placeLine`（唯一入口，`box` 为子局部矩形参数），锚点折盒集中在 cc-free 的 `ui/TextBand.ts:anchorBand`；`tests/cocos-phase3.test.ts` 第 7 节按 `shopLayoutPure` / `heroSelectLayout` 全网格断言每条文本带落在 `0..560`，Code Review 检查所有 `rect` 调用 |
 | R6 | 视图节点挂到 `World` 而非 `Screen:<key>` | 屏幕间互相漏画 | §2.2 写成约定；Phase 1 起屏幕组件构造签名强制接收所属屏幕节点 |
 | R7 | `addComponent(Sprite/Graphics/Label)` 自动附带 `UITransform` | 重复组件、尺寸设置失效 | 统一 `getComponent(UITransform) || addComponent(UITransform)` |
 | R8 | 渐变/发光等 Canvas 效果直译 | 视觉回退或过度设计 Shader | 优先贴图 + `UIOpacity`；Shader 作为 Phase 6 之后的独立优化项 |

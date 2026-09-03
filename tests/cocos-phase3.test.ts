@@ -42,6 +42,7 @@ import { shopCardPrice, shopRefreshPrice } from "@game/data/shop";
 import { DAILY_BOXES, ENERGY_MAX } from "@game/data/daily";
 import { COMMISSION_READY_HOURS, type CommissionState } from "@game/data/commissions";
 import { STAGES } from "@game/data/stages";
+import { fs as FS, ui as UI } from "@game/ui/theme";
 import type { TalentId } from "@game/data/talents";
 import { theme } from "@game/ui/theme";
 
@@ -55,6 +56,8 @@ import { buildMenuContent, menuCommissionReady, menuDailyDot, menuRowStates, men
 import { normalizeSave as cocosNormalizeSave } from "../cocos-prototype/assets/scripts/core/SaveModel";
 import * as cocosScroll from "../cocos-prototype/assets/scripts/game/ui/scrollList";
 import * as cocosHeroes from "../cocos-prototype/assets/scripts/game/data/heroes";
+import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos-prototype/assets/scripts/ui/TextBand";
+import { readFileSync } from "node:fs";
 
 /* ==================== 0. 端间同一实现(R9 纪律延续到 Phase 3) ==================== */
 
@@ -768,5 +771,204 @@ describe("主菜单内容模型(解锁 / 减淡档位 / 红点 / 实时数值)",
     expect(none.noteLines).toEqual([]);
     expect(content(menuSave()).entries.map((e) => e.label)).toEqual(["委托", "扭蛋", "天赋", "通行证", "每日", "升级"]);
     expect(content(menuSave({ premiumPassSeason: 1 })).entries.map((e) => e.label)).toContain("通行证★");
+  });
+});
+
+/* ==================== 7. 文本带右界(真机越界的 node 侧防线) ==================== */
+
+/**
+ * 这一节守的是真机实测暴露的那一类错位:一行文本的 x **随对齐换语义**(Web 的
+ * ctx.textAlign + fillText —— left 起笔 / center 中心 / right 末笔),而 Cocos 的
+ * placeRect 吃的是**盒**。折盒那一步在宿主侧 `ui/TextBand.ts:anchorBand`,折错一档的
+ * 表现就是"右对齐与居中的标签整体右移半个盒宽":商店屏 9 条标签越出 560 右界,
+ * 英雄页行内首字压住名字。
+ *
+ * 下面两张表逐条对应 `shop/ShopView.ts` 与 `heroes/HeroSelectView.ts` 的 Txt.set 调用
+ * (容器矩形来自共享层布局函数,内缩与限宽同数),视图增减一行文本就要同步这里;
+ * 于是没有真机面板时,同类回归在 node 侧一样会被拦下。
+ */
+
+const H_STD = 996;
+/** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
+const LIFT: number = JSON.parse(readFileSync(new URL("../cocos-prototype/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
+
+interface TextRequest {
+  /** 出问题时的定位:指回视图里的那一行 */
+  at: string;
+  /** Web fillText 口径的对齐锚点(绝对设计 px) */
+  x: number;
+  baseY: number;
+  /** 容器内宽(已扣内缩)= 这条文本的限宽 */
+  maxW: number;
+  px: number;
+  align: TextAlign;
+}
+
+const bandOf = (t: TextRequest): Band => anchorBand(t.x, t.baseY, t.maxW, t.px, t.align, LIFT);
+
+/** 越界判定:整条文本带(按限宽的最宽一档)落在 0..560 内;违规项连标签名一起列出 */
+function expectInsideScreen(bands: TextRequest[]): void {
+  const bad = bands
+    .map((t) => `${t.at} [${t.align}] 锚点${t.x} 限宽${t.maxW} → ${bandOf(t).x}..${bandOf(t).x + bandOf(t).w}`)
+    .filter((_, i) => {
+      const b = bandOf(bands[i]);
+      return b.x < 0 || b.x + b.w > W;
+    });
+  expect(bad).toEqual([]);
+}
+
+/** 商店屏的文本带:顶信息条 8 行 / 工具钮 / 三卡 / 槽位+1 / 两个分区条 / 武器行 / 进化行 / 底操作条 */
+function shopTextBands(L: ReturnType<typeof shopLayoutPure>): TextRequest[] {
+  const pad = UI.pad;
+  const rx = W - pad;
+  const out: TextRequest[] = [
+    { at: "顶栏标题", x: pad, baseY: 19, maxW: 160, px: FS.micro, align: "left" },
+    { at: "顶栏金币", x: rx, baseY: 19, maxW: 120, px: FS.micro, align: "right" },
+    { at: "顶栏敌情", x: pad + 16, baseY: 39, maxW: 330, px: FS.micro, align: "left" },
+    { at: "顶栏槽位", x: rx, baseY: 39, maxW: 120, px: FS.micro, align: "right" },
+    { at: "顶栏套组链", x: pad, baseY: 58, maxW: 150, px: FS.micro, align: "left" },
+    // 进度胶囊后的加成串:套组链取满限宽 150 才是这条的最右位(胶囊宽 90 + 两段 8 缝)
+    { at: "顶栏套组加成", x: pad + 150 + 8 + 90 + 8, baseY: 58, maxW: 190, px: FS.micro, align: "left" },
+    { at: "顶栏推荐", x: pad, baseY: 58, maxW: 330, px: FS.micro, align: "left" },
+    { at: "顶栏卡价提示", x: rx, baseY: 58, maxW: 160, px: FS.micro, align: "right" },
+    { at: "槽位+1 钮", x: L.slotBtn.x + L.slotBtn.w / 2, baseY: L.slotBtn.y + 18, maxW: L.slotBtn.w - 16, px: FS.muted, align: "center" },
+    { at: "底栏开始钮", x: L.nextBtn.x + L.nextBtn.w / 2, baseY: L.nextBtn.y + 29, maxW: L.nextBtn.w - 16, px: FS.body, align: "center" },
+    { at: "底栏敌情", x: pad, baseY: SHOP_BOTTOM + 19, maxW: 238, px: FS.micro, align: "left" },
+    { at: "底栏推荐", x: pad, baseY: SHOP_BOTTOM + 37, maxW: 238, px: FS.micro, align: "left" },
+  ];
+  for (const [i, b] of L.toolBtns.entries()) out.push({ at: `工具钮${i}`, x: b.x + b.w / 2, baseY: b.y + 18, maxW: b.w - 12, px: FS.body, align: "center" });
+  for (const [i, r] of L.cards.entries()) {
+    const icx = r.x + r.w / 2;
+    const inner = r.w - 16;
+    out.push(
+      { at: `卡${i}图标首字`, x: icx, baseY: r.y + 38, maxW: 40, px: FS.section, align: "center" },
+      { at: `卡${i}名`, x: icx, baseY: r.y + 66, maxW: inner, px: FS.body, align: "center" },
+      { at: `卡${i}品质`, x: icx, baseY: r.y + 84, maxW: inner, px: FS.muted, align: "center" },
+      { at: `卡${i}效果行`, x: icx, baseY: r.y + 104, maxW: inner, px: FS.micro, align: "center" },
+      { at: `卡${i}价格`, x: icx, baseY: r.y + r.h - 14, maxW: inner, px: FS.body, align: "center" },
+      { at: `卡${i}套组角标`, x: r.x + r.w - 8, baseY: r.y + 19, maxW: 44, px: FS.micro, align: "right" },
+      { at: `卡${i}售罄主行`, x: icx, baseY: r.y + r.h / 2 + 6, maxW: inner, px: FS.section, align: "center" },
+      { at: `卡${i}售罄副行`, x: icx, baseY: r.y + r.h / 2 + 28, maxW: inner, px: FS.micro, align: "center" }
+    );
+  }
+  for (const [i, y] of [L.weaponLabelY, L.mergeLabelY].entries()) {
+    out.push({ at: `分区${i}标题`, x: pad + 10, baseY: y + 18, maxW: 330, px: FS.muted, align: "left" });
+    out.push({ at: `分区${i}右注`, x: W - pad - 10, baseY: y + 18, maxW: 150, px: FS.micro, align: "right" });
+  }
+  for (const [i, r] of L.weaponRows.entries()) {
+    const icy = r.y + r.h / 2;
+    const d = L.destroyRects[i];
+    out.push(
+      // 有图标时名从 r.x+38 起笔,缺图标退到 r.x+10:取更宽的那一档
+      { at: `武器${i}名`, x: r.x + 10, baseY: icy, maxW: 200, px: FS.muted, align: "left" },
+      { at: `武器${i}副`, x: r.x + 246, baseY: icy, maxW: 130, px: FS.micro, align: "left" },
+      { at: `武器${i}销毁`, x: d.x + d.w / 2, baseY: d.y + d.h / 2, maxW: d.w - 6, px: FS.micro, align: "center" }
+    );
+  }
+  const wph = L.weaponRows[0];
+  out.push({ at: "武器空态", x: wph.x + wph.w / 2, baseY: wph.y + wph.h / 2, maxW: wph.w - 16, px: FS.muted, align: "center" });
+  for (const [i, r] of L.merges.entries()) {
+    const mcy = r.y + r.h / 2;
+    out.push({ at: `进化${i}名`, x: r.x + 10, baseY: mcy, maxW: 300, px: FS.muted, align: "left" });
+    out.push({ at: `进化${i}费用`, x: r.x + r.w - 10, baseY: mcy, maxW: 160, px: FS.muted, align: "right" });
+  }
+  const mph = L.merges[0];
+  out.push({ at: "进化空态", x: mph.x + mph.w / 2, baseY: mph.y + mph.h / 2, maxW: mph.w - 16, px: FS.muted, align: "center" });
+  return out;
+}
+
+/** 英雄屏的文本带:表头 / 详情(含缺图立绘首字)/ 技能四行 / 三枚按钮 / 列表行(已换算回绝对坐标) */
+function heroTextBands(L: ReturnType<typeof heroLayoutAt>["L"], preview: boolean): TextRequest[] {
+  const pad = UI.pad;
+  const d = L.detail;
+  const out: TextRequest[] = [
+    { at: "表头标题", x: pad, baseY: 36, maxW: W - pad * 2 - UI.backW, px: FS.title, align: "left" },
+    { at: "表头副信息", x: pad, baseY: 56, maxW: W - pad * 2, px: FS.muted, align: "left" },
+    { at: "详情立绘首字", x: L.portrait.x + L.portrait.w / 2, baseY: L.portrait.y + L.portrait.h / 2, maxW: L.portrait.w, px: FS.display, align: "center" },
+    { at: "详情技能小标", x: L.portrait.x, baseY: L.skillLabelY, maxW: 160, px: FS.micro, align: "left" },
+    { at: "返回钮", x: L.backBtn.x + L.backBtn.w / 2, baseY: L.backBtn.y + L.backBtn.h / 2, maxW: L.backBtn.w, px: FS.muted, align: "center" },
+    { at: "确定钮", x: L.confirm.x + L.confirm.w / 2, baseY: L.confirm.y + L.confirm.h / 2, maxW: L.confirm.w - 16, px: FS.body, align: "center" },
+    { at: "不出战钮", x: L.clearBtn.x + L.clearBtn.w / 2, baseY: L.clearBtn.y + L.clearBtn.h / 2, maxW: L.clearBtn.w - 8, px: FS.muted, align: "center" },
+  ];
+  if (preview) {
+    out.push(
+      { at: "详情名", x: L.textX, baseY: L.nameY, maxW: L.loreW, px: FS.title, align: "left" },
+      { at: "详情称号", x: L.textX, baseY: L.titleY, maxW: L.loreW, px: FS.muted, align: "left" },
+      { at: "详情正文", x: L.textX, baseY: L.loreY, maxW: L.loreW, px: FS.muted, align: "left" }
+    );
+  } else {
+    out.push(
+      { at: "详情空态主行", x: d.x + d.w / 2, baseY: d.y + 180, maxW: d.w - 28, px: FS.section, align: "center" },
+      { at: "详情空态副行", x: d.x + d.w / 2, baseY: d.y + 206, maxW: d.w - 28, px: FS.muted, align: "center" }
+    );
+  }
+  for (const [i, sr] of L.skillRows.entries()) {
+    out.push(
+      { at: `技能${i}胶囊`, x: sr.chip.x + sr.chip.w / 2, baseY: sr.chip.y + sr.chip.h / 2, maxW: sr.chip.w, px: FS.micro, align: "center" },
+      { at: `技能${i}名`, x: sr.rect.x + 68, baseY: sr.labelY, maxW: sr.descW, px: FS.body, align: "left" },
+      { at: `技能${i}说明`, x: sr.rect.x + 68, baseY: sr.descY, maxW: sr.descW, px: FS.micro, align: "left" }
+    );
+  }
+  for (const [i, row] of L.rows.entries()) {
+    out.push(
+      { at: `行${i}立绘首字`, x: row.portrait.x + row.portrait.w / 2, baseY: row.portrait.y + row.portrait.h / 2, maxW: row.portrait.w, px: FS.title, align: "center" },
+      { at: `行${i}名`, x: row.textX, baseY: row.nameY, maxW: row.badge.x - row.textX - 10, px: FS.body, align: "left" },
+      { at: `行${i}副`, x: row.textX, baseY: row.subY, maxW: row.badge.x - row.textX - 10, px: FS.micro, align: "left" },
+      { at: `行${i}徽标`, x: row.badge.x + row.badge.w / 2, baseY: row.badge.y + row.badge.h / 2, maxW: row.badge.w, px: FS.micro, align: "center" }
+    );
+  }
+  return out;
+}
+
+const rowCharBand = (row: ReturnType<typeof heroLayoutAt>["L"]["rows"][number]): Band => bandOf({ at: "首字", x: row.portrait.x + row.portrait.w / 2, baseY: 0, maxW: row.portrait.w, px: FS.title, align: "center" });
+const rowNameBand = (row: ReturnType<typeof heroLayoutAt>["L"]["rows"][number]): Band => bandOf({ at: "名字", x: row.textX, baseY: 0, maxW: row.badge.x - row.textX - 10, px: FS.body, align: "left" });
+
+describe("文本带右界(shopLayoutPure / heroSelectLayout 全网格)", () => {
+  it("anchorBand 的 x 就是对齐锚点:起笔 / 中心 / 末笔三条恒成立", () => {
+    expect([alignAx("left"), alignAx("center"), alignAx("right")]).toEqual([0, 0.5, 1]);
+    const b = (align: TextAlign) => anchorBand(300, 58, 160, FS.micro, align, LIFT);
+    expect(b("left").x).toBe(300);
+    expect(b("center").x + b("center").w / 2).toBe(300);
+    expect(b("right").x + b("right").w).toBe(300);
+    // 基线口径:盒顶 = 基线 − 字号 × lift,行高 = 字号 × 1.25
+    expect(b("left").y).toBe(Math.round(58 - FS.micro * LIFT));
+    expect(b("left").h).toBe(Math.round(FS.micro * 1.25));
+  });
+
+  it("商店屏 0..8 武器 × 0..4 进化组全网格:每条文本带都落在 0..560", () => {
+    for (let nw = 0; nw <= 8; nw++) {
+      for (let nm = 0; nm <= 4; nm++) {
+        const bands = shopTextBands(shopLayoutPure(nw, nm));
+        expect(bands.length).toBeGreaterThan(30);
+        expectInsideScreen(bands);
+      }
+    }
+  });
+
+  it("英雄屏 996 / 1246 两档 × 四季 × 首中末滚动位:每条文本带都落在 0..560", () => {
+    for (const h of [H_STD, H_TALL]) {
+      for (const seasonId of [1, 2, 3, 4]) {
+        const maxScroll = heroLayoutAt(seasonId, h, 0).L.maxScroll;
+        for (const offset of [0, Math.round(maxScroll / 2), maxScroll]) {
+          const { L } = heroLayoutAt(seasonId, h, offset);
+          expect(L.rows.length).toBeGreaterThan(0);
+          expectInsideScreen(heroTextBands(L, false));
+          expectInsideScreen(heroTextBands(L, true));
+        }
+      }
+    }
+  });
+
+  it("行内立绘首字与名字互不相犯:首字带右沿 ≤ 名字起笔,且首字仍在立绘位内", () => {
+    for (const h of [H_STD, H_TALL]) {
+      const { L: top } = heroLayoutAt(4, h, 0);
+      const { L: end } = heroLayoutAt(4, h, top.maxScroll);
+      for (const row of [...top.rows, ...end.rows]) {
+        const char = rowCharBand(row);
+        const name = rowNameBand(row);
+        expect(char.x).toBeGreaterThanOrEqual(row.rect.x);
+        expect(char.x + char.w).toBeLessThanOrEqual(name.x);
+      }
+    }
   });
 });

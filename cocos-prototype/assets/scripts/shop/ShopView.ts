@@ -9,15 +9,15 @@
  * 指针:整屏一个 Capture 节点 + `model.hitTest()`。热区判定与绘制同源于 shopLayoutPure
  * 的产物,不给每块底板挂 touch —— 那样会出现"命中框 ≠ 画面框"的第二套几何。
  *
- * 文本一律挂在屏根上、用**绝对设计矩形**落位(placeText 按对齐取锚点),因此不存在
- * "子局部矩形忘传 box"这一类错位。
+ * 文本一律挂在屏根上,走 `ui/PanelKit.placeLine` 的 Web 口径:x 随对齐就是 `fillText` 的锚点
+ * (左起笔 / 中中心 / 右末笔),maxW 传容器内宽,于是限宽与热区同源于 shopLayoutPure 的矩形。
  */
 
 import { Graphics, Label, Node, Sprite, SpriteFrame } from "cc";
 import { DESIGN_W, coverRect, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, UI, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
-import { Plate, approxW, fitOne, flatBox, iconNode, placeText, qualityBox, textBand } from "../ui/PanelKit";
+import { Plate, approxW, fitOne, flatBox, iconNode, placeLine, qualityBox } from "../ui/PanelKit";
 import { HUD_BOT_H, HUD_TOP_H } from "../game/ui/hud";
 import { SHOP_BOTTOM } from "../game/ui/shop";
 import type { ShopAction, ShopModel } from "./ShopModel";
@@ -28,7 +28,7 @@ const DOCK_STROKE = "rgba(200,182,255,0.28)";
 /** 分区标题条缺图回退描边(Web drawSectionHeader 的金色细边) */
 const SECTION_STROKE = "rgba(255,215,106,0.25)";
 
-/** 一行可重排的文本:每次给基线 / 限宽 / 字号 / 颜色,内部只在变化时改 Label 状态 */
+/** 一行可重排的文本:每次给锚点 x(随对齐 = Web fillText 的 x)/ 基线 / 容器内宽 / 字号 / 颜色,内部只在变化时改 Label 状态 */
 class Txt {
   readonly lb: Label;
   private lastPx = -1;
@@ -52,7 +52,7 @@ class Txt {
       this.lb.color = hexToColor(color);
     }
     bindLabel(this.lb, fitOne(text, maxW, px));
-    placeText(this.lb.node, textBand(x, baseY, maxW, px), align);
+    placeLine(this.lb.node, x, baseY, maxW, px, align);
   }
   get node(): Node {
     return this.lb.node;

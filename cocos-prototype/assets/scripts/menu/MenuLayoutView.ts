@@ -10,7 +10,7 @@ import { isSkinHidden, isSkinTextHidden, resolveSkinKey } from "../game/dev/labS
 import type { MenuPanelId } from "../game/data/menuSkin";
 import type { SetId } from "../game/data/sets";
 import { menuChipRects, type MenuRowContent, type MenuTextContent } from "./MenuContentModel";
-import { placeText, textBand } from "../ui/PanelKit";
+import { placeLine } from "../ui/PanelKit";
 
 /**
  * 主菜单的**表驱动几何视图**(Phase 2 落地:布局台的"画面";Phase 3 补逐屏内容)。
@@ -257,14 +257,14 @@ export class MenuLayoutView {
     /* --- 标题横幅 --- */
     this.showPlate(this.banner, "menu_title_plate", L.d.ban, "stretch");
     this.showPlate(this.crest, "crest_echo", L.d.crest, "stretch");
-    placeText(this.titleText.node, textBand(L.d.titlePos.x, L.d.titlePos.y, L.d.ban.w - 80, m.titlePx));
+    placeLine(this.titleText.node, L.d.titlePos.x, L.d.titlePos.y, L.d.ban.w - 80, m.titlePx);
     this.titleText.fontSize = m.titlePx;
     this.titleText.color = hexToColor(m.titleColor);
     bindLabel(this.titleText, c.title);
-    placeText(this.seasonText.node, textBand(L.d.seasonPos.x - m.rightColumnW, L.d.seasonPos.y, m.rightColumnW, m.subPx), "right");
+    placeLine(this.seasonText.node, L.d.seasonPos.x, L.d.seasonPos.y, m.rightColumnW, m.subPx, "right");
     this.seasonText.fontSize = m.subPx;
     bindLabel(this.seasonText, c.seasonLine);
-    placeText(this.row2Text.node, textBand(L.d.seasonPos.x - m.rightColumnW, L.d.row2Y, m.rightColumnW, m.subPx), "right");
+    placeLine(this.row2Text.node, L.d.seasonPos.x, L.d.row2Y, m.rightColumnW, m.subPx, "right");
     this.row2Text.fontSize = m.subPx;
     bindLabel(this.row2Text, c.energyLine);
     for (const lb of [this.titleText, this.seasonText, this.row2Text]) lb.node.active = !textOff("title");
@@ -285,11 +285,11 @@ export class MenuLayoutView {
       this.showPlate(slot.plate, "menu_chip_plate", box, "slice");
       const ih = m.chipIconH;
       this.showPlate(slot.icon, icon.iconKey, { x: box.x + L.d.chipSlide, y: L.d.chipBase.y + Math.round((L.d.chipBase.h - ih) / 2), w: L.d.chipIconW, h: ih }, "stretch");
-      placeText(slot.text.node, textBand(x + L.d.chipIconW + L.d.chipIconGap, L.d.chipBase.y + L.d.chipBase.h - 2, box.w, m.subPx));
+      placeLine(slot.text.node, x + L.d.chipIconW + L.d.chipIconGap, L.d.chipBase.y + L.d.chipBase.h - 2, box.w, m.subPx);
       bindLabel(slot.text, icon.text);
     });
     this.showPlate(this.phantom.plate, "menu_chip_plate", L.phantomBtn, "slice");
-    placeText(this.phantom.text.node, textBand(L.phantomBtn.x + 4, L.phantomBtn.y + L.phantomBtn.h - 4, L.phantomBtn.w, m.subPx));
+    placeLine(this.phantom.text.node, L.phantomBtn.x + 4, L.phantomBtn.y + L.phantomBtn.h - 4, L.phantomBtn.w, m.subPx);
     bindLabel(this.phantom.text, c.phantomText);
     this.phantom.text.node.active = !textOff("chip");
 
@@ -327,9 +327,9 @@ export class MenuLayoutView {
       const c1 = Math.round(cy - L.d.rowC1Off);
       const rightX = r.x + r.w - L.rowMargin - L.d.rowRightInset - (content?.makeup ? L.d.rowMakeupReserve : 0);
       const tw = Math.max(20, rightX - L.d.descClipPad - textX);
-      placeText(n.name.node, textBand(textX, c1, tw, m.bodyPx));
+      placeLine(n.name.node, textX, c1, tw, m.bodyPx);
       bindLabel(n.name, content?.name ?? `第 ${r.id} 关`);
-      placeText(n.desc.node, textBand(textX, c1 + L.d.rowC2Gap, tw, m.subPx));
+      placeLine(n.desc.node, textX, c1 + L.d.rowC2Gap, tw, m.subPx);
       bindLabel(n.desc, content?.desc ?? "");
       n.name.node.active = !textOff("row");
       n.desc.node.active = !textOff("row");
@@ -392,7 +392,7 @@ export class MenuLayoutView {
       const lb = this.heroLines[i];
       if (!lb) return;
       const y = [L.heroRow1Y, L.heroRow2Y, L.heroRow3Y][i];
-      placeText(lb.node, textBand(L.heroTextX, y, Math.max(20, L.heroTextMaxW), i === 0 ? m.bodyPx : m.subPx));
+      placeLine(lb.node, L.heroTextX, y, Math.max(20, L.heroTextMaxW), i === 0 ? m.bodyPx : m.subPx);
       bindLabel(lb, t);
       lb.color = hexToColor(i === 1 && c.accent ? c.accent : i === 0 ? HEX.textPrimary : HEX.textSecondary);
       lb.node.active = !textOff("setCard");
@@ -411,7 +411,7 @@ export class MenuLayoutView {
       const t = c.noteLines[i];
       lb.node.active = noteOn && t !== undefined && !textOff("note");
       if (!lb.node.active) return;
-      placeText(lb.node, textBand(L.d.noteX, L.d.noteRow1Y + i * L.d.noteRow2Gap, Math.max(20, L.d.noteMaxW), m.subPx));
+      placeLine(lb.node, L.d.noteX, L.d.noteRow1Y + i * L.d.noteRow2Gap, Math.max(20, L.d.noteMaxW), m.subPx);
       bindLabel(lb, t ?? "");
       lb.color = hexToColor(i === 1 && c.accent ? c.accent : m.noteColor);
     });

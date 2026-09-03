@@ -8,7 +8,8 @@
  *
  * 两处 Cocos 特有约定:
  *  ① 列表用 `Mask(GRAPHICS_RECT)` 裁切(= Web 的 ctx.clip());行节点因此活在
- *     **列表局部坐标**里,子矩形一律带盒尺寸再 placeRect,否则文字飞出屏幕。
+ *     **列表局部坐标**里,行内文本一律把行尺寸作为 box 交给 `PanelKit.placeLine`,
+ *     漏传或按整屏参照换算,文字就会整体偏移一档。
  *  ② 立绘资源(hero_*)尚未出图,行内与详情都退化成"主色方块 + 名字首字",缺图不空板。
  */
 
@@ -17,7 +18,7 @@ import { DESIGN_W, Rect, fullRect, logicalH, placeRect, toDesignSpace } from "..
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, UI, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
 import type { ViewTable } from "../core/ViewTable";
-import { Plate, fitLines, fitOne, flatBox, iconNode, placeText, textBand } from "../ui/PanelKit";
+import { Plate, fitLines, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
 import { hexA, theme } from "../game/ui/theme";
 import type { HeroSelectLayout } from "../game/ui/heroSelectLayout";
 import type { Phase3Params } from "../core/ViewTable";
@@ -54,8 +55,8 @@ interface SkillSlot {
 }
 
 /**
- * 一行可重排的文本:基线口径与 Web 的 fillText 对齐(盒顶 = 基线 − 字号 × lift),
- * 横向按对齐取锚点。给 `box` 时按**子局部矩形**落位(父节点尺寸),否则按整屏绝对矩形。
+ * 一行可重排的文本:落位只走 `ui/PanelKit.placeLine`(Web 的 fillText 口径 —— x 随对齐
+ * 表示起笔 / 中心 / 末笔)。给 `box` 时按**子局部矩形**落位(父节点尺寸),否则按整屏参照。
  */
 class Txt {
   readonly lb: Label;
@@ -70,7 +71,7 @@ class Txt {
   set(x: number, baseY: number, maxW: number, px: number, text: string, align: "left" | "center" | "right" = "left", color?: string, box?: { w: number; h: number }): void {
     this.font(px, align, color);
     bindLabel(this.lb, fitOne(text, maxW, px));
-    this.place(textBand(x, baseY, maxW, px), align, box);
+    placeLine(this.lb.node, x, baseY, maxW, px, align, box);
   }
 
   /** 多行正文:整块按行高 × 行数占位,顶锚(与 Web 逐行 fillText 的堆叠一致) */
@@ -78,7 +79,7 @@ class Txt {
     this.font(px, "left", color);
     this.lb.lineHeight = Math.round(px * 1.25);
     bindLabel(this.lb, list.join("\n"));
-    this.place({ x, y: topY, w: maxW, h: Math.round(px * 1.25 * Math.max(1, list.length)) }, "left", box);
+    placeLine(this.lb.node, x, topY, maxW, px, "left", box);
   }
 
   private font(px: number, align: "left" | "center" | "right", color?: string): void {
@@ -95,12 +96,6 @@ class Txt {
       this.lastColor = color;
       this.lb.color = hexToColor(color);
     }
-  }
-
-  private place(r: Rect, align: "left" | "center" | "right", box?: { w: number; h: number }): void {
-    const ax = align === "left" ? 0 : align === "right" ? 1 : 0.5;
-    if (box) placeRect(this.lb.node, r, box.w, box.h, ax, 1);
-    else placeText(this.lb.node, r, align);
   }
 
   get node(): Node {
