@@ -1,4 +1,5 @@
 import { JsonAsset, resources } from "cc";
+import { LAB_OVERLAY_DEFAULTS, MENU_PRESENTATION_DEFAULTS, resolveBorder, type LabOverlayParams, type MenuPresentationParams } from "../game/dev/labTable";
 
 /**
  * 表现层参数表。数值型与结构型表现参数一律来自 resources/config/viewTable.json,
@@ -126,6 +127,10 @@ export interface ViewTable {
         /** 贴图之上再压一层的遮罩色,与 Web 版 rgba(...) 遮罩同源 */
         dimColor: string;
     };
+    /** 主菜单表驱动视图的表现参数(几何仍由 menuLayoutPure 派生,这里只管"长什么样") */
+    menu: MenuPresentationParams;
+    /** 布局台浮层自身参数:手柄尺寸/拾取半径/配色/虚拟屏高档位,?lab=1 时消费 */
+    lab: LabOverlayParams;
 }
 
 export const FALLBACK: ViewTable = {
@@ -251,6 +256,13 @@ export const FALLBACK: ViewTable = {
         },
     },
     backdrop: { coverAlpha: 0.55, dimColor: "rgba(11,14,20,0.35)" },
+    menu: { ...MENU_PRESENTATION_DEFAULTS },
+    lab: {
+        ...LAB_OVERLAY_DEFAULTS,
+        screenHeights: [...LAB_OVERLAY_DEFAULTS.screenHeights],
+        showDefault: { ...LAB_OVERLAY_DEFAULTS.showDefault },
+        colors: { ...LAB_OVERLAY_DEFAULTS.colors },
+    },
 };
 
 let current: ViewTable = FALLBACK;
@@ -258,6 +270,25 @@ let current: ViewTable = FALLBACK;
 /** 数值字段兜底合并:表内字段整体覆盖回落值(缺失字段保留 FALLBACK) */
 function merge<T extends Record<string, any>>(base: T, raw: unknown): T {
     return Object.assign({}, base, (raw && typeof raw === "object" ? raw : {}) as Partial<T>) as T;
+}
+
+/**
+ * 逐字段按类型合并:只有与回落值同类型且有限的字段才被接受。
+ * 表里写错一个数(字符串混进数值位)不能把绘制路径带崩,回落档必须保住。
+ */
+function typedMerge<T extends Record<string, any>>(base: T, raw: unknown): T {
+    const out = { ...base };
+    const src = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+    for (const k of Object.keys(base) as (keyof T)[]) {
+        const want = base[k];
+        const got = src[k as string];
+        if (typeof want === "number" && typeof got === "number" && Number.isFinite(got)) (out as Record<string, unknown>)[k as string] = got;
+        else if (typeof want === "string" && typeof got === "string" && got) (out as Record<string, unknown>)[k as string] = got;
+        else if (typeof want === "boolean" && typeof got === "boolean") (out as Record<string, unknown>)[k as string] = got;
+        else if (Array.isArray(want) && Array.isArray(got) && got.length === want.length && got.every((v) => typeof v === "number"))
+            (out as Record<string, unknown>)[k as string] = [...got];
+    }
+    return out;
 }
 
 export function loadViewTable(): Promise<ViewTable> {
@@ -298,6 +329,14 @@ export function loadViewTable(): Promise<ViewTable> {
                             ? raw.backdrop.dimColor
                             : FALLBACK.backdrop.dimColor,
                 },
+                menu: typedMerge(FALLBACK.menu, raw.menu),
+                lab: (() => {
+                    const lab = typedMerge(FALLBACK.lab, raw.lab);
+                    const src = (raw.lab && typeof raw.lab === "object" ? raw.lab : {}) as Record<string, unknown>;
+                    if (src.colors && typeof src.colors === "object") lab.colors = { ...FALLBACK.lab.colors, ...(src.colors as Record<string, string>) };
+                    if (src.showDefault && typeof src.showDefault === "object") lab.showDefault = { ...FALLBACK.lab.showDefault, ...(src.showDefault as Record<string, boolean>) };
+                    return lab;
+                })(),
             };
             resolve(current);
         });
@@ -309,12 +348,9 @@ export function viewTable(): ViewTable {
 }
 
 /**
- * 九宫格边距:表内显式值优先,否则按源图短边 × factor 自动推导,
- * 语义等价于 Web 版 drawNineUniform 的角深推导。
+ * 九宫格边距:表内显式值优先,否则按源图短边 × factor 自动推导。
+ * 公式住在共享层 `game/dev/labTable.ts:resolveBorder()`,与布局台的边距列同一实现(单一事实源)。
  */
 export function borderOf(key: string, srcW: number, srcH: number): number {
-    const explicit = current.nineSlice.keys ? current.nineSlice.keys[key] : undefined;
-    const v = Number(explicit);
-    if (Number.isFinite(v) && v > 0) return Math.floor(v);
-    return Math.floor(Math.min(srcW, srcH) * current.nineSlice.factor);
+    return resolveBorder(Number(current.nineSlice.keys ? current.nineSlice.keys[key] : undefined), srcW, srcH, current.nineSlice.factor);
 }

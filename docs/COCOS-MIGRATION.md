@@ -22,7 +22,7 @@
 | `src/entities/` | 4 | 1167 | 4 个全部已入共享层 |
 | `src/systems/` | 4 | 1392 | `waves` `equipmentEngine` `onboarding` 已入共享层；`save` 走宿主存档通道 |
 | `src/ui/` | 8 | 1628 | 布局/纯逻辑 6 个已入共享层；`theme` 的 Canvas2D 画笔拆到宿主侧 `themePaint.ts`，`skin` `heroPortrait` 留宿主侧 |
-| `src/dev/` | 3 | 1817 | 布局台，Phase 2 重定向 |
+| `src/dev/` | 3 | 1817 | 布局台：模型层已上移 `game/dev/{labModel,labSkin,labTable}.ts`（两端共用），`src/dev/` 留交互层与入口垫片 |
 | `public/assets/` | 152 PNG | — | 资源镜像 |
 | `public/config/` | balance.json | — | 数据表镜像 |
 
@@ -287,10 +287,23 @@ web-desktop 构建里 `cc` 是全局对象，可直接内省真实节点树：
 
 **编排层的行为保护**：`tests/battle-fingerprint.test.ts` 用定种子 `Math.random` 与固定 `Date.now` 驱动 `BattleSim` 跑 3000 帧，把每 500 帧的状态计数与敌人/弹道集合的 FNV-1a 哈希钉成内联快照，另有四条不依赖基线的不变量（实体数组引用身份稳定、不越 `LIMITS`、玩家留在竞技场带内、确实在产出击杀/金币/飘字）。改动 `battleWorld` 的推进顺序、倍率管线、钳制边界或掉落规则都会在这里显形；更新基线 `npx vitest run tests/battle-fingerprint.test.ts -u`。
 
-### Phase 2 — 布局台重定向
-`src/dev/{labModel,labSkin,layoutWorkbench}.ts` 改为消费 Cocos 节点几何，`?lab=1` 在 web-desktop 构建内可用，导出仍写 `balance.json` 的 `menuLayout` 段与 `viewTable.json`。
+### Phase 2 — 布局台重定向（已落地）
 
-验收：拖拽手柄改位置/尺寸 → 画面实时跟随 → 导出 JSON → 重新加载后一致；`menuSkin` 五段通道（换图/四边间距/显隐）在 Cocos 侧生效；双通道换图（配置 remap + 本地预览）行为与 Web 相同。
+模型层整体上移到共享层，两端只留宿主交互层：
+
+- `game/dev/labModel.ts` —— 字段清单/取值域/步进/钳制/手柄锚点/参考框/拾取/导出。实现自 `src/dev/labModel.ts` 原样搬来；`pickHandle()` 从工作台内联代码升为共享函数，签名多一个 `offAxisFactor`。
+- `game/dev/labSkin.ts` —— 结构树 7 面板 13 层、四段不可变更新、白名单导出；新增 `resolveSkinKey / isSkinHidden / isSkinTextHidden / skinInsetsOf / skinAssetKeys` 五个只读解析口，绘制层与结构树共用。
+- `game/dev/labTable.ts` —— 第二条数据通道：`viewTable.json` 的 `nineSlice`（九宫格边距）与 `menu`（主菜单表现参数）两段，加 `lab` 段默认值与草稿编解码。`resolveBorder()` 是边距公式的唯一出处，`core/ViewTable.ts:borderOf()` 改为调它。
+- `src/dev/labModel.ts` 与 `src/dev/labSkin.ts` 收敛为 `export * from "@game/dev/…"` 的入口垫片：Web 工作台行为不变，但两端读到的是同一批函数引用（单测按引用同一性卡死）。
+- `menu/MenuLayoutView.ts` —— 表驱动的主菜单视图：矩形全部来自 `menuLayoutPure()`，皮肤五段经 `snapshotMenuSkin()` 生效，贴图形态对标 `drawMenu`（九宫格 / 整图拉伸），缺图与 `hidden` 走同一条代码回退链。手柄指的那条边与节点的那条边出自同一次计算，布局台没有第二套几何实现。
+- `dev/LayoutLab.ts` —— 浮层与交互：参考框合成单个 Graphics 节点，手柄各一节点（尺寸与位置都经 `placeRect()`），指针经 `UITransform.convertToNodeSpaceAR()` 反算设计 px；浏览器宿主下挂 DOM 侧栏（虚拟屏高/浮层开关/边距列/结构树/字段表/两段导出），草稿走 `sys.localStorage`，键与 Web 侧同名。
+- 门控：`GameShell.labMode()` 经 `globalThis` 读 `location.search`，正则匹配 `lab=1`。`urlTools` 不在 3.8.8 的类型声明里，故未使用；取不到 `location` 时返回 `false`，因此微信小游戏宿主（无 `location`）天然关着工作台，玩家版路径不变。命中才多预载 17 张工作台贴图、把菜单屏换成表驱动视图并挂浮层、开局落在 `menu`。
+
+验收实测：手柄 76（分区标题条就绪档，996 与 1246 同数）/ 字段 125（origin 37 + deco 88）；缺标题条的降级档为 70——七个标题条相关手柄按环境退化为 `listYNoSection` + `endlessGapFlat`。`tests/cocos-lab-parity.test.ts` 24 例覆盖计数与端间引用同一性、钳制口径（编辑器钳到边界 vs 加载器回退默认）、拖动倍率与符号、`pickHandle` 的绑轴判定与近邻优先、导出→回灌→再导出逐字节相同、草稿编解码幂等、viewTable 段合并幂等且保留未知段、边距公式与钳制。`npm test` 42 套件 / 1068 用例、`npm run build`、`npm run build:cocos` 全绿；`buildHandles` / `MenuLayoutView` / `LayoutLab` / `resolveBorder` 均出现在 `cocos-prototype/build/web-desktop/assets/main/index.js`。
+
+**尚未在本期闭环的验收项**（受 §7.3 的引擎起不来所限）：拖手柄→画面跟随→松手→刷新一致的实机链路、`convertToNodeSpaceAR` 换算方向、手柄命中手感、DOM 侧栏可见性、本地文件预览通道（`assetManager.loadRemote` + `SpriteFrame.texture`）。这些都在宿主交互层，其等价逻辑已在 node 侧证死。
+
+**与 Web 工作台的已知分歧**：参考带画实线（`Graphics` 无虚线）；`menu_section_strip` / `crest_echo` / `menu_title_plate` / `menu_strip_plate` 按 Web 口径整图绘制，故不在边距标注列；`MenuLayoutView` 只给几何与占位文案，逐行锁定/通关减淡、英雄立绘、实时货币与红点判定留待 Phase 3；边距列只在 Cocos 侧产生实际效果（Web 侧角深自动推导）。
 
 ### Phase 3 — 菜单 / 商店 / 英雄
 `drawMenu` `drawShop` `drawHeroes` + `ui/{menuLayout,shop,heroSelectLayout,scrollList,heroPortrait}.ts` 的矩形包与滚动容器节点化。
@@ -326,7 +339,7 @@ web-desktop 构建里 `cc` 是全局对象，可直接内省真实节点树：
 | R6 | 视图节点挂到 `World` 而非 `Screen:<key>` | 屏幕间互相漏画 | §2.2 写成约定；Phase 1 起屏幕组件构造签名强制接收所属屏幕节点 |
 | R7 | `addComponent(Sprite/Graphics/Label)` 自动附带 `UITransform` | 重复组件、尺寸设置失效 | 统一 `getComponent(UITransform) || addComponent(UITransform)` |
 | R8 | 渐变/发光等 Canvas 效果直译 | 视觉回退或过度设计 Shader | 优先贴图 + `UIOpacity`；Shader 作为 Phase 6 之后的独立优化项 |
-| R9 | 布局台（1817 行 dev 代码）与 Cocos 几何模型不兼容 | 失去"拖拽改表"这条已验证的高效通道 | Phase 2 单列一期，验收要求实测手柄数与字段数不低于 Web 侧（76 手柄 / 125 字段） |
+| R9 | 布局台（1817 行 dev 代码）与 Cocos 几何模型不兼容 | 失去"拖拽改表"这条已验证的高效通道 | 已闭合。Phase 2 把模型层（字段/手柄/钳制/拾取/导出）上移为两端共用的 `game/dev/`，Web 侧只留入口垫片，手柄与字段数按引用同一性与实测数（76 / 125）钉在 `tests/cocos-lab-parity.test.ts`；Cocos 侧几何读同一份 `menuLayoutPure` 产物，不存在第二套实现 |
 | R10 | 存档跨端兼容 | 老玩家进度丢失 | 键名与结构不变（`echo-abyss-save-v1`），Phase 1 起每阶段做读旧档回归 |
 
 ---

@@ -141,5 +141,40 @@
     "backdrop": {
         "coverAlpha": 0.55,
         "dimColor": "rgba(11,14,20,0.35)"
+    },
+    "menu": {
+        "$comment": "主菜单表驱动视图(MenuLayoutView)的表现参数;几何一律由 game/ui/menuLayout.ts 派生,这里只管颜色与字号。",
+        "titleColor": "#FFD76A",
+        "subColor": "#8F9BB3",
+        "noteColor": "#C8C2B1",
+        "titlePx": 22,
+        "subPx": 13,
+        "bodyPx": 14,
+        "baselineLift": 0.82,
+        "rightColumnW": 200,
+        "chipIconH": 15,
+        "fallbackPlate": "rgba(19,24,38,0.92)",
+        "fallbackStroke": "rgba(255,255,255,0.14)",
+        "highlightAlpha": 180,
+        "dotColor": "#FF5A6E",
+        "currentRowPlate": "menu_row_plate_current"
+    },
+    "lab": {
+        "$comment": "布局台浮层自身参数:?lab=1 时由 dev/LayoutLab.ts 消费。手柄位置永远由 game/dev/labModel.ts 从表算出,这里只定它们画多大、点得到多松。",
+        "handleSize": 8,
+        "handleSizeActive": 11,
+        "grabPx": 9,
+        "offAxisFactor": 1.6,
+        "labelPx": 11,
+        "lineWidth": 1,
+        "dashOn": 4,
+        "dashOff": 3,
+        "panelW": 430,
+        "screenHeights": [996, 1246],
+        "minScreenH": 700,
+        "maxScreenH": 1400,
+        "coarseStep": 10,
+        "showDefault": { "layout": true, "hit": true, "guide": true, "labels": true },
+        "colors": { "layout": "#ffd76a", "hit": "#5ac8fa", "guide": "#ff5ce1", "sel": "#ffffff", "drag": "#4dffc8" }
     }
 }

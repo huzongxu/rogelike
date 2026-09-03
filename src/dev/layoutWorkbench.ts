@@ -32,12 +32,14 @@ import {
   exportJson,
   nudgeValue,
   parseFieldDocs,
+  pickHandle,
   readValues,
   resetAll,
   resetField,
 } from "./labModel";
 import type { FieldDoc, FieldId, Handle, HandleContext } from "./labModel";
 import { SKIN_TREE, applyInsets, applyLayerName, applyRemap, applyToggle, buildSkinTree, exportSkinJson, mergeExport } from "./labSkin";
+import { LAB_OVERLAY_DEFAULTS } from "@game/dev/labTable";
 
 const PANEL_W = 430;
 const DESIGN_W = 560;
@@ -279,22 +281,10 @@ function pointerNow(_lab: Lab): [number, number] {
 
 /* ==================== 交互 ==================== */
 
-function pickHandle(lab: Lab, x: number, y: number): Handle | null {
-  const grab = 9 / lab.gv.scale;
-  let best: Handle | null = null;
-  let bestD = grab;
-  for (const h of lab.lastHandles) {
-    const dx = Math.abs(h.x - x);
-    const dy = Math.abs(h.y - y);
-    // 只沿绑定轴判定:手柄在自由轴上的错开不代表"更接近该字段"
-    const d = h.axis === "x" ? dx : dy;
-    const off = h.axis === "x" ? dy : dx;
-    if (d <= bestD && off <= grab * 1.6) {
-      best = h;
-      bestD = d;
-    }
-  }
-  return best;
+/** 拾取几何在共享层(pickHandle);这里只负责把"屏幕 9px"换成设计 px 的抓取半径 */
+function pickAt(lab: Lab, x: number, y: number): Handle | null {
+  const s = lab.gv.scale;
+  return pickHandle(lab.lastHandles, x, y, LAB_OVERLAY_DEFAULTS.grabPx / s, LAB_OVERLAY_DEFAULTS.offAxisFactor);
 }
 
 function bindPointer(lab: Lab): void {
@@ -308,7 +298,7 @@ function bindPointer(lab: Lab): void {
     const p = local(e);
     pointer.x = p.x;
     pointer.y = p.y;
-    const h = pickHandle(lab, p.x, p.y);
+    const h = pickAt(lab, p.x, p.y);
     if (!h) {
       lab.selected = null;
       lab.valuesDirty = true;
@@ -332,7 +322,7 @@ function bindPointer(lab: Lab): void {
       applyValue(h.bind.section, h.bind.key, dragValue(h, dx, dy, lab.drag.base));
       lab.valuesDirty = true;
     } else {
-      const hit = pickHandle(lab, p.x, p.y);
+      const hit = pickAt(lab, p.x, p.y);
       const id = hit?.id ?? null;
       if (id !== lab.hover) {
         lab.hover = id;
