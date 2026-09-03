@@ -14,7 +14,7 @@
 
 | 位置 | 文件数 | 行数 | 迁移归属 |
 | --- | --- | --- | --- |
-| `src/game.ts` | 1 | 6782 | 拆解重写（本方案主体） |
+| `src/game.ts` | 1 | 5426 | 拆解重写（本方案主体）；战斗编排已委托 `@game/systems/battleWorld` |
 | `src/main.ts` | 1 | 29 | 由 `Bootstrap.ts` 取代 |
 | `src/platform/adapter.ts` | 1 | 180 | 引擎通道，逐项替换 |
 | `src/core/` | 3 | 504 | `math.ts` 已入共享层；`fxLayer` `input` 属宿主通道，Phase 1 节点化 |
@@ -241,9 +241,12 @@ web-desktop 构建里 `cc` 是全局对象，可直接内省真实节点树：
 2. 一次同步调用设竖屏并重建代码树：`cc.view.setFrameSize(430, 932); cc.director.loadScene('Main')`。
 3. 再发一次同步调用读节点树（此时 `boot()` 的异步加载已完成）。
 
-两条硬性注意：
+三条硬性注意：
 - **`evaluate_script` 里不能 await**。返回 Promise 的脚本会被回收（`"Promise was collected"`）或超时。加载与探针必须拆成两次独立调用。
 - **`getComponent(cc.UITransform)` 会返回 null**——全局 `cc` 上的类引用与 bundle 内部构造器不同一。取组件一律用字符串形式：`getComponent('cc.UITransform')` / `'cc.Label'` / `'cc.Sprite'` / `'cc.UIOpacity'` / `'GameShell'`。
+- **引擎必须先被"看见"一次才能起来。** 内置浏览器面板处于后台时，Chromium 对该表面的 rAF 是彻底挂起而非降频：干净加载后等 25 秒，`cc.game.inited` 仍为 `false`、`cc.director.getTotalFrames()` 仍为 `0`、`getScene()` 返回 `null`；手动调 `cc.game.init()` / `cc.game.run()` 也救不回来，且重复调 `setFrameSize` 会让设计分辨率累积放大（实测 visibleSize 从 560×1214 一路涨到 1280×2774，只能重新 navigate）。所以每期验证前请人把面板打开一次；**引擎初始化之后，即使面板再次转入后台，`cc.game.step(1 / 60)` 手动推进与抓图都照常可用**。
+
+抓图不依赖 `take_screenshot`——面板不可见时它一律报 `NATIVE_BROWSER_VIEWPORT_UNAVAILABLE … visible=false`，且 `bringToFront` 无效。改由页面自己 `canvas.toDataURL('image/png')` 返回整串 base64，经 `evaluate_script` 的 `filePath` 参数落盘（返回值写进文件、不进上下文），再用 node 解码成 PNG；Web 侧 Canvas2D 与 Cocos 侧 WebGL 都适用。两端取景对齐的办法是在页面内按内容包围盒裁切再缩放到同尺寸。Web 侧的循环可以直接手动驱动（`window.game` 已暴露，`game.update(1/60); game.render()`，开局调 `game.startStage(1)` 比派发键盘事件可靠），没有引擎起不来的问题。
 
 `setFrameSize(430,932)` 后 visibleSize 为 560×1213.77，可稳定复现竖屏；桌面窗口下看到的横向裁切是 FIXED_WIDTH 下的取景结果，不是布局缺陷。
 
@@ -272,10 +275,17 @@ web-desktop 构建里 `cc` 是全局对象，可直接内省真实节点树：
 
 验收（已逐项实测通过）：`npm run build`（Web，tsc `--noEmit` + vite build）与 `npm run build:cocos`（web-desktop）均通过；`npm test` 40 套件 / 1039 用例全绿；守卫测试对注入的 `from "cc"` 报错；`public/config/balance.json` 与 `cocos-prototype/assets/resources/config/balance.json` 逐字节相同（由 `npm run sync:cocos` 镜像）。共享层确实进入 Cocos 产物：`spreadRows` / `confirmRects` 出现在 `cocos-prototype/build/web-desktop/assets/main/index.js`。
 
-### Phase 1 — 战斗主屏
-`drawWorld` + 实体渲染（玩家/敌人/弹道/掉落）+ HUD 双坞（`drawTopDock` `drawBottomDock` `drawDockPlate` `drawHudTicker` `drawEnergy` `drawGuideBanner` `drawJoystick`）+ `FxLayer` 节点化 + 对象池 + 飘字。
+### Phase 1 — 战斗主屏（已落地）
 
-验收：同一存档下，Cocos 战斗画面与 Web 逐屏截图比对通过；60 帧稳定；`Enemies` 池峰值节点数 ≤ 实体上限；HUD 文本每帧零重排（`bindLabel` 命中率打点）。
+`cocos-prototype/assets/scripts/battle/` 六个模块：`BattleSim`（共享层适配器，注入 `FxLayerData` 作绘制桥）、`BattleWorldView`（实体渲染 + `cc.NodePool` 对象池）、`HudView`（顶坞 64 / 底坞 48，几何全部走 `game/ui/hud.ts`）、`FxView` + `FxCore`（`fxLayer` 的纯数据时间轴保留，只把"画"换成节点；含飘字池）、`JoystickView`（全屏 `TOUCH_START/MOVE/END` + 键盘）。`GameShell` 收敛为搭层级、装载资源、跑路由、交 dt 四件事。`viewTable.json` 扩 `battle`/`fx`/`pool`/`hud`/`joystick` 五段。
+
+**顺带关闭了 R1**：战斗编排层（每帧推进顺序、`updatePlayer`/`updateEnemies`/`updateProjectiles`/`updateClouds`/`updateMinions`/`updateGems`、`damageEnemy` 倍率管线、`killEnemy`、接触与震击伤害、章节与 Boss 流程、飘字与特效事件的数据层）抽入 `game/systems/battleWorld.ts`，`src/game.ts` 与 `BattleSim` 共用同一份。接缝是 `BattleRunInputs`（宿主喂数值上下文）、`BattleWorldHost`（章末/死亡/通关回报宿主）、`FxBridge`（各端注入绘制桥）；存档 schema 留在宿主侧 `core/SaveModel.ts`，共享层不经任何持久化通道。
+
+验收（已实测）：战斗画面与 Web 逐屏截图比对通过；HUD 14 条实时文案与 Web 模板逐字吻合（含 `初入尸潮 ·  · 第 1/20 章` 的双分隔符 —— `chapterTypeLabel()` 对普通章返回空串，属 Web 原样，移植中不要"修"）；顶坞 `560×64 @ y=466`、底坞 `560×48 @ y=-474` 与 `hud.ts` 常量精确吻合；敌人节点数与逻辑实体数逐采样一致，池峰值不越 `LIMITS`；`npm test` 41 套件 / 1044 用例、`npm run build`、`npm run build:cocos` 全绿。
+
+**尚未在本期闭环的验收项**：60 帧稳定与 `bindLabel` 命中率打点未做量化采样；死亡/胜利结算屏属 Phase 5，当前死亡是静默冻结；章节结束直接 `nextChapter` 跳过商店（商店屏属 Phase 3）；粒子光晕用半透明圆替代 Web 的叠加径向渐变（符合 R8 的"优先贴图，不引 Shader"）；环境词缀的行情图标省略。
+
+**编排层的行为保护**：`tests/battle-fingerprint.test.ts` 用定种子 `Math.random` 与固定 `Date.now` 驱动 `BattleSim` 跑 3000 帧，把每 500 帧的状态计数与敌人/弹道集合的 FNV-1a 哈希钉成内联快照，另有四条不依赖基线的不变量（实体数组引用身份稳定、不越 `LIMITS`、玩家留在竞技场带内、确实在产出击杀/金币/飘字）。改动 `battleWorld` 的推进顺序、倍率管线、钳制边界或掉落规则都会在这里显形；更新基线 `npx vitest run tests/battle-fingerprint.test.ts -u`。
 
 ### Phase 2 — 布局台重定向
 `src/dev/{labModel,labSkin,layoutWorkbench}.ts` 改为消费 Cocos 节点几何，`?lab=1` 在 web-desktop 构建内可用，导出仍写 `balance.json` 的 `menuLayout` 段与 `viewTable.json`。
@@ -308,7 +318,7 @@ web-desktop 构建里 `cc` 是全局对象，可直接内省真实节点树：
 
 | 编号 | 风险 | 影响 | 处置 |
 | --- | --- | --- | --- |
-| R1 | 纯逻辑与 Cocos 侧各留一份拷贝 | 数值/系统行为双端漂移，回归成本极高 | Phase 0 已落地：42 个文件进共享层 + `@game` alias + `tests/shared-purity.test.ts` 随每次 `npm test` 执行 |
+| R1 | 纯逻辑与 Cocos 侧各留一份拷贝 | 数值/系统行为双端漂移，回归成本极高 | 已闭合。Phase 0 把 42 个纯逻辑文件进共享层 + `@game` alias；Phase 1 把战斗编排层也抽进 `game/systems/battleWorld.ts`，`src/game.ts` 与 `BattleSim` 共用同一份（`damageEnemy`/`killEnemy`/`updateProjectiles` 等在 `src/game.ts` 中已各 0 处）。两道测试守住：`tests/shared-purity.test.ts` 挡宿主依赖混入共享层，`tests/battle-fingerprint.test.ts` 挡编排行为漂移 |
 | R2 | 152 张 PNG 全量入 `resources` | 包体超限、首屏变慢 | Phase 6 前保持按需镜像；分组进 bundle（战斗/皮肤/背景），背景与皮肤走远程资源 |
 | R3 | 微信小游戏端资源与广告 API | 上线受阻 | `AdChannel` 已按端分流；Phase 6 用 `scripts/smoke-wechat.cjs` 的思路补 Cocos 版冒烟 |
 | R4 | `Label` 每帧改文本 | 明显掉帧 | 全量走 `bindLabel`；Phase 1 加命中率打点 |
