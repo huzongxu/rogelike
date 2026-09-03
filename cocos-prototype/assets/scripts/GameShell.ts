@@ -25,7 +25,6 @@ import { FxView } from "./battle/FxView";
 import { JoystickView } from "./battle/JoystickView";
 import { MenuLayoutView } from "./menu/MenuLayoutView";
 import { buildMenuContent, hitMenu, menuRowStates, menuSetIds, type MenuAction, type MenuRowState, type MenuTextContent } from "./menu/MenuContentModel";
-import { LayoutLab } from "./dev/LayoutLab";
 import { ShopModel, type ShopAction, type ShopWorld } from "./shop/ShopModel";
 import { ShopView } from "./shop/ShopView";
 import { HeroSelectModel, type HeroAction, type HeroSaveView } from "./heroes/HeroSelectModel";
@@ -85,30 +84,6 @@ function restFrameKeys(): string[] {
     return Object.keys(ASSET_MANIFEST).filter((k) => !pre.has(k));
 }
 
-/**
- * 布局台(?lab=1)要多一批贴图先到位:结构树里的每张底板 + 视图实际会画的按钮与货币图标。
- * 只在工作台版预载,不给玩家版加加载耗时。
- */
-const LAB_PRELOAD_KEYS = [
-    "bg_menu",
-    "btn_primary",
-    "btn_minor",
-    "icon_gold",
-    "icon_echo",
-    "icon_stardust",
-    "menu_title_plate",
-    "crest_echo",
-    "menu_strip_plate",
-    "menu_chip_plate",
-    "menu_section_strip",
-    "menu_row_plate",
-    "menu_row_plate_current",
-    "menu_set_plate",
-    "menu_set_plate_selected",
-    "menu_note_plate",
-    "badge_shield_bronze",
-];
-
 /** balance.json → 共享数值模块(与 Web src/platform/balance.ts 同一分发口径) */
 function applySharedBalance(cfg: Record<string, any> | null): void {
     if (!cfg) return;
@@ -125,22 +100,10 @@ function applySharedBalance(cfg: Record<string, any> | null): void {
     applyChapterTypes(section("chapterTypes"));
     applyGacha(section("gacha"));
     applyEconomy(section("economy"));
-    // 布局与皮肤两条通道:布局台导出的 balance.json 段就是这么进 Cocos 侧内存表的
+    // 布局与皮肤两条通道:balance.json 的 menuLayout / menuSkin 段就是这么进 Cocos 侧内存表的
     applyMenuLayoutTable(section("menuLayout"));
     const skin = cfg.menuSkin;
     if (skin && typeof skin === "object" && !Array.isArray(skin)) applyMenuSkin(skin as Record<string, unknown>);
-}
-
-/**
- * 布局台门控:`?lab=1` 才挂浮层。
- * Web 侧靠独立入口(layout-lab.html 不进生产构建)隔离 dev 代码,Cocos 侧只有一个场景,
- * 所以用查询参数把同一份构建分成"玩家版 / 工作台版";dev 目录不参与任何玩法判定。
- * 读的是页面 URL 的查询段(native 端无 location → 恒为 false,工作台本就是浏览器工具)。
- */
-export function labMode(): boolean {
-    const g = globalThis as Record<string, any>;
-    const search = typeof g.location?.search === "string" ? String(g.location.search) : "";
-    return /(^|[?&])lab=1/.test(search);
 }
 
 /**
@@ -163,11 +126,9 @@ export class GameShell extends Component {
     private fxView!: FxView;
     private joystick!: JoystickView;
 
-    /* 布局台(?lab=1):表驱动视图 + 浮层宿主 */
-    private labOn = false;
-    private lab: LayoutLab | null = null;
+    /* 主菜单:表驱动视图 + 玩家版指针热区 */
     private menuView: MenuLayoutView | null = null;
-    /** 玩家版的指针热区(布局台版由浮层的 Capture 接管,不重复绑) */
+    /** 玩家版的指针热区(整屏一个捕获节点,菜单屏唯一的触摸入口) */
     private menuPointer: Node | null = null;
     /** 激励视频在途标记:一次未看完前不接受第二次点击 */
     private adPending = false;
@@ -219,13 +180,11 @@ export class GameShell extends Component {
         const balance = await loadBalance();
         applySharedBalance(balance);
         await loadViewTable();
-        this.labOn = labMode();
         // HUD 构建期一次性贴图先到位(坞板/图标/横幅/装备卡图标),再建界面
-        await this.loadFrames(this.labOn ? [...HUD_PRELOAD_KEYS, ...LAB_PRELOAD_KEYS] : HUD_PRELOAD_KEYS);
+        await this.loadFrames(HUD_PRELOAD_KEYS);
         this.buildLayers();
         this.ready = true;
-        // 工作台版:浮层只服务主菜单,和 Web 侧布局台"每帧把界面按回 menu"同一口径
-        this.router.show(this.labOn ? "menu" : "battle");
+        this.router.show("battle");
         // 其余世界美术后台流式加载:每帧从 frames 读取,到位即自动换上(语义 = Web assets.beginLoad())
         this.loadFrames(restFrameKeys()).then(() => {
             // 背景与视图贴图就绪态都是一次性读取,流到位后补刷一次
@@ -236,8 +195,7 @@ export class GameShell extends Component {
             this.shopView?.setFrames(this.frames);
             this.heroesView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
-            if (this.lab) this.lab.sync();
-            else this.refreshMenu();
+            this.refreshMenu();
         });
     }
 
@@ -325,13 +283,12 @@ export class GameShell extends Component {
         this.worldView.setBackdrop(this.frames.has(key) ? key : "bg_outside");
     }
 
-    /* ================= 主菜单屏(表驱动:布局台与玩家版共用同一视图与同一内容构建) ================= */
+    /* ================= 主菜单屏(表驱动:几何来自 menuLayoutPure,文案来自存档) ================= */
 
     /**
      * 菜单屏装配。两条纪律:
-     *  ① 画面只由 `MenuLayoutView` 画(几何全部来自 `menuLayoutPure`),玩家版与工作台版
-     *     用的是同一个视图实例 —— 骨架版 MENU_ROWS 已在 Phase 3 删除;
-     *  ② 文案与状态只由 `buildMenuContent` 给(存档驱动),所以布局台里拖手柄看到的
+     *  ① 画面只由 `MenuLayoutView` 画(几何全部来自 `menuLayoutPure`),一份视图一处真相;
+     *  ② 文案与状态只由 `buildMenuContent` 给(存档驱动),所以屏幕上看到的
      *     行/筹码/红点就是玩家真实进度下的那一套。
      */
     private buildMenuScreen(): void {
@@ -343,28 +300,12 @@ export class GameShell extends Component {
         this.menuView = new MenuLayoutView(menu, this.frames);
         this.menuView.setEnv(STAGES.map((s) => s.id), menuSetIds(save));
         this.menuView.refresh(this.menuContent());
-        if (!this.labOn) {
-            this.bindMenuPointer(menu);
-            return;
-        }
-        // 工作台版:浮层按同一份布局产物放手柄, Capture 在最上层接管指针
-        this.lab = new LayoutLab({
-            screen: menu,
-            view: this.menuView,
-            frames: this.frames,
-            content: () => this.menuContent(),
-            stageIds: STAGES.map((s) => s.id),
-            setIds: menuSetIds(save),
-            makeupRows: () => this.menuRows().map((r) => r.makeup),
-            selectedSet: save.selectedSet ?? null,
-        });
-        this.lab.mount();
-        (globalThis as Record<string, unknown>).__lab = this.lab;
+        this.bindMenuPointer(menu);
     }
 
-    /** 实时重算一屏:切回菜单、广告入账、补星后都走它(工作台版的刷新由 LayoutLab.sync 负责) */
+    /** 实时重算一屏:切回菜单、广告入账、补星后都走它 */
     private refreshMenu(): void {
-        if (!this.menuView || this.labOn) return;
+        if (!this.menuView) return;
         this.menuView.refresh(this.menuContent());
     }
 
@@ -710,8 +651,7 @@ export class GameShell extends Component {
     /* ================= 主循环 ================= */
 
     update(dt: number): void {
-        // 布局台、轻提示与英雄列表惯性都工作在非战斗屏上(blocksPlay 为真),所以排在推进世界之前
-        if (this.lab) this.lab.tick();
+        // 轻提示与英雄列表惯性都工作在非战斗屏上(blocksPlay 为真),所以排在推进世界之前
         this.tickToast(dt);
         this.tickHeroScroll(dt);
         if (!this.ready || this.router.blocksPlay()) return;
