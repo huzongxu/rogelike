@@ -160,7 +160,7 @@
         "currentRowPlate": "menu_row_plate_current"
     },
     "lab": {
-        "$comment": "布局台浮层自身参数:?lab=1 时由 dev/LayoutLab.ts 消费。手柄位置永远由 game/dev/labModel.ts 从表算出,这里只定它们画多大、点得到多松。",
+        "$comment": "布局台浮层自身参数:core/ViewTable.ts 装载本段,Web 侧工作台 src/dev/layoutWorkbench.ts 消费。手柄位置永远由 game/dev/labModel.ts 从表算出,这里只定它们画多大、点得到多松。",
         "handleSize": 8,
         "handleSizeActive": 11,
         "grabPx": 9,
