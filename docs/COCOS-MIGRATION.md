@@ -257,6 +257,15 @@ web-desktop 构建里 `cc` 是全局对象，可直接内省真实节点树：
 
 已归档的 Web 基准图在 `.probe/`（gitignored，随取随重生成）：`web-menu.png` / `shop.png` / `heroes.png` / `web-battle-crop.png`，即 Phase 1/3 逐屏对标的对照面。
 
+**设计坐标 → 浏览器 client 点（布局台实机验证的前提）**：UI 节点的 `worldPosition` 原点在**左下角**（全屏 `Canvas` 自身 wp = `(W/2, H/2)`，`W/H` 即 `cc.view.getVisibleSize()`），所以左上原点的模型值 `(x, y)` 对应 `world = (x, H - y)`；换 client 用 `rect = canvas.getBoundingClientRect()`：
+
+```
+clientX = rect.left + wx * (rect.width  / W)
+clientY = rect.top  + (H - wy) * (rect.height / H)
+```
+
+三个坑：① 分母必须是 `visibleSize`（设计 px），不是 `getFrameSize()`，也不是 CSS 布局框——`#GameDiv` 比画布宽得多，拿容器宽算会偏出画布；② 派发合成事件要打在 **canvas 元素**上（`pointerdown/move/up` 与 `mousemove` 同发最稳），打 `window`/`document` 上的 `keydown` 不驱动手柄微调；③ 行板是居中满宽节点，改 `pad` 变的是 `UITransform.width` 而不是 `worldPosition.x`（所有行的 x 恒为 280），验"画面跟随"要量宽度或子节点偏移，别量行中心。
+
 ### 7.4 已通过的骨架验收
 - 启动链：`loadBalance` + `loadViewTable` + `loadFrames` 并行完成 → `buildLayers()` → 读档 → `router.show("battle")`，`ready === true`。
 - 背景：`Cover p0,0 s694x1214 op140` + `Dim s560x1214`，居中与压暗均对标 Web。
