@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { shopLayoutPure, SHOP_TOP, SHOP_BOTTOM, SHOP_ROW_BOTTOM, SHOP_PAD } from "../src/ui/shop";
-import { HUD_TOP_H, HUD_BOT_H } from "../src/ui/hud";
+import { shopLayoutPure, SHOP_TOP, SHOP_BOTTOM, SHOP_ROW_BOTTOM, SHOP_PAD } from "@game/ui/shop";
+import { HUD_TOP_H, HUD_BOT_H } from "@game/ui/hud";
 
 /** 区块包络(顶缘/底缘),用于相邻零重叠断言 */
 function blocks(L: ReturnType<typeof shopLayoutPure>): { name: string; y0: number; y1: number }[] {

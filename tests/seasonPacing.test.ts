@@ -17,7 +17,7 @@ import {
   seasonScore,
   THREE_STAR_TICKETS,
   FIRST_CLEAR_TICKET_MULT,
-} from "../src/data/season";
+} from "@game/data/season";
 import {
   ENERGY_MAX,
   ENERGY_AD_GAIN,
@@ -25,11 +25,11 @@ import {
   DIAMOND_AD_DAILY,
   ENDLESS_ENERGY_COST,
   stageEnergyCost,
-} from "../src/data/daily";
-import { STAGES } from "../src/data/stages";
-import { phantomBoard, rankAmong, PHANTOM_COUNT } from "../src/data/leaderboard";
-import { spawnEnemy, bossHpMult } from "../src/entities/enemy";
-import { vec2 } from "../src/core/math";
+} from "@game/data/daily";
+import { STAGES } from "@game/data/stages";
+import { phantomBoard, rankAmong, PHANTOM_COUNT } from "@game/data/leaderboard";
+import { spawnEnemy, bossHpMult } from "@game/entities/enemy";
+import { vec2 } from "@game/core/math";
 import { runSim, measureBossDps } from "../scripts/balance-sim";
 
 const UNLOCK_PROGRESS = 0.5;

@@ -14,6 +14,7 @@ text-erase/*
 .fx-shots/
 tmp_shots/
 tmp_fx_*.png
+.probe/
 
 # 备份与工具状态
 .bak-prelayout/

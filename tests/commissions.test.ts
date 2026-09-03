@@ -13,8 +13,8 @@ import {
   difficultyOf,
   COMMISSION_MAX_HOURS,
   type CommissionState,
-} from "../src/data/commissions";
-import { BUILDER_ROUTE } from "../src/data/talents";
+} from "@game/data/commissions";
+import { BUILDER_ROUTE } from "@game/data/talents";
 
 describe("离线收益衰减曲线(策划案 4.4)", () => {
   it("前 2 小时 100% 收益", () => {

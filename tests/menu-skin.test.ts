@@ -10,7 +10,7 @@ import {
   setMenuSkin,
   MENU_SKIN_DEFAULTS,
   menuSkinWarnings,
-} from "../src/data/menuSkin";
+} from "@game/data/menuSkin";
 
 afterEach(() => {
   applyMenuSkin();

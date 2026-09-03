@@ -4,15 +4,15 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Player } from "../src/entities/player";
-import { spawnEnemy } from "../src/entities/enemy";
-import { EquipmentEngine, type BattleContext, type Fx } from "../src/systems/equipmentEngine";
-import { makeTrigger, makeEffect, type EffectType } from "../src/data/affixes";
-import { generateSetEquipment, GENERIC_EFFECT_TYPES, type Equipment } from "../src/data/equipmentGen";
-import { SETS, setDef, setOfEffect, setsOfEffect, allSets, seasonNewSets, setReleaseSeason, isSetPiece, setPieces, setBonusState, releasedSets, type SetId } from "../src/data/sets";
-import { chapterIntel } from "../src/data/intel";
-import { EFFECTS } from "../src/data/affixes";
-import { vec2 } from "../src/core/math";
+import { Player } from "@game/entities/player";
+import { spawnEnemy } from "@game/entities/enemy";
+import { EquipmentEngine, type BattleContext, type Fx } from "@game/systems/equipmentEngine";
+import { makeTrigger, makeEffect, type EffectType } from "@game/data/affixes";
+import { generateSetEquipment, GENERIC_EFFECT_TYPES, type Equipment } from "@game/data/equipmentGen";
+import { SETS, setDef, setOfEffect, setsOfEffect, allSets, seasonNewSets, setReleaseSeason, isSetPiece, setPieces, setBonusState, releasedSets, type SetId } from "@game/data/sets";
+import { chapterIntel } from "@game/data/intel";
+import { EFFECTS } from "@game/data/affixes";
+import { vec2 } from "@game/core/math";
 
 function makeContext(player: Player, setBonus?: Parameters<typeof setBonusState>[1]): BattleContext & { fx: Fx[]; heal: ReturnType<typeof vi.fn> } {
   const fx: Fx[] = [];

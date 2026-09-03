@@ -3,12 +3,12 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { ENV_AFFIXES, rollEnvAffixes, deathChainDamage, envAffixDef } from "../src/data/envAffixes";
-import { spawnEnemy } from "../src/entities/enemy";
-import { vec2 } from "../src/core/math";
-import { Player } from "../src/entities/player";
-import { EquipmentEngine, type BattleContext } from "../src/systems/equipmentEngine";
-import { makeTrigger, makeEffect } from "../src/data/affixes";
+import { ENV_AFFIXES, rollEnvAffixes, deathChainDamage, envAffixDef } from "@game/data/envAffixes";
+import { spawnEnemy } from "@game/entities/enemy";
+import { vec2 } from "@game/core/math";
+import { Player } from "@game/entities/player";
+import { EquipmentEngine, type BattleContext } from "@game/systems/equipmentEngine";
+import { makeTrigger, makeEffect } from "@game/data/affixes";
 describe("环境词缀定义(策划案 4.2 六种)", () => {
   it("定义完整且覆盖策划案 4.2 全部词缀", () => {
     expect(ENV_AFFIXES).toHaveLength(6);

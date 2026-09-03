@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { MENU_SKIN_DEFAULTS, type MenuSkinTable } from "../src/data/menuSkin";
+import { MENU_SKIN_DEFAULTS, type MenuSkinTable } from "@game/data/menuSkin";
 import {
   SKIN_TREE,
   buildSkinTree,

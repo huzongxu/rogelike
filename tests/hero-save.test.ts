@@ -25,7 +25,7 @@ vi.mock("../src/platform/adapter", () => ({
 }));
 
 import { loadSave, persistSave, resetSave, type SaveData } from "../src/systems/save";
-import { allHeroes, applyHeroSelection, heroDef, showcaseHero, type HeroId, type HeroSelection } from "../src/data/heroes";
+import { allHeroes, applyHeroSelection, heroDef, showcaseHero, type HeroId, type HeroSelection } from "@game/data/heroes";
 
 const KEY = "echo-abyss-save-v1";
 

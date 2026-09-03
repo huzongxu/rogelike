@@ -18,10 +18,10 @@ import {
   HERO_ROW_H,
   type HeroSelectLayout,
   type Rect,
-} from "../src/ui/heroSelectLayout";
-import { allHeroes, isHeroReleased, releasedHeroes } from "../src/data/heroes";
-import { SCROLL_TRACK_W } from "../src/ui/scrollList";
-import { ui } from "../src/ui/theme";
+} from "@game/ui/heroSelectLayout";
+import { allHeroes, isHeroReleased, releasedHeroes } from "@game/data/heroes";
+import { SCROLL_TRACK_W } from "@game/ui/scrollList";
+import { ui } from "@game/ui/theme";
 
 const W = 560;
 const H0 = 996; // 标定档

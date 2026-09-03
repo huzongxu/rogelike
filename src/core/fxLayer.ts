@@ -10,7 +10,7 @@
  * 未使用离屏画布:platform.createCanvas() 返回的是主画布,不能用于烘焙。
  */
 
-import { rand, clamp01 } from "./math";
+import { rand, clamp01 } from "@game/core/math";
 
 /** 粒子硬上限:满池后新请求直接丢弃(尸潮 420 投射物 + 340 敌人下仍需稳帧) */
 const MAX_PARTICLES = 520;

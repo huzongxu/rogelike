@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { phantomBoard, rankAmong, PHANTOM_COUNT, type PhantomEntry } from "../src/data/leaderboard";
+import { phantomBoard, rankAmong, PHANTOM_COUNT, type PhantomEntry } from "@game/data/leaderboard";
 
 describe("phantomBoard(§4.3)", () => {
   it("确定性:同 seasonId 两次全等(后端未接入前榜单必须稳定)", () => {

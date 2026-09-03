@@ -21,9 +21,9 @@ import {
   setMenuLayoutDeco,
   setMenuLayoutOrigin,
   snapshotMenuLayout,
-} from "../data/layoutMenu";
-import type { MenuLayoutDeco, MenuLayoutOrigin } from "../data/layoutMenu";
-import type { MenuLayout, MenuRect } from "../ui/menuLayout";
+} from "@game/data/layoutMenu";
+import type { MenuLayoutDeco, MenuLayoutOrigin } from "@game/data/layoutMenu";
+import type { MenuLayout, MenuRect } from "@game/ui/menuLayout";
 
 export type LayoutSection = "origin" | "deco";
 export type FieldId = string; // `origin.pad` / `deco.banY`

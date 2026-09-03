@@ -23,7 +23,7 @@ vi.mock("../src/platform/adapter", () => ({
 }));
 
 import { calcPrestigePoints, availablePoints, loadSave, persistSave, applyRunRewards, isTreeFull, type SaveData } from "../src/systems/save";
-import { BUILDER_ROUTE, BUILDER_ROUTE_COST, ALL_TALENTS, isTierUnlocked, slotBonusFor, firstXpScaleFor } from "../src/data/talents";
+import { BUILDER_ROUTE, BUILDER_ROUTE_COST, ALL_TALENTS, isTierUnlocked, slotBonusFor, firstXpScaleFor } from "@game/data/talents";
 
 /** 构造完整 SaveData(广告驱动字段给默认值),便于测试聚焦差异字段 */
 function mkSave(partial: Partial<SaveData> = {}): SaveData {
@@ -90,8 +90,8 @@ import {
   buildHasHeal,
   buildHasThorn,
   type Equipment,
-} from "../src/data/equipmentGen";
-import { makeTrigger, makeEffect, makeModifier } from "../src/data/affixes";
+} from "@game/data/equipmentGen";
+import { makeTrigger, makeEffect, makeModifier } from "@game/data/affixes";
 
 beforeEach(() => {
   for (const k of Object.keys(store)) delete store[k];

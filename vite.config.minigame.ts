@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 /**
@@ -5,6 +6,11 @@ import { defineConfig } from "vite";
  * 由 minigame/game.js(先做环境 shim)require 加载。
  */
 export default defineConfig({
+  resolve: {
+    alias: {
+      "@game": fileURLToPath(new URL("./cocos-prototype/assets/scripts/game", import.meta.url)),
+    },
+  },
   build: {
     outDir: "minigame/js",
     emptyOutDir: false,

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { rollGachaQuality, drawGacha, drawGacha10, DUPLICATE_STARDUST, type GachaPity } from "../src/data/gacha";
+import { rollGachaQuality, drawGacha, drawGacha10, DUPLICATE_STARDUST, type GachaPity } from "@game/data/gacha";
 
 describe("扭蛋保底(参考弹壳特工队)", () => {
   it("50 抽必传奇", () => {

@@ -46,11 +46,11 @@ import {
   COLLECTION_HP_PCT,
   stageDropCount,
   stageDropLevel,
-} from "../src/data/daily";
-import { REGIONS, effectiveHours } from "../src/data/commissions";
+} from "@game/data/daily";
+import { REGIONS, effectiveHours } from "@game/data/commissions";
 import { loadSave, persistSave, type SaveData } from "../src/systems/save";
-import { makeTrigger, makeEffect } from "../src/data/affixes";
-import type { Equipment } from "../src/data/equipmentGen";
+import { makeTrigger, makeEffect } from "@game/data/affixes";
+import type { Equipment } from "@game/data/equipmentGen";
 
 const HOUR = 3600000;
 const MIN = 60000;

@@ -21,15 +21,15 @@ import {
   seasonMonsterThemeIndex,
   type SeasonMonsterRow,
   type SeasonMonsterTier,
-} from "../src/data/seasonMonsters";
-import { ENEMY_DEFS, type EnemyKind } from "../src/data/enemies";
-import { spawnEnemy, tryRevive, splitBabies } from "../src/entities/enemy";
-import { seasonMonsterDefFor } from "../src/systems/waves";
-import { chapterIntel } from "../src/data/intel";
-import { Player } from "../src/entities/player";
-import { spawnBurnPool, tickObstacleTtl, isInPool, OBSTACLE, type Obstacle } from "../src/entities/objects";
-import { PLAYER_BASE } from "../src/data/combat";
-import { vec2 } from "../src/core/math";
+} from "@game/data/seasonMonsters";
+import { ENEMY_DEFS, type EnemyKind } from "@game/data/enemies";
+import { spawnEnemy, tryRevive, splitBabies } from "@game/entities/enemy";
+import { seasonMonsterDefFor } from "@game/systems/waves";
+import { chapterIntel } from "@game/data/intel";
+import { Player } from "@game/entities/player";
+import { spawnBurnPool, tickObstacleTtl, isInPool, OBSTACLE, type Obstacle } from "@game/entities/objects";
+import { PLAYER_BASE } from "@game/data/combat";
+import { vec2 } from "@game/core/math";
 
 /** 固定序列伪随机:先出 gate 值,再出选池值 */
 function seq(...vals: number[]): () => number {

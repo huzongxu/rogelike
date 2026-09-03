@@ -5,9 +5,10 @@
  */
 
 import type { AssetManager } from "../platform/assets";
-import { header, theme, fs, F, hexA } from "./theme";
-import { barFillW } from "./hud";
-import { frameQualityForStage } from "../data/quality";
+import { theme, fs, F, hexA } from "@game/ui/theme";
+import { header } from "./themePaint";
+import { barFillW } from "@game/ui/hud";
+import { frameQualityForStage } from "@game/data/quality";
 // 关卡头像框品质映射(§4.4)数值已抽离至 data/quality 品质规范表;保持从本模块导出
 export { frameQualityForStage };
 

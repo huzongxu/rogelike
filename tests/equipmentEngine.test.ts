@@ -6,13 +6,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Player } from "../src/entities/player";
-import { spawnEnemy, type Enemy } from "../src/entities/enemy";
-import { EquipmentEngine, type BattleContext, type Fx } from "../src/systems/equipmentEngine";
-import { makeTrigger, makeEffect, makeModifier } from "../src/data/affixes";
-import { generateEquipment, generateChoices, type Equipment } from "../src/data/equipmentGen";
-import { qualityDef } from "../src/data/quality";
-import { vec2 } from "../src/core/math";
+import { Player } from "@game/entities/player";
+import { spawnEnemy, type Enemy } from "@game/entities/enemy";
+import { EquipmentEngine, type BattleContext, type Fx } from "@game/systems/equipmentEngine";
+import { makeTrigger, makeEffect, makeModifier } from "@game/data/affixes";
+import { generateEquipment, generateChoices, type Equipment } from "@game/data/equipmentGen";
+import { qualityDef } from "@game/data/quality";
+import { vec2 } from "@game/core/math";
 
 function makeContext(player: Player, enemies: Enemy[] = []): BattleContext & { fx: Fx[] } {
   const fx: Fx[] = [];

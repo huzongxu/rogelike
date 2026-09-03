@@ -11,8 +11,8 @@ import {
   canUpgrade,
   upgradeCost,
   type Equipment,
-} from "../src/data/equipmentGen";
-import { makeTrigger, makeEffect, makeModifier } from "../src/data/affixes";
+} from "@game/data/equipmentGen";
+import { makeTrigger, makeEffect, makeModifier } from "@game/data/affixes";
 
 function mk(name: string, quality: Equipment["quality"], id: number, mods: Equipment["modifiers"] = []): Equipment {
   return {

@@ -45,14 +45,14 @@ export async function loadBalanceConfig(url = "config/balance.json"): Promise<Ba
   };
 
   // 动态 import 避免平台层反向依赖数据层细节;各模块自行校验并回退
-  const { applyBalance: applyEnergy } = await import("../data/daily");
-  const { applyBalance: applyBattle } = await import("../data/stages");
-  const { applyBalance: applyWaves } = await import("../systems/waves");
-  const { applyBalance: applyChapterType } = await import("../data/chapters");
-  const { applyBalance: applyGacha } = await import("../data/gacha");
-  const { applyBalance: applyEconomy } = await import("../data/equipmentGen");
-  const { applyBalance: applyMenuLayout, menuLayoutWarnings } = await import("../data/layoutMenu");
-  const { applyMenuSkin, menuSkinWarnings } = await import("../data/menuSkin");
+  const { applyBalance: applyEnergy } = await import("@game/data/daily");
+  const { applyBalance: applyBattle } = await import("@game/data/stages");
+  const { applyBalance: applyWaves } = await import("@game/systems/waves");
+  const { applyBalance: applyChapterType } = await import("@game/data/chapters");
+  const { applyBalance: applyGacha } = await import("@game/data/gacha");
+  const { applyBalance: applyEconomy } = await import("@game/data/equipmentGen");
+  const { applyBalance: applyMenuLayout, menuLayoutWarnings } = await import("@game/data/layoutMenu");
+  const { applyMenuSkin, menuSkinWarnings } = await import("@game/data/menuSkin");
 
   applyEnergy({ energy: section("energy"), economy: section("economy") });
   const battle = section("battle");

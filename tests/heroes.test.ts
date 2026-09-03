@@ -18,10 +18,10 @@ import {
   seasonNewHeroes,
   showcaseHero,
   type HeroSelection,
-} from "../src/data/heroes";
-import { allSets, setDef, setReleaseSeason, SET_PIECE_TIERS } from "../src/data/sets";
-import { isSeasonBoosted, seasonThemeIndex, setMutation } from "../src/data/seasonSets";
-import { SET_STARTERS } from "../src/data/equipmentGen";
+} from "@game/data/heroes";
+import { allSets, setDef, setReleaseSeason, SET_PIECE_TIERS } from "@game/data/sets";
+import { isSeasonBoosted, seasonThemeIndex, setMutation } from "@game/data/seasonSets";
+import { SET_STARTERS } from "@game/data/equipmentGen";
 
 const SEASONS = [1, 2, 3, 4] as const;
 const PER_SEASON = 3;

@@ -14,9 +14,9 @@ import {
   seasonMonster,
   seasonMonsterDef,
   seasonVariantDef,
-} from "../src/data/seasonMonsters";
-import { ENEMY_DEFS, SUMMON_SPREAD } from "../src/data/enemies";
-import { OBSTACLE } from "../src/data/field";
+} from "@game/data/seasonMonsters";
+import { ENEMY_DEFS, SUMMON_SPREAD } from "@game/data/enemies";
+import { OBSTACLE } from "@game/data/field";
 import {
   spawnEnemy,
   updateSkill,
@@ -32,9 +32,9 @@ import {
   type EnemySkill,
   type SkillEvents,
   type SkillTelegraph,
-} from "../src/entities/enemy";
-import { PLAYER_BASE } from "../src/entities/player";
-import { vec2, type Vec2 } from "../src/core/math";
+} from "@game/entities/enemy";
+import { PLAYER_BASE } from "@game/entities/player";
+import { vec2, type Vec2 } from "@game/core/math";
 
 /* ---------- 共用驱动器 ---------- */
 

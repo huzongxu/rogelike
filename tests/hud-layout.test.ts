@@ -15,8 +15,8 @@ import {
   equipRowLayout,
   barFillW,
   type TickerFlags,
-} from "../src/ui/hud";
-import { PLAYER_BASE } from "../src/entities/player";
+} from "@game/ui/hud";
+import { PLAYER_BASE } from "@game/entities/player";
 
 const none: TickerFlags = { combo: false, commission: false, intel: false, env: false, thorn: false };
 

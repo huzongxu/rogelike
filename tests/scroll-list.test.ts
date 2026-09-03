@@ -24,7 +24,7 @@ import {
   SCROLL_THUMB_MIN_H,
   SCROLL_TRACK_W,
   type ScrollState,
-} from "../src/ui/scrollList";
+} from "@game/ui/scrollList";
 
 /* 与英雄页同源的实参,便于逐像素核对 */
 const ROW = 72;

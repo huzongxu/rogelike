@@ -4,7 +4,7 @@
  */
 
 import { platform, type TouchPoint } from "../platform/adapter";
-import { type Vec2, vec2 } from "./math";
+import { type Vec2, vec2 } from "@game/core/math";
 
 export class Input {
   /** 归一化移动方向(0,0 = 无输入) */

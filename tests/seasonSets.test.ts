@@ -5,15 +5,15 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { seasonTheme, setMutation, featuredSetId, isSeasonBoosted } from "../src/data/seasonSets";
-import { SETS, setBonusState, allSets, releasedSets, seasonNewSets, type SetId } from "../src/data/sets";
-import { generateSetEquipment, type Equipment } from "../src/data/equipmentGen";
-import { makeTrigger, makeEffect, type EffectType } from "../src/data/affixes";
-import { Player } from "../src/entities/player";
-import { EquipmentEngine, type BattleContext, type Fx } from "../src/systems/equipmentEngine";
-import { rollEnvAffixes, ENV_AFFIXES, type EnvAffixType } from "../src/data/envAffixes";
-import { spawnEnemy } from "../src/entities/enemy";
-import { vec2 } from "../src/core/math";
+import { seasonTheme, setMutation, featuredSetId, isSeasonBoosted } from "@game/data/seasonSets";
+import { SETS, setBonusState, allSets, releasedSets, seasonNewSets, type SetId } from "@game/data/sets";
+import { generateSetEquipment, type Equipment } from "@game/data/equipmentGen";
+import { makeTrigger, makeEffect, type EffectType } from "@game/data/affixes";
+import { Player } from "@game/entities/player";
+import { EquipmentEngine, type BattleContext, type Fx } from "@game/systems/equipmentEngine";
+import { rollEnvAffixes, ENV_AFFIXES, type EnvAffixType } from "@game/data/envAffixes";
+import { spawnEnemy } from "@game/entities/enemy";
+import { vec2 } from "@game/core/math";
 
 /* ---------- L1 主题 ---------- */
 

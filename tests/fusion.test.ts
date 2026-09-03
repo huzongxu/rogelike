@@ -14,9 +14,9 @@ import {
   inheritSource,
   HIDDEN_AFFIXES,
   HIDDEN_PITY_N,
-} from "../src/data/fusion";
-import { makeTrigger, makeEffect, makeModifier, type TriggerType, type EffectType, type ModifierType } from "../src/data/affixes";
-import type { Equipment } from "../src/data/equipmentGen";
+} from "@game/data/fusion";
+import { makeTrigger, makeEffect, makeModifier, type TriggerType, type EffectType, type ModifierType } from "@game/data/affixes";
+import type { Equipment } from "@game/data/equipmentGen";
 
 function makeEq(
   id: number,

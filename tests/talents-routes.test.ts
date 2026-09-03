@@ -25,8 +25,8 @@ import {
   critFor,
   elementalMultFor,
   desperateMultFor,
-} from "../src/data/talents";
-import { effectiveHours, accruedReward } from "../src/data/commissions";
+} from "@game/data/talents";
+import { effectiveHours, accruedReward } from "@game/data/commissions";
 import {
   spawnEnemy,
   updateSpecial,
@@ -34,8 +34,8 @@ import {
   shieldguardDamageMult,
   splitBabies,
   randomEnemyKind,
-} from "../src/entities/enemy";
-import { vec2 } from "../src/core/math";
+} from "@game/entities/enemy";
+import { vec2 } from "@game/core/math";
 
 describe("三系路线定义(策划案 5.2)", () => {
   it("构筑师 91 点 / 效率专家 91 点", () => {

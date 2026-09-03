@@ -18,10 +18,10 @@ import {
   portraitRings,
   type Box,
 } from "../src/ui/heroPortrait";
-import { allHeroes, heroDef } from "../src/data/heroes";
-import { setDef } from "../src/data/sets";
-import { ASSET_MANIFEST } from "../src/data/assets";
-import { F, hexA } from "../src/ui/theme";
+import { allHeroes, heroDef } from "@game/data/heroes";
+import { setDef } from "@game/data/sets";
+import { ASSET_MANIFEST } from "@game/data/assets";
+import { F, hexA } from "@game/ui/theme";
 import type { AssetManager } from "../src/platform/assets";
 
 /* ---------- 标定档与桩 ---------- */

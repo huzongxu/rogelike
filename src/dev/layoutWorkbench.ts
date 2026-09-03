@@ -15,11 +15,11 @@
 
 import { Game } from "../game";
 import { loadBalanceConfig } from "../platform/balance";
-import { canStarMakeup } from "../data/season";
-import { ASSET_MANIFEST } from "../data/assets";
-import { menuLayoutWarnings } from "../data/layoutMenu";
-import { applyMenuSkin, setMenuSkin, snapshotMenuSkin, type MenuPanelId, type MenuSkinTable, type SkinInsets } from "../data/menuSkin";
-import type { MenuLayout } from "../ui/menuLayout";
+import { canStarMakeup } from "@game/data/season";
+import { ASSET_MANIFEST } from "@game/data/assets";
+import { menuLayoutWarnings } from "@game/data/layoutMenu";
+import { applyMenuSkin, setMenuSkin, snapshotMenuSkin, type MenuPanelId, type MenuSkinTable, type SkinInsets } from "@game/data/menuSkin";
+import type { MenuLayout } from "@game/ui/menuLayout";
 import {
   ALL_FIELDS,
   applyValue,

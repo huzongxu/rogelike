@@ -40,7 +40,7 @@ import {
   FIRST_CLEAR_ECHO_MULT,
   STAR_MAKEUP_COST,
   canStarMakeup,
-} from "../src/data/season";
+} from "@game/data/season";
 import { loadSave } from "../src/systems/save";
 
 const DAY = 86400000;

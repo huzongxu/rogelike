@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { spawnEnemy, updateEnemy } from "../src/entities/enemy";
-import { vec2 } from "../src/core/math";
+import { spawnEnemy, updateEnemy } from "@game/entities/enemy";
+import { vec2 } from "@game/core/math";
 
 describe("敌人不与目标重合", () => {
   it("贴身敌人停在碰撞半径之外,不再穿过目标中心", () => {

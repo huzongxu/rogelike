@@ -6,13 +6,13 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { Player } from "../src/entities/player";
-import { spawnEnemy, type Enemy } from "../src/entities/enemy";
-import { EquipmentEngine, type BattleContext } from "../src/systems/equipmentEngine";
-import { makeTrigger, makeEffect, makeModifier, type TriggerType, type EffectType, type ModifierType } from "../src/data/affixes";
-import type { Equipment } from "../src/data/equipmentGen";
-import { comboStates, COMBOS, COMBO_OFF, type ComboStates } from "../src/data/combos";
-import { vec2 } from "../src/core/math";
+import { Player } from "@game/entities/player";
+import { spawnEnemy, type Enemy } from "@game/entities/enemy";
+import { EquipmentEngine, type BattleContext } from "@game/systems/equipmentEngine";
+import { makeTrigger, makeEffect, makeModifier, type TriggerType, type EffectType, type ModifierType } from "@game/data/affixes";
+import type { Equipment } from "@game/data/equipmentGen";
+import { comboStates, COMBOS, COMBO_OFF, type ComboStates } from "@game/data/combos";
+import { vec2 } from "@game/core/math";
 import { runSim, buildEquipment, type SimOptions } from "../scripts/balance-sim";
 
 /* ---------- 测试基建 ---------- */

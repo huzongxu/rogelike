@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { spawnEnemy, updateBoss, splitBabies, BOSS_SLAM, BOSS_SUMMON, BOSS_FRENZY_SPEED, type BossEvents } from "../src/entities/enemy";
-import { vec2 } from "../src/core/math";
+import { spawnEnemy, updateBoss, splitBabies, BOSS_SLAM, BOSS_SUMMON, BOSS_FRENZY_SPEED, type BossEvents } from "@game/entities/enemy";
+import { vec2 } from "@game/core/math";
 
 function makeBoss(variant: "full" | "weak" = "full") {
   const b = spawnEnemy("boss", vec2(200, 200), 20);
@@ -150,8 +150,8 @@ describe("Boss 三阶段(策划案 V3 §3.2)", () => {
 
 /* ---------- Boss 独立血量曲线(关卡维度) ---------- */
 
-import { bossHpMult, BOSS_HP_CURVE } from "../src/entities/enemy";
-import { ENEMY_DEFS, waveHpMult } from "../src/entities/enemy";
+import { bossHpMult, BOSS_HP_CURVE } from "@game/entities/enemy";
+import { ENEMY_DEFS, waveHpMult } from "@game/entities/enemy";
 import { runSim, measureBossDps } from "../scripts/balance-sim";
 
 describe("Boss 血量曲线(关卡维度;修复终局 3 秒融化/全关同血)", () => {

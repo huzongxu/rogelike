@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { chapterTypeOf, chapterTypeInfo, chapterTypeLabel, ELITE_CHAPTERS, TREASURE_CHAPTERS } from "../src/data/chapters";
+import { chapterTypeOf, chapterTypeInfo, chapterTypeLabel, ELITE_CHAPTERS, TREASURE_CHAPTERS } from "@game/data/chapters";
 import { runSim, formatReport } from "../scripts/balance-sim";
 
 describe("章型纯函数", () => {

@@ -15,7 +15,7 @@ import {
   DIAMOND_TICKET_COST,
   regenEnergy,
   stageEnergyCost,
-} from "../src/data/daily";
+} from "@game/data/daily";
 import {
   applyBalance as applyBattle,
   CHAPTER_SECONDS,
@@ -24,11 +24,11 @@ import {
   chapterMonsterCount,
   stageEchoReward,
   splitEcho,
-} from "../src/data/stages";
-import { applyBalance as applyWaves, SPAWN_BASE, SPAWN_EARLY_CHAPTERS, SPAWN_INTERVAL_MIN } from "../src/systems/waves";
-import { applyBalance as applyChapters, chapterTypeOf, ELITE_CHAPTERS, TREASURE_CHAPTERS } from "../src/data/chapters";
-import { applyBalance as applyGacha, EPIC_PITY, LEGENDARY_PITY, rollGachaQuality, DUPLICATE_STARDUST } from "../src/data/gacha";
-import { applyBalance as applyEconomy, qualityBasePrice, SHOP_SLOT_CAP, slotExpandCost } from "../src/data/equipmentGen";
+} from "@game/data/stages";
+import { applyBalance as applyWaves, SPAWN_BASE, SPAWN_EARLY_CHAPTERS, SPAWN_INTERVAL_MIN } from "@game/systems/waves";
+import { applyBalance as applyChapters, chapterTypeOf, ELITE_CHAPTERS, TREASURE_CHAPTERS } from "@game/data/chapters";
+import { applyBalance as applyGacha, EPIC_PITY, LEGENDARY_PITY, rollGachaQuality, DUPLICATE_STARDUST } from "@game/data/gacha";
+import { applyBalance as applyEconomy, qualityBasePrice, SHOP_SLOT_CAP, slotExpandCost } from "@game/data/equipmentGen";
 
 afterEach(() => {
   applyDaily();

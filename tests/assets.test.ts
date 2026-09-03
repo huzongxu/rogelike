@@ -5,7 +5,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { AssetManager } from "../src/platform/assets";
-import { ASSET_MANIFEST } from "../src/data/assets";
+import { ASSET_MANIFEST } from "@game/data/assets";
 import { skinBar, skinHeader, iconText, skinIconButton } from "../src/ui/skin";
 
 const created = vi.hoisted(() => [] as any[]);

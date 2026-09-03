@@ -13,12 +13,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { spreadRows, ui } from "../src/ui/theme";
-import { menuLayoutPure, nineMarginPure, type MenuLayoutEnv, type MenuLayout } from "../src/ui/menuLayout";
-import { MENU_LAYOUT_DEFAULTS, applyBalance, snapshotMenuLayout, type MenuLayoutTable } from "../src/data/layoutMenu";
-import { MENU_SKIN_DEFAULTS, type MenuSkinTable } from "../src/data/menuSkin";
-import { STAGES } from "../src/data/stages";
-import type { SetId } from "../src/data/sets";
+import { spreadRows, ui } from "@game/ui/theme";
+import { menuLayoutPure, nineMarginPure, type MenuLayoutEnv, type MenuLayout } from "@game/ui/menuLayout";
+import { MENU_LAYOUT_DEFAULTS, applyBalance, snapshotMenuLayout, type MenuLayoutTable } from "@game/data/layoutMenu";
+import { MENU_SKIN_DEFAULTS, type MenuSkinTable } from "@game/data/menuSkin";
+import { STAGES } from "@game/data/stages";
+import type { SetId } from "@game/data/sets";
 
 /* ============================ A. 预言机:重构前实现逐式转录 ============================ */
 /* 源:.bak-prelayout/game.ts.orig 第 3923..3982 行(private menuLayout),字面量原样保留。 */

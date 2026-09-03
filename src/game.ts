@@ -5,21 +5,22 @@
 
 import { platform } from "./platform/adapter";
 import { AssetManager } from "./platform/assets";
-import { ASSET_MANIFEST } from "./data/assets";
+import { ASSET_MANIFEST } from "@game/data/assets";
 import { input } from "./core/input";
-import { theme, panel, primaryButton, dangerButton, minorButton, minorButtonBg, hexA, fs, F, ui, spreadRows, rowTextY, confirmRects } from "./ui/theme";
+import { theme, hexA, fs, F, ui, spreadRows, rowTextY, confirmRects } from "@game/ui/theme";
+import { panel, primaryButton, dangerButton, minorButton, minorButtonBg } from "./ui/themePaint";
 import { skinBar, drawBar, skinHeader, iconText, skinIconButton, skinButtonBase, drawAvatarFrame, drawQualityFrame } from "./ui/skin";
-import { HUD_TOP_H, HUD_BOT_H, HUD_PAD, battleBandY, pickTicker, equipRowLayout } from "./ui/hud";
-import { shopLayoutPure, SHOP_BOTTOM, SHOP_ROW_BOTTOM } from "./ui/shop";
-import { menuLayoutPure, type MenuLayout } from "./ui/menuLayout";
-import { heroSelectLayout, HERO_ROW_GAP, HERO_ROW_H, type HeroSelectLayout } from "./ui/heroSelectLayout";
-import { dragScrollFrom, flickOf, inertiaNext, SCROLL_TAP_SLOP } from "./ui/scrollList";
+import { HUD_TOP_H, HUD_BOT_H, HUD_PAD, battleBandY, pickTicker, equipRowLayout } from "@game/ui/hud";
+import { shopLayoutPure, SHOP_BOTTOM, SHOP_ROW_BOTTOM } from "@game/ui/shop";
+import { menuLayoutPure, type MenuLayout } from "@game/ui/menuLayout";
+import { heroSelectLayout, HERO_ROW_GAP, HERO_ROW_H, type HeroSelectLayout } from "@game/ui/heroSelectLayout";
+import { dragScrollFrom, flickOf, inertiaNext, SCROLL_TAP_SLOP } from "@game/ui/scrollList";
 import { drawHeroPortrait } from "./ui/heroPortrait";
-import { snapshotMenuLayout } from "./data/layoutMenu";
-import { menuSkinTable, snapshotMenuSkin } from "./data/menuSkin";
-import { type Vec2, vec2, clamp, rand } from "./core/math";
+import { snapshotMenuLayout } from "@game/data/layoutMenu";
+import { menuSkinTable, snapshotMenuSkin } from "@game/data/menuSkin";
+import { type Vec2, vec2, clamp, rand } from "@game/core/math";
 import { FxLayer } from "./core/fxLayer";
-import { Player, xpToNext, PLAYER_BASE } from "./entities/player";
+import { Player, xpToNext, PLAYER_BASE } from "@game/entities/player";
 import {
   spawnEnemy,
   randomEnemyKind,
@@ -41,16 +42,16 @@ import {
   ENEMY_DEFS,
   type Enemy,
   type SkillTelegraph,
-} from "./entities/enemy";
-import { type Projectile, updateProjectile, projectileHits, steerHoming } from "./entities/projectile";
-import { type Cloud, type Minion, spawnCloud, spawnGem, type Gem, type Obstacle, rollChapterObstacles, pushOutOfPillar, isInPool, spawnBurnPool, tickObstacleTtl, OBSTACLE } from "./entities/objects";
+} from "@game/entities/enemy";
+import { type Projectile, updateProjectile, projectileHits, steerHoming } from "@game/entities/projectile";
+import { type Cloud, type Minion, spawnCloud, spawnGem, type Gem, type Obstacle, rollChapterObstacles, pushOutOfPillar, isInPool, spawnBurnPool, tickObstacleTtl, OBSTACLE } from "@game/entities/objects";
 import {
   EquipmentEngine,
   type BattleContext,
   type Fx,
-} from "./systems/equipmentEngine";
-import { WaveManager, seasonMonsterDefFor, type ArenaRect } from "./systems/waves";
-import { SEASON_MONSTERS } from "./data/seasonMonsters";
+} from "@game/systems/equipmentEngine";
+import { WaveManager, seasonMonsterDefFor, type ArenaRect } from "@game/systems/waves";
+import { SEASON_MONSTERS } from "@game/data/seasonMonsters";
 import {
   generateEquipment,
   generateSetEquipment,
@@ -68,18 +69,18 @@ import {
   buildHasHeal,
   equipmentHasThornTrigger,
   type Equipment,
-} from "./data/equipmentGen";
-import { makeTrigger, makeEffect, makeModifier, effectDef, triggerDef, TRIGGERS, EFFECTS, MODIFIERS } from "./data/affixes";
-import { qualityDef, GACHA_EQUIPMENT_BASE_LEVEL, type Quality } from "./data/quality";
-import { shopCardPrice, shopRefreshPrice, MERGE_FEE_MULT, DESTROY_REFUND_RATE, DUPLICATE_OFFER_CHANCE, SET_OFFER_BIAS } from "./data/shop";
-import { PASS_TIERS, PASS_PREMIUM_MULT, calcPassProgress } from "./data/pass";
-import { isSetPiece, setDef, setBonusState, releasedSets, type SetId } from "./data/sets";
-import { seasonTheme, setMutation, isSeasonBoosted } from "./data/seasonSets";
-import { allHeroes, applyHeroSelection, heroDef, heroSkillLines, releasedHeroes, showcaseHero, type HeroId } from "./data/heroes";
-import { comboStates, COMBOS } from "./data/combos";
-import { chapterIntel } from "./data/intel";
-import { chapterTypeInfo, chapterTypeLabel } from "./data/chapters";
-import { Onboarding, type GuideCtx } from "./systems/onboarding";
+} from "@game/data/equipmentGen";
+import { makeTrigger, makeEffect, makeModifier, effectDef, triggerDef, TRIGGERS, EFFECTS, MODIFIERS } from "@game/data/affixes";
+import { qualityDef, GACHA_EQUIPMENT_BASE_LEVEL, type Quality } from "@game/data/quality";
+import { shopCardPrice, shopRefreshPrice, MERGE_FEE_MULT, DESTROY_REFUND_RATE, DUPLICATE_OFFER_CHANCE, SET_OFFER_BIAS } from "@game/data/shop";
+import { PASS_TIERS, PASS_PREMIUM_MULT, calcPassProgress } from "@game/data/pass";
+import { isSetPiece, setDef, setBonusState, releasedSets, type SetId } from "@game/data/sets";
+import { seasonTheme, setMutation, isSeasonBoosted } from "@game/data/seasonSets";
+import { allHeroes, applyHeroSelection, heroDef, heroSkillLines, releasedHeroes, showcaseHero, type HeroId } from "@game/data/heroes";
+import { comboStates, COMBOS } from "@game/data/combos";
+import { chapterIntel } from "@game/data/intel";
+import { chapterTypeInfo, chapterTypeLabel } from "@game/data/chapters";
+import { Onboarding, type GuideCtx } from "@game/systems/onboarding";
 import {
   BUILDER_ROUTE,
   EFFICIENT_ROUTE,
@@ -105,7 +106,7 @@ import {
   desperateMultFor,
   TALENT_VALUES,
   type TalentId,
-} from "./data/talents";
+} from "@game/data/talents";
 import { loadSave, persistSave, resetSave, calcPrestigePoints, availablePoints, type SaveData } from "./systems/save";
 import {
   ENERGY_MAX,
@@ -133,7 +134,7 @@ import {
   COLLECTION_ATK_PCT,
   stageDropCount,
   stageDropLevel,
-} from "./data/daily";
+} from "@game/data/daily";
 import {
   SEASON_DAYS,
   DAY_MS,
@@ -150,8 +151,8 @@ import {
   seasonStardust,
   STAR_MAKEUP_COST,
   canStarMakeup,
-} from "./data/season";
-import { phantomBoard, rankAmong } from "./data/leaderboard";
+} from "@game/data/season";
+import { phantomBoard, rankAmong } from "@game/data/leaderboard";
 import {
   fusionCost,
   performFusion,
@@ -164,8 +165,8 @@ import {
   inheritSource,
   HIDDEN_PITY_N,
   type TripleMode,
-} from "./data/fusion";
-import type { EffectType, HiddenAffixType, TriggerType } from "./data/affixes";
+} from "@game/data/fusion";
+import type { EffectType, HiddenAffixType, TriggerType } from "@game/data/affixes";
 import {
   envAffixDef,
   rollEnvAffixes,
@@ -178,7 +179,7 @@ import {
   DEATH_CHAIN_RADIUS,
   DEATH_CHAIN_KNOCKBACK,
   type EnvAffixType,
-} from "./data/envAffixes";
+} from "@game/data/envAffixes";
 import {
   CONTACT_HIT_CD,
   COMBO_WINDOW,
@@ -203,8 +204,8 @@ import {
   BOSS_SPAWN_OFFSET_X,
   BOSS_SPAWN_OFFSET_Y,
   BOSS_SPAWN_INSET,
-} from "./data/combat";
-import { BOSS_WEAK_HP_MULT } from "./data/enemies";
+} from "@game/data/combat";
+import { BOSS_WEAK_HP_MULT } from "@game/data/enemies";
 import {
   REGIONS,
   DIFFICULTIES,
@@ -220,7 +221,7 @@ import {
   type RegionId,
   type CommissionBonus,
   type CommissionState,
-} from "./data/commissions";
+} from "@game/data/commissions";
 import {
   STAGES,
   stageOf,
@@ -235,7 +236,7 @@ import {
   makeUpReward,
   type StageDef,
   type StageRewards,
-} from "./data/stages";
+} from "@game/data/stages";
 import {
   GACHA_COST,
   GACHA_10_COST,
@@ -243,7 +244,7 @@ import {
   drawGacha10,
   DUPLICATE_STARDUST,
   type GachaResult,
-} from "./data/gacha";
+} from "@game/data/gacha";
 
 /** 实体上限(保证小游戏性能) */
 const LIMITS = { enemies: 340, projectiles: 420, clouds: 44, minions: 24, gems: 300 }; // 弹幕 420:组合技分裂子弹+品质高频下 260 会挤掉存活主弹幕(重构标定)

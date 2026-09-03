@@ -10,8 +10,8 @@ import {
   shieldguardDamageMult,
   splitBabies,
   randomEnemyKind,
-} from "../src/entities/enemy";
-import { vec2 } from "../src/core/math";
+} from "@game/entities/enemy";
+import { vec2 } from "@game/core/math";
 
 describe("反射者(反弹伤害)", () => {
   it("按 25% 比例反弹伤害", () => {

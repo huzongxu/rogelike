@@ -4,14 +4,14 @@
  */
 
 import { platform } from "../platform/adapter";
-import { talentOf, ALL_TALENTS, type TalentId } from "../data/talents";
-import type { CommissionState } from "../data/commissions";
-import type { Equipment } from "../data/equipmentGen";
-import type { SetId } from "../data/sets";
-import type { HeroId } from "../data/heroes";
-import { applyHeroSelection, heroOfSetOrNull, normalizeHeroId } from "../data/heroes";
-import { ENERGY_MAX } from "../data/daily";
-import { calcPrestigePoints, PRESTIGE_OVERFLOW_STARDUST_RATE } from "../data/prestige";
+import { talentOf, ALL_TALENTS, type TalentId } from "@game/data/talents";
+import type { CommissionState } from "@game/data/commissions";
+import type { Equipment } from "@game/data/equipmentGen";
+import type { SetId } from "@game/data/sets";
+import type { HeroId } from "@game/data/heroes";
+import { applyHeroSelection, heroOfSetOrNull, normalizeHeroId } from "@game/data/heroes";
+import { ENERGY_MAX } from "@game/data/daily";
+import { calcPrestigePoints, PRESTIGE_OVERFLOW_STARDUST_RATE } from "@game/data/prestige";
 
 /** 回响点数公式已抽离至策划数值规范表(数值唯一出处),此处转发保持旧导入路径可用 */
 export { calcPrestigePoints };

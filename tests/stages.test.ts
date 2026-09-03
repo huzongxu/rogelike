@@ -3,9 +3,9 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { STAGES, stageOf, splitEcho, stageEchoReward, chapterMonsterCount, stageClearedAtFinalChapter, CHAPTER_SECONDS, makeUpReward } from "../src/data/stages";
-import { spawnEnemy, updateSpecial, reflectDamage, shieldguardDamageMult, splitBabies } from "../src/entities/enemy";
-import { vec2 } from "../src/core/math";
+import { STAGES, stageOf, splitEcho, stageEchoReward, chapterMonsterCount, stageClearedAtFinalChapter, CHAPTER_SECONDS, makeUpReward } from "@game/data/stages";
+import { spawnEnemy, updateSpecial, reflectDamage, shieldguardDamageMult, splitBabies } from "@game/entities/enemy";
+import { vec2 } from "@game/core/math";
 
 describe("主线关卡定义", () => {
   it("7 个关卡,id 连续,每关 20 章且通关奖励递增", () => {

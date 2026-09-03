@@ -15,7 +15,7 @@ import {
   type MenuPanelId,
   type MenuSkinTable,
   type SkinInsets,
-} from "../data/menuSkin";
+} from "@game/data/menuSkin";
 
 /** 图层种类:图(可换图/隐藏图)/ 文(可隐藏文字) */
 export type SkinLayerKind = "image" | "text";

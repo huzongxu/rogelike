@@ -12,8 +12,8 @@ import {
   OBSTACLE,
   _resetObjectUids,
   type Obstacle,
-} from "../src/entities/objects";
-import { vec2 } from "../src/core/math";
+} from "@game/entities/objects";
+import { vec2 } from "@game/core/math";
 import { runSim } from "../scripts/balance-sim";
 
 function seededRng(seed: number): () => number {

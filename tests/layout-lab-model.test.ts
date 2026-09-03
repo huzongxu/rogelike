@@ -17,11 +17,11 @@
 
 import { describe, it, expect } from "vitest";
 import CONFIG_MD from "../docs/CONFIG-TABLES.md?raw";
-import { menuLayoutPure, type MenuLayout, type MenuLayoutEnv } from "../src/ui/menuLayout";
-import { MENU_LAYOUT_DEFAULTS, MENU_LAYOUT_RANGE, applyBalance, snapshotMenuLayout } from "../src/data/layoutMenu";
-import type { MenuLayoutTable } from "../src/data/layoutMenu";
-import { STAGES } from "../src/data/stages";
-import type { SetId } from "../src/data/sets";
+import { menuLayoutPure, type MenuLayout, type MenuLayoutEnv } from "@game/ui/menuLayout";
+import { MENU_LAYOUT_DEFAULTS, MENU_LAYOUT_RANGE, applyBalance, snapshotMenuLayout } from "@game/data/layoutMenu";
+import type { MenuLayoutTable } from "@game/data/layoutMenu";
+import { STAGES } from "@game/data/stages";
+import type { SetId } from "@game/data/sets";
 import {
   ALL_FIELDS,
   DECO_KEYS,

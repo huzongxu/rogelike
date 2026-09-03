@@ -3,8 +3,8 @@
  * 用法:vitest 内运行(见 tests/balance.test.ts);也导出 runSim 供手动调试。
  */
 
-import { EquipmentEngine, type BattleContext } from "../src/systems/equipmentEngine";
-import { Player, xpToNext } from "../src/entities/player";
+import { EquipmentEngine, type BattleContext } from "@game/systems/equipmentEngine";
+import { Player, xpToNext } from "@game/entities/player";
 import {
   spawnEnemy,
   updateEnemy,
@@ -16,19 +16,19 @@ import {
   knockback,
   type Enemy,
   _resetEnemyUid,
-} from "../src/entities/enemy";
-import { updateProjectile, projectileHits, steerHoming, type Projectile, _resetProjectileUid } from "../src/entities/projectile";
-import { spawnCloud, spawnGem, type Cloud, type Minion, type Gem, _resetObjectUids, type Obstacle, rollChapterObstacles, pushOutOfPillar, isInPool, OBSTACLE } from "../src/entities/objects";
-import { WaveManager, type ArenaRect, type SpawnIntel } from "../src/systems/waves";
-import { CHAPTER_ARENA } from "../src/data/stages";
-import { chapterIntel } from "../src/data/intel";
-import { chapterTypeInfo } from "../src/data/chapters";
-import type { Equipment } from "../src/data/equipmentGen";
-import { makeSetStarterEquipment, generateEquipment, generateSetEquipment, qualityBasePrice, slotExpandCost, SHOP_SLOT_CAP, qualityUpgrade, qualityPowerRatio, _resetEquipmentUid } from "../src/data/equipmentGen";
-import { makeTrigger, makeEffect, makeModifier, type EffectType } from "../src/data/affixes";
-import { setBonusState, type SetId } from "../src/data/sets";
-import { comboStates, COMBO_OFF } from "../src/data/combos";
-import { vec2, type Vec2 } from "../src/core/math";
+} from "@game/entities/enemy";
+import { updateProjectile, projectileHits, steerHoming, type Projectile, _resetProjectileUid } from "@game/entities/projectile";
+import { spawnCloud, spawnGem, type Cloud, type Minion, type Gem, _resetObjectUids, type Obstacle, rollChapterObstacles, pushOutOfPillar, isInPool, OBSTACLE } from "@game/entities/objects";
+import { WaveManager, type ArenaRect, type SpawnIntel } from "@game/systems/waves";
+import { CHAPTER_ARENA } from "@game/data/stages";
+import { chapterIntel } from "@game/data/intel";
+import { chapterTypeInfo } from "@game/data/chapters";
+import type { Equipment } from "@game/data/equipmentGen";
+import { makeSetStarterEquipment, generateEquipment, generateSetEquipment, qualityBasePrice, slotExpandCost, SHOP_SLOT_CAP, qualityUpgrade, qualityPowerRatio, _resetEquipmentUid } from "@game/data/equipmentGen";
+import { makeTrigger, makeEffect, makeModifier, type EffectType } from "@game/data/affixes";
+import { setBonusState, type SetId } from "@game/data/sets";
+import { comboStates, COMBO_OFF } from "@game/data/combos";
+import { vec2, type Vec2 } from "@game/core/math";
 
 export interface SimOptions {
   /** 使用的 Build */

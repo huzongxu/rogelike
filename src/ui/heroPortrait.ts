@@ -12,9 +12,9 @@
  */
 
 import type { AssetManager } from "../platform/assets";
-import type { HeroDef } from "../data/heroes";
-import { setDef } from "../data/sets";
-import { F, hexA, theme } from "./theme";
+import type { HeroDef } from "@game/data/heroes";
+import { setDef } from "@game/data/sets";
+import { F, hexA, theme } from "@game/ui/theme";
 
 /** 底盘半径 = 方框半宽 × 该比例(留 4% 边缝,贴面板不顶死) */
 const PORTRAIT_INSET = 0.96;

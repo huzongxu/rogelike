@@ -10,7 +10,7 @@ import {
   CONFIRM_BTN_W,
   CONFIRM_BTN_H,
   CONFIRM_BTN_GAP,
-} from "../src/ui/theme";
+} from "@game/ui/theme";
 
 describe("confirmRects 确认弹窗几何", () => {
   it("常量口径", () => {

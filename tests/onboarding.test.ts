@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { Onboarding, GUIDE_STEPS, TIP_SECONDS, type GuideCtx } from "../src/systems/onboarding";
+import { Onboarding, GUIDE_STEPS, TIP_SECONDS, type GuideCtx } from "@game/systems/onboarding";
 
 // 存档模块依赖平台存储,这里 mock 掉 platform(与 prestige.test 一致)
 const store = vi.hoisted(() => ({} as Record<string, string>));
