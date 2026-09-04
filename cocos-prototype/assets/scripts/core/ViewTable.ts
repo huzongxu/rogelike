@@ -283,6 +283,63 @@ export interface Phase4Params {
     guBackBg: string;
     guBackStroke: string;
     guBackText: string;
+
+    /* ---------- 扭蛋机屏(Web drawGacha 3562-3702 与 onGachaClick 3704-3742 的内联字面量) ---------- */
+    /** 全屏覆盖底(rgba(8,10,16,0.86),与 psDim / guDim 同值,按屏分键便于独立调表) */
+    gcDim: string;
+    /** 标题「扭蛋机」—— Web skinHeader 的 color 实参,横幅档与缺图档共用同一色 */
+    gcTitle: string;
+    /** 券数文字(Web iconText 的 color #ffd76a)与缺图时的替代字形「✦」 */
+    gcTicketText: string;
+    gcTicketGlyph: string;
+    /** 返回钮(Web skinIconButton 的 drawBaseBg):#2a3d55 + rgba(255,255,255,0.3),文字 #cfcfcf */
+    gcBackBg: string;
+    gcBackStroke: string;
+    gcBackText: string;
+    /** 单抽钮可抽档代码底(btn_minor 缺图时的回退):#3a2d4d + #c06cff,文字 #c8b6ff */
+    gcSingleBg: string;
+    gcSingleStroke: string;
+    gcSingleText: string;
+    /** 十连钮可抽档代码底(btn_primary 缺图时的回退):#c06cff + #ffd76a,文字 #ffd76a */
+    gcTenBg: string;
+    gcTenStroke: string;
+    gcTenText: string;
+    /** 广告钮未用档代码底:#1d3d2e + #4dffc8,文字 #4dffc8 */
+    gcAdBg: string;
+    gcAdStroke: string;
+    gcAdText: string;
+    /** 三枚钮的禁档代码底(Web 三处都是 #1a1f2a,描边分两档:钮 0.2 / 条 0.15)与文字 #5a6a80 */
+    gcBtnDisabledBg: string;
+    gcBtnDisabledStroke: string;
+    gcPanelDisabledStroke: string;
+    gcBtnTextDisabled: string;
+    /** 钻石换券条可换档(纯代码矩形,无贴图):#3a3320 + #ffd76a,文字 #ffd76a */
+    gcSwapBg: string;
+    gcSwapStroke: string;
+    gcSwapText: string;
+    /** 保底标签两行(史诗 / 传奇同色 #8f9bb3) */
+    gcPityLabel: string;
+    /** 保底条缺图档:轨道 rgba(255,255,255,0.12);填充两档 史诗 #c8b6ff / 传奇 #ffd76a */
+    gcBarFallbackTrack: string;
+    gcBarFillEpic: string;
+    gcBarFillLegend: string;
+    /** 保底条有贴图时盖住空缺的暗罩(skinBar 的 dim 默认档 rgba(10,12,18,0.72)) */
+    gcBarCover: string;
+    /** 「最近抽取:」标签色(#8f9bb3)与右列「重复→星尘+N」色(#c8b6ff;名字那档走品质色) */
+    gcResLabel: string;
+    gcDupText: string;
+    /** 收藏区三档:标签 #4dffc8 / 加成串 #ffd76a / 空态提示 #8f9bb3 */
+    gcCollLabel: string;
+    gcCollBonus: string;
+    gcEmpty: string;
+    /** 收藏行两档纯代码底板:选中 rgba(77,255,200,0.14)+#4dffc8 / 未选 rgba(255,255,255,0.04)+rgba(255,255,255,0.12) */
+    gcRowSelFill: string;
+    gcRowSelStroke: string;
+    gcRowFill: string;
+    gcRowStroke: string;
+    /** 行内 Lv. 段(#8f9bb3)与「带入中」(#4dffc8);名字那档走品质色,由内容层从 qualityDef 取 */
+    gcRowLevel: string;
+    gcRowBadge: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -371,6 +428,47 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     guBackBg: "#1A1F2A",
     guBackStroke: "rgba(255,255,255,0.15)",
     guBackText: "#C8B6FF",
+
+    /* 扭蛋机屏(逐项对标 Web drawGacha / onGachaClick) */
+    gcDim: "rgba(8,10,16,0.86)",
+    gcTitle: "#C06CFF",
+    gcTicketText: "#FFD76A",
+    gcTicketGlyph: "✦",
+    gcBackBg: "#2A3D55",
+    gcBackStroke: "rgba(255,255,255,0.3)",
+    gcBackText: "#CFCFCF",
+    gcSingleBg: "#3A2D4D",
+    gcSingleStroke: "#C06CFF",
+    gcSingleText: "#C8B6FF",
+    gcTenBg: "#C06CFF",
+    gcTenStroke: "#FFD76A",
+    gcTenText: "#FFD76A",
+    gcAdBg: "#1D3D2E",
+    gcAdStroke: "#4DFFC8",
+    gcAdText: "#4DFFC8",
+    gcBtnDisabledBg: "#1A1F2A",
+    gcBtnDisabledStroke: "rgba(255,255,255,0.2)",
+    gcPanelDisabledStroke: "rgba(255,255,255,0.15)",
+    gcBtnTextDisabled: "#5A6A80",
+    gcSwapBg: "#3A3320",
+    gcSwapStroke: "#FFD76A",
+    gcSwapText: "#FFD76A",
+    gcPityLabel: "#8F9BB3",
+    gcBarFallbackTrack: "rgba(255,255,255,0.12)",
+    gcBarFillEpic: "#C8B6FF",
+    gcBarFillLegend: "#FFD76A",
+    gcBarCover: "rgba(10,12,18,0.72)",
+    gcResLabel: "#8F9BB3",
+    gcDupText: "#C8B6FF",
+    gcCollLabel: "#4DFFC8",
+    gcCollBonus: "#FFD76A",
+    gcEmpty: "#8F9BB3",
+    gcRowSelFill: "rgba(77,255,200,0.14)",
+    gcRowSelStroke: "#4DFFC8",
+    gcRowFill: "rgba(255,255,255,0.04)",
+    gcRowStroke: "rgba(255,255,255,0.12)",
+    gcRowLevel: "#8F9BB3",
+    gcRowBadge: "#4DFFC8",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */

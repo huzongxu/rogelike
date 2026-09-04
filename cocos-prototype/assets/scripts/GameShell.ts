@@ -39,13 +39,16 @@ import { passScreenLayout } from "./game/ui/passLayout";
 import { GearUpView } from "./gearup/GearUpView";
 import { buildGearUpContent, gearUpClaim, type GearUpAction, type GearClaim, type GearUpSaveView } from "./gearup/GearUpModel";
 import { gearUpScreenLayout } from "./game/ui/gearUpLayout";
+import { GachaView } from "./gacha/GachaView";
+import { buildGachaContent, gachaClaim, type GachaAction, type GachaClaim, type GachaSaveView } from "./gacha/GachaModel";
+import { gachaScreenLayout } from "./game/ui/gachaLayout";
+import { type GachaResult } from "./game/data/gacha";
 
 const { ccclass } = _decorator;
 
 /** 后续阶段才落地的屏幕(键 = 尚未接入的菜单入口 id + fusion):点下去先给一条轻提示,不做假动作 */
 const PENDING_SCREEN: Record<string, string> = {
     commission: "委托尚未开放",
-    gacha: "扭蛋尚未开放",
     talent: "天赋尚未开放",
     fusion: "融合尚未开放",
 };
@@ -152,6 +155,13 @@ export class GameShell extends Component {
     private passView: PassView | null = null;
     /** 装备升级屏:同上,内容与写入意图来自 cc-free 的 gearup/GearUpModel.ts(本屏没有广告位) */
     private gearUpView: GearUpView | null = null;
+    /** 扭蛋机屏:同上,内容与写入意图来自 cc-free 的 gacha/GachaModel.ts(本屏有每日 1 次的广告抽) */
+    private gachaView: GachaView | null = null;
+    /**
+     * 最近抽取结果 —— **宿主持有的瞬时态,不入档**(对标 Web 的 `private gachaResults`)。
+     * 每次进屏清空;抽取与广告抽都把它 `[...本次, ...旧].slice(0, 8)`,绘制只取前 5 条。
+     */
+    private gachaResults: GachaResult[] = [];
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
     private overlay: Node | null = null;
@@ -212,11 +222,13 @@ export class GameShell extends Component {
             this.dailyView?.setFrames(this.frames);
             this.passView?.setFrames(this.frames);
             this.gearUpView?.setFrames(this.frames);
+            this.gachaView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             if (this.router.current === "daily") this.dailyView?.sync();
             if (this.router.current === "pass") this.passView?.sync();
             if (this.router.current === "gearup") this.gearUpView?.sync();
+            if (this.router.current === "gacha") this.gachaView?.sync();
             this.refreshMenu();
         });
     }
@@ -231,6 +243,7 @@ export class GameShell extends Component {
         this.buildDailyScreen();
         this.buildPassScreen();
         this.buildGearUpScreen();
+        this.buildGachaScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
@@ -244,8 +257,9 @@ export class GameShell extends Component {
             daily: () => this.syncDaily(),
             pass: () => this.syncPass(),
             gearup: () => this.syncGearUp(),
+            gacha: () => this.syncGacha(),
         };
-        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup"] as ScreenKey[]).forEach((key) => {
+        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
             const refresh = hooks[key];
@@ -424,6 +438,10 @@ export class GameShell extends Component {
                 }
                 if (a.entry === "gearup") {
                     this.openGearUp();
+                    return;
+                }
+                if (a.entry === "gacha") {
+                    this.openGacha();
                     return;
                 }
                 this.toast(PENDING_SCREEN[a.entry]);
@@ -1009,6 +1027,120 @@ export class GameShell extends Component {
         this.refreshMenu();
     }
 
+    /* ================= 扭蛋机屏(Phase 4 第五屏:抽取入收藏 + 每日一次广告抽) ================= */
+
+    /**
+     * 扭蛋机屏装配。三层分工与前四屏同构:
+     *  ① 几何全部来自共享层 `game/ui/gachaLayout.ts`(经 `gachaScreenLayout` 单一出口,面板底 /
+     *     横幅与标题两档 / 券数图标两档 / 三枚钮与换券条 / 双保底条 / 最近抽取逐行 / 收藏行 /
+     *     返回钮与 Web 逐项同数)。这一屏的几何要按 `ownedGear` 的 id 列表与瞬时最近结果条数
+     *     现算(行区顶缘随后者在 354 与 434 之间跳),故与每日屏一样经宿主投影出切片再调共享层出口;
+     *  ② 文案、命中与**写入意图**来自 cc-free 的 `gacha/GachaModel.ts`(抽取本身在共享层
+     *     `game/data/gacha.ts` 的 `drawGacha` / `drawGacha10` 里,模型只是带着一次性拷贝的 pity 调它);
+     *  ③ 模型不碰存档:落字段、`persist()` 与激励视频全在本文件(`commitGachaClaim` / `watchAd`)。
+     * 无常驻模型实例(收藏与保底全在存档侧),唯一的屏内瞬时态是 `this.gachaResults`(不入档)。
+     */
+    private buildGachaScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:gacha");
+        if (!node) return;
+        node.removeAllChildren();
+        this.gachaView = new GachaView(node, this.frames, {
+            layout: () => gachaScreenLayout(DESIGN_W, logicalH(), this.gachaSave().ownedGear.map((g) => g.id), this.gachaResults.length),
+            content: (L) => buildGachaContent(this.gachaSave(), this.gachaResults, L),
+            onAction: (a) => this.onGachaAction(a),
+        });
+        this.gachaView.sync();
+    }
+
+    /** 本屏要读的存档字段就这八项;投影成窄切片交给纯函数(收藏加成与品质名都由共享层现算) */
+    private gachaSave(): GachaSaveView {
+        const s = this.save();
+        return {
+            gachaTicket: s.gachaTicket,
+            gachaPityEpic: s.gachaPityEpic,
+            gachaPityLegendary: s.gachaPityLegendary,
+            dailyGachaAdUsed: s.dailyGachaAdUsed,
+            diamond: s.diamond,
+            highestStage: s.highestStage,
+            ownedGear: s.ownedGear,
+            selectedGearId: s.selectedGearId,
+        };
+    }
+
+    /** 进屏:先清掉上一次的最近结果(Web `openGacha` 就是 `gachaResults = []` 再切屏),再触发路由 refresh */
+    private openGacha(): void {
+        this.gachaResults = [];
+        this.router.show("gacha");
+    }
+
+    private syncGacha(): void {
+        this.gachaView?.sync();
+    }
+
+    /**
+     * 热区 → 玩法(对标 Web onGachaClick 的七段:返回 → 单抽 → 十连 → 广告抽 → 钻石换券 →
+     * 逐行切换带入 → 热区外什么都不做)。广告在途先吞掉整屏点击,与已落地三屏同口径。
+     * 模型返回 null 就是"券不足 / 广告已用 / 钻石不足",与 Web 在扣费前 `return` 同一语义。
+     */
+    private onGachaAction(a: GachaAction): void {
+        if (this.adPending) return;
+        if (a.kind === "back") {
+            this.router.show("menu");
+            return;
+        }
+        const claim = gachaClaim(this.gachaSave(), this.gachaResults, a);
+        if (!claim) return;
+        if (!claim.needsAd) {
+            this.commitGachaClaim(claim);
+            return;
+        }
+        this.watchAd(
+            () => this.commitGachaClaim(claim),
+            () => this.toast("广告未看完,奖励未入账")
+        );
+    }
+
+    /**
+     * 照着模型给的意图落账(壳层是唯一的写入方)。三档各自的账面:
+     *  - `draw`:扣 `gachaTicket`(广告抽为 0)、把两个保底计数写成模型给的目标值、按序 push
+     *    新装备并逐件登记词缀图鉴(= Web 的 `recordEquipment`,经 `sim.world.recordEquipment`
+     *    这条已落地口走)、累加重复折算的 `stardust`、覆写瞬时态 `gachaResults`;广告抽还要
+     *    置上 `dailyGachaAdUsed` 并**再落一次盘**(Web 的 `doGachaAd` 自己 persist 一次,
+     *    回调里又 persist 一次,一次广告抽共落两次盘 —— 照抄,不合并);
+     *  - `ticket`:扣 `diamond`、`gachaTicket` +1;
+     *  - `select`:只改 `selectedGearId`(同 id 再点就是取消带入)。
+     * 收藏加成由 `collectionBonus` 在读取侧现算,这里不动它。
+     */
+    private commitGachaClaim(claim: GachaClaim): void {
+        const save = this.save();
+        if (claim.kind === "draw") {
+            save.gachaTicket -= claim.ticketCost;
+            save.gachaPityEpic = claim.pityEpic;
+            save.gachaPityLegendary = claim.pityLegendary;
+            save.stardust += claim.stardustGain;
+            for (const eq of claim.newGear) {
+                save.ownedGear.push(eq);
+                this.sim?.world.recordEquipment(eq);
+            }
+            this.gachaResults = claim.recent;
+            this.sim?.persist();
+            if (claim.markAdUsed) {
+                save.dailyGachaAdUsed = true;
+                this.sim?.persist();
+            }
+        } else if (claim.kind === "ticket") {
+            save.diamond -= claim.diamondCost;
+            save.gachaTicket += claim.ticketGain;
+            this.sim?.persist();
+        } else {
+            save.selectedGearId = claim.selectedGearId;
+            this.sim?.persist();
+        }
+        this.syncGacha();
+        // 主菜单顶栏的券数与钻石读数直接读这两个字段,消费后一并重算
+        this.refreshMenu();
+    }
+
     /* ================= 主循环 ================= */
 
     update(dt: number): void {
@@ -1020,6 +1152,9 @@ export class GameShell extends Component {
         // 菜单/每日屏跨天就永远不清零,本屏会一直显示「已领取」(静默失效)
         if (this.sim.syncDaily()) {
             if (this.router.current === "daily") this.syncDaily();
+            // 广告免费抽的可用态读 dailyGachaAdUsed,而这一句把它清零:Web 逐帧重绘自然跟上,
+            // Cocos 侧停在扭蛋屏跨天时必须显式重排一次,否则钮会一直停在「今日广告抽已用」
+            if (this.router.current === "gacha") this.syncGacha();
             this.refreshMenu();
         }
         if (this.router.blocksPlay()) return;
