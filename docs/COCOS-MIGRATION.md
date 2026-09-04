@@ -343,7 +343,7 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 
 **九屏共同事实（2026-09-03 实测，源 `src/game.ts` + 共享层）**：均为暂停态；`watchAd` 置 `adBusy`，期间 `update` 早退、点击全吞；行高一律走共享 `theme.spreadRows` / `rowTextY`，面板底走 `panelPad` 九宫贴图；**九屏都没有共享层纯布局函数**（`game/ui/menuLayout.ts` 只管菜单侧入口钮），其中五屏在 `game.ts` 内已有"单一出口私有 layout 方法"（draw 与 click 同源，搬迁即可）：`gachaLayout` `dailyLayout` `prestigeLayout` `fusionLayout` `commissionLayout`；pass / season / leaderboard / gearup 的矩形内联在 `draw*` 里，需先抽成 cc-free 纯函数。九屏均无 Canvas 渐变（唯一 `createLinearGradient` 在 HUD dock）、无滚动惯性，`ui/scrollList.ts` 本期用不上。
 
-**Cocos 侧接线点**：`GameShell.PENDING_SCREEN` 现有九条占位轻提示（`"××尚未开放"`，菜单入口在 `onMenuAction` 分发、融合在商店工具钮分发），逐屏换成真实 `router.show(...)`；`core/ScreenRouter.ts` 的 `SCREEN_KEYS` 当前为 battle/menu/shop/heroes，按屏增键。`drawAvatarFrame` 住在 Web 侧 `src/ui/skin.ts`（Canvas2D），不在共享层 —— 排行屏的关卡框徽标按 Phase 3 立绘同款处置：贴图优先、缺图回退代码形状。
+**Cocos 侧接线点**：`GameShell.PENDING_SCREEN` 剩五条占位轻提示（`commission` / `gacha` / `talent` / `gearup` / `fusion`，菜单入口在 `onMenuAction` 分发、融合在商店工具钮分发），已落地屏逐屏换成真实 `router.show(...)`；`core/ScreenRouter.ts` 的 `SCREEN_KEYS` 为 16 态全量，路由实际注册 battle / menu / shop / heroes / leaderboard / daily / pass 七屏。`drawAvatarFrame` 住在 Web 侧 `src/ui/skin.ts`（Canvas2D），不在共享层 —— 排行屏的关卡框徽标按 Phase 3 立绘同款处置：贴图优先、缺图回退代码形状。
 
 **逐屏形态（数量一律写"由什么门控"，不钉死数字）**：
 

@@ -197,6 +197,52 @@ export interface Phase4Params {
     dlBackBg: string;
     dlBackStroke: string;
     dlBackText: string;
+
+    /* ---------- 赛季通行证屏(Web drawPass 2618-2713 的内联字面量) ---------- */
+    /** 全屏覆盖底(rgba(8,10,16,0.86);排行屏同值,通行证屏再开一键以便独立调表) */
+    psDim: string;
+    /** 标题横幅文字色(Web skinHeader 的 color 实参 #ffd76a) */
+    psTitle: string;
+    /** 回响统计行(#e8e8e8) */
+    psEcho: string;
+    /** 高级轨状态行两档:已激活 #ffd76a / 未激活 #8f9bb3 */
+    psPremOn: string;
+    psPremOff: string;
+    /** 激活行已激活档的状态文字(#8f9bb3;Web 该分支只放文字,不画底板) */
+    psActDone: string;
+    /** 激活行未激活档:btn_primary 缺图回退底 rgba(255,215,106,0.12) + theme.gold 描边,文字 theme.gold */
+    psActFallbackBg: string;
+    psActFallbackStroke: string;
+    psActText: string;
+    /** 档位行底:已领 rgba(77,255,200,0.08) / 未领 rgba(255,255,255,0.05)(Web 本屏行底全是纯代码矩形) */
+    psRowClaimedBg: string;
+    psRowBg: string;
+    /** 档位行边:已解锁 #4dffc8 / 未解锁 rgba(255,255,255,0.15) */
+    psRowStrokeUnlocked: string;
+    psRowStrokeLocked: string;
+    /** 行首行文字两档:已解锁 #4dffc8 / 未解锁 #8f9bb3 */
+    psRowNameUnlocked: string;
+    psRowNameLocked: string;
+    /** 行免费轨文字(#cfcfcf) */
+    psRowFree: string;
+    /** 行高级轨文字两档:已激活 #ffd76a / 未激活 #8f9bb3 */
+    psRowPremOn: string;
+    psRowPremOff: string;
+    /** 行右列三态:已领取 #4dffc8 / 可领取 #ffd76a / 未解锁 #5a6a80 */
+    psStatusClaimed: string;
+    psStatusReady: string;
+    psStatusLocked: string;
+    /** 总进度文字(#8f9bb3) */
+    psProgressLabel: string;
+    /** 总进度条缺图回退:轨道 rgba(255,255,255,0.12) + 填充 #c06cff */
+    psBarFallbackTrack: string;
+    psBarFallbackFill: string;
+    /** 总进度条有贴图时盖住空缺的暗罩(skinBar 的 dim 默认档 rgba(10,12,18,0.72)) */
+    psBarCover: string;
+    /** 返回钮底板(skinIconButton 的 drawBaseBg 闭包恒画):#2a3d55 + rgba(255,255,255,0.3),文字 #cfcfcf */
+    psBackBg: string;
+    psBackStroke: string;
+    psBackText: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -233,6 +279,36 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     dlBackBg: "#2A3D55",
     dlBackStroke: "rgba(255,255,255,0.3)",
     dlBackText: "#CFCFCF",
+
+    /* 赛季通行证屏(逐项对标 Web drawPass) */
+    psDim: "rgba(8,10,16,0.86)",
+    psTitle: "#FFD76A",
+    psEcho: "#E8E8E8",
+    psPremOn: "#FFD76A",
+    psPremOff: "#8F9BB3",
+    psActDone: "#8F9BB3",
+    psActFallbackBg: "rgba(255,215,106,0.12)",
+    psActFallbackStroke: "#FFD76A",
+    psActText: "#FFD76A",
+    psRowClaimedBg: "rgba(77,255,200,0.08)",
+    psRowBg: "rgba(255,255,255,0.05)",
+    psRowStrokeUnlocked: "#4DFFC8",
+    psRowStrokeLocked: "rgba(255,255,255,0.15)",
+    psRowNameUnlocked: "#4DFFC8",
+    psRowNameLocked: "#8F9BB3",
+    psRowFree: "#CFCFCF",
+    psRowPremOn: "#FFD76A",
+    psRowPremOff: "#8F9BB3",
+    psStatusClaimed: "#4DFFC8",
+    psStatusReady: "#FFD76A",
+    psStatusLocked: "#5A6A80",
+    psProgressLabel: "#8F9BB3",
+    psBarFallbackTrack: "rgba(255,255,255,0.12)",
+    psBarFallbackFill: "#C06CFF",
+    psBarCover: "rgba(10,12,18,0.72)",
+    psBackBg: "#2A3D55",
+    psBackStroke: "rgba(255,255,255,0.3)",
+    psBackText: "#CFCFCF",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */

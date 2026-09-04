@@ -33,6 +33,9 @@ import { LeaderboardView } from "./leaderboard/LeaderboardView";
 import { buildLeaderboardContent, leaderboardScreenLayout, type LeaderboardAction, type LeaderboardSaveView } from "./leaderboard/LeaderboardModel";
 import { DailyView } from "./daily/DailyView";
 import { buildDailyContent, dailyClaim, dailyScreenLayout, type DailyAction, type DailyClaim, type DailySaveView } from "./daily/DailyModel";
+import { PassView } from "./pass/PassView";
+import { buildPassContent, passClaim, type PassAction, type PassClaim, type PassSaveView } from "./pass/PassModel";
+import { passScreenLayout } from "./game/ui/passLayout";
 
 const { ccclass } = _decorator;
 
@@ -41,7 +44,6 @@ const PENDING_SCREEN: Record<string, string> = {
     commission: "委托尚未开放",
     gacha: "扭蛋尚未开放",
     talent: "天赋尚未开放",
-    pass: "通行证尚未开放",
     gearup: "升级尚未开放",
     fusion: "融合尚未开放",
 };
@@ -144,6 +146,8 @@ export class GameShell extends Component {
     private leaderboardView: LeaderboardView | null = null;
     /** 每日福利屏:内容与写入意图由 cc-free 模型给,视图与排行屏同构(无常驻模型实例) */
     private dailyView: DailyView | null = null;
+    /** 赛季通行证屏:同上,内容与写入意图来自 cc-free 的 pass/PassModel.ts */
+    private passView: PassView | null = null;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
     private overlay: Node | null = null;
@@ -202,9 +206,11 @@ export class GameShell extends Component {
             this.heroesView?.setFrames(this.frames);
             this.leaderboardView?.setFrames(this.frames);
             this.dailyView?.setFrames(this.frames);
+            this.passView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             if (this.router.current === "daily") this.dailyView?.sync();
+            if (this.router.current === "pass") this.passView?.sync();
             this.refreshMenu();
         });
     }
@@ -217,6 +223,7 @@ export class GameShell extends Component {
         this.buildHeroesContent();
         this.buildLeaderboardScreen();
         this.buildDailyScreen();
+        this.buildPassScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
@@ -228,8 +235,9 @@ export class GameShell extends Component {
             heroes: () => this.syncHeroes(),
             leaderboard: () => this.syncLeaderboard(),
             daily: () => this.syncDaily(),
+            pass: () => this.syncPass(),
         };
-        (["battle", "menu", "shop", "heroes", "leaderboard", "daily"] as ScreenKey[]).forEach((key) => {
+        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
             const refresh = hooks[key];
@@ -400,6 +408,10 @@ export class GameShell extends Component {
             case "entry":
                 if (a.entry === "daily") {
                     this.openDaily();
+                    return;
+                }
+                if (a.entry === "pass") {
+                    this.openPass();
                     return;
                 }
                 this.toast(PENDING_SCREEN[a.entry]);
@@ -819,6 +831,93 @@ export class GameShell extends Component {
         this.sim?.persist();
         this.syncDaily();
         // 主菜单「每日」入口的红点读 dailyBoxClaimed,入账后一并重算
+        this.refreshMenu();
+    }
+
+    /* ================= 赛季通行证屏(Phase 4 第三屏:双轨领取 + 广告激活) ================= */
+
+    /**
+     * 通行证屏装配。三层分工与每日屏同构:
+     *  ① 几何全部来自共享层 `game/ui/passLayout.ts`(经 `passScreenLayout` 单一出口,激活行矩形 /
+     *     档位行三段文本与右列两档基线 / 总进度条 / 返回钮与 Web 逐项同数),这一屏行数恒定,
+     *     几何不依赖存档,故宿主直接调共享层出口;
+     *  ② 文案、命中与**写入意图**来自 cc-free 的 `pass/PassModel.ts`;
+     *  ③ 模型不碰存档:落字段、`persist()` 与激励视频全在本文件(`commitPassClaim` / `watchAd`)。
+     * 无常驻模型实例(状态全在存档侧),视图每轮 sync 现算 content。
+     */
+    private buildPassScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:pass");
+        if (!node) return;
+        node.removeAllChildren();
+        this.passView = new PassView(node, this.frames, {
+            layout: () => passScreenLayout(DESIGN_W, logicalH()),
+            content: () => buildPassContent(this.passSave()),
+            onAction: (a) => this.onPassAction(a),
+        });
+        this.passView.sync();
+    }
+
+    /** 本屏要读的存档字段就这七项(`stageStars` 是累计回响的星数加权项);投影成窄切片交给纯函数 */
+    private passSave(): PassSaveView {
+        const s = this.save();
+        return {
+            points: s.points,
+            dayEcho: s.dayEcho,
+            stageStars: s.stageStars,
+            seasonId: s.seasonId,
+            premiumPass: s.premiumPass,
+            premiumPassSeason: s.premiumPassSeason,
+            passTier: s.passTier,
+        };
+    }
+
+    /** 进屏:切屏即触发路由 refresh 钩子 → syncPass(现算一帧几何与文案) */
+    private openPass(): void {
+        this.router.show("pass");
+    }
+
+    private syncPass(): void {
+        this.passView?.sync();
+    }
+
+    /**
+     * 热区 → 玩法(对标 Web onPassClick 的三段:返回钮 → 激活行 → 其余一律领下一档)。
+     * 广告在途先吞掉整屏点击;领取不要看广告,激活要先看完一次激励视频。
+     * 模型返回 null 就是"档位不存在 / 进度不够 / 高级轨已生效",与 Web 在那里直接 return
+     * 同一语义(点了没反应)。
+     */
+    private onPassAction(a: PassAction): void {
+        if (this.adPending) return;
+        if (a.kind === "back") {
+            this.router.show("menu");
+            return;
+        }
+        const claim = passClaim(this.passSave(), a);
+        if (!claim) return;
+        if (!claim.needsAd) {
+            this.commitPassClaim(claim);
+            return;
+        }
+        this.watchAd(
+            () => this.commitPassClaim(claim),
+            () => this.toast("广告未看完,奖励未入账")
+        );
+    }
+
+    /**
+     * 照着模型给的意图落账(壳层是唯一的写入方)。激活只写 `premiumPassSeason = seasonId`
+     * (赛季翻页只递增 seasonId,比较自然转假,不需要任何重置代码);领取按倍率加券与星尘
+     * 并把 `passTier` 推进一档 —— 与 Web 的 `+= tier.tickets * mult` 逐字段同式。
+     */
+    private commitPassClaim(claim: PassClaim): void {
+        const save = this.save();
+        save.gachaTicket += claim.gachaTicket;
+        save.stardust += claim.stardust;
+        save.passTier += claim.passTierDelta;
+        if (claim.premiumPassSeason !== null) save.premiumPassSeason = claim.premiumPassSeason;
+        this.sim?.persist();
+        this.syncPass();
+        // 主菜单「通行证」入口的文字按 premiumActive() 决定要不要带 ★,激活后一并重算
         this.refreshMenu();
     }
 
