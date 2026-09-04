@@ -145,16 +145,16 @@ export function qualityBox(name: string, parent: Node): { node: Node; draw: (r: 
 export const QUALITY_FRAME_BG = "rgba(0,0,0,0.5)";
 
 /** 纯色 + 描边的平面块(禁态按钮 / 分区条缺图回退;对标 Web 的 fillRect + strokeRect) */
-export function flatBox(name: string, parent: Node): { node: Node; draw: (r: Rect, fill: string, stroke?: string) => void } {
+export function flatBox(name: string, parent: Node): { node: Node; draw: (r: Rect, fill: string, stroke?: string, strokeWidth?: number) => void } {
   const node = makeNode(name, parent);
   const g = node.addComponent(Graphics);
-  const draw = (r: Rect, fill: string, stroke?: string) => {
+  const draw = (r: Rect, fill: string, stroke?: string, strokeWidth = 1) => {
     g.clear();
     g.fillColor = hexToColor(fill);
     g.rect(-r.w / 2, -r.h / 2, r.w, r.h);
     g.fill();
     if (stroke) {
-      g.lineWidth = 1;
+      g.lineWidth = strokeWidth;
       g.strokeColor = hexToColor(stroke);
       g.rect(-r.w / 2, -r.h / 2, r.w, r.h);
       g.stroke();

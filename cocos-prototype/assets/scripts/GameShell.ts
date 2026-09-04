@@ -43,13 +43,15 @@ import { GachaView } from "./gacha/GachaView";
 import { buildGachaContent, gachaClaim, type GachaAction, type GachaClaim, type GachaSaveView } from "./gacha/GachaModel";
 import { gachaScreenLayout } from "./game/ui/gachaLayout";
 import { type GachaResult } from "./game/data/gacha";
+import { PrestigeView } from "./prestige/PrestigeView";
+import { buildPrestigeContent, prestigeBlocks, prestigeClaim, prestigeRouteIds, type PrestigeAction, type PrestigeClaim, type PrestigeRunConfig, type PrestigeSaveView } from "./prestige/PrestigeModel";
+import { prestigeScreenLayout, type PtRouteKey } from "./game/ui/prestigeLayout";
 
 const { ccclass } = _decorator;
 
 /** 后续阶段才落地的屏幕(键 = 尚未接入的菜单入口 id + fusion):点下去先给一条轻提示,不做假动作 */
 const PENDING_SCREEN: Record<string, string> = {
     commission: "委托尚未开放",
-    talent: "天赋尚未开放",
     fusion: "融合尚未开放",
 };
 
@@ -162,6 +164,20 @@ export class GameShell extends Component {
      * 每次进屏清空;抽取与广告抽都把它 `[...本次, ...旧].slice(0, 8)`,绘制只取前 5 条。
      */
     private gachaResults: GachaResult[] = [];
+    /** 转生与天赋屏:同上,内容与写入意图来自 cc-free 的 prestige/PrestigeModel.ts(本屏没有广告位,也没有返回钮) */
+    private prestigeView: PrestigeView | null = null;
+    /**
+     * 当前显示的天赋系 —— **宿主持有的瞬时态,不入档**(对标 Web 的 `private talentRoute`,
+     * `SaveData` 里没有这一项)。切页签只改它,重开应用回到默认那一系。
+     */
+    private talentRoute: PtRouteKey = "builder";
+    /**
+     * 开局配置两枚开关 —— **宿主持有的瞬时态,不入档**(对标 Web 的 `private runConfig`)。
+     * Web 侧 `blueprintEffect` 由下一次开局的 `makeStarter()` 消费、`targetTrigger` 在 Web 侧
+     * 本身就没有消费方;Cocos 侧的开局武器通道尚未接入(见 `battle/BattleSim.ts` 的
+     * `makeStarterEquipment`),故这里只管开关本身。
+     */
+    private runConfig: PrestigeRunConfig = {};
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
     private overlay: Node | null = null;
@@ -223,12 +239,14 @@ export class GameShell extends Component {
             this.passView?.setFrames(this.frames);
             this.gearUpView?.setFrames(this.frames);
             this.gachaView?.setFrames(this.frames);
+            this.prestigeView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             if (this.router.current === "daily") this.dailyView?.sync();
             if (this.router.current === "pass") this.passView?.sync();
             if (this.router.current === "gearup") this.gearUpView?.sync();
             if (this.router.current === "gacha") this.gachaView?.sync();
+            if (this.router.current === "prestige") this.prestigeView?.sync();
             this.refreshMenu();
         });
     }
@@ -244,6 +262,7 @@ export class GameShell extends Component {
         this.buildPassScreen();
         this.buildGearUpScreen();
         this.buildGachaScreen();
+        this.buildPrestigeScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
@@ -258,8 +277,9 @@ export class GameShell extends Component {
             pass: () => this.syncPass(),
             gearup: () => this.syncGearUp(),
             gacha: () => this.syncGacha(),
+            prestige: () => this.syncPrestige(),
         };
-        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha"] as ScreenKey[]).forEach((key) => {
+        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
             const refresh = hooks[key];
@@ -442,6 +462,10 @@ export class GameShell extends Component {
                 }
                 if (a.entry === "gacha") {
                     this.openGacha();
+                    return;
+                }
+                if (a.entry === "talent") {
+                    this.openPrestige();
                     return;
                 }
                 this.toast(PENDING_SCREEN[a.entry]);
@@ -1138,6 +1162,100 @@ export class GameShell extends Component {
         }
         this.syncGacha();
         // 主菜单顶栏的券数与钻石读数直接读这两个字段,消费后一并重算
+        this.refreshMenu();
+    }
+
+    /* ================= 转生与天赋屏(Phase 4 第六屏:买天赋入档 + 开局配置瞬时态) ================= */
+
+    /**
+     * 转生与天赋屏装配。三层分工与前五屏同构:
+     *  ① 几何全部来自共享层 `game/ui/prestigeLayout.ts`(经 `prestigeScreenLayout` 单一出口,面板底 /
+     *     横幅与标题两档 / 头部小立绘与四行信息 / 页签整条打底与逐签覆盖层 / 节点行两行基线与右列两档
+     *     与勾选标记盒 / 两个开局配置块 / 开始新轮回钮与 Web 逐项同数)。这一屏的几何要按**当前系的
+     *     id 序列**与**两个条件块在不在**现算(行区预算底缘随后者在三档之间跳),故与每日 / 扭蛋屏一样
+     *     经宿主投影出存档切片再调共享层出口;
+     *  ② 文案、命中与**写入意图**来自 cc-free 的 `prestige/PrestigeModel.ts`(可支配点数、层级门、
+     *     路线总价与图鉴四个分母全部走既有函数,本文件不复制判据);
+     *  ③ 模型不碰存档:落字段、`persist()` 与开局加成全在本文件(`commitPrestigeClaim`)。
+     *     **本屏没有广告位**,也就没有 `watchAd` 分支。
+     * 无常驻模型实例(拥有的天赋与回响都在存档侧),屏内两份瞬时态是 `this.talentRoute` 与
+     * `this.runConfig`(都不入档,与 Web 同形)。
+     */
+    private buildPrestigeScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:prestige");
+        if (!node) return;
+        node.removeAllChildren();
+        this.prestigeView = new PrestigeView(node, this.frames, {
+            layout: () => {
+                const s = this.prestigeSave();
+                return prestigeScreenLayout(DESIGN_W, logicalH(), prestigeRouteIds(this.talentRoute), s.hasBlueprint, s.hasTargetedSearch);
+            },
+            content: (L) => buildPrestigeContent(this.prestigeSave(), this.talentRoute, this.runConfig, L),
+            onAction: (a) => this.onPrestigeAction(a),
+        });
+        this.prestigeView.sync();
+    }
+
+    /** 本屏要读的存档字段就三项,外加共享层算出的两个条件块标志;投影成窄切片交给纯函数 */
+    private prestigeSave(): PrestigeSaveView & { hasBlueprint: boolean; hasTargetedSearch: boolean } {
+        const s = this.save();
+        const blocks = prestigeBlocks(s);
+        return { points: s.points, ownedTalents: s.ownedTalents, collection: s.collection, ...blocks };
+    }
+
+    /** 进屏:切屏即触发路由 refresh 钩子 → syncPrestige(现算一帧几何与文案) */
+    private openPrestige(): void {
+        this.router.show("prestige");
+    }
+
+    private syncPrestige(): void {
+        this.prestigeView?.sync();
+    }
+
+    /**
+     * 热区 → 玩法(对标 Web onPrestigeClick 的五段:页签 → 逐行买天赋 → 触发器钮 → 效果钮 →
+     * 开始新轮回钮;热区外什么都不做)。广告在途先吞掉整屏点击,与已落地四屏同口径。
+     * **本屏没有返回钮**:屏内唯一的离开出口是"开始新轮回",而它重开一局、不回主菜单 ——
+     * 这条是 Web 原样(见 `docs/COCOS-MIGRATION.md` §8)。
+     * `prestigeClaim` 返回 null 就是"已拥有 / 点数不够 / 层级未解锁 / 那一下是开始新轮回",
+     * 与 Web 在守卫处直接 `return` 同一语义(点了没反应)。
+     */
+    private onPrestigeAction(a: PrestigeAction): void {
+        if (this.adPending) return;
+        if (a.kind === "start") {
+            // Web 的 startNewRun() 就是 restart():只重开一局。死亡结算不在这里 ——
+            // Web 的 restart 首行 settlePendingRun() 有 `if (!pendingSettle) return` 守在前头,
+            // 而两条进屏路径下它都是假,于是点这个钮不会使 prestiges +1。Cocos 侧的死亡结算
+            // 本身还没落地(Phase 5),restartRun 也不含任何结算,与 Web 同一结果。
+            this.restartRun();
+            return;
+        }
+        const claim = prestigeClaim(this.prestigeSave(), this.runConfig, a);
+        if (!claim) return;
+        this.commitPrestigeClaim(claim);
+    }
+
+    /**
+     * 照着模型给的意图落账(壳层是唯一的写入方)。三档各自的账面:
+     *  - `talent`:唯一入档的一档 —— `ownedTalents.push(id)` 后调 `world.applyTalentBonuses()`
+     *    (与 Web `buyTalent` 同序),再落一次盘;回响点数**不扣减**(可支配是派生量);
+     *  - `tab` / `trigger` / `effect`:只改宿主持有的瞬时态,`persists === false`,不落盘。
+     */
+    private commitPrestigeClaim(claim: PrestigeClaim): void {
+        if (claim.kind === "talent") {
+            const save = this.save();
+            save.ownedTalents.push(claim.id);
+            this.sim?.world.applyTalentBonuses();
+            this.sim?.persist();
+        } else if (claim.kind === "tab") {
+            this.talentRoute = claim.route;
+        } else if (claim.kind === "trigger") {
+            this.runConfig.targetTrigger = claim.targetTrigger;
+        } else {
+            this.runConfig.blueprintEffect = claim.blueprintEffect;
+        }
+        this.syncPrestige();
+        // 主菜单顶栏的回响读数直接读 points,而它的"已用"由 ownedTalents 派生,买完一并重算
         this.refreshMenu();
     }
 

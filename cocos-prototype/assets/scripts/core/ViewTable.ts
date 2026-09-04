@@ -340,6 +340,54 @@ export interface Phase4Params {
     /** 行内 Lv. 段(#8f9bb3)与「带入中」(#4dffc8);名字那档走品质色,由内容层从 qualityDef 取 */
     gcRowLevel: string;
     gcRowBadge: string;
+
+    /* ---------- 转生与天赋屏(Web drawPrestige 4224-4353 与 onPrestigeClick 4355-4385 的内联字面量) ---------- */
+    /** 全屏覆盖底(rgba(8,10,16,0.86),与 psDim / guDim / gcDim 同值,按屏分键便于独立调表) */
+    ptDim: string;
+    /** 标题「转生与天赋」—— Web skinHeader 的 color 实参,横幅档与缺图档共用同一色 */
+    ptTitle: string;
+    /** 头部「回响点数 …」行(#e8e8e8)与「可支配 …」行(#ffd76a) */
+    ptEcho: string;
+    ptAvail: string;
+    /** 头部后两行(路线行与图鉴行):Web 只设一次 fillStyle,两行同取此档 */
+    ptMeta: string;
+    /** 三系页签两档:选中 rgba(192,108,255,0.25) + #c06cff / 未选 rgba(255,255,255,0.04) + rgba(255,255,255,0.15) */
+    ptTabSelFill: string;
+    ptTabSelStroke: string;
+    ptTabFill: string;
+    ptTabStroke: string;
+    /** 页签标题两档字色:选中 #c06cff / 未选 #8f9bb3 */
+    ptTabTextSel: string;
+    ptTabText: string;
+    /** 节点行两档底板:已拥有 rgba(77,255,200,0.10) + #4dffc8 / 未拥有 rgba(255,255,255,0.04) + rgba(255,255,255,0.12) */
+    ptRowOwnedFill: string;
+    ptRowOwnedStroke: string;
+    ptRowFill: string;
+    ptRowStroke: string;
+    /** 行名两档:已拥有 #4dffc8 / 未拥有 #e8e8e8(两档都加粗) */
+    ptRowNameOwned: string;
+    ptRowName: string;
+    /** 右列「已拥有」文字色(#4dffc8);价格串两档 可负担 #ffd76a / 其余 #5a6a80 */
+    ptOwnedText: string;
+    ptCostAfford: string;
+    ptCostLocked: string;
+    /** 行描述(#9aa7bd) */
+    ptDesc: string;
+    /** 两个配置块的标签行(#8f9bb3)与钮的未选档三件(#2a3d55 + rgba(255,255,255,0.2) + #cfcfcf) */
+    ptChoiceLabel: string;
+    ptChoiceBg: string;
+    ptChoiceStroke: string;
+    ptChoiceText: string;
+    /** 选中档的文字色两块同取 #0b0e14;底色与描边分两档:定向搜索 #ffd76a / 完美蓝图 #4dffc8 */
+    ptChoiceTextSel: string;
+    ptTriggerSelBg: string;
+    ptTriggerSelStroke: string;
+    ptEffectSelBg: string;
+    ptEffectSelStroke: string;
+    /** 开始新轮回钮(纯代码矩形,无贴图):#2a3d55 + #5ac8fa + #fff;描边宽度见共享层 PT_START_STROKE_W */
+    ptStartBg: string;
+    ptStartStroke: string;
+    ptStartText: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -469,6 +517,41 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     gcRowStroke: "rgba(255,255,255,0.12)",
     gcRowLevel: "#8F9BB3",
     gcRowBadge: "#4DFFC8",
+
+    /* 转生与天赋屏(逐项对标 Web drawPrestige / onPrestigeClick) */
+    ptDim: "rgba(8,10,16,0.86)",
+    ptTitle: "#C06CFF",
+    ptEcho: "#E8E8E8",
+    ptAvail: "#FFD76A",
+    ptMeta: "#8F9BB3",
+    ptTabSelFill: "rgba(192,108,255,0.25)",
+    ptTabSelStroke: "#C06CFF",
+    ptTabFill: "rgba(255,255,255,0.04)",
+    ptTabStroke: "rgba(255,255,255,0.15)",
+    ptTabTextSel: "#C06CFF",
+    ptTabText: "#8F9BB3",
+    ptRowOwnedFill: "rgba(77,255,200,0.10)",
+    ptRowOwnedStroke: "#4DFFC8",
+    ptRowFill: "rgba(255,255,255,0.04)",
+    ptRowStroke: "rgba(255,255,255,0.12)",
+    ptRowNameOwned: "#4DFFC8",
+    ptRowName: "#E8E8E8",
+    ptOwnedText: "#4DFFC8",
+    ptCostAfford: "#FFD76A",
+    ptCostLocked: "#5A6A80",
+    ptDesc: "#9AA7BD",
+    ptChoiceLabel: "#8F9BB3",
+    ptChoiceBg: "#2A3D55",
+    ptChoiceStroke: "rgba(255,255,255,0.2)",
+    ptChoiceText: "#CFCFCF",
+    ptChoiceTextSel: "#0B0E14",
+    ptTriggerSelBg: "#FFD76A",
+    ptTriggerSelStroke: "#FFD76A",
+    ptEffectSelBg: "#4DFFC8",
+    ptEffectSelStroke: "#4DFFC8",
+    ptStartBg: "#2A3D55",
+    ptStartStroke: "#5AC8FA",
+    ptStartText: "#FFFFFF",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */

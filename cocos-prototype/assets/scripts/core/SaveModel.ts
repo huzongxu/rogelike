@@ -7,7 +7,7 @@
  * 持久化走 core/SaveChannel.ts(sys.localStorage)。
  */
 
-import { type TalentId } from "../game/data/talents";
+import { talentOf, type TalentId } from "../game/data/talents";
 import type { CommissionState } from "../game/data/commissions";
 import type { Equipment } from "../game/data/equipmentGen";
 import type { SetId } from "../game/data/sets";
@@ -148,4 +148,13 @@ export function normalizeSave(parsed: any): SaveModel {
 /** 空存档(与 Web EMPTY 同构;体力上限以运行时配置为准) */
 export function emptySave(): SaveModel {
     return normalizeSave(null);
+}
+
+/**
+ * 可支配点数(未花费的)—— Web `src/systems/save.ts:availablePoints` 的 Cocos 侧对应物,
+ * 逐字同式:`points − Σ 已拥有天赋的 cost`,单价一律经共享层 `talentOf` 取,本文件不复制定价表。
+ * 形参收最小结构切片,于是 `SaveModel` 与各屏模型的窄切片都能直接喂进来。
+ */
+export function availablePoints(s: { points: number; ownedTalents: readonly TalentId[] }): number {
+    return s.points - s.ownedTalents.reduce((sum, id) => sum + talentOf(id).cost, 0);
 }
