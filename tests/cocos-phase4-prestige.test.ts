@@ -1399,12 +1399,16 @@ describe("GameShell 的转生与天赋屏接线", () => {
     expect(seg.includes("this.commitPrestigeClaim(claim)")).toBe(true);
   });
 
-  it("开始新轮回走既有的 restartRun,并且不顺手结算", () => {
+  it("开始新轮回走既有的 restartRun;结算只发生在 restartRun 首行(Web restart() 同位)且排在开新局之前", () => {
     const seg = src.slice(src.indexOf("private onPrestigeAction"), src.indexOf("private commitPrestigeClaim"));
     expect(seg.includes("this.restartRun();")).toBe(true);
+    // 屏层自己不结这笔账、也不直接写 prestiges —— 账由 restartRun 首行那一处统一结
+    expect(seg.includes("settlePendingRun();"), "onPrestigeAction 里没有结算调用(注释里提到这个词不算)").toBe(false);
+    expect(seg.includes("prestiges +=")).toBe(false);
+    expect(seg.includes("prestiges -=")).toBe(false);
     const restart = src.slice(src.indexOf("private restartRun()"), src.indexOf("private restartRun()") + 900);
-    expect(restart.includes("settle")).toBe(false);
-    expect(restart.includes("prestiges")).toBe(false);
+    expect(restart.includes("sim.settlePendingRun();"), "restartRun 首行结算,与 Web restart() 同位").toBe(true);
+    expect(restart.indexOf("settlePendingRun"), "结算必须排在 startStage 之前,否则 startRun 会清掉挂起标记").toBeLessThan(restart.indexOf("startStage"));
     const shell = src.slice(src.indexOf("private openPrestige"), src.indexOf("private syncPrestige"));
     expect(shell.includes("settle")).toBe(false);
   });

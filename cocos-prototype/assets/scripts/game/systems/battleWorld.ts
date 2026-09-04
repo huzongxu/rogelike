@@ -685,8 +685,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     this.host.onChapterShop();
   }
 
-  /** 记录本关打到过的最远章节(进度制解锁依据) */
-  private recordStageProgress(): void {
+  /** 记录本关打到过的最远章节(进度制解锁依据);除章末推进外,死亡结算也要调它,故对外可见 */
+  recordStageProgress(): void {
     const st = this.currentStage;
     if (!st) return;
     this.inputs.recordStageFurthest(st.id, this.chapter);

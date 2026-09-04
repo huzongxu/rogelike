@@ -418,6 +418,8 @@ export class GameShell extends Component {
                     this.toast(`第${a.id}关尚未解锁`);
                     return;
                 }
+                // 死亡后放弃本局改打别关:先结算死亡(必须排在 startStage 之前,否则挂起的账被 startRun 清掉)
+                sim.settlePendingRun();
                 if (!sim.startStage(a.id)) {
                     this.toast("体力不足,稍后再试或改打无限关");
                     return;
@@ -430,6 +432,8 @@ export class GameShell extends Component {
                 this.starMakeup(a.id);
                 return;
             case "endless":
+                // 同上:放弃死亡局改打无限关也要先结算
+                sim.settlePendingRun();
                 if (!sim.startEndless()) {
                     this.toast("体力不足,无法进入无限关");
                     return;
@@ -658,10 +662,14 @@ export class GameShell extends Component {
         this.shopView?.sync();
     }
 
-    /** 重开本局(商店「重开」钮):与 Web restart() 同一口径 —— 当前关带门控豁免重开,无限关重掷词缀 */
+    /**
+     * 重开本局(商店「重开」钮 / 转生屏「开始新轮回」):与 Web `restart()` 同一口径 ——
+     * 首行先结算挂起的死亡局,再当前关带门控豁免重开、无限关重掷词缀。
+     */
     private restartRun(): void {
         const sim = this.sim;
         if (!sim) return;
+        sim.settlePendingRun(); // Web restart() 首行同位:死亡后放弃重开,先结算死亡
         const ok = sim.currentStage ? sim.startStage(sim.currentStage.id, true) : sim.startEndless();
         if (!ok) {
             this.toast("体力不足,无法重开");
@@ -1223,10 +1231,10 @@ export class GameShell extends Component {
     private onPrestigeAction(a: PrestigeAction): void {
         if (this.adPending) return;
         if (a.kind === "start") {
-            // Web 的 startNewRun() 就是 restart():只重开一局。死亡结算不在这里 ——
-            // Web 的 restart 首行 settlePendingRun() 有 `if (!pendingSettle) return` 守在前头,
-            // 而两条进屏路径下它都是假,于是点这个钮不会使 prestiges +1。Cocos 侧的死亡结算
-            // 本身还没落地(Phase 5),restartRun 也不含任何结算,与 Web 同一结果。
+            // Web 的 startNewRun() 就是 restart():只重开一局。restartRun 首行会 settlePendingRun()
+            // (与 Web restart() 同位),而它有 `if (!pendingSettle) return` 守在前头 —— 从主菜单的
+            // 「天赋」入口进本屏时挂起标记是假的,于是点这个钮**不会**使 prestiges +1,与 Web 同一结果。
+            // 只有带着未结算的死亡局进本屏时才会结一次,那正是 Web 在进屏那一步(hitTalentsBtn)结掉的同一笔。
             this.restartRun();
             return;
         }

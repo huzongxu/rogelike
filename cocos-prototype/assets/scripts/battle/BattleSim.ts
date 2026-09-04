@@ -391,6 +391,33 @@ export class BattleSim {
         });
     }
 
+    /**
+     * 放弃本局时才结算死亡(看广告复活不结算)—— 逐行照 Web `settlePendingRun` + `settleRun`
+     * (`src/game.ts:1185-1189` 与 `1805-1817`):阵亡也记本关最远章节,回响按 `splitEcho` 的
+     * 40% 跨天 / 60% 本日入账,写最佳纪录与赛季最佳,`prestiges + 1`(委托区域解锁的判据),
+     * 清挂起标记并落一次盘。结算屏与广告复活仍在 Phase 5,这里只把**账**结清。
+     *
+     * **必须排在任何 `startStage` / `startEndless` 之前** —— `startRun()` 会把 `pendingSettle`
+     * 清零,顺序错了这一笔就静默丢掉(Web 把它放 `restart()` 首行是同一理由)。
+     */
+    settlePendingRun(): void {
+        if (!this.pendingSettle) return;
+        this.world.recordStageProgress();
+        const gained = this.pointsEarnedThisRun || calcPrestigePoints(this.world.elapsed, this.world.kills, 1);
+        const { permanent, day } = splitEcho(gained);
+        this.save.points += permanent;
+        this.save.dayEcho += day;
+        this.pointsEarnedThisRun = gained;
+        if (!this.save.bestRun || this.world.kills > this.save.bestRun.kills) {
+            this.save.bestRun = { kills: this.world.kills, seconds: Math.floor(this.world.elapsed) };
+        }
+        if (this.world.chapter > this.save.bestWave) this.save.bestWave = this.world.chapter;
+        if (this.world.chapter > this.save.seasonBest) this.save.seasonBest = this.world.chapter;
+        this.save.prestiges += 1;
+        this.pendingSettle = false;
+        this.persist();
+    }
+
     /** 首次 3 星一次性奖励(券 + 关卡框);框已存在时券照发,与 Web settleThreeStarOnce 同口径 */
     private settleThreeStarOnce(stageId: number): { tickets: number; frameNew: boolean } {
         let frameNew = false;
