@@ -989,7 +989,7 @@ describe("GameShell 的装备升级屏接线", () => {
     // buildGearUpScreen 排在 buildPassScreen 之后
     expect(src.indexOf("this.buildGearUpScreen();")).toBeGreaterThan(src.indexOf("this.buildPassScreen();"));
     expect(src.includes("gearup: () => this.syncGearUp(),")).toBe(true);
-    expect(src.includes('"pass", "gearup", "gacha", "prestige"]')).toBe(true);
+    expect(src.includes('"pass", "gearup", "gacha", "prestige", "commission"]')).toBe(true);
   });
 
   it("入口从占位轻提示换成 openGearUp,PENDING_SCREEN 里不再有 gearup 键", () => {
@@ -997,8 +997,8 @@ describe("GameShell 的装备升级屏接线", () => {
     expect(src.includes("this.openGearUp();")).toBe(true);
     expect(src.includes("升级尚未开放")).toBe(false);
     expect(pending.includes("gearup")).toBe(false);
-    // 其余两条占位仍在(扭蛋屏与转生与天赋屏都已换成真实进屏)
-    for (const k of ["commission", "fusion"]) expect(pending.includes(`${k}:`), k).toBe(true);
+    // 只剩一条占位(扭蛋 / 转生与天赋 / 委托挂机三屏都已换成真实进屏)
+    expect(pending.includes("fusion:")).toBe(true);
   });
 
   it("本屏不走广告入口(没有为它新增 watchAd 调用)", () => {

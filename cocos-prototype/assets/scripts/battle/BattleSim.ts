@@ -22,6 +22,7 @@ import { ENDLESS_ENERGY_COST, needsDailyReset, regenEnergy, rollDailyTalents, st
 import { CHAPTERS_PER_STAGE, CLEAR_REWARD_GROWTH, splitEcho, STAGES, stageEchoReward, stageOf, STAGE_UNLOCK_PROGRESS, type StageDef, type StageRewards } from "../game/data/stages";
 import { DUPLICATE_STARDUST } from "../game/data/gacha";
 import { generateEquipment, makeStarterEquipment, type Equipment } from "../game/data/equipmentGen";
+import type { EffectType } from "../game/data/affixes";
 import { seasonTheme } from "../game/data/seasonSets";
 import {
     calcStars,
@@ -82,6 +83,12 @@ export interface BattleSimOptions {
     /** FX 数据层容量(viewTable.fx 注入;缺省 = Web 硬上限 520/40) */
     fxMaxParticles?: number;
     fxMaxRings?: number;
+    /**
+     * 开局武器效果(转生屏「完美蓝图」的选装),缺省 = 固定飞刀。
+     * 写成现取的 getter:Web 的 `makeStarter()`(`src/game.ts:5335-5336`)在每次开局时才读
+     * `runConfig.blueprintEffect`,且该配置整局会话内不清零、跨多次开局持续生效。
+     */
+    starterEffect?: () => EffectType | undefined;
 }
 
 /** 本局是否已结束由世界层的 over 标记;结算屏交互在 Phase 5 */
@@ -111,6 +118,7 @@ export class BattleSim {
         this.cb = opts.callbacks;
         this.fxLayer.setCaps(opts.fxMaxParticles ?? 520, opts.fxMaxRings ?? 40);
         const sim = this;
+        const starterEffect = opts.starterEffect;
         /** 局外配置:全部现取,宿主存档数组被整体替换(每日重置/购天赋)时不会读到陈旧引用 */
         const inputs: BattleRunInputs = {
             ownedTalents: () => sim.save.ownedTalents,
@@ -124,8 +132,8 @@ export class BattleSim {
                 const sel = sim.save.ownedGear.find((g) => g.id === sim.save.selectedGearId);
                 return sel ? (JSON.parse(JSON.stringify(sel)) as Equipment) : null;
             },
-            // 蓝图画布选装在 Cocos 侧尚未接入(场外观装屏 Phase 3):套组走共享表,通用初始武器固定飞刀
-            makeStarterEquipment: () => makeStarterEquipment("knife"),
+            // 开局武器:每次开局现取宿主的「完美蓝图」选装,未选则飞刀(对标 Web makeStarter)
+            makeStarterEquipment: () => makeStarterEquipment(starterEffect?.() ?? "knife"),
             openingEquipmentOverride: () => null,
             tutorialDone: () => sim.save.tutorialDone,
             onTutorialFinished: () => {

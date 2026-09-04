@@ -1424,17 +1424,17 @@ describe("GameShell 的扭蛋屏接线", () => {
     expect(src.includes("this.buildGachaScreen();")).toBe(true);
     expect(src.indexOf("this.buildGachaScreen();")).toBeGreaterThan(src.indexOf("this.buildGearUpScreen();"));
     expect(src.includes("gacha: () => this.syncGacha(),")).toBe(true);
-    expect(src.includes('"gearup", "gacha", "prestige"]')).toBe(true);
+    expect(src.includes('"gearup", "gacha", "prestige", "commission"]')).toBe(true);
   });
 
-  it("路由实际注册十屏(SCREEN_KEYS 仍是 16 态全量)", () => {
+  it("路由实际注册十一屏(SCREEN_KEYS 仍是 16 态全量)", () => {
     const router = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ScreenRouter.ts", import.meta.url), "utf8");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
-    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige"')).toBe(true);
+    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
-    // 七个屏走 sync*(heroes / leaderboard / daily / pass / gearup / gacha / prestige);menu 走 refreshMenu、shop 走视图
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(7);
+    // 八个屏走 sync*(heroes / leaderboard / daily / pass / gearup / gacha / prestige / commission);menu 走 refreshMenu、shop 走视图
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(8);
     expect(hooks.includes("menu: () => this.refreshMenu(),")).toBe(true);
     expect(hooks.includes("shop: () => this.shopView?.sync(),")).toBe(true);
   });
@@ -1444,8 +1444,8 @@ describe("GameShell 的扭蛋屏接线", () => {
     expect(src.includes("this.openGacha();")).toBe(true);
     expect(src.includes("扭蛋尚未开放")).toBe(false);
     expect(pending.includes("gacha:")).toBe(false);
-    for (const k of ["commission", "fusion"]) expect(pending.includes(`${k}:`), k).toBe(true);
-    expect(pending.split("\n").filter((l) => /: "/.test(l))).toHaveLength(2);
+    expect(pending.includes("fusion:")).toBe(true);
+    expect(pending.split("\n").filter((l) => /: "/.test(l))).toHaveLength(1);
   });
 
   it("进屏先清空瞬时最近结果(对标 Web openGacha),再切屏", () => {
@@ -1467,9 +1467,11 @@ describe("GameShell 的扭蛋屏接线", () => {
     }
   });
 
-  it("广告档走 watchAd 唯一入口,onGachaAction 开头仍先吞整屏点击", () => {
+  it("广告档走 watchAd 唯一入口,闸门只在 watchAd 首行(Web adBusy 同位)", () => {
     const seg = src.slice(src.indexOf("private onGachaAction"), src.indexOf("private commitGachaClaim"));
-    expect(seg.includes("if (this.adPending) return;")).toBe(true);
+    // 广告闸门只有 watchAd 首行那一道(对标 Web watchAd 的 adBusy):屏级 action 不再吞整屏点击
+    expect(seg.includes("adPending"), "扭蛋屏 action 里没有屏级广告闸门").toBe(false);
+    expect(src.split("if (this.adPending) return;").length - 1, "整个 GameShell 只剩 watchAd 那一道广告闸门").toBe(1);
     expect(seg.includes("this.watchAd(")).toBe(true);
     expect(seg.includes('this.toast("广告未看完,奖励未入账")')).toBe(true);
     expect(seg.includes('this.router.show("menu")')).toBe(true);

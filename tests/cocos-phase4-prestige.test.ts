@@ -1345,17 +1345,17 @@ describe("GameShell 的转生与天赋屏接线", () => {
     expect(src.includes("this.buildPrestigeScreen();")).toBe(true);
     expect(src.indexOf("this.buildPrestigeScreen();")).toBeGreaterThan(src.indexOf("this.buildGachaScreen();"));
     expect(src.includes("prestige: () => this.syncPrestige(),")).toBe(true);
-    expect(src.includes('"gacha", "prestige"]')).toBe(true);
+    expect(src.includes('"gacha", "prestige", "commission"]')).toBe(true);
   });
 
-  it("路由实际注册十屏(SCREEN_KEYS 仍是 16 态全量)", () => {
+  it("路由实际注册十一屏(SCREEN_KEYS 仍是 16 态全量)", () => {
     const router = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ScreenRouter.ts", import.meta.url), "utf8");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
-    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige"')).toBe(true);
+    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
-    // 七个屏走 sync*(heroes 除外:它走 syncHeroes;这里数的是箭头里直接调 syncX 的那七条)
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(7);
+    // 八个屏走 sync*(heroes 除外:它走 syncHeroes;这里数的是箭头里直接调 syncX 的那八条)
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(8);
     expect(hooks.includes("menu: () => this.refreshMenu(),")).toBe(true);
     expect(hooks.includes("shop: () => this.shopView?.sync(),")).toBe(true);
   });
@@ -1365,8 +1365,8 @@ describe("GameShell 的转生与天赋屏接线", () => {
     expect(src.includes("this.openPrestige();")).toBe(true);
     expect(src.includes("天赋尚未开放")).toBe(false);
     expect(pending.includes("talent:")).toBe(false);
-    for (const k of ["commission", "fusion"]) expect(pending.includes(`${k}:`), k).toBe(true);
-    expect(pending.split("\n").filter((l) => /: "/.test(l))).toHaveLength(2);
+    expect(pending.includes("fusion:")).toBe(true);
+    expect(pending.split("\n").filter((l) => /: "/.test(l))).toHaveLength(1);
   });
 
   it("几何与内容都经宿主投影现算(视图不读存档)", () => {
@@ -1384,8 +1384,8 @@ describe("GameShell 的转生与天赋屏接线", () => {
     expect(src.includes('private talentRoute: PtRouteKey = "builder";')).toBe(true);
     expect(src.includes("private runConfig: PrestigeRunConfig = {};")).toBe(true);
     expect(src.includes("private prestigeView: PrestigeView | null = null;")).toBe(true);
-    // 落盘只发生在买天赋那一档
-    const commit = src.slice(src.indexOf("private commitPrestigeClaim"), src.indexOf("/* ================= 主循环"));
+    // 落盘只发生在买天赋那一档(切到下一屏的分节标题为止,这一段就是本屏的 commit 函数)
+    const commit = src.slice(src.indexOf("private commitPrestigeClaim"), src.indexOf("/* ================= 委托挂机屏"));
     expect(commit.includes("this.sim?.persist();")).toBe(true);
     expect(commit.includes("save.ownedTalents.push(claim.id);")).toBe(true);
     expect(commit.includes("this.sim?.world.applyTalentBonuses();")).toBe(true);
@@ -1394,7 +1394,7 @@ describe("GameShell 的转生与天赋屏接线", () => {
   });
 
   it("本屏不走广告入口(没有为它新增 watchAd 调用)", () => {
-    const seg = codeOf(src.slice(src.indexOf("/* ================= 转生与天赋屏"), src.indexOf("/* ================= 主循环")));
+    const seg = codeOf(src.slice(src.indexOf("/* ================= 转生与天赋屏"), src.indexOf("/* ================= 委托挂机屏")));
     expect(seg.includes("watchAd")).toBe(false);
     expect(seg.includes("this.commitPrestigeClaim(claim)")).toBe(true);
   });

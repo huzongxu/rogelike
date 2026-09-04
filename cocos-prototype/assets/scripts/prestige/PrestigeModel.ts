@@ -39,11 +39,10 @@
  *     而本屏的行恒取自当前系,所以两端在正常路径下重合 —— 守卫仍照 Web 用 `routeOf(id)`,不改成当前系。
  *
  * 一条与本屏有关、但落在 Cocos 侧别处的事实:
- *  - Web 的 `runConfig.blueprintEffect` 由 `makeStarter()`(`src/game.ts:5336`)在下一次开局时消费;
- *    Cocos 侧那条通道**尚未接入** —— `battle/BattleSim.ts` 构造 `BattleRunInputs` 时把
- *    `makeStarterEquipment` 写死成 `makeStarterEquipment("knife")`,文件里已有一句
- *    「蓝图画布选装在 Cocos 侧尚未接入」的说明。本层照 Web 把这枚开关作为瞬时态管起来,
- *    但它 currently 不改变 Cocos 侧的开局武器。
+ *  - `runConfig.blueprintEffect` 由**下一次开局**消费:Web 走 `makeStarter()`(`src/game.ts:5336`),
+ *    Cocos 走 `GameShell.buildBattle()` 注入 `BattleSim` 的 `starterEffect` 通道
+ *    (`battle/BattleSim.ts` 的 `makeStarterEquipment`)。两端都在开局时现取、整局会话内不清零,
+ *    未选时都回落 `"knife"`;本层只管开关本身(瞬时态,不入档)。
  *  - `runConfig.targetTrigger` 在 **Web 侧本身就没有消费方**:全仓只有 371(声明)、4311(绘制选中态)
  *    与 4372(点击写入)三处,「首次升级必定出现的触发器」这条玩法未实装。本层同样只管开关本身。
  */

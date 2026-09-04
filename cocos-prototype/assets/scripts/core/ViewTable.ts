@@ -388,6 +388,78 @@ export interface Phase4Params {
     ptStartBg: string;
     ptStartStroke: string;
     ptStartText: string;
+
+    /* ---------- 委托挂机屏(Web drawCommission 5088-5200 与 drawCommissionPanel 5034-5086 的内联字面量) ---------- */
+    /** 全屏覆盖底(rgba(8,10,16,0.86),与 psDim / guDim / gcDim / ptDim 同值,按屏分键便于独立调表) */
+    cmDim: string;
+    /** 标题「委托挂机」—— Web skinHeader 的 color 实参,横幅档与缺图档共用同一色 */
+    cmTitle: string;
+    /** 词缀碎片读数(iconText 的 color #c8b6ff)与缺图时的替代字形「✧」 */
+    cmFragmentText: string;
+    cmFragmentGlyph: string;
+    /** 星尘读数(iconText 的 color theme.stardust)与缺图时的替代字形「❋」 */
+    cmStardustText: string;
+    cmStardustGlyph: string;
+    /** 「转生 N 次」行(#8f9bb3) */
+    cmPrestiges: string;
+    /** 兑换钮(纯代码矩形,无贴图):#3a2d4d + #c06cff,文字 #c8b6ff */
+    cmExchangeBg: string;
+    cmExchangeStroke: string;
+    cmExchangeText: string;
+    /** 返回钮(Web skinIconButton 的 drawBaseBg):#2a3d55 + rgba(255,255,255,0.3),文字 #cfcfcf */
+    cmBackBg: string;
+    cmBackStroke: string;
+    cmBackText: string;
+    /** 羊皮纸面板缺图回退:rgba(255,255,255,0.05) 填充 + rgba(200,182,255,0.35) 描边 */
+    cmPanelFallbackBg: string;
+    cmPanelFallbackStroke: string;
+    /**
+     * 面板三行文字的两档色 —— Web 注释点明的"唯一改文字色处":羊皮纸贴图命中时切深色
+     * (第一行 #2a2a33、后两行 #4a4a55),缺图回退时才用亮色(#e8e8e8 / #8f9bb3)。
+     */
+    cmPanelLine1OnParch: string;
+    cmPanelLine1Bare: string;
+    cmPanelSubOnParch: string;
+    cmPanelSubBare: string;
+    /** 进度条缺图档:轨道 rgba(255,255,255,0.12) + 填充 #4dffc8 */
+    cmBarFallbackTrack: string;
+    cmBarFallbackFill: string;
+    /** 进度条有贴图时盖住空缺的暗罩(skinBar 的 dim 默认档 rgba(10,12,18,0.72)) */
+    cmBarCover: string;
+    /** 领取钮(纯代码矩形):#1d3d2e + #4dffc8,文字 #4dffc8 */
+    cmCollectBg: string;
+    cmCollectStroke: string;
+    cmCollectText: string;
+    /** 放弃钮(纯代码矩形):#2a1d1d + rgba(255,90,90,0.4),文字 #ff8a8a */
+    cmAbandonBg: string;
+    cmAbandonStroke: string;
+    cmAbandonText: string;
+    /** 区域行两档底板:选中 rgba(200,182,255,0.14) + #c8b6ff / 未选 rgba(255,255,255,0.04) + rgba(255,255,255,0.12) */
+    cmRowSelFill: string;
+    cmRowSelStroke: string;
+    cmRowFill: string;
+    cmRowStroke: string;
+    /** 行名三档:解锁且选中 #c8b6ff / 解锁未选中 #e8e8e8 / 锁定 #5a6a80(三档都加粗) */
+    cmRowNameSel: string;
+    cmRowName: string;
+    cmRowNameLocked: string;
+    /** 行第二行(#8f9bb3)与右对齐产出(#c8b6ff,仅解锁档绘制) */
+    cmRowSub: string;
+    cmRowRate: string;
+    /** 难度说明行(#8f9bb3) */
+    cmDiffLabel: string;
+    /** 难度钮两档底板:选中 #ffd76a + #ffd76a / 未选 #2a3d55 + rgba(255,255,255,0.2) */
+    cmDiffSelFill: string;
+    cmDiffSelStroke: string;
+    cmDiffFill: string;
+    cmDiffStroke: string;
+    /** 难度钮文字两档:选中 #0b0e14 / 未选 #cfcfcf(两行同取一档) */
+    cmDiffSelText: string;
+    cmDiffText: string;
+    /** 开始委托钮(纯代码矩形):#2a3d55 + #5ac8fa + #fff;描边宽度见共享层 CM_START_STROKE_W */
+    cmStartBg: string;
+    cmStartStroke: string;
+    cmStartText: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -552,6 +624,55 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     ptStartBg: "#2A3D55",
     ptStartStroke: "#5AC8FA",
     ptStartText: "#FFFFFF",
+
+    /* 委托挂机屏(逐项对标 Web drawCommission / drawCommissionPanel) */
+    cmDim: "rgba(8,10,16,0.86)",
+    cmTitle: "#C8B6FF",
+    cmFragmentText: "#C8B6FF",
+    cmFragmentGlyph: "✧",
+    cmStardustText: "#7FD8FF",
+    cmStardustGlyph: "❋",
+    cmPrestiges: "#8F9BB3",
+    cmExchangeBg: "#3A2D4D",
+    cmExchangeStroke: "#C06CFF",
+    cmExchangeText: "#C8B6FF",
+    cmBackBg: "#2A3D55",
+    cmBackStroke: "rgba(255,255,255,0.3)",
+    cmBackText: "#CFCFCF",
+    cmPanelFallbackBg: "rgba(255,255,255,0.05)",
+    cmPanelFallbackStroke: "rgba(200,182,255,0.35)",
+    cmPanelLine1OnParch: "#2A2A33",
+    cmPanelLine1Bare: "#E8E8E8",
+    cmPanelSubOnParch: "#4A4A55",
+    cmPanelSubBare: "#8F9BB3",
+    cmBarFallbackTrack: "rgba(255,255,255,0.12)",
+    cmBarFallbackFill: "#4DFFC8",
+    cmBarCover: "rgba(10,12,18,0.72)",
+    cmCollectBg: "#1D3D2E",
+    cmCollectStroke: "#4DFFC8",
+    cmCollectText: "#4DFFC8",
+    cmAbandonBg: "#2A1D1D",
+    cmAbandonStroke: "rgba(255,90,90,0.4)",
+    cmAbandonText: "#FF8A8A",
+    cmRowSelFill: "rgba(200,182,255,0.14)",
+    cmRowSelStroke: "#C8B6FF",
+    cmRowFill: "rgba(255,255,255,0.04)",
+    cmRowStroke: "rgba(255,255,255,0.12)",
+    cmRowNameSel: "#C8B6FF",
+    cmRowName: "#E8E8E8",
+    cmRowNameLocked: "#5A6A80",
+    cmRowSub: "#8F9BB3",
+    cmRowRate: "#C8B6FF",
+    cmDiffLabel: "#8F9BB3",
+    cmDiffSelFill: "#FFD76A",
+    cmDiffSelStroke: "#FFD76A",
+    cmDiffFill: "#2A3D55",
+    cmDiffStroke: "rgba(255,255,255,0.2)",
+    cmDiffSelText: "#0B0E14",
+    cmDiffText: "#CFCFCF",
+    cmStartBg: "#2A3D55",
+    cmStartStroke: "#5AC8FA",
+    cmStartText: "#FFFFFF",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */

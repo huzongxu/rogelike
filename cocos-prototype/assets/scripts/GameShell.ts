@@ -46,17 +46,34 @@ import { type GachaResult } from "./game/data/gacha";
 import { PrestigeView } from "./prestige/PrestigeView";
 import { buildPrestigeContent, prestigeBlocks, prestigeClaim, prestigeRouteIds, type PrestigeAction, type PrestigeClaim, type PrestigeRunConfig, type PrestigeSaveView } from "./prestige/PrestigeModel";
 import { prestigeScreenLayout, type PtRouteKey } from "./game/ui/prestigeLayout";
+import { CommissionView } from "./commission/CommissionView";
+import {
+    COMMISSION_DEFAULT_SELECTION,
+    buildCommissionContent,
+    commissionClaim,
+    commissionSlots,
+    type CommissionAction,
+    type CommissionClaim,
+    type CommissionSaveView,
+    type CommissionSelection,
+} from "./commission/CommissionModel";
+import { commissionScreenLayout } from "./game/ui/commissionLayout";
 
 const { ccclass } = _decorator;
 
-/** 后续阶段才落地的屏幕(键 = 尚未接入的菜单入口 id + fusion):点下去先给一条轻提示,不做假动作 */
+/** 后续阶段才落地的屏幕(键 = 商店工具钮的 fusion):点下去先给一条轻提示,不做假动作 */
 const PENDING_SCREEN: Record<string, string> = {
-    commission: "委托尚未开放",
     fusion: "融合尚未开放",
 };
 
 /** 回响筹码下标:点它走激励视频领回响(三枚筹码 = 券/回响/星尘) */
 const ECHO_CHIP_INDEX = 1;
+
+/**
+ * 委托面板的刷新节奏(秒):面板上那三行读数与进度条都按 `Date.now()` 现算,
+ * 小时读数 `toFixed(1)` 要 6 分钟才跳一档,1 秒一次足够跟上,不必逐帧重排 Label。
+ */
+const COMMISSION_TICK_SECONDS = 1;
 
 
 /**
@@ -173,11 +190,20 @@ export class GameShell extends Component {
     private talentRoute: PtRouteKey = "builder";
     /**
      * 开局配置两枚开关 —— **宿主持有的瞬时态,不入档**(对标 Web 的 `private runConfig`)。
-     * Web 侧 `blueprintEffect` 由下一次开局的 `makeStarter()` 消费、`targetTrigger` 在 Web 侧
-     * 本身就没有消费方;Cocos 侧的开局武器通道尚未接入(见 `battle/BattleSim.ts` 的
-     * `makeStarterEquipment`),故这里只管开关本身。
+     * `blueprintEffect` 经 `buildBattle()` 注入 BattleSim 的 `starterEffect`,每次开局现取,
+     * 整局会话内不清零;`targetTrigger` 在 Web 侧本身就没有消费方(「首次升级必定出现的触发器」
+     * 这条玩法未实装),两端都只管开关本身。
      */
     private runConfig: PrestigeRunConfig = {};
+    /** 委托挂机屏:同上,内容与写入意图来自 cc-free 的 commission/CommissionModel.ts(本屏没有广告位) */
+    private commissionView: CommissionView | null = null;
+    /**
+     * 委托屏选中的区域与难度 —— **宿主持有的瞬时态,不入档**(对标 Web 的 `private commRegion`
+     * 与 `private commDifficulty`,`SaveData` 里没有这两项)。整局会话内跨开屏 / 关屏保留。
+     */
+    private commSel: CommissionSelection = { ...COMMISSION_DEFAULT_SELECTION };
+    /** 委托面板的刷新计时(秒;只在面板态走,见 tickCommission) */
+    private commTick = 0;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
     private overlay: Node | null = null;
@@ -240,6 +266,7 @@ export class GameShell extends Component {
             this.gearUpView?.setFrames(this.frames);
             this.gachaView?.setFrames(this.frames);
             this.prestigeView?.setFrames(this.frames);
+            this.commissionView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             if (this.router.current === "daily") this.dailyView?.sync();
@@ -247,6 +274,7 @@ export class GameShell extends Component {
             if (this.router.current === "gearup") this.gearUpView?.sync();
             if (this.router.current === "gacha") this.gachaView?.sync();
             if (this.router.current === "prestige") this.prestigeView?.sync();
+            if (this.router.current === "commission") this.commissionView?.sync();
             this.refreshMenu();
         });
     }
@@ -263,6 +291,7 @@ export class GameShell extends Component {
         this.buildGearUpScreen();
         this.buildGachaScreen();
         this.buildPrestigeScreen();
+        this.buildCommissionScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
@@ -278,8 +307,9 @@ export class GameShell extends Component {
             gearup: () => this.syncGearUp(),
             gacha: () => this.syncGacha(),
             prestige: () => this.syncPrestige(),
+            commission: () => this.syncCommission(),
         };
-        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige"] as ScreenKey[]).forEach((key) => {
+        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
             const refresh = hooks[key];
@@ -325,6 +355,8 @@ export class GameShell extends Component {
             },
             fxMaxParticles: fx.maxParticles,
             fxMaxRings: fx.maxRings,
+            // 转生屏「完美蓝图」的选装:每次开局现取,未选则由战斗层回落飞刀(对标 Web makeStarter)
+            starterEffect: () => this.runConfig.blueprintEffect,
             callbacks: {
                 onDamage: (pos, text, color) => this.fxView.popDamage(pos, text, color),
                 // 死亡/通关结算屏属 Phase 5:先停住世界推进(sim.over),不做入账交互
@@ -451,6 +483,7 @@ export class GameShell extends Component {
             case "phantom":
                 this.openLeaderboard();
                 return;
+            // 六个入口就是 MenuEntryId 的全集,逐个换成真实开屏;占位轻提示只剩商店的融合工具钮那一处
             case "entry":
                 if (a.entry === "daily") {
                     this.openDaily();
@@ -472,7 +505,10 @@ export class GameShell extends Component {
                     this.openPrestige();
                     return;
                 }
-                this.toast(PENDING_SCREEN[a.entry]);
+                if (a.entry === "commission") {
+                    this.openCommission();
+                    return;
+                }
                 return;
         }
     }
@@ -501,6 +537,7 @@ export class GameShell extends Component {
      * 平台分流全在 `core/AdChannel.showRewardedAd`,这里不碰 wx API。
      */
     private watchAd(onOk: () => void, onFail?: () => void): void {
+        // 广告闸门只有这一道(对标 Web watchAd 首行的 adBusy):在途期间挡第二次看广告,同步领取照常执行
         if (this.adPending) return;
         this.adPending = true;
         showRewardedAd((ok) => {
@@ -849,12 +886,11 @@ export class GameShell extends Component {
     }
 
     /**
-     * 热区 → 玩法(对标 Web onDailyClick 的四段)。广告在途先吞掉整屏点击;
-     * 免费档天赋直接落账,宝箱与补领要先看完一次激励视频。模型返回 null 就是
+     * 热区 → 玩法(对标 Web onDailyClick 的四段)。免费档天赋直接落账,宝箱与补领要先看完一次激励视频。
+     * 广告闸门只有 `watchAd` 那一道:在途期间同步领取照常执行。模型返回 null 就是
      * "已领取 / 今日不可补领",与 Web 在那里直接 return 同一语义(点了没反应)。
      */
     private onDailyAction(a: DailyAction): void {
-        if (this.adPending) return;
         if (a.kind === "back") {
             this.router.show("menu");
             return;
@@ -944,12 +980,11 @@ export class GameShell extends Component {
 
     /**
      * 热区 → 玩法(对标 Web onPassClick 的三段:返回钮 → 激活行 → 其余一律领下一档)。
-     * 广告在途先吞掉整屏点击;领取不要看广告,激活要先看完一次激励视频。
+     * 领取不要看广告,激活要先看完一次激励视频(广告闸门只有 `watchAd` 那一道)。
      * 模型返回 null 就是"档位不存在 / 进度不够 / 高级轨已生效",与 Web 在那里直接 return
      * 同一语义(点了没反应)。
      */
     private onPassAction(a: PassAction): void {
-        if (this.adPending) return;
         if (a.kind === "back") {
             this.router.show("menu");
             return;
@@ -1031,10 +1066,9 @@ export class GameShell extends Component {
      * 热区 → 玩法(对标 Web onGearUpClick 的两段:返回钮 → 逐行只比升级钮矩形)。
      * 行矩形不参与命中,点行内非按钮区与屏内空白都拿不到动作。
      * 模型返回 null 就是"取不到装备 / 已满级 / 星尘不足",与 Web 在扣费前直接 return
-     * 同一语义(点了没反应);广告在途先吞掉整屏点击,与已落地两屏的 shell 侧口径一致。
+     * 同一语义(点了没反应)。
      */
     private onGearUpAction(a: GearUpAction): void {
-        if (this.adPending) return;
         if (a.kind === "back") {
             this.router.show("menu");
             return;
@@ -1111,11 +1145,10 @@ export class GameShell extends Component {
 
     /**
      * 热区 → 玩法(对标 Web onGachaClick 的七段:返回 → 单抽 → 十连 → 广告抽 → 钻石换券 →
-     * 逐行切换带入 → 热区外什么都不做)。广告在途先吞掉整屏点击,与已落地三屏同口径。
+     * 逐行切换带入 → 热区外什么都不做)。广告闸门只有 `watchAd` 那一道,在途期间同步动作照常执行。
      * 模型返回 null 就是"券不足 / 广告已用 / 钻石不足",与 Web 在扣费前 `return` 同一语义。
      */
     private onGachaAction(a: GachaAction): void {
-        if (this.adPending) return;
         if (a.kind === "back") {
             this.router.show("menu");
             return;
@@ -1229,7 +1262,6 @@ export class GameShell extends Component {
      * 与 Web 在守卫处直接 `return` 同一语义(点了没反应)。
      */
     private onPrestigeAction(a: PrestigeAction): void {
-        if (this.adPending) return;
         if (a.kind === "start") {
             // Web 的 startNewRun() 就是 restart():只重开一局。restartRun 首行会 settlePendingRun()
             // (与 Web restart() 同位),而它有 `if (!pendingSettle) return` 守在前头 —— 从主菜单的
@@ -1267,12 +1299,137 @@ export class GameShell extends Component {
         this.refreshMenu();
     }
 
+    /* ================= 委托挂机屏(Phase 4 第七屏:派遣 / 领取 / 放弃入档 + 选中态瞬时) ================= */
+
+    /**
+     * 委托挂机屏装配。三层分工与前六屏同构:
+     *  ① 几何全部来自共享层 `game/ui/commissionLayout.ts`(经 `commissionScreenLayout` 单一出口,
+     *     面板底 / 横幅与标题两档 / 头部小立绘与三项读数 / 兑换钮 / 返回钮与两档文字位 /
+     *     逐面板的三行基线与进度条与两枚钮 / 区域行与难度钮与开始钮,与 Web 逐项同数)。
+     *     这一屏的几何要按**活动槽位数**现算(面板条数 0 / 1 / 2,两个分支的矩形互斥),
+     *     故与每日 / 扭蛋 / 转生屏一样经宿主投影出存档切片再调共享层出口;
+     *  ② 文案、命中与**写入意图**来自 cc-free 的 `commission/CommissionModel.ts`(区域与难度查表、
+     *     解锁门、天赋加成四项、衰减曲线与产出、券数全部走既有函数,本文件不复制判据);
+     *  ③ 模型不碰存档:落字段与 `persist()` 全在本文件(`commitCommissionClaim`)。
+     *     **本屏没有广告位**,也就没有 `watchAd` 分支。
+     * 时间与随机源都在这一层注入:内容按 `Date.now()` 现算,领取的失败 roll 走模型默认形参。
+     * 无常驻模型实例(委托与碎片都在存档侧),屏内一份瞬时态是 `this.commSel`(不入档,与 Web 同形)。
+     */
+    private buildCommissionScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:commission");
+        if (!node) return;
+        node.removeAllChildren();
+        this.commissionView = new CommissionView(node, this.frames, {
+            layout: () => commissionScreenLayout(DESIGN_W, logicalH(), commissionSlots(this.commissionSave()).length),
+            content: (L) => buildCommissionContent(this.commissionSave(), this.commSel, Date.now(), L),
+            onAction: (a) => this.onCommissionAction(a),
+        });
+        this.commissionView.sync();
+    }
+
+    /** 本屏要读的存档字段就这六项;投影成窄切片交给纯函数(`diamond` / `gachaTicket` 只写不读) */
+    private commissionSave(): CommissionSaveView {
+        const s = this.save();
+        return {
+            fragments: s.fragments,
+            stardust: s.stardust,
+            prestiges: s.prestiges,
+            ownedTalents: s.ownedTalents,
+            commission: s.commission,
+            commission2: s.commission2,
+        };
+    }
+
+    /** 进屏:切屏即触发路由 refresh 钩子 → syncCommission(现算一帧几何与文案) */
+    private openCommission(): void {
+        this.commTick = 0;
+        this.router.show("commission");
+    }
+
+    private syncCommission(): void {
+        this.commissionView?.sync();
+    }
+
+    /**
+     * 热区 → 玩法(对标 Web onCommissionClick 的六段:返回钮 → 逐面板领取 / 放弃 → 区域行 →
+     * 难度钮 → 开始钮 → 兑换钮;面板态在面板循环之后直接收口,兑换钮虽然照画却不参与命中)。
+     * 广告在途先吞掉整屏点击,与已落地五屏同口径。
+     * 返回钮回主菜单:Cocos 侧本屏只从主菜单进入,Web 的 `overlayFrom` 三态在这里恒为 `"menu"`。
+     * `commissionClaim` 返回 null 就是"区域锁定 / 槽位已满且没有双委托 / 碎片不够兑换",
+     * 与 Web 在那里直接 `return` 同一语义(点了没反应,全程无提示)。
+     */
+    private onCommissionAction(a: CommissionAction): void {
+        if (a.kind === "back") {
+            this.router.show("menu");
+            return;
+        }
+        const claim = commissionClaim(this.commissionSave(), this.commSel, a, Date.now());
+        if (!claim) return;
+        this.commitCommissionClaim(claim);
+    }
+
+    /**
+     * 照着模型给的意图落账(壳层是唯一的写入方)。六档各自的账面:
+     *  - `start`:把模型给的那一枚 `CommissionState` 写进它选定的槽位(`commission` 优先,
+     *    否则 `commission2`),`startedAt` 就是动作发生时的 `Date.now()`;
+     *  - `collect`:产出按区域分流到 `fragments` / `stardust` / `diamond` 三个字段之一,
+     *    再加 `gachaTicket`,随后清空该槽 —— 与 Web `collectCommission` 逐字段同式,
+     *    失败只体现在产出减半,不额外扣分;
+     *  - `abandon`:只清空该槽,不发奖、无确认弹窗;
+     *  - `exchange`:扣 `n × FRAGMENT_TO_STARDUST` 碎片、加 `n` 星尘;
+     *  - `region` / `difficulty`:只改宿主持有的瞬时态,`persists === false`,不落盘。
+     */
+    private commitCommissionClaim(claim: CommissionClaim): void {
+        if (claim.kind === "region") {
+            this.commSel.region = claim.region;
+        } else if (claim.kind === "difficulty") {
+            this.commSel.difficulty = claim.difficulty;
+        } else {
+            const save = this.save();
+            if (claim.kind === "start") {
+                save[claim.slot] = { ...claim.state };
+            } else if (claim.kind === "collect") {
+                save.fragments += claim.fragments;
+                save.stardust += claim.stardust;
+                save.diamond += claim.diamond;
+                save.gachaTicket += claim.gachaTicket;
+                save[claim.slot] = null;
+            } else if (claim.kind === "abandon") {
+                save[claim.slot] = null;
+            } else {
+                save.fragments -= claim.fragmentsCost;
+                save.stardust += claim.stardustGain;
+            }
+            this.sim?.persist();
+        }
+        this.commTick = 0;
+        this.syncCommission();
+        // 主菜单委托钮的红点读两个槽位的 startedAt,顶栏的碎片与星尘读数直接读这两个字段
+        this.refreshMenu();
+    }
+
+    /**
+     * 委托面板的实时读数(Web 逐帧重绘,时数文本与进度条一直在走)。只有面板态需要:
+     * 列表态没有任何随时间变的文案。节奏见 `COMMISSION_TICK_SECONDS`。
+     */
+    private tickCommission(dt: number): void {
+        const view = this.commissionView;
+        if (!view || this.router.current !== "commission") return;
+        this.commTick += dt;
+        if (this.commTick < COMMISSION_TICK_SECONDS) return;
+        this.commTick = 0;
+        // 只有面板态有随时间变的读数:列表态跳过这一次重排
+        if (commissionSlots(this.commissionSave()).length === 0) return;
+        view.sync();
+    }
+
     /* ================= 主循环 ================= */
 
     update(dt: number): void {
-        // 轻提示与英雄列表惯性都工作在非战斗屏上(blocksPlay 为真),所以排在推进世界之前
+        // 轻提示、英雄列表惯性与委托面板读数都工作在非战斗屏上(blocksPlay 为真),所以排在推进世界之前
         this.tickToast(dt);
         this.tickHeroScroll(dt);
+        this.tickCommission(dt);
         if (!this.ready) return;
         // 每日重置:Web 是"任何状态下都执行",所以必须排在路由闸门之前 —— 否则停在
         // 菜单/每日屏跨天就永远不清零,本屏会一直显示「已领取」(静默失效)
