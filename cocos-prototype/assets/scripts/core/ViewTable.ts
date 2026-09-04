@@ -243,6 +243,46 @@ export interface Phase4Params {
     psBackBg: string;
     psBackStroke: string;
     psBackText: string;
+
+    /* ---------- 装备升级屏(Web drawGearUp 3887-3977 与 onGearUpClick 3979-4000 的内联字面量) ---------- */
+    /** 全屏覆盖底(rgba(8,10,16,0.86),与 psDim 同值,按屏分键便于独立调表) */
+    guDim: string;
+    /** 标题「装备升级」(theme.gold;本屏没有横幅贴图,只有一档文字) */
+    guTitle: string;
+    /** 副标题(theme.textSecondary) */
+    guSubtitle: string;
+    /** 右上星尘文字(theme.stardust) */
+    guStardust: string;
+    /** 空态提示(Web 的字面量 #8f9bb3,与 textSecondary 同值但独立可调) */
+    guEmpty: string;
+    /** 行描述文字(theme.textSecondary;名字那档走品质色,由内容层从 qualityDef 取,不进表) */
+    guDesc: string;
+    /** 升级钮文字两档:可升级 theme.actionPrimary / 其余(满级与星尘不足)theme.textMuted */
+    guBtnTextAfford: string;
+    guBtnTextDisabled: string;
+    /** 可升级档的 btn_minor 缺图回退(minorButtonBg 的平面底):#2A3D55 + rgba(255,255,255,0.3) */
+    guBtnMinorFallbackBg: string;
+    guBtnMinorFallbackStroke: string;
+    /** 禁态代码形状底(Web 非 afford 分支的 fillRect + strokeRect):#1A1F2A + rgba(255,255,255,0.15) */
+    guBtnDisabledBg: string;
+    guBtnDisabledStroke: string;
+    /** 徽记缺图回退的文字星两档:点亮 theme.stardust / 未点亮 #4a5164(替代字形「★」) */
+    guStarLit: string;
+    guStarDim: string;
+    guStarGlyph: string;
+    /** 未点亮徽记的节点不透明度(Web globalAlpha 0.22 折成 0..255;点亮档恒 255 不占键位) */
+    guStarDimAlpha: number;
+    /** 截断提示「仅显示前 14 件」(theme.textMuted) */
+    guHint: string;
+    /**
+     * 返回钮底板:Web 的回退闭包只写了 fillRect("#1A1F2A"),strokeRect 沿用上一笔的
+     * strokeStyle 与 lineWidth(列表里最后一枚禁档按钮留下的 rgba(255,255,255,0.15) / 1),
+     * **与 daily / pass 那两屏的 rgba(255,255,255,0.3) 不同档**;文字色是 theme.echo
+     * (daily / pass 是 #cfcfcf)。
+     */
+    guBackBg: string;
+    guBackStroke: string;
+    guBackText: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -309,6 +349,28 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     psBackBg: "#2A3D55",
     psBackStroke: "rgba(255,255,255,0.3)",
     psBackText: "#CFCFCF",
+
+    /* 装备升级屏(逐项对标 Web drawGearUp / onGearUpClick) */
+    guDim: "rgba(8,10,16,0.86)",
+    guTitle: "#FFD76A",
+    guSubtitle: "#8F9BB3",
+    guStardust: "#7FD8FF",
+    guEmpty: "#8F9BB3",
+    guDesc: "#8F9BB3",
+    guBtnTextAfford: "#4DFFC8",
+    guBtnTextDisabled: "#5A6A80",
+    guBtnMinorFallbackBg: "#2A3D55",
+    guBtnMinorFallbackStroke: "rgba(255,255,255,0.3)",
+    guBtnDisabledBg: "#1A1F2A",
+    guBtnDisabledStroke: "rgba(255,255,255,0.15)",
+    guStarLit: "#7FD8FF",
+    guStarDim: "#4A5164",
+    guStarGlyph: "★",
+    guStarDimAlpha: 56,
+    guHint: "#5A6A80",
+    guBackBg: "#1A1F2A",
+    guBackStroke: "rgba(255,255,255,0.15)",
+    guBackText: "#C8B6FF",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */

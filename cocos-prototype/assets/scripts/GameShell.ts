@@ -36,6 +36,9 @@ import { buildDailyContent, dailyClaim, dailyScreenLayout, type DailyAction, typ
 import { PassView } from "./pass/PassView";
 import { buildPassContent, passClaim, type PassAction, type PassClaim, type PassSaveView } from "./pass/PassModel";
 import { passScreenLayout } from "./game/ui/passLayout";
+import { GearUpView } from "./gearup/GearUpView";
+import { buildGearUpContent, gearUpClaim, type GearUpAction, type GearClaim, type GearUpSaveView } from "./gearup/GearUpModel";
+import { gearUpScreenLayout } from "./game/ui/gearUpLayout";
 
 const { ccclass } = _decorator;
 
@@ -44,7 +47,6 @@ const PENDING_SCREEN: Record<string, string> = {
     commission: "委托尚未开放",
     gacha: "扭蛋尚未开放",
     talent: "天赋尚未开放",
-    gearup: "升级尚未开放",
     fusion: "融合尚未开放",
 };
 
@@ -148,6 +150,8 @@ export class GameShell extends Component {
     private dailyView: DailyView | null = null;
     /** 赛季通行证屏:同上,内容与写入意图来自 cc-free 的 pass/PassModel.ts */
     private passView: PassView | null = null;
+    /** 装备升级屏:同上,内容与写入意图来自 cc-free 的 gearup/GearUpModel.ts(本屏没有广告位) */
+    private gearUpView: GearUpView | null = null;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
     private overlay: Node | null = null;
@@ -207,10 +211,12 @@ export class GameShell extends Component {
             this.leaderboardView?.setFrames(this.frames);
             this.dailyView?.setFrames(this.frames);
             this.passView?.setFrames(this.frames);
+            this.gearUpView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             if (this.router.current === "daily") this.dailyView?.sync();
             if (this.router.current === "pass") this.passView?.sync();
+            if (this.router.current === "gearup") this.gearUpView?.sync();
             this.refreshMenu();
         });
     }
@@ -224,6 +230,7 @@ export class GameShell extends Component {
         this.buildLeaderboardScreen();
         this.buildDailyScreen();
         this.buildPassScreen();
+        this.buildGearUpScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
@@ -236,8 +243,9 @@ export class GameShell extends Component {
             leaderboard: () => this.syncLeaderboard(),
             daily: () => this.syncDaily(),
             pass: () => this.syncPass(),
+            gearup: () => this.syncGearUp(),
         };
-        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass"] as ScreenKey[]).forEach((key) => {
+        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
             const refresh = hooks[key];
@@ -412,6 +420,10 @@ export class GameShell extends Component {
                 }
                 if (a.entry === "pass") {
                     this.openPass();
+                    return;
+                }
+                if (a.entry === "gearup") {
+                    this.openGearUp();
                     return;
                 }
                 this.toast(PENDING_SCREEN[a.entry]);
@@ -918,6 +930,82 @@ export class GameShell extends Component {
         this.sim?.persist();
         this.syncPass();
         // 主菜单「通行证」入口的文字按 premiumActive() 决定要不要带 ★,激活后一并重算
+        this.refreshMenu();
+    }
+
+    /* ================= 装备升级屏(Phase 4 第四屏:星尘消费 + 无广告位) ================= */
+
+    /**
+     * 装备升级屏装配。三层分工与前三屏同构:
+     *  ① 几何全部来自共享层 `game/ui/gearUpLayout.ts`(经 `gearUpScreenLayout` 单一出口,面板键与
+     *     矩形 / 头部三线 / 每行的品质框与升级钮与徽记槽 / 空态与截断提示 / 返回钮与 Web 逐项同数)。
+     *     这一屏的几何要按 `ownedGear.length` 现算(行数与截断提示都由它推出),故与每日屏一样
+     *     经宿主投影出存档切片再调共享层出口;
+     *  ② 文案、命中与**写入意图**来自 cc-free 的 `gearup/GearUpModel.ts`;
+     *  ③ 模型不碰存档:落字段与 `persist()` 全在本文件(`commitGearUpClaim`)。
+     *     **本屏没有广告位**,所以不走 `watchAd`,也就没有 `adPending` 之外的广告分支。
+     * 无常驻模型实例(状态全在存档侧),视图每轮 sync 现算 content。
+     */
+    private buildGearUpScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:gearup");
+        if (!node) return;
+        node.removeAllChildren();
+        this.gearUpView = new GearUpView(node, this.frames, {
+            layout: () => gearUpScreenLayout(DESIGN_W, logicalH(), this.gearUpSave().ownedGear.length),
+            content: () => buildGearUpContent(this.gearUpSave()),
+            onAction: (a) => this.onGearUpAction(a),
+        });
+        this.gearUpView.sync();
+    }
+
+    /** 本屏要读的存档字段就这三项;投影成窄切片交给纯函数(等级字典按装备名索引) */
+    private gearUpSave(): GearUpSaveView {
+        const s = this.save();
+        return {
+            stardust: s.stardust,
+            gearLevels: s.gearLevels,
+            ownedGear: s.ownedGear,
+        };
+    }
+
+    /** 进屏:切屏即触发路由 refresh 钩子 → syncGearUp(现算一帧几何与文案) */
+    private openGearUp(): void {
+        this.router.show("gearup");
+    }
+
+    private syncGearUp(): void {
+        this.gearUpView?.sync();
+    }
+
+    /**
+     * 热区 → 玩法(对标 Web onGearUpClick 的两段:返回钮 → 逐行只比升级钮矩形)。
+     * 行矩形不参与命中,点行内非按钮区与屏内空白都拿不到动作。
+     * 模型返回 null 就是"取不到装备 / 已满级 / 星尘不足",与 Web 在扣费前直接 return
+     * 同一语义(点了没反应);广告在途先吞掉整屏点击,与已落地两屏的 shell 侧口径一致。
+     */
+    private onGearUpAction(a: GearUpAction): void {
+        if (this.adPending) return;
+        if (a.kind === "back") {
+            this.router.show("menu");
+            return;
+        }
+        const claim = gearUpClaim(this.gearUpSave(), a);
+        if (!claim) return;
+        this.commitGearUpClaim(claim);
+    }
+
+    /**
+     * 照着模型给的意图落账(壳层是唯一的写入方):扣 `stardust`、把 `gearLevels[装备名]`
+     * 写成 lv + 1 —— 与 Web 的 `save.stardust -= cost; save.gearLevels[eq.name] = lv + 1;
+     * persistSave(save)` 逐字段同式。收藏加成由 `collectionBonus` 在读取侧现算,这里不动它。
+     */
+    private commitGearUpClaim(claim: GearClaim): void {
+        const save = this.save();
+        save.stardust -= claim.stardustCost;
+        save.gearLevels[claim.gearLevelKey] = claim.gearLevelTo;
+        this.sim?.persist();
+        this.syncGearUp();
+        // 主菜单顶栏的星尘读数直接读 save.stardust,扣费后一并重算
         this.refreshMenu();
     }
 
