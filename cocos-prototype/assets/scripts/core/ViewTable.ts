@@ -157,6 +157,46 @@ export interface Phase4Params {
     /** 返回钮缺图回退底 / 描边(Web drawLeaderboard #2a3d55 + rgba(255,255,255,0.3)) */
     lbBackFallbackBg: string;
     lbBackFallbackStroke: string;
+
+    /* ---------- 每日福利屏(Web drawDaily 4815-4937 的内联字面量) ---------- */
+    /** 每日屏覆盖底(rgba(8,10,16,0.9);比排行屏的 0.86 更实,按屏分键) */
+    dlDim: string;
+    /** 宝箱区标签色(#4dffc8)与天赋区标签色(#c06cff) */
+    dlBoxLabel: string;
+    dlTalentLabel: string;
+    /** 资源行文字色(#8f9bb3)与图标缺图时的替代字形(iconText 的 fallbackGlyph「◆」) */
+    dlResText: string;
+    dlResGlyph: string;
+    /** 未领行三段文字:名字(#e8e8e8)/ 描述(#8f9bb3)/ 右文(#ffd76a) */
+    dlRowName: string;
+    dlRowDesc: string;
+    dlRowStatus: string;
+    /** 未领行底板缺图回退:底 rgba(255,255,255,0.05) + 描边 rgba(255,255,255,0.15) */
+    dlRowFallbackBg: string;
+    dlRowFallbackStroke: string;
+    /** 宝箱已领:底 rgba(77,255,200,0.08) + 描边 rgba(77,255,200,0.5),名字与右文 #4dffc8 */
+    dlBoxClaimedBg: string;
+    dlBoxClaimedStroke: string;
+    dlBoxClaimedText: string;
+    /** 天赋已领:底 rgba(192,108,255,0.1) + 描边 rgba(192,108,255,0.55),名字与右文 #c06cff */
+    dlTalentClaimedBg: string;
+    dlTalentClaimedStroke: string;
+    dlTalentClaimedText: string;
+    /** 补领行可补领档:底 rgba(255,215,106,0.08) + 描边 theme.gold,标题 #ffd76a,右文 #ffd76a */
+    dlMakeUpOpenBg: string;
+    dlMakeUpOpenStroke: string;
+    dlMakeUpOpenTitle: string;
+    dlMakeUpOpenStatus: string;
+    /** 补领行不可补领档(已补领或已首通):底 rgba(255,255,255,0.03) + 描边 rgba(255,255,255,0.12),
+     *  标题 #8f9bb3,右文 #4dffc8 */
+    dlMakeUpDoneBg: string;
+    dlMakeUpDoneStroke: string;
+    dlMakeUpDoneTitle: string;
+    dlMakeUpDoneStatus: string;
+    /** 返回钮(Web drawDaily 是纯色 rect,不走 skinButtonBase):#2a3d55 + rgba(255,255,255,0.3) + #cfcfcf */
+    dlBackBg: string;
+    dlBackStroke: string;
+    dlBackText: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -166,6 +206,33 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     lbGhostRank: "#E8E8E8",
     lbBackFallbackBg: "#2A3D55",
     lbBackFallbackStroke: "rgba(255,255,255,0.3)",
+    dlDim: "rgba(8,10,16,0.9)",
+    dlBoxLabel: "#4DFFC8",
+    dlTalentLabel: "#C06CFF",
+    dlResText: "#8F9BB3",
+    dlResGlyph: "◆",
+    dlRowName: "#E8E8E8",
+    dlRowDesc: "#8F9BB3",
+    dlRowStatus: "#FFD76A",
+    dlRowFallbackBg: "rgba(255,255,255,0.05)",
+    dlRowFallbackStroke: "rgba(255,255,255,0.15)",
+    dlBoxClaimedBg: "rgba(77,255,200,0.08)",
+    dlBoxClaimedStroke: "rgba(77,255,200,0.5)",
+    dlBoxClaimedText: "#4DFFC8",
+    dlTalentClaimedBg: "rgba(192,108,255,0.1)",
+    dlTalentClaimedStroke: "rgba(192,108,255,0.55)",
+    dlTalentClaimedText: "#C06CFF",
+    dlMakeUpOpenBg: "rgba(255,215,106,0.08)",
+    dlMakeUpOpenStroke: "#FFD76A",
+    dlMakeUpOpenTitle: "#FFD76A",
+    dlMakeUpOpenStatus: "#FFD76A",
+    dlMakeUpDoneBg: "rgba(255,255,255,0.03)",
+    dlMakeUpDoneStroke: "rgba(255,255,255,0.12)",
+    dlMakeUpDoneTitle: "#8F9BB3",
+    dlMakeUpDoneStatus: "#4DFFC8",
+    dlBackBg: "#2A3D55",
+    dlBackStroke: "rgba(255,255,255,0.3)",
+    dlBackText: "#CFCFCF",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */

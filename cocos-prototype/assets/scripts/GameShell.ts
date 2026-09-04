@@ -7,7 +7,7 @@ import { readSave, writeSave } from "./core/SaveChannel";
 import { showRewardedAd } from "./core/AdChannel";
 import { HEX, UI, bindLabel, hexToColor, label, makeNode, solidRect } from "./ui/Widgets";
 import { ASSET_MANIFEST } from "./game/data/assets";
-import { applyBalance as applyDaily } from "./game/data/daily";
+import { applyBalance as applyDaily, DIAMOND_AD_DAILY, DIAMOND_PER_AD } from "./game/data/daily";
 import { applyBalance as applyStages } from "./game/data/stages";
 import { applyBalance as applyWaves } from "./game/systems/waves";
 import { applyBalance as applyChapterTypes } from "./game/data/chapters";
@@ -31,6 +31,8 @@ import { HeroSelectModel, type HeroAction, type HeroSaveView } from "./heroes/He
 import { HeroSelectView } from "./heroes/HeroSelectView";
 import { LeaderboardView } from "./leaderboard/LeaderboardView";
 import { buildLeaderboardContent, leaderboardScreenLayout, type LeaderboardAction, type LeaderboardSaveView } from "./leaderboard/LeaderboardModel";
+import { DailyView } from "./daily/DailyView";
+import { buildDailyContent, dailyClaim, dailyScreenLayout, type DailyAction, type DailyClaim, type DailySaveView } from "./daily/DailyModel";
 
 const { ccclass } = _decorator;
 
@@ -40,7 +42,6 @@ const PENDING_SCREEN: Record<string, string> = {
     gacha: "扭蛋尚未开放",
     talent: "天赋尚未开放",
     pass: "通行证尚未开放",
-    daily: "每日尚未开放",
     gearup: "升级尚未开放",
     fusion: "融合尚未开放",
 };
@@ -131,7 +132,7 @@ export class GameShell extends Component {
     private menuView: MenuLayoutView | null = null;
     /** 玩家版的指针热区(整屏一个捕获节点,菜单屏唯一的触摸入口) */
     private menuPointer: Node | null = null;
-    /** 激励视频在途标记:一次未看完前不接受第二次点击 */
+    /** 激励视频在途标记(= Web 的 `adBusy`):一次未看完前不接受第二次点击,期间本屏点击全吞 */
     private adPending = false;
     /** 章间商店:账本与视图(战场状态经 ShopWorld 切片接入) */
     private shopModel: ShopModel | null = null;
@@ -141,6 +142,8 @@ export class GameShell extends Component {
     private heroesView: HeroSelectView | null = null;
     /** 幻影榜屏:纯只读,视图直读存档派生的 content(无常驻模型实例) */
     private leaderboardView: LeaderboardView | null = null;
+    /** 每日福利屏:内容与写入意图由 cc-free 模型给,视图与排行屏同构(无常驻模型实例) */
+    private dailyView: DailyView | null = null;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
     private overlay: Node | null = null;
@@ -198,8 +201,10 @@ export class GameShell extends Component {
             this.shopView?.setFrames(this.frames);
             this.heroesView?.setFrames(this.frames);
             this.leaderboardView?.setFrames(this.frames);
+            this.dailyView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
+            if (this.router.current === "daily") this.dailyView?.sync();
             this.refreshMenu();
         });
     }
@@ -211,6 +216,7 @@ export class GameShell extends Component {
         this.buildShopScreen();
         this.buildHeroesContent();
         this.buildLeaderboardScreen();
+        this.buildDailyScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
@@ -221,8 +227,9 @@ export class GameShell extends Component {
             shop: () => this.shopView?.sync(),
             heroes: () => this.syncHeroes(),
             leaderboard: () => this.syncLeaderboard(),
+            daily: () => this.syncDaily(),
         };
-        (["battle", "menu", "shop", "heroes", "leaderboard"] as ScreenKey[]).forEach((key) => {
+        (["battle", "menu", "shop", "heroes", "leaderboard", "daily"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
             const refresh = hooks[key];
@@ -391,6 +398,10 @@ export class GameShell extends Component {
                 this.openLeaderboard();
                 return;
             case "entry":
+                if (a.entry === "daily") {
+                    this.openDaily();
+                    return;
+                }
                 this.toast(PENDING_SCREEN[a.entry]);
                 return;
         }
@@ -413,22 +424,39 @@ export class GameShell extends Component {
         this.toast(`补星完成 · 扭蛋券 +${THREE_STAR_TICKETS}`);
     }
 
-    /** 激励视频领回响:非微信宿主按模拟时长判定完整观看;入账走存档唯一写路径 */
-    private watchAdForEcho(): void {
+    /**
+     * 激励视频的唯一入口(语义逐项对标 Web `game.ts:watchAd`):
+     * 在途期间不接受第二次点击;看完先记一次 `adWatchCount` 并在每日上限内发钻石、落一次盘,
+     * 再调 `onOk` 发本屏奖励(于是"今日广告 N 次"与各屏入账共用同一条通道);没看完走 `onFail`。
+     * 平台分流全在 `core/AdChannel.showRewardedAd`,这里不碰 wx API。
+     */
+    private watchAd(onOk: () => void, onFail?: () => void): void {
         if (this.adPending) return;
         this.adPending = true;
-        const gain = viewTable().phase3.echoAdGain;
         showRewardedAd((ok) => {
             this.adPending = false;
-            if (!ok) {
-                this.toast("广告未看完,回响未入账");
-                return;
-            }
-            this.save().points += gain;
-            this.sim.persist();
-            this.refreshMenu();
-            this.toast(`回响 +${gain}`);
+            if (ok) {
+                const save = this.save();
+                save.adWatchCount += 1;
+                if (save.adWatchCount <= DIAMOND_AD_DAILY) save.diamond += DIAMOND_PER_AD;
+                this.sim?.persist();
+                onOk();
+            } else if (onFail) onFail();
         });
+    }
+
+    /** 激励视频领回响:非微信宿主按模拟时长判定完整观看;入账走存档唯一写路径 */
+    private watchAdForEcho(): void {
+        const gain = viewTable().phase3.echoAdGain;
+        this.watchAd(
+            () => {
+                this.save().points += gain;
+                this.sim?.persist();
+                this.refreshMenu();
+                this.toast(`回响 +${gain}`);
+            },
+            () => this.toast("广告未看完,回响未入账")
+        );
     }
 
     /* ---------- 轻提示:Overlay 上一条暗底胶囊,ttl 到点收起(未接入屏幕的兜底反馈) ---------- */
@@ -699,13 +727,115 @@ export class GameShell extends Component {
         if (a.kind === "back") this.router.show("menu");
     }
 
+    /* ================= 每日福利屏(Phase 4 第二屏:广告驱动 + 存档写入) ================= */
+
+    /**
+     * 每日福利屏装配。三层分工与排行屏同构:
+     *  ① 几何全部来自共享层 `game/ui/dailyLayout.ts`(经 `dailyScreenLayout` 单一出口,
+     *     三区行矩形 / 每行两行文本基线 / 标题横幅 / 资源行图标 / 返回钮与 Web 逐项同数),
+     *     顶/底锚用整屏高 `logicalH()`,与视图内 `placeRect` 的默认 H 同源;
+     *  ② 文案、命中与**写入意图**来自 cc-free 的 `daily/DailyModel.ts`;
+     *  ③ 模型不碰存档:落字段、`persist()` 与激励视频全在本文件(`commitDailyClaim` / `watchAd`)。
+     * 无常驻模型实例(状态全在存档侧),视图每轮 sync 现算 content。
+     */
+    private buildDailyScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:daily");
+        if (!node) return;
+        node.removeAllChildren();
+        this.dailyView = new DailyView(node, this.frames, {
+            layout: () => dailyScreenLayout(DESIGN_W, logicalH(), this.dailySave()),
+            content: () => buildDailyContent(this.dailySave()),
+            onAction: (a) => this.onDailyAction(a),
+        });
+        this.dailyView.sync();
+    }
+
+    /** 本屏要读的存档字段就这八项;投影成窄切片交给纯函数(时间是入参,不藏在模型里) */
+    private dailySave(): DailySaveView {
+        const s = this.save();
+        return {
+            diamond: s.diamond,
+            adWatchCount: s.adWatchCount,
+            dailyBoxClaimed: s.dailyBoxClaimed,
+            dailyTalentClaimed: s.dailyTalentClaimed,
+            dailyTalents: s.dailyTalents,
+            makeUpDate: s.makeUpDate,
+            dailyClearedDate: s.dailyClearedDate,
+            highestStage: s.highestStage,
+        };
+    }
+
+    /** 进屏:切屏即触发路由 refresh 钩子 → syncDaily(现算一帧几何与文案) */
+    private openDaily(): void {
+        this.router.show("daily");
+    }
+
+    private syncDaily(): void {
+        this.dailyView?.sync();
+    }
+
+    /**
+     * 热区 → 玩法(对标 Web onDailyClick 的四段)。广告在途先吞掉整屏点击;
+     * 免费档天赋直接落账,宝箱与补领要先看完一次激励视频。模型返回 null 就是
+     * "已领取 / 今日不可补领",与 Web 在那里直接 return 同一语义(点了没反应)。
+     */
+    private onDailyAction(a: DailyAction): void {
+        if (this.adPending) return;
+        if (a.kind === "back") {
+            this.router.show("menu");
+            return;
+        }
+        const claim = dailyClaim(this.dailySave(), a);
+        if (!claim) return;
+        if (!claim.needsAd) {
+            this.commitDailyClaim(claim);
+            return;
+        }
+        this.watchAd(
+            () => this.commitDailyClaim(claim),
+            () => this.toast("广告未看完,奖励未入账")
+        );
+    }
+
+    /**
+     * 照着模型给的意图落账(壳层是唯一的写入方)。补领那一档同时写上
+     * `dailyClearedDate` / `dailyClearedStage` / `makeUpDate` —— 与 Web 同口径:
+     * 看广告补领等于把当日首通视为已消耗,所以当日再通关不再发首通奖励。
+     */
+    private commitDailyClaim(claim: DailyClaim): void {
+        const save = this.save();
+        save.gachaTicket += claim.gachaTicket;
+        save.stardust += claim.stardust;
+        save.diamond += claim.diamond;
+        save.points += claim.points;
+        save.dayEcho += claim.dayEcho;
+        if (claim.boxClaim) save.dailyBoxClaimed.push(claim.boxClaim);
+        if (claim.talentClaim) save.dailyTalentClaimed.push(claim.talentClaim);
+        if (claim.makeUp) {
+            save.dailyClearedDate = claim.makeUp.date;
+            save.dailyClearedStage = claim.makeUp.stageId;
+            save.makeUpDate = claim.makeUp.date;
+        }
+        this.sim?.persist();
+        this.syncDaily();
+        // 主菜单「每日」入口的红点读 dailyBoxClaimed,入账后一并重算
+        this.refreshMenu();
+    }
+
     /* ================= 主循环 ================= */
 
     update(dt: number): void {
         // 轻提示与英雄列表惯性都工作在非战斗屏上(blocksPlay 为真),所以排在推进世界之前
         this.tickToast(dt);
         this.tickHeroScroll(dt);
-        if (!this.ready || this.router.blocksPlay()) return;
+        if (!this.ready) return;
+        // 每日重置:Web 是"任何状态下都执行",所以必须排在路由闸门之前 —— 否则停在
+        // 菜单/每日屏跨天就永远不清零,本屏会一直显示「已领取」(静默失效)
+        if (this.sim.syncDaily()) {
+            if (this.router.current === "daily") this.syncDaily();
+            this.refreshMenu();
+        }
+        if (this.router.blocksPlay()) return;
         const step = Math.min(dt, viewTable().battle.maxFrameDt);
         this.joystick.update();
         this.sim.update(step);

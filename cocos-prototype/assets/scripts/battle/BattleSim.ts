@@ -310,8 +310,18 @@ export class BattleSim {
         this.world.advance(dt);
     }
 
+    /**
+     * 每日重置的宿主入口(Web `update()` 里那句"任何状态下都执行"的 `checkDailyReset()`)。
+     * 壳层在路由闸门之前逐帧调它,于是停在菜单/每日屏跨天也会照常清零;
+     * 返回是否真的改了存档,宿主据此重排当前屏(每日屏的行态与主菜单的红点都读这几个字段)。
+     */
+    syncDaily(): boolean {
+        return this.checkDailyReset();
+    }
+
     /** 每日重置:跨天清零每日计数并抽取今日天赋(入账与持久化归宿主) */
-    private checkDailyReset(): void {
+    private checkDailyReset(): boolean {
+        let changed = false;
         if (needsDailyReset(this.save.dailyDate)) {
             this.save.dailyDate = todayKey();
             this.save.adWatchCount = 0;
@@ -321,11 +331,14 @@ export class BattleSim {
             this.save.dailyTalentClaimed = [];
             this.save.dailyTalents = rollDailyTalents();
             this.persist();
+            changed = true;
         }
         if (this.save.dailyTalents.length === 0) {
             this.save.dailyTalents = rollDailyTalents();
             this.persist();
+            changed = true;
         }
+        return changed;
     }
 
     /** 赛季到期结算翻页:赛季分→星尘,重置星数/赛季最佳,赛季 +1(循环处理离线跨多赛季) */
