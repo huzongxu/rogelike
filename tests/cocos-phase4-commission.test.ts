@@ -1443,7 +1443,6 @@ describe("CommissionView 的纪律:几何全来自共享层、文本只走 place
 
 describe("GameShell 的委托挂机屏接线", () => {
   const src = fileSource("../cocos-prototype/assets/scripts/GameShell.ts");
-  const pending = src.slice(src.indexOf("const PENDING_SCREEN"), src.indexOf("/** 回响筹码下标"));
 
   it("五件套齐全并在 buildLayers / 路由钩子里各就各位", () => {
     for (const m of ["buildCommissionScreen", "commissionSave", "openCommission", "syncCommission", "onCommissionAction", "commitCommissionClaim"]) {
@@ -1452,26 +1451,24 @@ describe("GameShell 的委托挂机屏接线", () => {
     expect(src.includes("this.buildCommissionScreen();")).toBe(true);
     expect(src.indexOf("this.buildCommissionScreen();")).toBeGreaterThan(src.indexOf("this.buildPrestigeScreen();"));
     expect(src.includes("commission: () => this.syncCommission(),")).toBe(true);
-    expect(src.includes('"gacha", "prestige", "commission"]')).toBe(true);
+    expect(src.includes('"gacha", "prestige", "commission", "fusion"]')).toBe(true);
   });
 
-  it("路由实际注册十一屏(SCREEN_KEYS 仍是 16 态全量)", () => {
+  it("路由实际注册十二屏(SCREEN_KEYS 仍是 16 态全量)", () => {
     const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
     expect(keysBlock[1].includes('"commission"')).toBe(true);
-    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission"')).toBe(true);
+    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(8);
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(9);
   });
 
-  it("入口从占位轻提示换成 openCommission,PENDING_SCREEN 里只剩 fusion 一条", () => {
+  it("入口从占位轻提示换成 openCommission,占位表已随最后一屏落地整表下线", () => {
     expect(src.includes('if (a.entry === "commission")')).toBe(true);
     expect(src.includes("this.openCommission();")).toBe(true);
     expect(src.includes("委托尚未开放")).toBe(false);
-    expect(pending.includes("commission:")).toBe(false);
-    expect(pending.includes("fusion:")).toBe(true);
-    expect(pending.split("\n").filter((l) => /: "/.test(l))).toHaveLength(1);
+    expect(src.includes("PENDING_SCREEN")).toBe(false);
   });
 
   it("晚到贴图流到位后本屏也换引用并在当前屏时补排一次", () => {
@@ -1523,14 +1520,14 @@ describe("GameShell 的委托挂机屏接线", () => {
   });
 
   it("本屏不走广告入口(没有为它新增 watchAd 调用)", () => {
-    const seg = codeOf(src.slice(src.indexOf("/* ================= 委托挂机屏"), src.indexOf("/* ================= 主循环")));
+    const seg = codeOf(src.slice(src.indexOf("/* ================= 委托挂机屏"), src.indexOf("/* ================= 词缀融合屏")));
     expect(seg.includes("watchAd(")).toBe(false);
     expect(seg.includes("showRewardedAd")).toBe(false);
   });
 
   it("面板态的实时读数由 tickCommission 周期重排,并挂在主循环的路由闸门之前", () => {
     expect(src.includes("private tickCommission(dt: number): void")).toBe(true);
-    const tick = src.slice(src.indexOf("private tickCommission"), src.indexOf("/* ================= 主循环"));
+    const tick = src.slice(src.indexOf("private tickCommission"), src.indexOf("/* ================= 词缀融合屏"));
     expect(tick.includes('this.router.current !== "commission"')).toBe(true);
     expect(tick.includes("COMMISSION_TICK_SECONDS")).toBe(true);
     const upd = src.slice(src.indexOf("update(dt: number): void"));

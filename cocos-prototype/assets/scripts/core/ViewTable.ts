@@ -460,6 +460,62 @@ export interface Phase4Params {
     cmStartBg: string;
     cmStartStroke: string;
     cmStartText: string;
+
+    /* ---------- 词缀融合屏(Web drawFusion 4412-4518 / drawHiddenChoice 4519-4555 / drawTriplePanel 4566-4613 的内联字面量) ---------- */
+    /** 全屏覆盖底(rgba(8,10,16,0.86),与 psDim / guDim / gcDim / ptDim / cmDim 同值,按屏分键便于独立调表) */
+    fuDim: string;
+    /** 标题「装备融合」(Web 的直接 fillText 色 #4dffc8;横幅是裸 assets.draw,没有缺图回退档) */
+    fuTitle: string;
+    /** 星尘读数(iconText 的 color #c8b6ff)与缺图时的替代字形「❋」 */
+    fuStardustText: string;
+    fuStardustGlyph: string;
+    /** 返回钮(纯代码矩形,无贴图):#2a3d55 + rgba(255,255,255,0.3),文字 #cfcfcf */
+    fuBackBg: string;
+    fuBackStroke: string;
+    fuBackText: string;
+    /** 装备不足 2 件与未选齐提示(两处同为 #8f9bb3,按用途分键) */
+    fuEmpty: string;
+    fuHint: string;
+    /** 装备行底板四档:选中 A rgba(90,200,250,0.16) / B rgba(192,108,255,0.16) / C rgba(255,215,106,0.16) / 未选 rgba(255,255,255,0.04) */
+    fuRowSelAFill: string;
+    fuRowSelBFill: string;
+    fuRowSelCFill: string;
+    fuRowFill: string;
+    /** 行描边未选档(rgba(255,255,255,0.12);选中档走品质色,由内容层从 qualityDef 取,不进表) */
+    fuRowStroke: string;
+    /** 行名与选中标记三档:选中 A #5ac8fa / B #c06cff / C #ffd76a(未选且可用那档走品质色) */
+    fuRowSelAText: string;
+    fuRowSelBText: string;
+    fuRowSelCText: string;
+    /** 隐藏词缀装备的行名档(#5a6a80,「不可作素材」) */
+    fuRowNameDisabled: string;
+    /** 行摘要(#cfcfcf) */
+    fuRowSub: string;
+    /** 成本与保底读数行(#e8e8e8)与规则说明行(#8f9bb3;预览行走品质色) */
+    fuReadout: string;
+    fuNote: string;
+    /** 融合钮两档:可融合 #1d3d2e + #4dffc8 + #4dffc8 / 星尘不足 #1a1f2a + rgba(255,255,255,0.2) + #5a6a80 */
+    fuFuseBg: string;
+    fuFuseStroke: string;
+    fuFuseText: string;
+    fuFuseDisabledBg: string;
+    fuFuseDisabledStroke: string;
+    fuFuseTextDisabled: string;
+    /** 三重模式钮两档:选中 rgba(255,215,106,0.22) + #ffd76a + #ffd76a / 未选 #2a3d55 + rgba(255,255,255,0.2) + #cfcfcf */
+    fuModeSelFill: string;
+    fuModeSelStroke: string;
+    fuModeSelText: string;
+    fuModeFill: string;
+    fuModeStroke: string;
+    fuModeText: string;
+    /** 三选一弹层:覆盖底 rgba(4,6,10,0.92)、标题 #ffd76a、副行 #cfcfcf */
+    fuHiddenDim: string;
+    fuHiddenTitle: string;
+    fuHiddenSub: string;
+    /** 卡片底 rgba(255,215,106,0.08)(描边与名字走 hiddenAffixDef 的动态色)、描述 #cfcfcf、「点击选择」#8f9bb3 */
+    fuHiddenCardFill: string;
+    fuHiddenCardDesc: string;
+    fuHiddenCardHint: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -673,6 +729,47 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     cmStartBg: "#2A3D55",
     cmStartStroke: "#5AC8FA",
     cmStartText: "#FFFFFF",
+
+    /* 词缀融合屏(逐项对标 Web drawFusion / drawHiddenChoice / drawTriplePanel) */
+    fuDim: "rgba(8,10,16,0.86)",
+    fuTitle: "#4DFFC8",
+    fuStardustText: "#C8B6FF",
+    fuStardustGlyph: "❋",
+    fuBackBg: "#2A3D55",
+    fuBackStroke: "rgba(255,255,255,0.3)",
+    fuBackText: "#CFCFCF",
+    fuEmpty: "#8F9BB3",
+    fuHint: "#8F9BB3",
+    fuRowSelAFill: "rgba(90,200,250,0.16)",
+    fuRowSelBFill: "rgba(192,108,255,0.16)",
+    fuRowSelCFill: "rgba(255,215,106,0.16)",
+    fuRowFill: "rgba(255,255,255,0.04)",
+    fuRowStroke: "rgba(255,255,255,0.12)",
+    fuRowSelAText: "#5AC8FA",
+    fuRowSelBText: "#C06CFF",
+    fuRowSelCText: "#FFD76A",
+    fuRowNameDisabled: "#5A6A80",
+    fuRowSub: "#CFCFCF",
+    fuReadout: "#E8E8E8",
+    fuNote: "#8F9BB3",
+    fuFuseBg: "#1D3D2E",
+    fuFuseStroke: "#4DFFC8",
+    fuFuseText: "#4DFFC8",
+    fuFuseDisabledBg: "#1A1F2A",
+    fuFuseDisabledStroke: "rgba(255,255,255,0.2)",
+    fuFuseTextDisabled: "#5A6A80",
+    fuModeSelFill: "rgba(255,215,106,0.22)",
+    fuModeSelStroke: "#FFD76A",
+    fuModeSelText: "#FFD76A",
+    fuModeFill: "#2A3D55",
+    fuModeStroke: "rgba(255,255,255,0.2)",
+    fuModeText: "#CFCFCF",
+    fuHiddenDim: "rgba(4,6,10,0.92)",
+    fuHiddenTitle: "#FFD76A",
+    fuHiddenSub: "#CFCFCF",
+    fuHiddenCardFill: "rgba(255,215,106,0.08)",
+    fuHiddenCardDesc: "#CFCFCF",
+    fuHiddenCardHint: "#8F9BB3",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */

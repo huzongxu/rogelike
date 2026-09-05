@@ -1415,7 +1415,6 @@ describe("GachaView 的落位纪律(R5)", () => {
 
 describe("GameShell 的扭蛋屏接线", () => {
   const src = readFileSync(new URL("../cocos-prototype/assets/scripts/GameShell.ts", import.meta.url), "utf8");
-  const pending = src.slice(src.indexOf("const PENDING_SCREEN"), src.indexOf("/** 回响筹码下标"));
 
   it("五件套齐全并在 buildLayers / 路由钩子里各就各位", () => {
     for (const m of ["buildGachaScreen", "gachaSave", "openGacha", "syncGacha", "onGachaAction", "commitGachaClaim"]) {
@@ -1424,28 +1423,26 @@ describe("GameShell 的扭蛋屏接线", () => {
     expect(src.includes("this.buildGachaScreen();")).toBe(true);
     expect(src.indexOf("this.buildGachaScreen();")).toBeGreaterThan(src.indexOf("this.buildGearUpScreen();"));
     expect(src.includes("gacha: () => this.syncGacha(),")).toBe(true);
-    expect(src.includes('"gearup", "gacha", "prestige", "commission"]')).toBe(true);
+    expect(src.includes('"gearup", "gacha", "prestige", "commission", "fusion"]')).toBe(true);
   });
 
-  it("路由实际注册十一屏(SCREEN_KEYS 仍是 16 态全量)", () => {
+  it("路由实际注册十二屏(SCREEN_KEYS 仍是 16 态全量)", () => {
     const router = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ScreenRouter.ts", import.meta.url), "utf8");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
-    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission"')).toBe(true);
+    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
-    // 八个屏走 sync*(heroes / leaderboard / daily / pass / gearup / gacha / prestige / commission);menu 走 refreshMenu、shop 走视图
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(8);
+    // 九个屏走 sync*(heroes / leaderboard / daily / pass / gearup / gacha / prestige / commission / fusion);menu 走 refreshMenu、shop 走视图
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(9);
     expect(hooks.includes("menu: () => this.refreshMenu(),")).toBe(true);
     expect(hooks.includes("shop: () => this.shopView?.sync(),")).toBe(true);
   });
 
-  it("入口从占位轻提示换成 openGacha,PENDING_SCREEN 里不再有 gacha 键", () => {
+  it("入口从占位轻提示换成 openGacha,占位表已随最后一屏落地整表下线", () => {
     expect(src.includes('if (a.entry === "gacha")')).toBe(true);
     expect(src.includes("this.openGacha();")).toBe(true);
     expect(src.includes("扭蛋尚未开放")).toBe(false);
-    expect(pending.includes("gacha:")).toBe(false);
-    expect(pending.includes("fusion:")).toBe(true);
-    expect(pending.split("\n").filter((l) => /: "/.test(l))).toHaveLength(1);
+    expect(src.includes("PENDING_SCREEN")).toBe(false);
   });
 
   it("进屏先清空瞬时最近结果(对标 Web openGacha),再切屏", () => {
@@ -1599,7 +1596,7 @@ describe("Web 基准的反直觉口径已原样带上", () => {
     expect((web.match(/this\.recordEquipment\(/g) ?? []).length).toBe(2);
     // 这条口在宿主侧有两处消费者(章间商店 + 本屏),扭蛋落账段内恰好一处
     expect((shell.match(/world\.recordEquipment\(eq\)/g) ?? []).length).toBe(2);
-    const commit = shell.slice(shell.indexOf("private commitGachaClaim"), shell.indexOf("/* ================= 主循环"));
+    const commit = shell.slice(shell.indexOf("private commitGachaClaim"), shell.indexOf("/* ================= 转生与天赋屏"));
     expect((commit.match(/world\.recordEquipment\(eq\)/g) ?? []).length).toBe(1);
   });
 

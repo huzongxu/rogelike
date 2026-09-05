@@ -1336,7 +1336,6 @@ describe("PrestigeView 的纪律:几何全来自共享层、文本只走 placeLi
 
 describe("GameShell 的转生与天赋屏接线", () => {
   const src = readFileSync(new URL("../cocos-prototype/assets/scripts/GameShell.ts", import.meta.url), "utf8");
-  const pending = src.slice(src.indexOf("const PENDING_SCREEN"), src.indexOf("/** 回响筹码下标"));
 
   it("五件套齐全并在 buildLayers / 路由钩子里各就各位", () => {
     for (const m of ["buildPrestigeScreen", "prestigeSave", "openPrestige", "syncPrestige", "onPrestigeAction", "commitPrestigeClaim"]) {
@@ -1345,28 +1344,26 @@ describe("GameShell 的转生与天赋屏接线", () => {
     expect(src.includes("this.buildPrestigeScreen();")).toBe(true);
     expect(src.indexOf("this.buildPrestigeScreen();")).toBeGreaterThan(src.indexOf("this.buildGachaScreen();"));
     expect(src.includes("prestige: () => this.syncPrestige(),")).toBe(true);
-    expect(src.includes('"gacha", "prestige", "commission"]')).toBe(true);
+    expect(src.includes('"gacha", "prestige", "commission", "fusion"]')).toBe(true);
   });
 
-  it("路由实际注册十一屏(SCREEN_KEYS 仍是 16 态全量)", () => {
+  it("路由实际注册十二屏(SCREEN_KEYS 仍是 16 态全量)", () => {
     const router = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ScreenRouter.ts", import.meta.url), "utf8");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
-    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission"')).toBe(true);
+    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
-    // 八个屏走 sync*(heroes 除外:它走 syncHeroes;这里数的是箭头里直接调 syncX 的那八条)
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(8);
+    // 九个屏走 sync*(heroes 除外:它走 syncHeroes;这里数的是箭头里直接调 syncX 的那九条)
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(9);
     expect(hooks.includes("menu: () => this.refreshMenu(),")).toBe(true);
     expect(hooks.includes("shop: () => this.shopView?.sync(),")).toBe(true);
   });
 
-  it("入口从占位轻提示换成 openPrestige,PENDING_SCREEN 里不再有 talent 键", () => {
+  it("入口从占位轻提示换成 openPrestige,占位表已随最后一屏落地整表下线", () => {
     expect(src.includes('if (a.entry === "talent")')).toBe(true);
     expect(src.includes("this.openPrestige();")).toBe(true);
     expect(src.includes("天赋尚未开放")).toBe(false);
-    expect(pending.includes("talent:")).toBe(false);
-    expect(pending.includes("fusion:")).toBe(true);
-    expect(pending.split("\n").filter((l) => /: "/.test(l))).toHaveLength(1);
+    expect(src.includes("PENDING_SCREEN")).toBe(false);
   });
 
   it("几何与内容都经宿主投影现算(视图不读存档)", () => {

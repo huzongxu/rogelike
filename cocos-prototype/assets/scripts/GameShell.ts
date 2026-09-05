@@ -58,13 +58,24 @@ import {
     type CommissionSelection,
 } from "./commission/CommissionModel";
 import { commissionScreenLayout } from "./game/ui/commissionLayout";
+import { FusionView } from "./fusion/FusionView";
+import {
+    FUSION_DEFAULT_SELECTION,
+    FUSION_DEFAULT_TRIPLE_MODE,
+    buildFusionContent,
+    fusionClaim,
+    fusionTripleArmed,
+    type FusionAction,
+    type FusionClaim,
+    type FusionPendingHidden,
+    type FusionSaveView,
+    type FusionSelection,
+} from "./fusion/FusionModel";
+import { fusionScreenLayout } from "./game/ui/fusionLayout";
+import type { TripleMode } from "./game/data/fusion";
+import type { Equipment } from "./game/data/equipmentGen";
 
 const { ccclass } = _decorator;
-
-/** 后续阶段才落地的屏幕(键 = 商店工具钮的 fusion):点下去先给一条轻提示,不做假动作 */
-const PENDING_SCREEN: Record<string, string> = {
-    fusion: "融合尚未开放",
-};
 
 /** 回响筹码下标:点它走激励视频领回响(三枚筹码 = 券/回响/星尘) */
 const ECHO_CHIP_INDEX = 1;
@@ -204,6 +215,20 @@ export class GameShell extends Component {
     private commSel: CommissionSelection = { ...COMMISSION_DEFAULT_SELECTION };
     /** 委托面板的刷新计时(秒;只在面板态走,见 tickCommission) */
     private commTick = 0;
+    /** 词缀融合屏:同上,内容与写入意图来自 cc-free 的 fusion/FusionModel.ts(本屏没有广告位) */
+    private fusionView: FusionView | null = null;
+    /**
+     * 融合屏选中的三件装备 id 与保底三选一暂存 —— **宿主持有的瞬时态,不入档**(对标 Web 的
+     * `private fusA/fusB/fusC` 与 `private pendingHidden`,`SaveData` 里没有这四项)。
+     * 每次开屏清空;暂存只在保底触达那一发存在,选定后收尾。
+     */
+    private fusSel: FusionSelection = { ...FUSION_DEFAULT_SELECTION };
+    private fusPending: FusionPendingHidden | null = null;
+    /**
+     * 三重融合模式 —— **宿主持有的瞬时态,不入档**(对标 Web 的 `private tripleMode`)。
+     * 开屏**不**清空:整局会话内跨开屏 / 关屏保留,与选中三件的节奏不同。
+     */
+    private fusMode: TripleMode = FUSION_DEFAULT_TRIPLE_MODE;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
     private overlay: Node | null = null;
@@ -267,6 +292,7 @@ export class GameShell extends Component {
             this.gachaView?.setFrames(this.frames);
             this.prestigeView?.setFrames(this.frames);
             this.commissionView?.setFrames(this.frames);
+            this.fusionView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             if (this.router.current === "daily") this.dailyView?.sync();
@@ -275,6 +301,7 @@ export class GameShell extends Component {
             if (this.router.current === "gacha") this.gachaView?.sync();
             if (this.router.current === "prestige") this.prestigeView?.sync();
             if (this.router.current === "commission") this.commissionView?.sync();
+            if (this.router.current === "fusion") this.fusionView?.sync();
             this.refreshMenu();
         });
     }
@@ -292,6 +319,7 @@ export class GameShell extends Component {
         this.buildGachaScreen();
         this.buildPrestigeScreen();
         this.buildCommissionScreen();
+        this.buildFusionScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
@@ -308,8 +336,9 @@ export class GameShell extends Component {
             gacha: () => this.syncGacha(),
             prestige: () => this.syncPrestige(),
             commission: () => this.syncCommission(),
+            fusion: () => this.syncFusion(),
         };
-        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission"] as ScreenKey[]).forEach((key) => {
+        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
             const refresh = hooks[key];
@@ -483,7 +512,7 @@ export class GameShell extends Component {
             case "phantom":
                 this.openLeaderboard();
                 return;
-            // 六个入口就是 MenuEntryId 的全集,逐个换成真实开屏;占位轻提示只剩商店的融合工具钮那一处
+            // 六个入口就是 MenuEntryId 的全集,逐个换成真实开屏(商店的融合工具钮走 onShopAction)
             case "entry":
                 if (a.entry === "daily") {
                     this.openDaily();
@@ -668,7 +697,7 @@ export class GameShell extends Component {
                 if (a.id === "refresh") {
                     if (!m.refresh()) this.toast("金币不足,刷新不了");
                 } else if (a.id === "fusion") {
-                    this.toast(PENDING_SCREEN.fusion);
+                    this.openFusion();
                 } else if (a.id === "restart") {
                     this.restartRun();
                     return;
@@ -1421,6 +1450,130 @@ export class GameShell extends Component {
         // 只有面板态有随时间变的读数:列表态跳过这一次重排
         if (commissionSlots(this.commissionSave()).length === 0) return;
         view.sync();
+    }
+
+    /* ================= 词缀融合屏(Phase 4 第八屏:融合出成品入局内装备 + 保底三选一暂存) ================= */
+
+    /**
+     * 词缀融合屏装配。三层分工与前七屏同构:
+     *  ① 几何全部来自共享层 `game/ui/fusionLayout.ts`(经 `fusionScreenLayout` 单一出口,面板底 /
+     *     标题横幅 / 星尘读数 / 返回钮 / 逐行矩形与两行基线与名字两档 / 底部三形态的全部文本线
+     *     与模式钮与融合钮 / 三选一卡片与弹层两行,与 Web 逐项同数)。这一屏的几何要按**局内装备
+     *     的 id 序列**与**弹层 / 三重态两个形态位**现算(行条数随前者变,命中分派随后者变),
+     *     故与每日 / 扭蛋 / 转生 / 委托屏一样经宿主投影出切片再调共享层出口;
+     *  ② 文案、命中与**写入意图**来自 cc-free 的 `fusion/FusionModel.ts`(成本、解锁门、融合执行、
+     *     继承源、保底推进、候选抽取与落词缀全部走共享层既有函数,本文件不复制判据);
+     *  ③ 模型不碰存档也不碰局内装备:扣星尘、写 `fusionPity`、增删装备、`recordEquipment` 与
+     *     `persist()` 全在本文件(`commitFusionClaim`)。**本屏没有广告位**,也就没有 `watchAd` 分支。
+     * 本屏没有 `Date.now()` 消费点(无实时读数),随机源只有保底三选一的候选抽取,走模型默认形参。
+     * 无常驻模型实例(星尘与保底计数在存档侧、装备列表在局内侧),屏内三份瞬时态是
+     * `this.fusSel` / `this.fusMode` / `this.fusPending`(都不入档,与 Web 同形)。
+     */
+    private buildFusionScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:fusion");
+        if (!node) return;
+        node.removeAllChildren();
+        this.fusionView = new FusionView(node, this.frames, {
+            layout: () =>
+                fusionScreenLayout(DESIGN_W, logicalH(), this.fusionEquipment().map((e) => e.id), {
+                    hidden: this.fusPending !== null,
+                    triple: fusionTripleArmed(this.fusSel, this.fusionSave().ownedTalentCount),
+                }),
+            content: (L) => buildFusionContent(this.fusionSave(), this.fusionEquipment(), this.fusSel, this.fusMode, this.fusPending, L),
+            onAction: (a) => this.onFusionAction(a),
+        });
+        this.fusionView.sync();
+    }
+
+    /** 本屏要读的存档字段就这三项(`ownedTalents` 只取长度:三重解锁门的唯一消费口径) */
+    private fusionSave(): FusionSaveView {
+        const s = this.save();
+        return { stardust: s.stardust, fusionPity: s.fusionPity, ownedTalentCount: s.ownedTalents.length };
+    }
+
+    /**
+     * 本屏操作的装备列表是**局内态**(Web 的 `this.player.equipment`,战斗层持有),
+     * 不是存档里的永久收藏 `ownedGear`;getter 现取,与商店屏的 ShopWorld 同一条口。
+     */
+    private fusionEquipment(): Equipment[] {
+        return this.sim ? this.sim.player.equipment : [];
+    }
+
+    /** 进屏:清空选中与三选一暂存再切屏(Web openFusion 同序;tripleMode 不清,跨开屏保留) */
+    private openFusion(): void {
+        const sim = this.sim;
+        // Web openFusion 首行守卫:不足 2 件装备不开屏,全程静默
+        if (!sim || sim.player.equipment.length < 2) return;
+        this.fusSel = { ...FUSION_DEFAULT_SELECTION };
+        this.fusPending = null;
+        this.router.show("fusion");
+    }
+
+    private syncFusion(): void {
+        this.fusionView?.sync();
+    }
+
+    /**
+     * 热区 → 玩法(对标 Web onFusionClick 的五段:三选一卡片 → 返回钮 → 装备行 → (三重态)模式钮 →
+     * 融合钮;弹层打开时只响应卡片,其余一律吞掉)。**本屏没有广告位**,action 里也没有
+     * `adPending` 闸门 —— 闸门只有 `watchAd` 首行那一道,与已落地各屏同口径。
+     * 返回钮回章间商店:Web 的 `overlayFrom` 两态里本屏唯一活着的入口是商店工具钮
+     * (`openFusion("shop")`,战斗内入口已移除),那一态恒为 `"shop"`。
+     * `fusionClaim` 返回 null 就是"素材带隐藏词缀 / 素材落空 / 星尘不足 / 暂存落空",
+     * 与 Web 在那里直接 `return` 同一语义(点了没反应,全程无提示)。
+     */
+    private onFusionAction(a: FusionAction): void {
+        if (a.kind === "back") {
+            this.router.show("shop");
+            return;
+        }
+        const claim = fusionClaim(this.fusionSave(), this.fusionEquipment(), this.fusSel, this.fusMode, this.fusPending, a);
+        if (!claim) return;
+        this.commitFusionClaim(claim);
+    }
+
+    /**
+     * 照着模型给的意图落账(壳层是唯一的写入方)。四档各自的账面:
+     *  - `fuse`:扣 `stardust`、把 `fusionPity` 写成模型给的目标值(触达即归零)、按 `removeIds`
+     *    从局内装备**原地**移除素材(数组身份由世界层持有,与 Web 的 filter 重赋同结果);
+     *    未触达保底 → 成品 push 入场、`recordEquipment` 登记词缀图鉴、落一次盘、清选中态;
+     *    触达保底 → 成品暂存 `this.fusPending`、**不落盘也不清选中**(Web afterFusionRoll 的
+     *    hitsPity 分支:素材已移除但成品未入场、存档未落,等三选一收尾);
+     *  - `pickHidden`:`applyHiddenAffix` 后的成品入场、登记图鉴、落盘(星尘与保底那两笔在
+     *    `fuse` 档已经改过内存,这一发 `persist()` 一起落 —— 与 Web 的落盘节奏同数),
+     *    随后清暂存与选中态;
+     *  - `select` / `mode`:只改宿主持有的瞬时态,`persists === false`,不落盘。
+     */
+    private commitFusionClaim(claim: FusionClaim): void {
+        if (claim.kind === "select") {
+            this.fusSel = claim.sel;
+        } else if (claim.kind === "mode") {
+            this.fusMode = claim.mode;
+        } else if (claim.kind === "fuse") {
+            const save = this.save();
+            save.stardust -= claim.stardustCost;
+            save.fusionPity = claim.fusionPityTo;
+            const eq = this.fusionEquipment();
+            for (let i = eq.length - 1; i >= 0; i--) if (claim.removeIds.includes(eq[i].id)) eq.splice(i, 1);
+            if (claim.pending) {
+                this.fusPending = claim.pending;
+            } else if (claim.result) {
+                eq.push(claim.result);
+                this.sim?.world.recordEquipment(claim.result);
+                this.sim?.persist();
+            }
+            if (claim.clearSelection) this.fusSel = { ...FUSION_DEFAULT_SELECTION };
+        } else {
+            const eq = this.fusionEquipment();
+            eq.push(claim.result);
+            this.sim?.world.recordEquipment(claim.result);
+            this.sim?.persist();
+            this.fusPending = null;
+            this.fusSel = { ...FUSION_DEFAULT_SELECTION };
+        }
+        this.syncFusion();
+        // 主菜单顶栏的星尘读数直接读 save.stardust,扣费后一并重算
+        this.refreshMenu();
     }
 
     /* ================= 主循环 ================= */
