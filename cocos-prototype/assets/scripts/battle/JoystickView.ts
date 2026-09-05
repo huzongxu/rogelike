@@ -68,7 +68,7 @@ export class JoystickView implements MoveInput {
         const c = this.toDesign(e);
         // 摇杆只占左半屏,右半屏留给 UI 点击(与 Web touchStart 同一分区)
         if (c.x >= DESIGN_W / 2) return;
-        this.stickId = e.getID();
+        this.stickId = e.getID() ?? -1;
         this.stickStart = vec2(c.x, c.y);
         this.knob = vec2(c.x, c.y);
         this.visible = true;
