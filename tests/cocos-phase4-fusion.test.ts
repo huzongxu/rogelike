@@ -138,17 +138,17 @@ import {
   type FusionPendingHidden,
   type FusionSaveView,
   type FusionSelection,
-} from "../cocos-prototype/assets/scripts/fusion/FusionModel";
-import * as cocosFusionData from "../cocos-prototype/assets/scripts/game/data/fusion";
-import * as cocosFusionLayout from "../cocos-prototype/assets/scripts/game/ui/fusionLayout";
-import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos-prototype/assets/scripts/ui/TextBand";
+} from "../cocos/assets/scripts/fusion/FusionModel";
+import * as cocosFusionData from "../cocos/assets/scripts/game/data/fusion";
+import * as cocosFusionLayout from "../cocos/assets/scripts/game/ui/fusionLayout";
+import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/scripts/ui/TextBand";
 
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
 const PAD = PAD_.pad;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
-const LIFT: number = JSON.parse(readFileSync(new URL("../cocos-prototype/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
+const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
 /* ==================== 夹具 ==================== */
 
@@ -213,7 +213,7 @@ function fileSource(rel: string): string {
 
 /** 从 PHASE4_DEFAULTS 里抠出一张 `键 → 字面量` 的表(ViewTable 那侧 import 了 cc,node 不能直载) */
 function phase4Defaults(): Record<string, string> {
-  const src = fileSource("../cocos-prototype/assets/scripts/core/ViewTable.ts");
+  const src = fileSource("../cocos/assets/scripts/core/ViewTable.ts");
   const block = src.slice(src.indexOf("export const PHASE4_DEFAULTS"), src.indexOf("/** 含义:Phase 3"));
   const out: Record<string, string> = {};
   for (const m of block.matchAll(/^\s{4}(\w+):\s*"([^"]*)",\s*$/gm)) out[m[1]] = m[2];
@@ -1251,7 +1251,7 @@ const CTX_TYPE = /\bCanvasRenderingContext2D\b/;
 const DOM_GLOBAL = /(?:^|[^.\w$])(window|document|navigator|localStorage|requestAnimationFrame|performance)\s*[.[]/m;
 const ABSOLUTE_GAME = /from\s*["']@game\//;
 
-const PURE_FILES = ["../cocos-prototype/assets/scripts/game/ui/fusionLayout.ts", "../cocos-prototype/assets/scripts/fusion/FusionModel.ts"];
+const PURE_FILES = ["../cocos/assets/scripts/game/ui/fusionLayout.ts", "../cocos/assets/scripts/fusion/FusionModel.ts"];
 
 describe("纯布局与宿主模型 cc-free", () => {
   for (const rel of PURE_FILES) {
@@ -1265,7 +1265,7 @@ describe("纯布局与宿主模型 cc-free", () => {
   }
 
   it("共享层不读存档也不查玩法表:件数与形态位是入参,解锁门一概不查", () => {
-    const src = codeOf(fileSource("../cocos-prototype/assets/scripts/game/ui/fusionLayout.ts"));
+    const src = codeOf(fileSource("../cocos/assets/scripts/game/ui/fusionLayout.ts"));
     for (const bad of ["save.", "stardust -=", "stardust >=", "fusionPity", "ownedTalents", "tripleUnlocked", "performFusion", "qualityDef", "hiddenAffix", "persistSave", "Equipment"]) {
       expect(src.includes(bad), bad).toBe(false);
     }
@@ -1274,7 +1274,7 @@ describe("纯布局与宿主模型 cc-free", () => {
   });
 
   it("模型不写存档、不碰广告通道、不碰路由、不自己取时间,随机源是形参", () => {
-    const src = codeOf(fileSource("../cocos-prototype/assets/scripts/fusion/FusionModel.ts"));
+    const src = codeOf(fileSource("../cocos/assets/scripts/fusion/FusionModel.ts"));
     for (const bad of ["persist(", "persistSave", "writeSave", "watchAd", "showRewardedAd", "localStorage", "router.show", "Date.now(", "save.stardust -=", "save.fusionPity ="]) {
       expect(src.includes(bad), bad).toBe(false);
     }
@@ -1282,7 +1282,7 @@ describe("纯布局与宿主模型 cc-free", () => {
   });
 
   it("模型不复制判据:成本、解锁门、融合执行、继承、保底候选、落词缀、品质表全部转调既有函数", () => {
-    const src = codeOf(fileSource("../cocos-prototype/assets/scripts/fusion/FusionModel.ts"));
+    const src = codeOf(fileSource("../cocos/assets/scripts/fusion/FusionModel.ts"));
     for (const good of ["fusionCost(", "tripleFusionCost(", "tripleUnlocked(", "performFusion(", "performTripleFusion(", "inheritSource(", "rollHiddenCandidates(", "applyHiddenAffix(", "hiddenAffixDef(", "qualityDef(", "HIDDEN_PITY_N"]) {
       expect(src.includes(good), good).toBe(true);
     }
@@ -1295,7 +1295,7 @@ describe("纯布局与宿主模型 cc-free", () => {
 /* ==================== 15. 视图层纪律 ==================== */
 
 describe("FusionView 的纪律:几何全来自共享层、文本只走 placeLine、三棵底部子树整体切换", () => {
-  const src = fileSource("../cocos-prototype/assets/scripts/fusion/FusionView.ts");
+  const src = fileSource("../cocos/assets/scripts/fusion/FusionView.ts");
   const code = codeOf(src);
 
   it("视图不产几何:不自算 panelY / 行步进 / 卡片位,一律读 layout", () => {
@@ -1353,7 +1353,7 @@ describe("FusionView 的纪律:几何全来自共享层、文本只走 placeLine
 /* ==================== 16. 宿主接线:五件套 + 路由注册 + 占位表下线 ==================== */
 
 describe("GameShell 的词缀融合屏接线", () => {
-  const src = fileSource("../cocos-prototype/assets/scripts/GameShell.ts");
+  const src = fileSource("../cocos/assets/scripts/GameShell.ts");
 
   it("五件套齐全并在 buildLayers / 路由钩子里各就各位", () => {
     for (const m of ["buildFusionScreen", "fusionSave", "fusionEquipment", "openFusion", "syncFusion", "onFusionAction", "commitFusionClaim"]) {
@@ -1366,7 +1366,7 @@ describe("GameShell 的词缀融合屏接线", () => {
   });
 
   it("路由实际注册十六屏(SCREEN_KEYS 仍是 16 态全量)", () => {
-    const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
+    const router = fileSource("../cocos/assets/scripts/core/ScreenRouter.ts");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
     expect(keysBlock[1].includes('"fusion"')).toBe(true);
@@ -1411,7 +1411,7 @@ describe("GameShell 的词缀融合屏接线", () => {
     expect(src.includes("private fusSel: FusionSelection = { ...FUSION_DEFAULT_SELECTION };")).toBe(true);
     expect(src.includes("private fusPending: FusionPendingHidden | null = null;")).toBe(true);
     expect(src.includes("private fusMode: TripleMode = FUSION_DEFAULT_TRIPLE_MODE;")).toBe(true);
-    const saveModel = fileSource("../cocos-prototype/assets/scripts/core/SaveModel.ts");
+    const saveModel = fileSource("../cocos/assets/scripts/core/SaveModel.ts");
     expect(saveModel.includes("fusionPity: Number(parsed?.fusionPity) || 0,")).toBe(true);
     for (const bad of ["fusSel", "fusMode", "fusPending", "tripleMode", "pendingHidden"]) {
       expect(saveModel.includes(bad), bad).toBe(false);

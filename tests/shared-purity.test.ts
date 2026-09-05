@@ -1,7 +1,7 @@
 /**
  * 共享层纯净度守卫。
  *
- * cocos-prototype/assets/scripts/game 是 Web 与 Cocos 两端共用的单一事实源:
+ * cocos/assets/scripts/game 是 Web 与 Cocos 两端共用的单一事实源:
  * Cocos 侧 tsconfig 不带 DOM lib,一旦这里引入 cc、DOM 或 Canvas2D,
  * 同一份逻辑就无法在两端同时编译,单一事实源随即失效。
  */
@@ -12,7 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const SHARED = path.join(ROOT, "cocos-prototype", "assets", "scripts", "game");
+const SHARED = path.join(ROOT, "cocos", "assets", "scripts", "game");
 
 function collect(dir: string): string[] {
   const out: string[] = [];

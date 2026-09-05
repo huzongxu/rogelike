@@ -65,17 +65,17 @@ import {
 } from "@game/ui/gearUpLayout";
 
 /* ---------- Cocos 宿主侧(本文件的被测物;只吃 cc-free 模型,不碰视图) ---------- */
-import { buildGearUpContent, gearLevelOf, gearUpClaim, hitGearUp, type GearUpSaveView } from "../cocos-prototype/assets/scripts/gearup/GearUpModel";
-import * as cocosDaily from "../cocos-prototype/assets/scripts/game/data/daily";
-import * as cocosGearLayout from "../cocos-prototype/assets/scripts/game/ui/gearUpLayout";
-import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos-prototype/assets/scripts/ui/TextBand";
+import { buildGearUpContent, gearLevelOf, gearUpClaim, hitGearUp, type GearUpSaveView } from "../cocos/assets/scripts/gearup/GearUpModel";
+import * as cocosDaily from "../cocos/assets/scripts/game/data/daily";
+import * as cocosGearLayout from "../cocos/assets/scripts/game/ui/gearUpLayout";
+import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/scripts/ui/TextBand";
 
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
 const PAD = UI.pad;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
-const LIFT: number = JSON.parse(readFileSync(new URL("../cocos-prototype/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
+const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
 function save(over: Partial<GearUpSaveView> = {}): GearUpSaveView {
   return { stardust: 0, gearLevels: {}, ownedGear: [], ...over };
@@ -181,7 +181,7 @@ describe("整屏三形态(由 ownedGear.length 门控)", () => {
   });
 
   it("spreadRows 用五个实参(第六个 maxGap 走默认 20;pass 是六个的 60 —— 两屏不同,不许统一)", () => {
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/game/ui/gearUpLayout.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/game/ui/gearUpLayout.ts", import.meta.url), "utf8"));
     const call = /=\s*spreadRows\(([^)]*)\)/.exec(src);
     expect(call, "本屏应有一处 spreadRows 调用").not.toBe(null);
     const args = call![1].split(",").map((s) => s.trim());
@@ -356,7 +356,7 @@ describe("屏级几何(面板 / 标题 / 副标题 / 星尘 / 空态 / 截断提
   });
 
   it("本屏没有标题横幅:几何里不产出横幅矩形(与 daily / pass 的 skinHeader 档不同)", () => {
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/game/ui/gearUpLayout.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/game/ui/gearUpLayout.ts", import.meta.url), "utf8"));
     expect(src.includes("headerPlate")).toBe(false);
     expect(src.includes("banner_title")).toBe(false);
     expect(src.includes("skinHeader")).toBe(false);
@@ -762,7 +762,7 @@ describe("升级意图(gearUpClaim)", () => {
 /* ==================== 10. 存档形态:字段都在、初值形态与 normalizeSave 一致 ==================== */
 
 describe("存档字段(派单要求:先确认 Cocos 侧字段齐备)", () => {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/core/SaveModel.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/core/SaveModel.ts", import.meta.url), "utf8");
 
   it("stardust / gearLevels / ownedGear 三个字段都在 SaveModel 上", () => {
     expect(/stardust:\s*number;/.test(src)).toBe(true);
@@ -785,7 +785,7 @@ describe("存档字段(派单要求:先确认 Cocos 侧字段齐备)", () => {
 
 /** 读 `core/ViewTable.ts` 源码里那段 `PHASE4_DEFAULTS`(那一侧 import cc,node 侧不能直载) */
 function phase4Defaults(): Record<string, string> {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
   const head = src.indexOf("export const PHASE4_DEFAULTS: Phase4Params = {");
   const body = src.slice(src.indexOf("{", head), src.indexOf("\n};", head));
   const out: Record<string, string> = {};
@@ -840,7 +840,7 @@ describe("phase4 表的装备升级屏配色档", () => {
   });
 
   it("每个 gu* 键都在 Phase4Params 接口里声明(typedMerge 的整段接线不漏键)", () => {
-    const src = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../cocos/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
     const iface = src.slice(src.indexOf("export interface Phase4Params"), src.indexOf("export const PHASE4_DEFAULTS"));
     for (const k of GU_KEYS) expect(new RegExp(`^\\s+${k}: (?:string|number);$`, "m").test(iface), k).toBe(true);
   });
@@ -919,7 +919,7 @@ const CTX_TYPE = /\bCanvasRenderingContext2D\b/;
 const DOM_GLOBAL = /(?:^|[^.\w$])(window|document|navigator|localStorage|requestAnimationFrame|performance)\s*[.[]/m;
 const ABSOLUTE_GAME = /from\s*["']@game\//;
 
-const PURE_FILES = ["../cocos-prototype/assets/scripts/game/ui/gearUpLayout.ts", "../cocos-prototype/assets/scripts/gearup/GearUpModel.ts"];
+const PURE_FILES = ["../cocos/assets/scripts/game/ui/gearUpLayout.ts", "../cocos/assets/scripts/gearup/GearUpModel.ts"];
 
 describe("纯布局与宿主模型 cc-free", () => {
   for (const rel of PURE_FILES) {
@@ -934,7 +934,7 @@ describe("纯布局与宿主模型 cc-free", () => {
   }
 
   it("共享层不留 Web 的 gearRows 侧信道:矩形由布局现算,绘制与命中同源", () => {
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/game/ui/gearUpLayout.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/game/ui/gearUpLayout.ts", import.meta.url), "utf8"));
     expect(src.includes("gearRows")).toBe(false);
     // 行 y 由 index × rowStep 递推,不靠循环里累加的 let y(那条是 Web dailyLayout 的写法)
     expect(/let y\s*=/.test(src)).toBe(false);
@@ -944,7 +944,7 @@ describe("纯布局与宿主模型 cc-free", () => {
 /* ==================== 14. 视图层纪律:文本只走 placeLine,几何只问共享层 ==================== */
 
 describe("GearUpView 的落位纪律(R5)", () => {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/gearup/GearUpView.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/gearup/GearUpView.ts", import.meta.url), "utf8");
 
   it("文本只经 placeLine 一个入口,视图不自己按对齐摆节点", () => {
     expect(src.includes("placeLine(")).toBe(true);
@@ -967,7 +967,7 @@ describe("GearUpView 的落位纪律(R5)", () => {
   });
 
   it("本屏不碰广告通道,也不写存档", () => {
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/gearup/GearUpView.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/gearup/GearUpView.ts", import.meta.url), "utf8"));
     expect(src.includes("watchAd")).toBe(false);
     expect(src.includes("AdChannel")).toBe(false);
     expect(src.includes("persist")).toBe(false);
@@ -978,7 +978,7 @@ describe("GearUpView 的落位纪律(R5)", () => {
 /* ==================== 15. 宿主接线:五件套 + 路由注册 + 占位提示下线 ==================== */
 
 describe("GameShell 的装备升级屏接线", () => {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/GameShell.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/GameShell.ts", import.meta.url), "utf8");
 
   it("五件套齐全并在 buildLayers / 路由钩子里各就各位", () => {
     for (const m of ["buildGearUpScreen", "gearUpSave", "openGearUp", "syncGearUp", "onGearUpAction", "commitGearUpClaim"]) {

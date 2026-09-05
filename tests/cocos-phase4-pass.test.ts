@@ -74,16 +74,16 @@ import {
   premiumActive,
   type PassAction,
   type PassSaveView,
-} from "../cocos-prototype/assets/scripts/pass/PassModel";
-import * as cocosPass from "../cocos-prototype/assets/scripts/game/data/pass";
-import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos-prototype/assets/scripts/ui/TextBand";
+} from "../cocos/assets/scripts/pass/PassModel";
+import * as cocosPass from "../cocos/assets/scripts/game/data/pass";
+import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/scripts/ui/TextBand";
 
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
 const PAD = UI.pad;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
-const LIFT: number = JSON.parse(readFileSync(new URL("../cocos-prototype/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
+const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
 /** 够拿到最高档的进度(由表尾推导,不写死数值) */
 const TOP_NEED = PASS_TIERS[PASS_TIERS.length - 1].need;
@@ -463,7 +463,7 @@ describe("premiumActive:premiumPass 或 premiumPassSeason === seasonId", () => {
 
 /** 读 `core/ViewTable.ts` 源码里那段 `PHASE4_DEFAULTS`(那一侧 import cc,node 侧不能直载) */
 function phase4Defaults(): Record<string, string> {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
   const head = src.indexOf("export const PHASE4_DEFAULTS: Phase4Params = {");
   const body = src.slice(src.indexOf("{", head), src.indexOf("\n};", head));
   const out: Record<string, string> = {};
@@ -495,7 +495,7 @@ describe("phase4 表的通行证配色档", () => {
   });
 
   it("每个 ps* 键都在 Phase4Params 接口里声明(typedMerge 的整段接线不漏键)", () => {
-    const src = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../cocos/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
     const iface = src.slice(src.indexOf("export interface Phase4Params"), src.indexOf("export const PHASE4_DEFAULTS"));
     for (const k of PS_KEYS) expect(new RegExp(`^\\s+${k}: string;$`, "m").test(iface), k).toBe(true);
   });
@@ -771,8 +771,8 @@ const DOM_GLOBAL = /(?:^|[^.\w$])(window|document|navigator|localStorage|request
 const ABSOLUTE_GAME = /from\s*["']@game\//;
 
 const PURE_FILES = [
-  "../cocos-prototype/assets/scripts/game/ui/passLayout.ts",
-  "../cocos-prototype/assets/scripts/pass/PassModel.ts",
+  "../cocos/assets/scripts/game/ui/passLayout.ts",
+  "../cocos/assets/scripts/pass/PassModel.ts",
 ];
 
 describe("纯布局与宿主模型 cc-free", () => {
@@ -791,7 +791,7 @@ describe("纯布局与宿主模型 cc-free", () => {
 /* ==================== 14. 视图层纪律:文本只走 placeLine,几何只问共享层 ==================== */
 
 describe("PassView 的落位纪律(R5)", () => {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/pass/PassView.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/pass/PassView.ts", import.meta.url), "utf8");
 
   it("文本只经 placeLine 一个入口,视图不自己按对齐摆节点", () => {
     expect(src.includes("placeLine(")).toBe(true);

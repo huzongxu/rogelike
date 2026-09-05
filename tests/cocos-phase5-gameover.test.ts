@@ -95,10 +95,10 @@ import {
   hitGameOver,
   type GameOverRunView,
   type GameOverSaveView,
-} from "../cocos-prototype/assets/scripts/gameover/GameOverModel";
-import * as cocosGameOverLayout from "../cocos-prototype/assets/scripts/game/ui/gameOverLayout";
-import * as cocosStagesData from "../cocos-prototype/assets/scripts/game/data/stages";
-import * as cocosDailyData from "../cocos-prototype/assets/scripts/game/data/daily";
+} from "../cocos/assets/scripts/gameover/GameOverModel";
+import * as cocosGameOverLayout from "../cocos/assets/scripts/game/ui/gameOverLayout";
+import * as cocosStagesData from "../cocos/assets/scripts/game/data/stages";
+import * as cocosDailyData from "../cocos/assets/scripts/game/data/daily";
 
 /* ==================== 夹具 ==================== */
 
@@ -160,7 +160,7 @@ function fileSource(rel: string): string {
 
 /** 从 PHASE4_DEFAULTS 里抠出一张 `键 → 字面量` 的表（ViewTable 那侧 import 了 cc，node 不能直载） */
 function phase4Defaults(): Record<string, string> {
-  const src = fileSource("../cocos-prototype/assets/scripts/core/ViewTable.ts");
+  const src = fileSource("../cocos/assets/scripts/core/ViewTable.ts");
   const block = src.slice(src.indexOf("export const PHASE4_DEFAULTS"), src.indexOf("/** 含义:Phase 3"));
   const out: Record<string, string> = {};
   for (const m of block.matchAll(/^\s{4}(\w+):\s*"([^"]*)",\s*$/gm)) out[m[1]] = m[2];
@@ -190,7 +190,7 @@ describe("端间共读同一份共享层", () => {
   });
 
   it("本屏用到的两条规则都没有宿主侧抄本：模型里不出现回响比例与复活上限的字面量", () => {
-    const model = codeOf(fileSource("../cocos-prototype/assets/scripts/gameover/GameOverModel.ts"));
+    const model = codeOf(fileSource("../cocos/assets/scripts/gameover/GameOverModel.ts"));
     expect(model.includes("0.4")).toBe(false);
     expect(model.includes("ECHO_RETAIN_RATE")).toBe(false);
     // 上限只写「1 + 不屈的 value」，那个 value 从 DAILY_TALENT_POOL 现取
@@ -366,7 +366,7 @@ describe("屏级矩形（与 Web drawGameOver 的内联字面量逐位对应）"
   });
 
   it("共享层不引 cc、不读存档：本层只有一个 import（theme）", () => {
-    const src = codeOf(fileSource("../cocos-prototype/assets/scripts/game/ui/gameOverLayout.ts"));
+    const src = codeOf(fileSource("../cocos/assets/scripts/game/ui/gameOverLayout.ts"));
     expect(src.includes('from "cc"')).toBe(false);
     expect(src.includes("save.")).toBe(false);
     expect(src.includes("localStorage")).toBe(false);
@@ -678,7 +678,7 @@ describe("phase4 表的死亡结算屏配色档（键前缀 go）", () => {
   });
 
   it("接口声明与默认值一一对应，且本屏没有任何一档走内联字面量", () => {
-    const src = fileSource("../cocos-prototype/assets/scripts/core/ViewTable.ts");
+    const src = fileSource("../cocos/assets/scripts/core/ViewTable.ts");
     const iface = src.slice(src.indexOf("export interface Phase4Params"), src.indexOf("export const PHASE4_DEFAULTS"));
     const keys = [...src.slice(src.indexOf("/* ---------- 死亡结算屏"), src.indexOf("}\n\nexport const PHASE4_DEFAULTS")).matchAll(/^\s{4}(go\w+): string;$/gm)].map((m) => m[1]);
     expect(keys.length).toBe(22);
@@ -686,7 +686,7 @@ describe("phase4 表的死亡结算屏配色档（键前缀 go）", () => {
       expect(iface.includes(k + ": string;"), k).toBe(true);
       expect(t[k], k).toBeTruthy();
     }
-    const view = codeOf(fileSource("../cocos-prototype/assets/scripts/gameover/GameOverView.ts"));
+    const view = codeOf(fileSource("../cocos/assets/scripts/gameover/GameOverView.ts"));
     expect((view.match(/p4\.go\w+/g) ?? []).length).toBeGreaterThan(15);
     // 视图里不出现任何内联颜色字面量（除零位盒与 alpha 这类几何档）
     expect(view.includes('"#')).toBe(false);
@@ -698,7 +698,7 @@ describe("phase4 表的死亡结算屏配色档（键前缀 go）", () => {
     expect(web.includes('skinButtonBase(g, this.assets, "btn_primary", dbl.x, dbl.y, dbl.w, dbl.h, 10)')).toBe(true);
     expect(web.includes("banner_large_red")).toBe(true);
     expect(web.includes("player_pose_4")).toBe(true);
-    const view = fileSource("../cocos-prototype/assets/scripts/gameover/GameOverView.ts");
+    const view = fileSource("../cocos/assets/scripts/gameover/GameOverView.ts");
     for (const k of ['const KEY_BANNER = "banner_large_red";', 'const KEY_POSE = "player_pose_4";', 'const KEY_PRIMARY = "btn_primary";', 'const KEY_MINOR = "btn_minor";']) {
       expect(view.includes(k), k).toBe(true);
     }
@@ -711,7 +711,7 @@ describe("phase4 表的死亡结算屏配色档（键前缀 go）", () => {
 /* ==================== 6. 宿主接线与源码守卫 ==================== */
 
 describe("GameShell 的死亡结算屏接线", () => {
-  const src = fileSource("../cocos-prototype/assets/scripts/GameShell.ts");
+  const src = fileSource("../cocos/assets/scripts/GameShell.ts");
 
   it("五件套齐全并在 buildLayers / 路由钩子里各就各位", () => {
     for (const m of ["buildGameOverScreen", "gameOverSave", "gameOverRun", "openGameOver", "syncGameOver", "onGameOverAction", "commitGameOverEcho", "resetGameOverTransients"]) {
@@ -724,7 +724,7 @@ describe("GameShell 的死亡结算屏接线", () => {
   });
 
   it("路由实际注册十六屏（SCREEN_KEYS 仍是 16 态全量）", () => {
-    const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
+    const router = fileSource("../cocos/assets/scripts/core/ScreenRouter.ts");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
     expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover"')).toBe(true);
@@ -744,7 +744,7 @@ describe("GameShell 的死亡结算屏接线", () => {
   });
 
   it("死亡那一刻的预计算在战斗层，宿主不重算一遍（pointsEarnedThisRun / pendingSettle / over）", () => {
-    const sim = codeOf(fileSource("../cocos-prototype/assets/scripts/battle/BattleSim.ts"));
+    const sim = codeOf(fileSource("../cocos/assets/scripts/battle/BattleSim.ts"));
     const seg = sim.slice(sim.indexOf("private onDeath(): void"), sim.indexOf("settlePendingRun(): void"));
     expect(seg.includes("this.world.over = true;")).toBe(true);
     expect(seg.includes("this.pendingSettle = true;")).toBe(true);
@@ -793,7 +793,7 @@ describe("GameShell 的死亡结算屏接线", () => {
   it("两项会话态不入档：宿主字段存在、SaveModel 里没有这两项", () => {
     expect(src.includes("private doubleClaimed = false;")).toBe(true);
     expect(src.includes("private stardustEarnedThisRun = 0;")).toBe(true);
-    const saveModel = fileSource("../cocos-prototype/assets/scripts/core/SaveModel.ts");
+    const saveModel = fileSource("../cocos/assets/scripts/core/SaveModel.ts");
     expect(saveModel.includes("doubleClaimed")).toBe(false);
     expect(saveModel.includes("stardustEarnedThisRun")).toBe(false);
     for (const f of ["points:", "dayEcho:", "bestRun:", "dailyTalentClaimed:"]) {

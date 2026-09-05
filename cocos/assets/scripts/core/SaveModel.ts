@@ -2,7 +2,7 @@
  * Cocos 宿主存档模型 —— 与 Web 版 src/systems/save.ts 的 SaveData 同构。
  *
  * 放在宿主侧(core/,不在 game/ 共享目录内):共享层只接接受显式的
- * "局外配置"入参(cocos-prototype/assets/scripts/game/systems/battleWorld.ts 的 BattleRunInputs),
+ * "局外配置"入参(cocos/assets/scripts/game/systems/battleWorld.ts 的 BattleRunInputs),
  * 不复制存档结构;读原始 JSON → 归一化 → 派生入参这条链路由各端宿主各自负责。
  * 持久化走 core/SaveChannel.ts(sys.localStorage)。
  */

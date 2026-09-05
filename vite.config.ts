@@ -5,7 +5,7 @@ export default defineConfig({
   base: "./",
   resolve: {
     alias: {
-      "@game": fileURLToPath(new URL("./cocos-prototype/assets/scripts/game", import.meta.url)),
+      "@game": fileURLToPath(new URL("./cocos/assets/scripts/game", import.meta.url)),
     },
   },
   server: {

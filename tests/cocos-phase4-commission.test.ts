@@ -131,10 +131,10 @@ import {
   type CommissionAction,
   type CommissionSaveView,
   type CommissionSelection,
-} from "../cocos-prototype/assets/scripts/commission/CommissionModel";
-import * as cocosCommissions from "../cocos-prototype/assets/scripts/game/data/commissions";
-import * as cocosCommissionLayout from "../cocos-prototype/assets/scripts/game/ui/commissionLayout";
-import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos-prototype/assets/scripts/ui/TextBand";
+} from "../cocos/assets/scripts/commission/CommissionModel";
+import * as cocosCommissions from "../cocos/assets/scripts/game/data/commissions";
+import * as cocosCommissionLayout from "../cocos/assets/scripts/game/ui/commissionLayout";
+import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/scripts/ui/TextBand";
 
 const W = 560;
 const H_STD = 996;
@@ -144,7 +144,7 @@ const PAD = PAD_.pad;
 const NOW = 1800000000000;
 const HOUR = 3600000;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
-const LIFT: number = JSON.parse(readFileSync(new URL("../cocos-prototype/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
+const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
 /* ==================== 夹具 ==================== */
 
@@ -189,7 +189,7 @@ function fileSource(rel: string): string {
 
 /** 从 PHASE4_DEFAULTS 里抠出一张 `键 → 字面量` 的表(ViewTable 那侧 import 了 cc,node 不能直载) */
 function phase4Defaults(): Record<string, string> {
-  const src = fileSource("../cocos-prototype/assets/scripts/core/ViewTable.ts");
+  const src = fileSource("../cocos/assets/scripts/core/ViewTable.ts");
   const block = src.slice(src.indexOf("export const PHASE4_DEFAULTS"), src.indexOf("/** 含义:Phase 3"));
   const out: Record<string, string> = {};
   for (const m of block.matchAll(/^\s{4}(\w+):\s*"([^"]*)",\s*$/gm)) out[m[1]] = m[2];
@@ -1215,7 +1215,7 @@ describe("字面量锁(Web 基准里确实有这两串,且表里的两个常量�
     expect(COMMISSION_DECAY_NOTE).toBe("收益前2h 100%,之后降至 50%");
     expect(frame(0).c.startText).toBe("开始委托(4h)");
     expect(frame(1).c.panels[0].line3.endsWith(COMMISSION_DECAY_NOTE)).toBe(true);
-    const model = fileSource("../cocos-prototype/assets/scripts/commission/CommissionModel.ts");
+    const model = fileSource("../cocos/assets/scripts/commission/CommissionModel.ts");
     expect(model.includes('= "收益前2h 100%,之后降至 50%"')).toBe(true);
     expect(model.includes("收益前${")).toBe(false);
   });
@@ -1328,7 +1328,7 @@ describe("phase4 表的 cm* 段(默认值逐项对标 Web drawCommission / drawC
 
   it("hud 段那条 commissionText 不在本屏重复定义(cm* 段里没有同名键)", () => {
     expect(CM_KEYS.includes("commissionText")).toBe(false);
-    const src = fileSource("../cocos-prototype/assets/scripts/core/ViewTable.ts");
+    const src = fileSource("../cocos/assets/scripts/core/ViewTable.ts");
     expect((src.match(/commissionText:/g) ?? []).length).toBe(1);
   });
 });
@@ -1340,7 +1340,7 @@ const CTX_TYPE = /\bCanvasRenderingContext2D\b/;
 const DOM_GLOBAL = /(?:^|[^.\w$])(window|document|navigator|localStorage|requestAnimationFrame|performance)\s*[.[]/m;
 const ABSOLUTE_GAME = /from\s*["']@game\//;
 
-const PURE_FILES = ["../cocos-prototype/assets/scripts/game/ui/commissionLayout.ts", "../cocos-prototype/assets/scripts/commission/CommissionModel.ts"];
+const PURE_FILES = ["../cocos/assets/scripts/game/ui/commissionLayout.ts", "../cocos/assets/scripts/commission/CommissionModel.ts"];
 
 describe("纯布局与宿主模型 cc-free", () => {
   for (const rel of PURE_FILES) {
@@ -1354,7 +1354,7 @@ describe("纯布局与宿主模型 cc-free", () => {
   }
 
   it("共享层不读存档:面板条数是入参,解锁与拥有态一概不查", () => {
-    const src = codeOf(fileSource("../cocos-prototype/assets/scripts/game/ui/commissionLayout.ts"));
+    const src = codeOf(fileSource("../cocos/assets/scripts/game/ui/commissionLayout.ts"));
     for (const bad of ["save.", "this.save", "s.prestiges", "ownedTalents", "commission2", "regionUnlocked", "owns(", "persistSave", "difficultyOf(", "accruedReward(", "effectiveHours(", "CommissionState"]) {
       expect(src.includes(bad), bad).toBe(false);
     }
@@ -1364,7 +1364,7 @@ describe("纯布局与宿主模型 cc-free", () => {
   });
 
   it("模型不写存档、不碰广告通道、不碰路由、不自己取时间", () => {
-    const src = codeOf(fileSource("../cocos-prototype/assets/scripts/commission/CommissionModel.ts"));
+    const src = codeOf(fileSource("../cocos/assets/scripts/commission/CommissionModel.ts"));
     for (const bad of ["persist(", "persistSave", "writeSave", "watchAd", "showRewardedAd", "localStorage", "router.show", "Date.now(", "save.fragments +=", "save.stardust +=", "save.commission ="]) {
       expect(src.includes(bad), bad).toBe(false);
     }
@@ -1374,7 +1374,7 @@ describe("纯布局与宿主模型 cc-free", () => {
   });
 
   it("模型不复制判据:查表、解锁门、加成、衰减、券数全部转调既有函数", () => {
-    const src = codeOf(fileSource("../cocos-prototype/assets/scripts/commission/CommissionModel.ts"));
+    const src = codeOf(fileSource("../cocos/assets/scripts/commission/CommissionModel.ts"));
     for (const good of ["regionOf(", "difficultyOf(", "regionUnlocked(", "offlineBonusFor(", "commissionSpeedFor(", "commissionTimeScaleFor(", "uncappedCommissionFor(", "effectiveHours(", "accruedReward(", "collectReward(", "commissionTickets(", "FRAGMENT_TO_STARDUST"]) {
       expect(src.includes(good), good).toBe(true);
     }
@@ -1389,7 +1389,7 @@ describe("纯布局与宿主模型 cc-free", () => {
 /* ==================== 16. 视图层纪律 ==================== */
 
 describe("CommissionView 的纪律:几何全来自共享层、文本只走 placeLine、两棵子树整体切换", () => {
-  const src = fileSource("../cocos-prototype/assets/scripts/commission/CommissionView.ts");
+  const src = fileSource("../cocos/assets/scripts/commission/CommissionView.ts");
   const code = codeOf(src);
 
   it("视图不产几何:不自算 diffY / bw / 面板 y,一律读 layout", () => {
@@ -1442,7 +1442,7 @@ describe("CommissionView 的纪律:几何全来自共享层、文本只走 place
 /* ==================== 17. 宿主接线:五件套 + 路由注册 + 占位提示下线 ==================== */
 
 describe("GameShell 的委托挂机屏接线", () => {
-  const src = fileSource("../cocos-prototype/assets/scripts/GameShell.ts");
+  const src = fileSource("../cocos/assets/scripts/GameShell.ts");
 
   it("五件套齐全并在 buildLayers / 路由钩子里各就各位", () => {
     for (const m of ["buildCommissionScreen", "commissionSave", "openCommission", "syncCommission", "onCommissionAction", "commitCommissionClaim"]) {
@@ -1455,7 +1455,7 @@ describe("GameShell 的委托挂机屏接线", () => {
   });
 
   it("路由实际注册十六屏(SCREEN_KEYS 仍是 16 态全量)", () => {
-    const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
+    const router = fileSource("../cocos/assets/scripts/core/ScreenRouter.ts");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
     expect(keysBlock[1].includes('"commission"')).toBe(true);
@@ -1491,7 +1491,7 @@ describe("GameShell 的委托挂机屏接线", () => {
     expect(src.includes("private commSel: CommissionSelection = { ...COMMISSION_DEFAULT_SELECTION };")).toBe(true);
     expect(COMMISSION_DEFAULT_SELECTION).toEqual({ region: "plains", difficulty: 1 });
     // 存档模型里没有这两个字段:选中态永远读不到盘上
-    const saveModel = fileSource("../cocos-prototype/assets/scripts/core/SaveModel.ts");
+    const saveModel = fileSource("../cocos/assets/scripts/core/SaveModel.ts");
     expect(saveModel.includes("commRegion")).toBe(false);
     expect(saveModel.includes("commDifficulty")).toBe(false);
     expect(saveModel.includes("commSel")).toBe(false);
@@ -1636,7 +1636,7 @@ describe("Web 基准的几条反直觉口径已原样带上", () => {
     expect(ready.includes("[this.save.commission, this.save.commission2].some(")).toBe(true);
     expect(ready.includes(">= COMMISSION_READY_HOURS")).toBe(true);
     // Cocos 侧同一判据已在 MenuContentModel 里,宿主落账后重算主菜单
-    const menu = fileSource("../cocos-prototype/assets/scripts/menu/MenuContentModel.ts");
+    const menu = fileSource("../cocos/assets/scripts/menu/MenuContentModel.ts");
     expect(menu.includes("[save.commission, save.commission2].some(")).toBe(true);
     expect(menu.includes("COMMISSION_READY_HOURS")).toBe(true);
   });

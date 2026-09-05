@@ -81,12 +81,12 @@ import {
   energyDiamondClaim,
   hitEnergy,
   type EnergySaveView,
-} from "../cocos-prototype/assets/scripts/energy/EnergyModel";
-import * as cocosEnergyLayout from "../cocos-prototype/assets/scripts/game/ui/energyLayout";
-import * as cocosEnergyModel from "../cocos-prototype/assets/scripts/energy/EnergyModel";
-import * as cocosDaily from "../cocos-prototype/assets/scripts/game/data/daily";
-import * as cocosVictoryLayout from "../cocos-prototype/assets/scripts/game/ui/victoryLayout";
-import * as cocosVictoryModel from "../cocos-prototype/assets/scripts/victory/VictoryModel";
+} from "../cocos/assets/scripts/energy/EnergyModel";
+import * as cocosEnergyLayout from "../cocos/assets/scripts/game/ui/energyLayout";
+import * as cocosEnergyModel from "../cocos/assets/scripts/energy/EnergyModel";
+import * as cocosDaily from "../cocos/assets/scripts/game/data/daily";
+import * as cocosVictoryLayout from "../cocos/assets/scripts/game/ui/victoryLayout";
+import * as cocosVictoryModel from "../cocos/assets/scripts/victory/VictoryModel";
 
 /* ==================== 夹具 ==================== */
 
@@ -144,7 +144,7 @@ function fileSource(rel: string): string {
 
 /** 从 PHASE4_DEFAULTS 里抠出一张 `键 → 字面量` 的表(ViewTable 那侧 import 了 cc,node 不能直载) */
 function phase4Defaults(): Record<string, string> {
-  const src = fileSource("../cocos-prototype/assets/scripts/core/ViewTable.ts");
+  const src = fileSource("../cocos/assets/scripts/core/ViewTable.ts");
   const block = src.slice(src.indexOf("export const PHASE4_DEFAULTS"), src.indexOf("/** 含义:Phase 3"));
   const out: Record<string, string> = {};
   for (const m of block.matchAll(/^\s{4}(\w+):\s*"([^"]*)",\s*$/gm)) out[m[1]] = m[2];
@@ -187,7 +187,7 @@ describe("端间共读同一份共享层", () => {
   });
 
   it("本屏的体力口径没有宿主侧抄本:五个数一律转调共享层常量", () => {
-    const model = codeOf(fileSource("../cocos-prototype/assets/scripts/energy/EnergyModel.ts"));
+    const model = codeOf(fileSource("../cocos/assets/scripts/energy/EnergyModel.ts"));
     for (const banned of ["= 20", ">= 10", "+ 5", "360"]) expect(model.includes(banned)).toBe(false);
     // 唯一的除法是作用在共享层常量上的秒 → 分,不落到任何字面量
     expect(model.includes("ENERGY_REGEN_SECONDS / 60")).toBe(true);
@@ -199,7 +199,7 @@ describe("端间共读同一份共享层", () => {
   });
 
   it("模型层不碰存档、不碰节点、不看时间与随机源", () => {
-    const model = codeOf(fileSource("../cocos-prototype/assets/scripts/energy/EnergyModel.ts"));
+    const model = codeOf(fileSource("../cocos/assets/scripts/energy/EnergyModel.ts"));
     expect(model.includes("Date.now")).toBe(false);
     expect(model.includes("Math.random")).toBe(false);
     expect(model.includes(".persist")).toBe(false);
@@ -380,7 +380,7 @@ describe("1246 档几何与跨档性质", () => {
     expect(Math.round((B.diamondBtn.y - B.adBtn.y) * 100) / 100).toBe(62);
     expect(Math.round((A.diamondBtn.y - A.adBtn.y) * 100) / 100).toBe(62);
     expect(B.adBtn.w).toBe(A.adBtn.w);
-    const layout = fileSource("../cocos-prototype/assets/scripts/game/ui/energyLayout.ts");
+    const layout = fileSource("../cocos/assets/scripts/game/ui/energyLayout.ts");
     expect(layout.includes("spreadRows")).toBe(false);
   });
 });
@@ -608,7 +608,7 @@ describe("文案与热区字面量在 Web 基准里逐字成对", () => {
   });
 
   it("模型里出现的每一段中文字面量都能在 Web drawEnergy 段里找到", () => {
-    const model = fileSource("../cocos-prototype/assets/scripts/energy/EnergyModel.ts");
+    const model = fileSource("../cocos/assets/scripts/energy/EnergyModel.ts");
     const code = codeOf(model);
     const lits = [...code.matchAll(/"([^"\n]*[㐀-鿿][^"\n]*)"/g)].map((m) => m[1]);
     expect(lits.length).toBeGreaterThanOrEqual(5);
@@ -659,7 +659,7 @@ describe("phase4 表的 en* 段(默认值逐项对标 Web drawEnergy)", () => {
   it("本屏 22 个键全部存在且都被视图层取用(没有孤儿键)", () => {
     const keys = Object.keys(D).filter((k) => /^en[A-Z]/.test(k));
     expect(keys.length).toBe(22);
-    const view = codeOf(fileSource("../cocos-prototype/assets/scripts/energy/EnergyView.ts"));
+    const view = codeOf(fileSource("../cocos/assets/scripts/energy/EnergyView.ts"));
     for (const k of keys) expect(view.includes(`p4.${k}`)).toBe(true);
   });
 
@@ -675,7 +675,7 @@ describe("phase4 表的 en* 段(默认值逐项对标 Web drawEnergy)", () => {
 
 describe("三层分工的源码纪律", () => {
   it("视图层不内联任何一枚盒与基线:几何只能来自 energyScreenLayout", () => {
-    const view = codeOf(fileSource("../cocos-prototype/assets/scripts/energy/EnergyView.ts"));
+    const view = codeOf(fileSource("../cocos/assets/scripts/energy/EnergyView.ts"));
     const body = bodyOf(view);
     // 视图里出现的数字只允许是零位盒(0)、缓存哨兵(-1 的 1)、lineHeight 系数(1.25)
     // 与暗底折中心锚点的除数(2)
@@ -692,12 +692,12 @@ describe("三层分工的源码纪律", () => {
   });
 
   it("视图层用 rowTextY 的只有几何层:视图内不出现 rowTextY", () => {
-    expect(bodyOf(codeOf(fileSource("../cocos-prototype/assets/scripts/energy/EnergyView.ts"))).includes("rowTextY")).toBe(false);
-    expect(fileSource("../cocos-prototype/assets/scripts/game/ui/energyLayout.ts").includes("rowTextY")).toBe(true);
+    expect(bodyOf(codeOf(fileSource("../cocos/assets/scripts/energy/EnergyView.ts"))).includes("rowTextY")).toBe(false);
+    expect(fileSource("../cocos/assets/scripts/game/ui/energyLayout.ts").includes("rowTextY")).toBe(true);
   });
 
   it("布局层不读存档也不查体力表", () => {
-    const layout = codeOf(fileSource("../cocos-prototype/assets/scripts/game/ui/energyLayout.ts"));
+    const layout = codeOf(fileSource("../cocos/assets/scripts/game/ui/energyLayout.ts"));
     for (const banned of ["ENERGY_MAX", "ENERGY_AD_LIMIT", "ENERGY_DIAMOND_COST", "save."]) expect(layout.includes(banned)).toBe(false);
     expect(layout.includes("from \"./theme\"")).toBe(true);
   });
@@ -712,7 +712,7 @@ describe("三层分工的源码纪律", () => {
   });
 
   it("三枚钮的贴图档与 Web 同一条写法:可用档才试 btn_primary", () => {
-    const view = codeOf(fileSource("../cocos-prototype/assets/scripts/energy/EnergyView.ts"));
+    const view = codeOf(fileSource("../cocos/assets/scripts/energy/EnergyView.ts"));
     expect(view.includes('c.canAd ? KEY_PRIMARY : ""')).toBe(true);
     expect(view.includes('c.canDiamond ? KEY_PRIMARY : ""')).toBe(true);
     expect(webDrawEnergy().includes('skinButtonBase(g, this.assets, "btn_primary"')).toBe(true);
@@ -726,20 +726,20 @@ describe("import 完整性:每一个用到的出口都必须在 import 清单里
   const modelSpec = { label: "EnergyModel", ns: cocosEnergyModel as unknown as Record<string, unknown> };
 
   it("EnergyView 用到的布局/模型出口全部在它的 import 清单里", () => {
-    expect(missingImports("../cocos-prototype/assets/scripts/energy/EnergyView.ts", [layoutSpec, modelSpec])).toEqual([]);
+    expect(missingImports("../cocos/assets/scripts/energy/EnergyView.ts", [layoutSpec, modelSpec])).toEqual([]);
   });
 
   it("GameShell 用到的 energy 三层出口全部在它的 import 清单里", () => {
-    expect(missingImports("../cocos-prototype/assets/scripts/GameShell.ts", [layoutSpec, modelSpec])).toEqual([]);
+    expect(missingImports("../cocos/assets/scripts/GameShell.ts", [layoutSpec, modelSpec])).toEqual([]);
   });
 
   it("EnergyModel 用到的布局出口也在清单里", () => {
-    expect(missingImports("../cocos-prototype/assets/scripts/energy/EnergyModel.ts", [layoutSpec])).toEqual([]);
+    expect(missingImports("../cocos/assets/scripts/energy/EnergyModel.ts", [layoutSpec])).toEqual([]);
   });
 
   it("同一把尺子量已落地的通关屏:曾经漏掉的 victoryBadgeTextLine 现在在清单里", () => {
     expect(
-      missingImports("../cocos-prototype/assets/scripts/victory/VictoryView.ts", [
+      missingImports("../cocos/assets/scripts/victory/VictoryView.ts", [
         { label: "victoryLayout", ns: cocosVictoryLayout as unknown as Record<string, unknown> },
         { label: "VictoryModel", ns: cocosVictoryModel as unknown as Record<string, unknown> },
       ])

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = join(
     fileURLToPath(new URL(".", import.meta.url)), "..",
-    "cocos-prototype", "build", process.argv[2] || "web-desktop"
+    "cocos", "build", process.argv[2] || "web-desktop"
 );
 const PORT = Number(process.argv[3] || 4173);
 const MIME = {

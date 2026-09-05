@@ -6,7 +6,7 @@ import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const OUT = join(ROOT, "cocos-prototype", "assets", "resources");
+const OUT = join(ROOT, "cocos", "assets", "resources");
 
 const PAIRS = [
     { from: join(ROOT, "public", "assets"), to: join(OUT, "textures"), filter: (f) => f.endsWith(".png") },

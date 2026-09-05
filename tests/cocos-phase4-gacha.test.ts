@@ -84,17 +84,17 @@ import {
 } from "@game/ui/gachaLayout";
 
 /* ---------- Cocos 宿主侧(本文件的被测物;只吃 cc-free 模型,不碰视图) ---------- */
-import { buildGachaContent, gachaClaim, gachaLevel, hitGacha, type GachaAction, type GachaSaveView } from "../cocos-prototype/assets/scripts/gacha/GachaModel";
-import * as cocosGacha from "../cocos-prototype/assets/scripts/game/data/gacha";
-import * as cocosGachaLayout from "../cocos-prototype/assets/scripts/game/ui/gachaLayout";
-import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos-prototype/assets/scripts/ui/TextBand";
+import { buildGachaContent, gachaClaim, gachaLevel, hitGacha, type GachaAction, type GachaSaveView } from "../cocos/assets/scripts/gacha/GachaModel";
+import * as cocosGacha from "../cocos/assets/scripts/game/data/gacha";
+import * as cocosGachaLayout from "../cocos/assets/scripts/game/ui/gachaLayout";
+import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/scripts/ui/TextBand";
 
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
 const PAD = UI.pad;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
-const LIFT: number = JSON.parse(readFileSync(new URL("../cocos-prototype/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
+const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
 /* ==================== 夹具 ==================== */
 
@@ -473,7 +473,7 @@ describe("四格溢出矩阵:h ∈ {996,1246} × nRes ∈ {0,5}", () => {
   it("行高钳制两档就是 Web 的 40 / 64,且 maxGap 走默认 20(spreadRows 只传五个实参)", () => {
     expect(GC_ROW_MIN_H).toBe(40);
     expect(GC_ROW_MAX_H).toBe(64);
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/game/ui/gachaLayout.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/game/ui/gachaLayout.ts", import.meta.url), "utf8"));
     const call = /=\s*spreadRows\(([^)]*)\)/.exec(src);
     expect(call, "本屏应有一处 spreadRows 调用").not.toBe(null);
     const args = call![1].split(",").map((s) => s.trim());
@@ -1069,7 +1069,7 @@ describe("抽取意图(gachaClaim)", () => {
 /* ==================== 10. 存档形态 ==================== */
 
 describe("存档字段(派单要求:先确认 Cocos 侧字段齐备)", () => {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/core/SaveModel.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/core/SaveModel.ts", import.meta.url), "utf8");
 
   it("本屏读的八个字段都在 SaveModel 上声明并归一化", () => {
     for (const f of ["gachaTicket", "gachaPityEpic", "gachaPityLegendary", "dailyGachaAdUsed", "diamond", "highestStage", "ownedGear", "selectedGearId"]) {
@@ -1080,7 +1080,7 @@ describe("存档字段(派单要求:先确认 Cocos 侧字段齐备)", () => {
 
   it("gachaResults 不是存档字段(宿主瞬时态,不入档)", () => {
     expect(src.includes("gachaResults")).toBe(false);
-    const shell = readFileSync(new URL("../cocos-prototype/assets/scripts/GameShell.ts", import.meta.url), "utf8");
+    const shell = readFileSync(new URL("../cocos/assets/scripts/GameShell.ts", import.meta.url), "utf8");
     expect(shell.includes("private gachaResults: GachaResult[] = [];")).toBe(true);
   });
 
@@ -1103,7 +1103,7 @@ describe("存档字段(派单要求:先确认 Cocos 侧字段齐备)", () => {
 
 /** 读 `core/ViewTable.ts` 源码里那段 `PHASE4_DEFAULTS`(那一侧 import cc,node 侧不能直载) */
 function phase4Defaults(): Record<string, string> {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
   const head = src.indexOf("export const PHASE4_DEFAULTS: Phase4Params = {");
   const body = src.slice(src.indexOf("{", head), src.indexOf("\n};", head));
   const out: Record<string, string> = {};
@@ -1171,7 +1171,7 @@ describe("phase4 表的扭蛋屏配色档", () => {
   });
 
   it("每个 gc* 键都在 Phase4Params 接口里声明(typedMerge 的整段接线不漏键)", () => {
-    const src = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
+    const src = readFileSync(new URL("../cocos/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
     const iface = src.slice(src.indexOf("export interface Phase4Params"), src.indexOf("export const PHASE4_DEFAULTS"));
     for (const k of GC_KEYS) expect(new RegExp(`^\\s+${k}: (?:string|number);$`, "m").test(iface), k).toBe(true);
   });
@@ -1330,7 +1330,7 @@ const CTX_TYPE = /\bCanvasRenderingContext2D\b/;
 const DOM_GLOBAL = /(?:^|[^.\w$])(window|document|navigator|localStorage|requestAnimationFrame|performance)\s*[.[]/m;
 const ABSOLUTE_GAME = /from\s*["']@game\//;
 
-const PURE_FILES = ["../cocos-prototype/assets/scripts/game/ui/gachaLayout.ts", "../cocos-prototype/assets/scripts/gacha/GachaModel.ts"];
+const PURE_FILES = ["../cocos/assets/scripts/game/ui/gachaLayout.ts", "../cocos/assets/scripts/gacha/GachaModel.ts"];
 
 describe("纯布局与宿主模型 cc-free", () => {
   for (const rel of PURE_FILES) {
@@ -1344,12 +1344,12 @@ describe("纯布局与宿主模型 cc-free", () => {
   }
 
   it("共享层不读存档:行 id 与最近结果条数都是入参", () => {
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/game/ui/gachaLayout.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/game/ui/gachaLayout.ts", import.meta.url), "utf8"));
     for (const bad of ["save.", "ownedGear", "gachaResults", "persistSave"]) expect(src.includes(bad), bad).toBe(false);
   });
 
   it("模型不写存档、不碰广告通道", () => {
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/gacha/GachaModel.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/gacha/GachaModel.ts", import.meta.url), "utf8"));
     for (const bad of ["ownedGear.push", "save.gachaTicket -=", "persist", "watchAd", "showRewardedAd", "localStorage"]) {
       expect(src.includes(bad), bad).toBe(false);
     }
@@ -1359,7 +1359,7 @@ describe("纯布局与宿主模型 cc-free", () => {
 /* ==================== 14. 视图层纪律 ==================== */
 
 describe("GachaView 的落位纪律(R5)", () => {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/gacha/GachaView.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/gacha/GachaView.ts", import.meta.url), "utf8");
 
   it("最近抽取两列的显隐成对切换:name 收起之后必须再放回(构建包实测抓到的缺陷)", () => {
     // 进屏时 gachaResults 为空 → 五个 name 槽全被收起;若 happy path 不放回,抽到的装备名永远不显示
@@ -1414,7 +1414,7 @@ describe("GachaView 的落位纪律(R5)", () => {
 /* ==================== 15. 宿主接线:五件套 + 路由注册 + 占位提示下线 ==================== */
 
 describe("GameShell 的扭蛋屏接线", () => {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/GameShell.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/GameShell.ts", import.meta.url), "utf8");
 
   it("五件套齐全并在 buildLayers / 路由钩子里各就各位", () => {
     for (const m of ["buildGachaScreen", "gachaSave", "openGacha", "syncGacha", "onGachaAction", "commitGachaClaim"]) {
@@ -1427,7 +1427,7 @@ describe("GameShell 的扭蛋屏接线", () => {
   });
 
   it("路由实际注册十六屏(SCREEN_KEYS 仍是 16 态全量)", () => {
-    const router = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ScreenRouter.ts", import.meta.url), "utf8");
+    const router = readFileSync(new URL("../cocos/assets/scripts/core/ScreenRouter.ts", import.meta.url), "utf8");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
     expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover"')).toBe(true);
@@ -1573,25 +1573,25 @@ describe("Web 基准的反直觉口径已原样带上", () => {
   });
 
   it("派单核实 ②:dailyGachaAdUsed 由每日重置清零,BattleSim 与 Web 各只有那一处", () => {
-    const sim = readFileSync(new URL("../cocos-prototype/assets/scripts/battle/BattleSim.ts", import.meta.url), "utf8");
+    const sim = readFileSync(new URL("../cocos/assets/scripts/battle/BattleSim.ts", import.meta.url), "utf8");
     const seg = sim.slice(sim.indexOf("private checkDailyReset()"), sim.indexOf("/** 广告复活(结算屏调用)"));
     expect(seg.includes("this.save.dailyGachaAdUsed = false;")).toBe(true);
     const full = readFileSync(new URL("../src/game.ts", import.meta.url), "utf8");
     expect((full.match(/dailyGachaAdUsed = false/g) ?? []).length).toBe(1);
     expect((sim.match(/dailyGachaAdUsed = false/g) ?? []).length).toBe(1);
     // 本屏不需要额外处理:壳层只是在本屏可见时重排一次
-    const shell = readFileSync(new URL("../cocos-prototype/assets/scripts/GameShell.ts", import.meta.url), "utf8");
+    const shell = readFileSync(new URL("../cocos/assets/scripts/GameShell.ts", import.meta.url), "utf8");
     expect((shell.match(/dailyGachaAdUsed = false/g) ?? []).length).toBe(0);
   });
 
   it("派单核实 ①:recordEquipment 的 Cocos 对应物已存在,本屏逐件接上", () => {
-    const sim = readFileSync(new URL("../cocos-prototype/assets/scripts/battle/BattleSim.ts", import.meta.url), "utf8");
+    const sim = readFileSync(new URL("../cocos/assets/scripts/battle/BattleSim.ts", import.meta.url), "utf8");
     const seg = sim.slice(sim.indexOf("private recordEquipment("), sim.indexOf("private recordAffix("));
     expect(seg.includes("this.save.collection")).toBe(true);
     expect(seg.includes("recordAffix(col.triggers")).toBe(true);
-    const world = readFileSync(new URL("../cocos-prototype/assets/scripts/game/systems/battleWorld.ts", import.meta.url), "utf8");
+    const world = readFileSync(new URL("../cocos/assets/scripts/game/systems/battleWorld.ts", import.meta.url), "utf8");
     expect(world.includes("recordEquipment(eq: Equipment): void")).toBe(true);
-    const shell = readFileSync(new URL("../cocos-prototype/assets/scripts/GameShell.ts", import.meta.url), "utf8");
+    const shell = readFileSync(new URL("../cocos/assets/scripts/GameShell.ts", import.meta.url), "utf8");
     // Web 的 doGacha / doGachaAd 各调一次 recordEquipment → Cocos 侧由宿主逐件走同一条口
     expect((web.match(/this\.recordEquipment\(/g) ?? []).length).toBe(2);
     // 这条口在宿主侧有两处消费者(章间商店 + 本屏),扭蛋落账段内恰好一处

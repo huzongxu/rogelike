@@ -24,16 +24,16 @@ import * as sharedLb from "@game/data/leaderboard";
 import { leaderboardLayout, LB_BADGE_BOX, LB_ROWS_TOP, LB_ROW_MIN_H, LB_ROW_MAX_H } from "@game/ui/leaderboardLayout";
 
 /* ---------- Cocos 宿主侧(本文件的被测物;只吃 cc-free 模型,不碰视图) ---------- */
-import { buildLeaderboardContent, hitLeaderboard, leaderboardScreenLayout, type LeaderboardSaveView } from "../cocos-prototype/assets/scripts/leaderboard/LeaderboardModel";
-import * as cocosLb from "../cocos-prototype/assets/scripts/game/data/leaderboard";
-import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos-prototype/assets/scripts/ui/TextBand";
+import { buildLeaderboardContent, hitLeaderboard, leaderboardScreenLayout, type LeaderboardSaveView } from "../cocos/assets/scripts/leaderboard/LeaderboardModel";
+import * as cocosLb from "../cocos/assets/scripts/game/data/leaderboard";
+import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/scripts/ui/TextBand";
 
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
 const PAD = UI.pad;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
-const LIFT: number = JSON.parse(readFileSync(new URL("../cocos-prototype/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
+const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
 /** 存档切片构造器:seasonScore = Σ(星数×10,只数 >0)+ seasonBest */
 function save(over: Partial<LeaderboardSaveView> = {}): LeaderboardSaveView {
@@ -357,8 +357,8 @@ const ABSOLUTE_GAME = /from\s*["']@game\//;
 
 /** 共享层新文件由 tests/shared-purity.test.ts 自动覆盖(game/** 递归);这里显式复核并补宿主 cc-free 模型 */
 const PURE_FILES = [
-  "../cocos-prototype/assets/scripts/game/ui/leaderboardLayout.ts",
-  "../cocos-prototype/assets/scripts/leaderboard/LeaderboardModel.ts",
+  "../cocos/assets/scripts/game/ui/leaderboardLayout.ts",
+  "../cocos/assets/scripts/leaderboard/LeaderboardModel.ts",
 ];
 
 describe("纯布局与宿主模型 cc-free", () => {

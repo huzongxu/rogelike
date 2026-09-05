@@ -8,7 +8,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   resolve: {
     alias: {
-      "@game": fileURLToPath(new URL("./cocos-prototype/assets/scripts/game", import.meta.url)),
+      "@game": fileURLToPath(new URL("./cocos/assets/scripts/game", import.meta.url)),
     },
   },
   build: {

@@ -13,8 +13,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { vec2 } from "@game/core/math";
 import { LIMITS } from "@game/systems/battleWorld";
-import { emptySave } from "../cocos-prototype/assets/scripts/core/SaveModel";
-import { BattleSim } from "../cocos-prototype/assets/scripts/battle/BattleSim";
+import { emptySave } from "../cocos/assets/scripts/core/SaveModel";
+import { BattleSim } from "../cocos/assets/scripts/battle/BattleSim";
 
 /** 与浏览器侧人工指纹同源的 mulberry32 */
 const SEED = 0x9e3779b9;

@@ -12,8 +12,8 @@
 import { describe, it, expect } from "vitest";
 import { vi } from "vitest";
 import { vec2 } from "@game/core/math";
-import { emptySave } from "../cocos-prototype/assets/scripts/core/SaveModel";
-import { BattleSim } from "../cocos-prototype/assets/scripts/battle/BattleSim";
+import { emptySave } from "../cocos/assets/scripts/core/SaveModel";
+import { BattleSim } from "../cocos/assets/scripts/battle/BattleSim";
 
 interface Harness {
   sim: BattleSim;
@@ -182,7 +182,7 @@ describe("顺序危险:startRun 会清挂起标记,所以结算必须排在开�
 describe("宿主接线:六个放弃/开局入口都要结算在前", () => {
   it("GameShell 的选关 / 无限关 / 重开与两张结算屏的天赋 / 菜单共六处都在切屏之前调 settlePendingRun", async () => {
     const { readFileSync } = await import("node:fs");
-    const src = readFileSync(new URL("../cocos-prototype/assets/scripts/GameShell.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    const src = readFileSync(new URL("../cocos/assets/scripts/GameShell.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     expect(src.split("sim.settlePendingRun();").length - 1, "六个入口各一次真实调用").toBe(6);
     // 逐处确认结算排在开新局 / 切屏之前
     const stageAt = src.indexOf("sim.settlePendingRun();\n                this.requestStage(a.id);");

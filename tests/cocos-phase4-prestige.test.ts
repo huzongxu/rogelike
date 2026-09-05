@@ -109,18 +109,18 @@ import {
   type PrestigeAction,
   type PrestigeRunConfig,
   type PrestigeSaveView,
-} from "../cocos-prototype/assets/scripts/prestige/PrestigeModel";
-import * as cocosTalents from "../cocos-prototype/assets/scripts/game/data/talents";
-import * as cocosPrestigeLayout from "../cocos-prototype/assets/scripts/game/ui/prestigeLayout";
-import { availablePoints } from "../cocos-prototype/assets/scripts/core/SaveModel";
-import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos-prototype/assets/scripts/ui/TextBand";
+} from "../cocos/assets/scripts/prestige/PrestigeModel";
+import * as cocosTalents from "../cocos/assets/scripts/game/data/talents";
+import * as cocosPrestigeLayout from "../cocos/assets/scripts/game/ui/prestigeLayout";
+import { availablePoints } from "../cocos/assets/scripts/core/SaveModel";
+import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/scripts/ui/TextBand";
 
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
 const PAD = PAD_.pad;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
-const LIFT: number = JSON.parse(readFileSync(new URL("../cocos-prototype/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
+const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
 /* ==================== 夹具 ==================== */
 
@@ -167,7 +167,7 @@ function webSource(): string {
 
 /** 从 PHASE4_DEFAULTS 里抠出一张 `键 → 字面量` 的表(ViewTable 那侧 import 了 cc,node 不能直载) */
 function phase4Defaults(): Record<string, string> {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/core/ViewTable.ts", import.meta.url), "utf8");
   const block = src.slice(src.indexOf("export const PHASE4_DEFAULTS"), src.indexOf("/** 含义:Phase 3"));
   const out: Record<string, string> = {};
   for (const m of block.matchAll(/^\s{4}(\w+):\s*"([^"]*)",\s*$/gm)) out[m[1]] = m[2];
@@ -1065,7 +1065,7 @@ describe("prestigeClaim(唯一入档的一档是买天赋;其余都是瞬时态)
     expect(prestigeClaim(s2, cfg(), { kind: "buy", id: "commission_speed" })!.kind).toBe("talent");
     expect(prestigeClaim(s2, cfg(), { kind: "buy", id: "affix_taste" })).toBeNull();
     // 本函数的形参里没有页签,守卫不可能读到"当前显示哪一系"
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/prestige/PrestigeModel.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/prestige/PrestigeModel.ts", import.meta.url), "utf8"));
     const fn = src.slice(src.indexOf("export function prestigeClaim"), src.indexOf("case \"start\""));
     expect(fn.includes("route: PtRouteKey")).toBe(false);
   });
@@ -1100,12 +1100,12 @@ describe("prestigeClaim(唯一入档的一档是买天赋;其余都是瞬时态)
   it("「开始新轮回」不产任何写入意图(本屏不结算死亡,故不会使 prestiges +1)", () => {
     expect(prestigeClaim(save({ points: 500 }), cfg(), { kind: "start" })).toBeNull();
     // 连"未结算的死亡"这一档也不补结算:模型侧压根没有 pendingSettle / settleRun 的形参与返回
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/prestige/PrestigeModel.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/prestige/PrestigeModel.ts", import.meta.url), "utf8"));
     for (const bad of ["settleRun", "pendingSettle", "prestiges", "recordStageProgress", "calcPrestigePoints"]) expect(src.includes(bad), bad).toBe(false);
   });
 
   it("意图是纯增量描述:不携带存档、不携带价格、不携带路线表", () => {
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/prestige/PrestigeModel.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/prestige/PrestigeModel.ts", import.meta.url), "utf8"));
     for (const bad of ["save.ownedTalents.push", "points -=", "points +=", "persist(", "persistSave", "writeSave", "localStorage", "applyTalentBonuses"]) {
       expect(src.includes(bad), bad).toBe(false);
     }
@@ -1115,7 +1115,7 @@ describe("prestigeClaim(唯一入档的一档是买天赋;其余都是瞬时态)
 /* ==================== 12. 存档形态 ==================== */
 
 describe("本屏读的存档切片与 availablePoints 的落点", () => {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/core/SaveModel.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/core/SaveModel.ts", import.meta.url), "utf8");
 
   it("points / ownedTalents / collection 三项都在 SaveModel 上声明", () => {
     for (const f of ["points", "ownedTalents", "collection"]) expect(new RegExp(`^\\s+${f}:`, "m").test(src), f).toBe(true);
@@ -1244,7 +1244,7 @@ const CTX_TYPE = /\bCanvasRenderingContext2D\b/;
 const DOM_GLOBAL = /(?:^|[^.\w$])(window|document|navigator|localStorage|requestAnimationFrame|performance)\s*[.[]/m;
 const ABSOLUTE_GAME = /from\s*["']@game\//;
 
-const PURE_FILES = ["../cocos-prototype/assets/scripts/game/ui/prestigeLayout.ts", "../cocos-prototype/assets/scripts/prestige/PrestigeModel.ts"];
+const PURE_FILES = ["../cocos/assets/scripts/game/ui/prestigeLayout.ts", "../cocos/assets/scripts/prestige/PrestigeModel.ts"];
 
 describe("纯布局与宿主模型 cc-free", () => {
   for (const rel of PURE_FILES) {
@@ -1258,26 +1258,26 @@ describe("纯布局与宿主模型 cc-free", () => {
   }
 
   it("共享层不读存档:路线 id 序列与两个块标志都是入参", () => {
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/game/ui/prestigeLayout.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/game/ui/prestigeLayout.ts", import.meta.url), "utf8"));
     for (const bad of ["save.", "ownedTalents", "persistSave", "this.save", "talentOf(", "currentTalentRoute"]) expect(src.includes(bad), bad).toBe(false);
   });
 
   it("共享层不查拥有态:两个块标志只出现在入参与回读里", () => {
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/game/ui/prestigeLayout.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/game/ui/prestigeLayout.ts", import.meta.url), "utf8"));
     expect(src.includes("owns(")).toBe(false);
     expect(src.includes("includes(\"blueprint\")")).toBe(false);
     expect(src.includes("includes(\"targeted_search\")")).toBe(false);
   });
 
   it("模型不写存档、不碰广告通道、不碰路由", () => {
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/prestige/PrestigeModel.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/prestige/PrestigeModel.ts", import.meta.url), "utf8"));
     for (const bad of ["ownedTalents.push", "points -=", "persist(", "persistSave", "writeSave", "watchAd", "showRewardedAd", "localStorage", "router.show", "restart("]) {
       expect(src.includes(bad), bad).toBe(false);
     }
   });
 
   it("模型不复制判据:定价、层级门、图鉴分母全部转调既有函数", () => {
-    const src = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/prestige/PrestigeModel.ts", import.meta.url), "utf8"));
+    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/prestige/PrestigeModel.ts", import.meta.url), "utf8"));
     expect(src.includes("availablePoints(")).toBe(true);
     expect(src.includes("isTierUnlocked(")).toBe(true);
     expect(src.includes("routeCost(")).toBe(true);
@@ -1295,7 +1295,7 @@ describe("纯布局与宿主模型 cc-free", () => {
 /* ==================== 15. 视图层纪律 ==================== */
 
 describe("PrestigeView 的纪律:几何全来自共享层、文本只走 placeLine、没有返回钮", () => {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/prestige/PrestigeView.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/prestige/PrestigeView.ts", import.meta.url), "utf8");
   const code = codeOf(src);
 
   it("视图不产几何:不自算 startBtn / blockTop / tabW,一律读 layout", () => {
@@ -1335,7 +1335,7 @@ describe("PrestigeView 的纪律:几何全来自共享层、文本只走 placeLi
 /* ==================== 16. 宿主接线:五件套 + 路由注册 + 占位提示下线 ==================== */
 
 describe("GameShell 的转生与天赋屏接线", () => {
-  const src = readFileSync(new URL("../cocos-prototype/assets/scripts/GameShell.ts", import.meta.url), "utf8");
+  const src = readFileSync(new URL("../cocos/assets/scripts/GameShell.ts", import.meta.url), "utf8");
 
   it("五件套齐全并在 buildLayers / 路由钩子里各就各位", () => {
     for (const m of ["buildPrestigeScreen", "prestigeSave", "openPrestige", "syncPrestige", "onPrestigeAction", "commitPrestigeClaim"]) {
@@ -1348,7 +1348,7 @@ describe("GameShell 的转生与天赋屏接线", () => {
   });
 
   it("路由实际注册十六屏(SCREEN_KEYS 仍是 16 态全量)", () => {
-    const router = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ScreenRouter.ts", import.meta.url), "utf8");
+    const router = readFileSync(new URL("../cocos/assets/scripts/core/ScreenRouter.ts", import.meta.url), "utf8");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
     expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover"')).toBe(true);
@@ -1503,7 +1503,7 @@ describe("Web 基准的几条反直觉口径已原样带上", () => {
     expect(dead.includes("F(fs.micro)")).toBe(true);
     // 两个死赋值之后紧接着又设一次 font,而 fillStyle 到下一笔之前没有 fillText
     expect(dead.includes("fillText")).toBe(false);
-    const model = codeOf(readFileSync(new URL("../cocos-prototype/assets/scripts/prestige/PrestigeModel.ts", import.meta.url), "utf8"));
+    const model = codeOf(readFileSync(new URL("../cocos/assets/scripts/prestige/PrestigeModel.ts", import.meta.url), "utf8"));
     expect(model.includes("层级徽标")).toBe(false);
   });
 

@@ -15,7 +15,7 @@
     "noEmit": true,
     "types": ["vite/client"],
     "baseUrl": ".",
-    "paths": { "@game/*": ["cocos-prototype/assets/scripts/game/*"] }
+    "paths": { "@game/*": ["cocos/assets/scripts/game/*"] }
   },
-  "include": ["src", "tests", "vite.config.ts", "cocos-prototype/assets/scripts/game"]
+  "include": ["src", "tests", "vite.config.ts", "cocos/assets/scripts/game"]
 }

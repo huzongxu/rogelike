@@ -50,13 +50,13 @@ import { theme } from "@game/ui/theme";
 import { loadSave } from "../src/systems/save";
 
 /* ---------- Cocos 宿主侧(本文件的被测物) ---------- */
-import { HeroSelectModel, type HeroSaveView, type ScrollGeometry } from "../cocos-prototype/assets/scripts/heroes/HeroSelectModel";
-import { ShopModel, SHOP_CARD_SLOTS, SHOP_CONTENT_BOTTOM, type MergeGroup, type ShopWorld } from "../cocos-prototype/assets/scripts/shop/ShopModel";
-import { buildMenuContent, menuCommissionReady, menuDailyDot, menuRowStates, menuStageOpen, starsGlyphs, type MenuSaveView } from "../cocos-prototype/assets/scripts/menu/MenuContentModel";
-import { normalizeSave as cocosNormalizeSave } from "../cocos-prototype/assets/scripts/core/SaveModel";
-import * as cocosScroll from "../cocos-prototype/assets/scripts/game/ui/scrollList";
-import * as cocosHeroes from "../cocos-prototype/assets/scripts/game/data/heroes";
-import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos-prototype/assets/scripts/ui/TextBand";
+import { HeroSelectModel, type HeroSaveView, type ScrollGeometry } from "../cocos/assets/scripts/heroes/HeroSelectModel";
+import { ShopModel, SHOP_CARD_SLOTS, SHOP_CONTENT_BOTTOM, type MergeGroup, type ShopWorld } from "../cocos/assets/scripts/shop/ShopModel";
+import { buildMenuContent, menuCommissionReady, menuDailyDot, menuRowStates, menuStageOpen, starsGlyphs, type MenuSaveView } from "../cocos/assets/scripts/menu/MenuContentModel";
+import { normalizeSave as cocosNormalizeSave } from "../cocos/assets/scripts/core/SaveModel";
+import * as cocosScroll from "../cocos/assets/scripts/game/ui/scrollList";
+import * as cocosHeroes from "../cocos/assets/scripts/game/data/heroes";
+import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/scripts/ui/TextBand";
 import { readFileSync } from "node:fs";
 
 /* ==================== 0. 端间同一实现(R9 纪律延续到 Phase 3) ==================== */
@@ -790,7 +790,7 @@ describe("主菜单内容模型(解锁 / 减淡档位 / 红点 / 实时数值)",
 
 const H_STD = 996;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
-const LIFT: number = JSON.parse(readFileSync(new URL("../cocos-prototype/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
+const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
 interface TextRequest {
   /** 出问题时的定位:指回视图里的那一行 */

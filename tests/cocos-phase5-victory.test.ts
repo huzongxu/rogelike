@@ -112,11 +112,11 @@ import {
   victoryForms,
   victoryFrameBadgeKey,
   type VictoryRunView,
-} from "../cocos-prototype/assets/scripts/victory/VictoryModel";
-import * as cocosVictoryLayout from "../cocos-prototype/assets/scripts/game/ui/victoryLayout";
-import * as cocosStagesData from "../cocos-prototype/assets/scripts/game/data/stages";
-import * as cocosQualityData from "../cocos-prototype/assets/scripts/game/data/quality";
-import * as cocosSeasonData from "../cocos-prototype/assets/scripts/game/data/season";
+} from "../cocos/assets/scripts/victory/VictoryModel";
+import * as cocosVictoryLayout from "../cocos/assets/scripts/game/ui/victoryLayout";
+import * as cocosStagesData from "../cocos/assets/scripts/game/data/stages";
+import * as cocosQualityData from "../cocos/assets/scripts/game/data/quality";
+import * as cocosSeasonData from "../cocos/assets/scripts/game/data/season";
 
 /* ==================== 夹具 ==================== */
 
@@ -172,7 +172,7 @@ function fileSource(rel: string): string {
 
 /** 从 PHASE4_DEFAULTS 里抠出一张 `键 → 字面量` 的表(ViewTable 那侧 import 了 cc,node 不能直载) */
 function phase4Defaults(): Record<string, string> {
-  const src = fileSource("../cocos-prototype/assets/scripts/core/ViewTable.ts");
+  const src = fileSource("../cocos/assets/scripts/core/ViewTable.ts");
   const block = src.slice(src.indexOf("export const PHASE4_DEFAULTS"), src.indexOf("/** 含义:Phase 3"));
   const out: Record<string, string> = {};
   for (const m of block.matchAll(/^\s{4}(\w+):\s*"([^"]*)",\s*$/gm)) out[m[1]] = m[2];
@@ -204,7 +204,7 @@ describe("端间共读同一份共享层", () => {
   });
 
   it("本屏用到的四条规则都没有宿主侧抄本:比例 / 关卡公式 / 品质映射 / 星字形都不在模型里", () => {
-    const model = codeOf(fileSource("../cocos-prototype/assets/scripts/victory/VictoryModel.ts"));
+    const model = codeOf(fileSource("../cocos/assets/scripts/victory/VictoryModel.ts"));
     expect(model.includes("0.4")).toBe(false);
     expect(model.includes("ECHO_RETAIN_RATE")).toBe(false);
     expect(model.includes("Math.pow")).toBe(false);
@@ -216,7 +216,7 @@ describe("端间共读同一份共享层", () => {
   });
 
   it("模型没有随机源、不取时间、不碰存档与 DOM:纯输入输出", () => {
-    const model = codeOf(fileSource("../cocos-prototype/assets/scripts/victory/VictoryModel.ts"));
+    const model = codeOf(fileSource("../cocos/assets/scripts/victory/VictoryModel.ts"));
     for (const bad of ["Math.random", "Date.now", "localStorage", "writeSave", "persist(", "document", "canvas"]) {
       expect(model.includes(bad), bad).toBe(false);
     }
@@ -227,15 +227,15 @@ describe("端间共读同一份共享层", () => {
   });
 
   it("通关账目不在本屏:模型与视图里都不出现星数判据、成长倍率与掉落表", () => {
-    const model = codeOf(fileSource("../cocos-prototype/assets/scripts/victory/VictoryModel.ts"));
-    const view = codeOf(fileSource("../cocos-prototype/assets/scripts/victory/VictoryView.ts"));
+    const model = codeOf(fileSource("../cocos/assets/scripts/victory/VictoryModel.ts"));
+    const view = codeOf(fileSource("../cocos/assets/scripts/victory/VictoryView.ts"));
     for (const seg of [model, view]) {
       for (const bad of ["calcStars", "CLEAR_REWARD_GROWTH", "FIRST_CLEAR", "stageDropCount", "generateEquipment", "DUPLICATE_STARDUST", "settleThreeStarOnce", "highestStage"]) {
         expect(seg.includes(bad), bad).toBe(false);
       }
     }
     // 战斗层才是那笔账的唯一事实源,并且它把结果一次性抛给宿主
-    const sim = codeOf(fileSource("../cocos-prototype/assets/scripts/battle/BattleSim.ts"));
+    const sim = codeOf(fileSource("../cocos/assets/scripts/battle/BattleSim.ts"));
     const vseg = sim.slice(sim.indexOf("private victory(): void"), sim.indexOf("private recordEquipment("));
     expect(vseg.includes("this.cb.onVictory(")).toBe(true);
     expect(vseg.includes("this.world.over = true;")).toBe(true);
@@ -451,7 +451,7 @@ describe("屏级矩形(与 Web drawVictory 的内联字面量逐位对应)", () 
   });
 
   it("共享层不引 cc、不读存档、不查关卡:本层只有一个 import(theme)", () => {
-    const src = codeOf(fileSource("../cocos-prototype/assets/scripts/game/ui/victoryLayout.ts"));
+    const src = codeOf(fileSource("../cocos/assets/scripts/game/ui/victoryLayout.ts"));
     expect(src.includes('from "cc"')).toBe(false);
     expect(src.includes("save.")).toBe(false);
     expect(src.includes("localStorage")).toBe(false);
@@ -802,7 +802,7 @@ describe("phase4 表的通关结算屏配色档(键前缀 vi)", () => {
   });
 
   it("接口声明与默认值一一对应,且本屏没有任何一档走内联字面量", () => {
-    const src = fileSource("../cocos-prototype/assets/scripts/core/ViewTable.ts");
+    const src = fileSource("../cocos/assets/scripts/core/ViewTable.ts");
     const iface = src.slice(src.indexOf("export interface Phase4Params"), src.indexOf("export const PHASE4_DEFAULTS"));
     const keys = [...src.slice(src.indexOf("/* ---------- 通关结算屏"), src.indexOf("}\n\nexport const PHASE4_DEFAULTS")).matchAll(/^\s{4}(vi\w+): string;$/gm)].map((m) => m[1]);
     expect(keys.length).toBe(22);
@@ -810,13 +810,13 @@ describe("phase4 表的通关结算屏配色档(键前缀 vi)", () => {
       expect(iface.includes(k + ": string;"), k).toBe(true);
       expect(t[k], k).toBeTruthy();
     }
-    const view = codeOf(fileSource("../cocos-prototype/assets/scripts/victory/VictoryView.ts"));
+    const view = codeOf(fileSource("../cocos/assets/scripts/victory/VictoryView.ts"));
     expect((view.match(/p4\.vi\w+/g) ?? []).length).toBeGreaterThan(18);
     expect(view.includes('"#')).toBe(false);
   });
 
   it("十枚贴图键与 Web drawVictory 的实参逐字对应", () => {
-    const view = fileSource("../cocos-prototype/assets/scripts/victory/VictoryView.ts");
+    const view = fileSource("../cocos/assets/scripts/victory/VictoryView.ts");
     for (const k of [
       'const KEY_BANNER = "banner_large_navy_a";',
       'const KEY_POSE = "player_pose_1";',
@@ -839,7 +839,7 @@ describe("phase4 表的通关结算屏配色档(键前缀 vi)", () => {
 /* ==================== 6. 宿主接线与源码守卫 ==================== */
 
 describe("GameShell 的通关结算屏接线", () => {
-  const src = fileSource("../cocos-prototype/assets/scripts/GameShell.ts");
+  const src = fileSource("../cocos/assets/scripts/GameShell.ts");
 
   it("六件套齐全并在 buildLayers / 路由钩子里各就各位", () => {
     for (const m of ["buildVictoryScreen", "victoryRun", "openVictory", "syncVictory", "onVictoryAction", "commitVictoryEcho"]) {
@@ -852,7 +852,7 @@ describe("GameShell 的通关结算屏接线", () => {
   });
 
   it("路由实际注册十六屏(SCREEN_KEYS 的 16 态全量已配齐,末位是 energy)", () => {
-    const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
+    const router = fileSource("../cocos/assets/scripts/core/ScreenRouter.ts");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     const all = keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean);
     expect(all).toHaveLength(16);
@@ -935,7 +935,7 @@ describe("GameShell 的通关结算屏接线", () => {
     expect(src.includes("private doubleClaimed = false;")).toBe(true);
     expect(src.includes("private stardustEarnedThisRun = 0;")).toBe(true);
     expect(src.includes("private victoryInfo: VictoryInfo | null = null;")).toBe(true);
-    const saveModel = fileSource("../cocos-prototype/assets/scripts/core/SaveModel.ts");
+    const saveModel = fileSource("../cocos/assets/scripts/core/SaveModel.ts");
     for (const f of ["doubleClaimed", "stardustEarnedThisRun", "victoryInfo"]) {
       expect(saveModel.includes(f), f).toBe(false);
     }
@@ -957,7 +957,7 @@ describe("GameShell 的通关结算屏接线", () => {
   });
 
   it("视图层零硬编码:几何全走 layout 出口,文字落位只有 placeLine 一个入口", () => {
-    const view = codeOf(fileSource("../cocos-prototype/assets/scripts/victory/VictoryView.ts"));
+    const view = codeOf(fileSource("../cocos/assets/scripts/victory/VictoryView.ts"));
     expect((view.match(/L\.\w+/g) ?? []).length).toBeGreaterThan(20);
     expect((view.match(/placeLine\(/g) ?? []).length).toBe(1);
     expect((view.match(/approxW\(/g) ?? []).length).toBe(2);
@@ -986,7 +986,7 @@ describe("Web 基准的六条反直觉口径已原样带上", () => {
     expect(seg.includes("w / 2 - g.measureText(fTxt).width / 2 - 18, h * 0.3 + 204, 22);")).toBe(true);
     expect(wv.includes('g.fillText(fTxt, w / 2, h * 0.3 + 210);')).toBe(true);
     // 本层两档都给,视图按贴图到位与否取一档
-    const view = fileSource("../cocos-prototype/assets/scripts/victory/VictoryView.ts");
+    const view = fileSource("../cocos/assets/scripts/victory/VictoryView.ts");
     expect(view.includes("L.frameLineLeaked")).toBe(true);
     expect(view.includes("L.frameLineFlat")).toBe(true);
   });
@@ -1027,7 +1027,7 @@ describe("Web 基准的六条反直觉口径已原样带上", () => {
   it("热区矩形在 Web 由上一帧绘制写入,Cocos 侧是纯函数没有这个时序", () => {
     expect(web.includes("this.doubleBtn = dbl;")).toBe(true);
     expect(web.includes('this.state === "victory"')).toBe(true);
-    const view = fileSource("../cocos-prototype/assets/scripts/victory/VictoryView.ts");
+    const view = fileSource("../cocos/assets/scripts/victory/VictoryView.ts");
     expect(view.includes("hitVictory(this.hooks.layout()")).toBe(true);
   });
 });

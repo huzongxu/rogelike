@@ -75,10 +75,10 @@ import {
   seasonRoll,
   type SeasonSaveView,
   type SeasonSummary,
-} from "../cocos-prototype/assets/scripts/season/SeasonModel";
-import * as cocosSeasonLayout from "../cocos-prototype/assets/scripts/game/ui/seasonLayout";
-import * as cocosSeasonData from "../cocos-prototype/assets/scripts/game/data/season";
-import * as cocosSeasonSets from "../cocos-prototype/assets/scripts/game/data/seasonSets";
+} from "../cocos/assets/scripts/season/SeasonModel";
+import * as cocosSeasonLayout from "../cocos/assets/scripts/game/ui/seasonLayout";
+import * as cocosSeasonData from "../cocos/assets/scripts/game/data/season";
+import * as cocosSeasonSets from "../cocos/assets/scripts/game/data/seasonSets";
 
 /* ==================== 夹具 ==================== */
 
@@ -130,7 +130,7 @@ function fileSource(rel: string): string {
 
 /** 从 PHASE4_DEFAULTS 里抠出一张 `键 → 字面量` 的表(ViewTable 那侧 import 了 cc,node 不能直载) */
 function phase4Defaults(): Record<string, string> {
-  const src = fileSource("../cocos-prototype/assets/scripts/core/ViewTable.ts");
+  const src = fileSource("../cocos/assets/scripts/core/ViewTable.ts");
   const block = src.slice(src.indexOf("export const PHASE4_DEFAULTS"), src.indexOf("/** 含义:Phase 3"));
   const out: Record<string, string> = {};
   for (const m of block.matchAll(/^\s{4}(\w+):\s*"([^"]*)",\s*$/gm)) out[m[1]] = m[2];
@@ -303,11 +303,11 @@ describe("四格几何矩阵(h ∈ {996,1246} × 摘要形态 ∈ {上屏,收起
   });
 
   it("本屏一次都不调 spreadRows:共享层里没有它的引用,几何也不随存档条数变", () => {
-    const src = codeOf(fileSource("../cocos-prototype/assets/scripts/game/ui/seasonLayout.ts"));
+    const src = codeOf(fileSource("../cocos/assets/scripts/game/ui/seasonLayout.ts"));
     expect(src.includes("spreadRows")).toBe(false);
     expect(src.includes("rowTextY")).toBe(false);
     // 只 import ui.pad
-    expect(fileSource("../cocos-prototype/assets/scripts/game/ui/seasonLayout.ts")).toContain('import { ui } from "./theme";');
+    expect(fileSource("../cocos/assets/scripts/game/ui/seasonLayout.ts")).toContain('import { ui } from "./theme";');
   });
 
   it("四格全部矩形与七行文本带都不越出横向 [pad, w − pad],也不越出纵向 [0, h]", () => {
@@ -577,7 +577,7 @@ describe("phase4 表的 se* 段(默认值逐项对标 Web drawSeason)", () => {
   });
 
   it("theme 令牌同值性:三行走令牌、两行走 Web 字面量(#e8e8e8 与 textPrimary 不同值)", () => {
-    const hex = fileSource("../cocos-prototype/assets/scripts/ui/Widgets.ts");
+    const hex = fileSource("../cocos/assets/scripts/ui/Widgets.ts");
     expect(hex.includes('gold: "#FFD76A"')).toBe(true);
     expect(hex.includes('echo: "#C8B6FF"')).toBe(true);
     expect(hex.includes('stardust: "#7FD8FF"')).toBe(true);
@@ -606,7 +606,7 @@ describe("Web 字面量与本屏表常量的同数关系", () => {
     expect(SE_STARS_RESET.length).toBe(STAGES.length + 1);
     const web = webSource();
     expect(web.includes("this.save.stageStars = [0, 0, 0, 0, 0, 0, 0, 0];")).toBe(true);
-    const saveModel = fileSource("../cocos-prototype/assets/scripts/core/SaveModel.ts");
+    const saveModel = fileSource("../cocos/assets/scripts/core/SaveModel.ts");
     expect(saveModel.includes("for (let i = 1; i <= 7; i++)")).toBe(true);
   });
 
@@ -615,7 +615,7 @@ describe("Web 字面量与本屏表常量的同数关系", () => {
     const note = "星数与赛季最佳已重置 · 关卡/收藏/天赋永久保留";
     expect(web.includes(note)).toBe(true);
     expect(screen(summary()).c.noteLine).toBe(note);
-    const saveModel = fileSource("../cocos-prototype/assets/scripts/core/SaveModel.ts");
+    const saveModel = fileSource("../cocos/assets/scripts/core/SaveModel.ts");
     for (const f of ["highestStage", "ownedGear", "ownedTalents"]) expect(saveModel.includes(f), f).toBe(true);
     // 被重置的那两项确实也在档上,且正是本屏写掉的两个字段
     for (const f of ["stageStars", "seasonBest"]) expect(saveModel.includes(f + ":"), f).toBe(true);
@@ -652,10 +652,10 @@ describe("Web 字面量与本屏表常量的同数关系", () => {
   });
 
   it("本屏没有任何 Date.now / 随机源消费点(时序全在宿主那一层)", () => {
-    const model = codeOf(fileSource("../cocos-prototype/assets/scripts/season/SeasonModel.ts"));
+    const model = codeOf(fileSource("../cocos/assets/scripts/season/SeasonModel.ts"));
     expect(model.includes("Math.random")).toBe(false);
     expect((model.match(/Date\.now\(\)/g) ?? []).length).toBe(1); // 只有 now 形参的默认值
-    const view = codeOf(fileSource("../cocos-prototype/assets/scripts/season/SeasonView.ts"));
+    const view = codeOf(fileSource("../cocos/assets/scripts/season/SeasonView.ts"));
     expect(view.includes("Date.now")).toBe(false);
     expect(view.includes("Math.random")).toBe(false);
   });
@@ -664,7 +664,7 @@ describe("Web 字面量与本屏表常量的同数关系", () => {
 /* ==================== 7. 宿主接线 ==================== */
 
 describe("GameShell 的赛季结算屏接线", () => {
-  const src = fileSource("../cocos-prototype/assets/scripts/GameShell.ts");
+  const src = fileSource("../cocos/assets/scripts/GameShell.ts");
 
   it("五件套齐全并在 buildLayers / 路由钩子里各就各位", () => {
     for (const m of ["buildSeasonScreen", "seasonSave", "openSeason", "tickSeason", "syncSeason", "onSeasonAction", "commitSeasonRoll"]) {
@@ -677,7 +677,7 @@ describe("GameShell 的赛季结算屏接线", () => {
   });
 
   it("路由实际注册十六屏(SCREEN_KEYS 仍是 16 态全量)", () => {
-    const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
+    const router = fileSource("../cocos/assets/scripts/core/ScreenRouter.ts");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
     expect(keysBlock[1].includes('"season"')).toBe(true);
@@ -707,7 +707,7 @@ describe("GameShell 的赛季结算屏接线", () => {
   it("摘要挂在宿主上且不入档;入档的是那五个赛季字段(SaveModel 里已有归一化)", () => {
     expect(src.includes("private seasonView: SeasonView | null = null;")).toBe(true);
     expect(src.includes("private seasonSummary: SeasonSummary | null = null;")).toBe(true);
-    const saveModel = fileSource("../cocos-prototype/assets/scripts/core/SaveModel.ts");
+    const saveModel = fileSource("../cocos/assets/scripts/core/SaveModel.ts");
     for (const f of ["seasonId", "seasonStartAt", "stageStars", "seasonBest"]) {
       expect(saveModel.includes(f + ":"), f).toBe(true);
     }
@@ -765,7 +765,7 @@ describe("GameShell 的赛季结算屏接线", () => {
   });
 
   it("翻页账本已从战斗层上移到宿主:BattleSim 里不再有一份抄本", () => {
-    const sim = codeOf(fileSource("../cocos-prototype/assets/scripts/battle/BattleSim.ts"));
+    const sim = codeOf(fileSource("../cocos/assets/scripts/battle/BattleSim.ts"));
     expect(sim.includes("syncSeason")).toBe(false);
     expect(sim.includes("seasonStardust")).toBe(false);
     expect(sim.includes("seasonEnded")).toBe(false);
@@ -775,7 +775,7 @@ describe("GameShell 的赛季结算屏接线", () => {
   });
 
   it("视图侧:两形态走容器 active 整棵切换,贴图键与 Web 逐字对应", () => {
-    const view = fileSource("../cocos-prototype/assets/scripts/season/SeasonView.ts");
+    const view = fileSource("../cocos/assets/scripts/season/SeasonView.ts");
     expect(view.includes('const KEY_EMBLEM = "emblem_flow_gold";')).toBe(true);
     expect(view.includes('const KEY_BANNER = "banner_mid_bronze";')).toBe(true);
     expect(view.includes("this.summaryNode.active = c.hasSummary;")).toBe(true);
@@ -834,10 +834,10 @@ describe("跨屏事实:翻页时机与各屏读数", () => {
   });
 
   it("翻页后停在非战斗屏时,当前屏靠 router.refresh 立刻跟上(Web 靠逐帧重绘)", () => {
-    const src = fileSource("../cocos-prototype/assets/scripts/GameShell.ts");
+    const src = fileSource("../cocos/assets/scripts/GameShell.ts");
     const seg = src.slice(src.indexOf("private tickSeason"), src.indexOf("private syncSeason"));
     expect(seg.includes("this.router.refresh();")).toBe(true);
-    const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
+    const router = fileSource("../cocos/assets/scripts/core/ScreenRouter.ts");
     expect(router.includes("refresh(): void")).toBe(true);
     // 闸门之后的战斗屏推进路径没有被本屏改动:season 的账不再挂在 sim.update 上
     expect(seg.includes("this.sim.update")).toBe(false);

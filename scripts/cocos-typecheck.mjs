@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 门 5:Cocos 工程全 script 树类型检查。
-// 存在的理由:根 tsconfig 的 include 只覆盖 cocos-prototype/assets/scripts/game,屏层(core/ battle/ */View GameShell)不在内,
+// 存在的理由:根 tsconfig 的 include 只覆盖 cocos/assets/scripts/game,屏层(core/ battle/ */View GameShell)不在内,
 // 而 Cocos CLI 构建的 error TS 计数为 0 也不代表做了类型检查 —— 漏 import 只有实机进屏才炸。
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -8,7 +8,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const PROJECT_DIR = join(ROOT, "cocos-prototype");
+const PROJECT_DIR = join(ROOT, "cocos");
 const BASE_CONFIG = join(PROJECT_DIR, "temp", "tsconfig.cocos.json");
 const TSC_BIN = join(ROOT, "node_modules", "typescript", "bin", "tsc");
 
@@ -32,7 +32,7 @@ function fail(msg) {
 }
 
 if (!existsSync(BASE_CONFIG)) {
-  fail(`缺 ${relative(ROOT, BASE_CONFIG)}(由编辑器或命令行构建生成)。先跑门 3:rm -rf cocos-prototype/temp && npm run build:cocos`);
+  fail(`缺 ${relative(ROOT, BASE_CONFIG)}(由编辑器或命令行构建生成)。先跑门 3:rm -rf cocos/temp && npm run build:cocos`);
 }
 if (!existsSync(TSC_BIN)) fail("缺 node_modules/typescript,先 npm install");
 
@@ -50,7 +50,7 @@ for (const line of out.split(/\r?\n/)) {
   const m = ERROR_RE.exec(line);
   if (!m) { unparsed++; continue; }
   const abs = m[1].replace(/\\/g, "/");
-  if (!abs.includes("cocos-prototype/assets/")) { external++; continue; }
+  if (!abs.includes("cocos/assets/")) { external++; continue; }
   const file = abs.slice(abs.indexOf("assets/scripts/") + "assets/scripts/".length);
   project.push({ file, line: Number(m[2]), col: Number(m[3]), code: m[4], text: m[5] });
 }

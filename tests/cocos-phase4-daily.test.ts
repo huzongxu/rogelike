@@ -58,16 +58,16 @@ import {
   hitDaily,
   type DailyAction,
   type DailySaveView,
-} from "../cocos-prototype/assets/scripts/daily/DailyModel";
-import * as cocosDaily from "../cocos-prototype/assets/scripts/game/data/daily";
-import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos-prototype/assets/scripts/ui/TextBand";
+} from "../cocos/assets/scripts/daily/DailyModel";
+import * as cocosDaily from "../cocos/assets/scripts/game/data/daily";
+import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/scripts/ui/TextBand";
 
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
 const PAD = UI.pad;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
-const LIFT: number = JSON.parse(readFileSync(new URL("../cocos-prototype/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
+const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
 /* 固定时钟:所有"今日/非今日"的断言都由它派生,不读真实当天 */
 const NOW = 1_700_000_000_000;
@@ -661,8 +661,8 @@ const ABSOLUTE_GAME = /from\s*["']@game\//;
 
 /** 共享层新文件由 tests/shared-purity.test.ts 自动覆盖(game/** 递归);这里显式复核并补宿主 cc-free 模型 */
 const PURE_FILES = [
-  "../cocos-prototype/assets/scripts/game/ui/dailyLayout.ts",
-  "../cocos-prototype/assets/scripts/daily/DailyModel.ts",
+  "../cocos/assets/scripts/game/ui/dailyLayout.ts",
+  "../cocos/assets/scripts/daily/DailyModel.ts",
 ];
 
 describe("纯布局与宿主模型 cc-free", () => {

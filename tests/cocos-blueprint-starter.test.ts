@@ -17,8 +17,8 @@ import { vec2 } from "@game/core/math";
 import { makeSetStarterEquipment, makeStarterEquipment } from "@game/data/equipmentGen";
 import { PT_EFFECT_TYPES } from "@game/ui/prestigeLayout";
 import { effectDef, type EffectType } from "@game/data/affixes";
-import { emptySave } from "../cocos-prototype/assets/scripts/core/SaveModel";
-import { BattleSim } from "../cocos-prototype/assets/scripts/battle/BattleSim";
+import { emptySave } from "../cocos/assets/scripts/core/SaveModel";
+import { BattleSim } from "../cocos/assets/scripts/battle/BattleSim";
 
 /** 造一个已开局第 1 关的 sim;starterEffect 按宿主形态传成现取的 getter */
 function makeSim(starterEffect?: () => EffectType | undefined): BattleSim {
@@ -121,7 +121,7 @@ describe("完美蓝图:开局武器效果由宿主注入", () => {
   });
 
   it("宿主接线在 buildBattle 里:现取 runConfig.blueprintEffect 传给 starterEffect", () => {
-    const src = readFileSync(new URL("../cocos-prototype/assets/scripts/GameShell.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+    const src = readFileSync(new URL("../cocos/assets/scripts/GameShell.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     const battle = src.slice(src.indexOf("private buildBattle()"), src.indexOf("private refreshBackdrop()"));
     expect(battle.includes("starterEffect: () => this.runConfig.blueprintEffect,"), "通道被摘掉的话开局武器就永远只是飞刀").toBe(true);
   });

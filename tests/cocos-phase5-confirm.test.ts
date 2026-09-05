@@ -83,13 +83,13 @@ import {
   hitConfirm,
   type CfRect,
   type ConfirmLayout,
-} from "../cocos-prototype/assets/scripts/confirm/ConfirmModel";
-import * as cocosConfirmModel from "../cocos-prototype/assets/scripts/confirm/ConfirmModel";
-import * as cocosTheme from "../cocos-prototype/assets/scripts/game/ui/theme";
-import * as cocosEnergyLayout from "../cocos-prototype/assets/scripts/game/ui/energyLayout";
-import * as cocosEnergyModel from "../cocos-prototype/assets/scripts/energy/EnergyModel";
-import * as cocosVictoryLayout from "../cocos-prototype/assets/scripts/game/ui/victoryLayout";
-import * as cocosVictoryModel from "../cocos-prototype/assets/scripts/victory/VictoryModel";
+} from "../cocos/assets/scripts/confirm/ConfirmModel";
+import * as cocosConfirmModel from "../cocos/assets/scripts/confirm/ConfirmModel";
+import * as cocosTheme from "../cocos/assets/scripts/game/ui/theme";
+import * as cocosEnergyLayout from "../cocos/assets/scripts/game/ui/energyLayout";
+import * as cocosEnergyModel from "../cocos/assets/scripts/energy/EnergyModel";
+import * as cocosVictoryLayout from "../cocos/assets/scripts/game/ui/victoryLayout";
+import * as cocosVictoryModel from "../cocos/assets/scripts/victory/VictoryModel";
 
 /* ==================== 夹具 ==================== */
 
@@ -138,7 +138,7 @@ function fileSource(rel: string): string {
 
 /** 从 PHASE4_DEFAULTS 里抠出一张 `键 → 字面量` 的表(ViewTable 那侧 import 了 cc,node 不能直载) */
 function phase4Defaults(): Record<string, string> {
-  const src = fileSource("../cocos-prototype/assets/scripts/core/ViewTable.ts");
+  const src = fileSource("../cocos/assets/scripts/core/ViewTable.ts");
   const block = src.slice(src.indexOf("export const PHASE4_DEFAULTS"), src.indexOf("/** 含义:Phase 3"));
   const out: Record<string, string> = {};
   for (const m of block.matchAll(/^\s{4}(\w+):\s*"([^"]*)",\s*$/gm)) out[m[1]] = m[2];
@@ -225,7 +225,7 @@ describe("端间共读同一份共享层", () => {
       expect(L.ok).toEqual(R.ok);
       expect(L.cancel).toEqual(R.cancel);
     }
-    const model = codeOf(fileSource("../cocos-prototype/assets/scripts/confirm/ConfirmModel.ts"));
+    const model = codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmModel.ts"));
     expect(model.includes("confirmRects(w, h)")).toBe(true);
     // 共享层的五个数在模型层只以「转出口」形式出现一次,不参与任何算式
     expect(model.includes("(w - CONFIRM_W) / 2")).toBe(false);
@@ -234,7 +234,7 @@ describe("端间共读同一份共享层", () => {
   });
 
   it("模型层不碰存档、不碰节点、不看时间与随机源", () => {
-    const model = codeOf(fileSource("../cocos-prototype/assets/scripts/confirm/ConfirmModel.ts"));
+    const model = codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmModel.ts"));
     expect(model.includes('from "cc"')).toBe(false);
     expect(model.includes("Date.now")).toBe(false);
     expect(model.includes("Math.random")).toBe(false);
@@ -244,7 +244,7 @@ describe("端间共读同一份共享层", () => {
   });
 
   it("量字函数是入参:模型层不复制 PanelKit.approxW 的那两个系数", () => {
-    const model = codeOf(fileSource("../cocos-prototype/assets/scripts/confirm/ConfirmModel.ts"));
+    const model = codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmModel.ts"));
     expect(model.includes("approxW")).toBe(false);
     expect(model.includes("0.55")).toBe(false);
     expect(model.includes("0.3")).toBe(false);
@@ -411,7 +411,7 @@ describe("1246 档几何与跨档性质", () => {
       expect(L.body[0].baseY - L.box.y).toBe(CF_BODY_DY_ONE);
       expect(L.ok.y - L.box.y).toBe(CONFIRM_H - 16 - CONFIRM_BTN_H);
     }
-    const layoutSrc = codeOf(fileSource("../cocos-prototype/assets/scripts/confirm/ConfirmModel.ts"));
+    const layoutSrc = codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmModel.ts"));
     expect(layoutSrc.includes("spreadRows")).toBe(false);
     expect(layoutSrc.includes("rowTextY")).toBe(false);
   });
@@ -673,7 +673,7 @@ describe("phase4 表的 cf* 段(默认值逐项对标 Web drawConfirm 与 themeP
         "cfTitle",
       ].sort()
     );
-    const view = codeOf(fileSource("../cocos-prototype/assets/scripts/confirm/ConfirmView.ts"));
+    const view = codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmView.ts"));
     for (const k of keys) expect(view.includes(`p4.${k}`)).toBe(true);
   });
 
@@ -695,7 +695,7 @@ describe("phase4 表的 cf* 段(默认值逐项对标 Web drawConfirm 与 themeP
 
 describe("三层分工的源码纪律", () => {
   it("视图层不内联任何一枚盒与基线:几何只能来自模型层那一帧", () => {
-    const view = codeOf(fileSource("../cocos-prototype/assets/scripts/confirm/ConfirmView.ts"));
+    const view = codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmView.ts"));
     const body = bodyOf(view);
     // 视图里出现的数字只允许是缓存哨兵(-1 的 1)、lineHeight 系数(1.25)、循环起点(0)
     // 与暗底折中心锚点的除数(2)
@@ -709,7 +709,7 @@ describe("三层分工的源码纪律", () => {
   });
 
   it("折行与量字都不在视图里:视图只有 fitOne 那一道截断", () => {
-    const body = bodyOf(codeOf(fileSource("../cocos-prototype/assets/scripts/confirm/ConfirmView.ts")));
+    const body = bodyOf(codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmView.ts")));
     expect(body.includes("fitLines")).toBe(false);
     expect(body.includes("approxW")).toBe(false);
     expect(body.includes("confirmFitLines")).toBe(false);
@@ -717,20 +717,20 @@ describe("三层分工的源码纪律", () => {
   });
 
   it("视图层不算几何:rowTextY / confirmRects / CONFIRM_* 一个都不出现", () => {
-    const body = bodyOf(codeOf(fileSource("../cocos-prototype/assets/scripts/confirm/ConfirmView.ts")));
+    const body = bodyOf(codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmView.ts")));
     for (const banned of ["rowTextY", "confirmRects", "CONFIRM_W", "CONFIRM_H", "CONFIRM_BTN_W", "CONFIRM_BTN_H", "CONFIRM_BTN_GAP", "buildConfirmLayout", "confirmScreenLayout"]) {
       expect(body.includes(banned), banned).toBe(false);
     }
   });
 
   it("正文行数上限单一事实源:视图从 CF_BODY_MAX_LINES 建节点,不写死枚数", () => {
-    const body = bodyOf(codeOf(fileSource("../cocos-prototype/assets/scripts/confirm/ConfirmView.ts")));
+    const body = bodyOf(codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmView.ts")));
     expect(body.includes("i < CF_BODY_MAX_LINES")).toBe(true);
     expect(body.includes('"Body1"')).toBe(false);
   });
 
   it("模型层不引 cc、不引宿主侧 ViewTable,也不复制共享层的几何常量", () => {
-    const model = codeOf(fileSource("../cocos-prototype/assets/scripts/confirm/ConfirmModel.ts"));
+    const model = codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmModel.ts"));
     expect(model.includes('from "cc"')).toBe(false);
     expect(model.includes("ViewTable")).toBe(false);
     expect(model.includes('from "../game/ui/theme"')).toBe(true);
@@ -759,7 +759,7 @@ describe("三层分工的源码纪律", () => {
   });
 
   it("模型里出现的每一段中文字面量都能在 Web 的弹层段或商店工具钮段里找到", () => {
-    const code = codeOf(fileSource("../cocos-prototype/assets/scripts/confirm/ConfirmModel.ts"));
+    const code = codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmModel.ts"));
     const web = webDrawConfirm() + webShopTools();
     const lits = [...code.matchAll(/"([^"\n]*[㐀-鿿][^"\n]*)"/g)].map((m) => m[1]);
     expect(lits.length).toBeGreaterThanOrEqual(5);
@@ -780,12 +780,12 @@ describe("三层分工的源码纪律", () => {
 /* ==================== 9. 接线计数守卫 ==================== */
 
 describe("GameShell 接线计数守卫", () => {
-  const src = fileSource("../cocos-prototype/assets/scripts/GameShell.ts");
+  const src = fileSource("../cocos/assets/scripts/GameShell.ts");
   const body = codeOf(src);
   const section = codeOf(src.slice(src.indexOf("/* ================= 二次确认弹层"), src.indexOf("/* ================= 主循环")));
 
   it("弹层不挂路由:SCREEN_KEYS 仍是 16 态、注册列表里没有 confirm、sync 钩子仍是 13 条", () => {
-    const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
+    const router = fileSource("../cocos/assets/scripts/core/ScreenRouter.ts");
     const keys = [...router.slice(router.indexOf("export const SCREEN_KEYS"), router.indexOf("] as const")).matchAll(/"(\w+)"/g)].map((m) => m[1]);
     expect(keys.length).toBe(16);
     expect(keys.includes("confirm")).toBe(false);
@@ -857,7 +857,7 @@ describe("GameShell 接线计数守卫", () => {
   });
 
   it("点击拦截靠 Overlay 的兄弟序 + Capture 的 propagationStopped,不在屏级 action 里加早退", () => {
-    const view = codeOf(fileSource("../cocos-prototype/assets/scripts/confirm/ConfirmView.ts"));
+    const view = codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmView.ts"));
     expect(view.includes("e.propagationStopped = true;")).toBe(true);
     expect(view.includes("placeRect(this.capture, fullRect())")).toBe(true);
     // 屏级 action 段一律没有被塞进「弹层开着就 return」这类早退
@@ -892,30 +892,30 @@ describe("import 完整性:每一个用到的出口都必须在 import 清单里
   const panelKitSpec = { label: "PanelKit", ns: PANEL_KIT_NS };
 
   it("ConfirmModel 用到的共享层出口全部在它的 import 清单里", () => {
-    expect(missingImports("../cocos-prototype/assets/scripts/confirm/ConfirmModel.ts", [themeSpec])).toEqual([]);
+    expect(missingImports("../cocos/assets/scripts/confirm/ConfirmModel.ts", [themeSpec])).toEqual([]);
   });
 
   it("ConfirmView 用到的模型出口与 PanelKit 出口全部在它的 import 清单里", () => {
-    expect(missingImports("../cocos-prototype/assets/scripts/confirm/ConfirmView.ts", [modelSpec, panelKitSpec])).toEqual([]);
+    expect(missingImports("../cocos/assets/scripts/confirm/ConfirmView.ts", [modelSpec, panelKitSpec])).toEqual([]);
   });
 
   it("GameShell 用到的 confirm 模型出口与 approxW 全部在它的 import 清单里", () => {
-    expect(missingImports("../cocos-prototype/assets/scripts/GameShell.ts", [modelSpec, panelKitSpec])).toEqual([]);
+    expect(missingImports("../cocos/assets/scripts/GameShell.ts", [modelSpec, panelKitSpec])).toEqual([]);
   });
 
   it("同一把尺子量已落地的两侧:energy 与 victory 的历史缺陷仍在清单里", () => {
     expect(
-      missingImports("../cocos-prototype/assets/scripts/energy/EnergyView.ts", [
+      missingImports("../cocos/assets/scripts/energy/EnergyView.ts", [
         { label: "energyLayout", ns: cocosEnergyLayout as unknown as Record<string, unknown> },
         { label: "EnergyModel", ns: cocosEnergyModel as unknown as Record<string, unknown> },
       ])
     ).toEqual([]);
     expect(
-      missingImports("../cocos-prototype/assets/scripts/victory/VictoryView.ts", [
+      missingImports("../cocos/assets/scripts/victory/VictoryView.ts", [
         { label: "victoryLayout", ns: cocosVictoryLayout as unknown as Record<string, unknown> },
         { label: "VictoryModel", ns: cocosVictoryModel as unknown as Record<string, unknown> },
       ])
     ).toEqual([]);
-    expect(missingImports("../cocos-prototype/assets/scripts/GameShell.ts", [{ label: "EnergyModel", ns: cocosEnergyModel as unknown as Record<string, unknown> }])).toEqual([]);
+    expect(missingImports("../cocos/assets/scripts/GameShell.ts", [{ label: "EnergyModel", ns: cocosEnergyModel as unknown as Record<string, unknown> }])).toEqual([]);
   });
 });
