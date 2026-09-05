@@ -646,6 +646,28 @@ export interface Phase4Params {
     enBackBg: string;
     enBackStroke: string;
     enBackText: string;
+
+    /* ---------- 二次确认弹层(Phase 5;Web drawConfirm 1208-1240 与 themePaint 的 panel/dangerButton/minorButton 内联字面量) ---------- */
+    /** 全屏暗底 rgba(0,0,0,0.62)(与十六屏的覆盖底都不同值:本件是纯黑而不是深蓝,且不透明度最低) */
+    cfDim: string;
+    /** 盒底垫 panel_dark_corners 缺图回退(Web `panel(...)` 的 theme.bgPanel 填充 + `{ stroke: "#ffd76a" }`) */
+    cfPanelFallbackBg: string;
+    cfPanelFallbackStroke: string;
+    /** 标题横幅 banner_mid_navy 缺图回退(Web 显式写了这一支:平面 rgba(18,24,44,0.88) + 1px rgba(255,215,106,0.35)) */
+    cfBannerFallbackBg: string;
+    cfBannerFallbackStroke: string;
+    /** 标题「确认操作」#ffd76a(= theme.gold;粗体 fs.body) */
+    cfTitle: string;
+    /** 正文 #cfd6e2(Web 的字面量,与 textPrimary #E8ECF4 不同值) */
+    cfBody: string;
+    /** 确认钮 btn_danger 缺图回退(dangerButton 的 theme.actionDangerBg 填充 + rgba(255,107,122,0.4) 描边),文字 theme.actionDanger */
+    cfOkFallbackBg: string;
+    cfOkFallbackStroke: string;
+    cfOkText: string;
+    /** 取消钮 btn_minor 缺图回退(minorButtonBg 的 #2A3D55 填充 + rgba(255,255,255,0.3) 描边),文字 theme.textSecondary(Web 传的 color 是 undefined) */
+    cfCancelFallbackBg: string;
+    cfCancelFallbackStroke: string;
+    cfCancelText: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -981,6 +1003,21 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     enBackBg: "#2A3D55",
     enBackStroke: "rgba(255,255,255,0.3)",
     enBackText: "#CFCFCF",
+
+    /* 二次确认弹层(逐项对标 Web drawConfirm 与 themePaint 的 panel / dangerButton / minorButton) */
+    cfDim: "rgba(0,0,0,0.62)",
+    cfPanelFallbackBg: "rgba(19,24,38,0.92)",
+    cfPanelFallbackStroke: "#FFD76A",
+    cfBannerFallbackBg: "rgba(18,24,44,0.88)",
+    cfBannerFallbackStroke: "rgba(255,215,106,0.35)",
+    cfTitle: "#FFD76A",
+    cfBody: "#CFD6E2",
+    cfOkFallbackBg: "#3A2222",
+    cfOkFallbackStroke: "rgba(255,107,122,0.4)",
+    cfOkText: "#FF6B7A",
+    cfCancelFallbackBg: "#2A3D55",
+    cfCancelFallbackStroke: "rgba(255,255,255,0.3)",
+    cfCancelText: "#8F9BB3",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */

@@ -107,6 +107,16 @@ import {
     type EnergySaveView,
 } from "./energy/EnergyModel";
 import { energyScreenLayout } from "./game/ui/energyLayout";
+import { ConfirmView } from "./confirm/ConfirmView";
+import {
+    CONFIRM_PROMPT_HOME,
+    CONFIRM_PROMPT_RESTART,
+    confirmScreenLayout,
+    type ConfirmAction,
+    type ConfirmFrame,
+    type ConfirmRequest,
+} from "./confirm/ConfirmModel";
+import { approxW } from "./ui/PanelKit";
 import type { TripleMode } from "./game/data/fusion";
 import type { Equipment } from "./game/data/equipmentGen";
 
@@ -305,6 +315,25 @@ export class GameShell extends Component {
      * 这一枚闭包:领到体力就调它续上开局,关闭 / 返回就把它清掉再回主菜单。
      */
     private energyPending: (() => void) | null = null;
+    /**
+     * 二次确认弹层:几何与内容与命中来自 cc-free 的 `confirm/ConfirmModel.ts`,节点在
+     * `confirm/ConfirmView.ts`。**本件没有广告位**,也不挂路由 —— 它挂在 `Overlay` 常驻层上,
+     * 与轻提示 toast 同一条通路(对标 Web `render()` 最后一步的 `if (this.confirm) this.drawConfirm(...)`,
+     * 覆盖在所有屏之上且不随 state 切换消失)。
+     */
+    private confirmView: ConfirmView | null = null;
+    /**
+     * 待确认的那一件事 —— **宿主持有的瞬时态,不入档**(对标 Web 的 `private confirm`,
+     * `SaveData` 里没有这一项)。`ok` 是确认后要执行的闭包(重开本局 / 回主菜单),
+     * 本层只负责「先清空、再执行」这条顺序。
+     */
+    private confirm: ConfirmRequest | null = null;
+    /**
+     * 弹层的一帧几何 + 文案。正文条数会改基线档(一行 `+80` / 两行 `+67`·`+89`),
+     * 于是「量字 → 折行 → 基线」整条链在模型层一次算完,视图的两个钩子各取一半、自己不算几何。
+     * 初值用空正文(量字函数因此一次都不会被调到),真值由 `syncConfirm` 覆写。
+     */
+    private confirmFrame: ConfirmFrame = confirmScreenLayout(DESIGN_W, logicalH(), "", approxW);
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
     /** 赛季切片同样被 `tickSeason` 逐帧读,故与 heroSlice 同性质地复用同一枚对象 */
@@ -375,6 +404,7 @@ export class GameShell extends Component {
             this.gameOverView?.setFrames(this.frames);
             this.victoryView?.setFrames(this.frames);
             this.energyView?.setFrames(this.frames);
+            this.confirmView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             if (this.router.current === "daily") this.dailyView?.sync();
@@ -388,6 +418,8 @@ export class GameShell extends Component {
             if (this.router.current === "gameover") this.gameOverView?.sync();
             if (this.router.current === "victory") this.victoryView?.sync();
             if (this.router.current === "energy") this.energyView?.sync();
+            // 弹层不挂路由:开着就补排一次(贴图就绪态随之变化)
+            if (this.confirm) this.syncConfirm();
             this.refreshMenu();
         });
     }
@@ -411,6 +443,9 @@ export class GameShell extends Component {
         this.buildVictoryScreen();
         this.buildEnergyScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
+        // 二次确认弹层挂在 Overlay 常驻层上(与 toast 同一条通路):它不属于任何一张屏,
+        // 覆盖在所有屏之上且不随切屏消失(Web render() 的最后一步)
+        this.buildConfirmLayer();
     }
 
     /** 屏幕注册表:每屏一个节点 + 一个 refresh 回调(路由切屏时即刷新实时数值) */
@@ -788,10 +823,12 @@ export class GameShell extends Component {
                 } else if (a.id === "fusion") {
                     this.openFusion();
                 } else if (a.id === "restart") {
-                    this.restartRun();
+                    // Web src/game.ts:1567:破坏性操作先弹二次确认,确认后才执行原来那一发
+                    this.openConfirm(CONFIRM_PROMPT_RESTART, () => this.restartRun());
                     return;
                 } else {
-                    this.closeShop(false);
+                    // Web src/game.ts:1569(home 钮):同一口径,确认后回主菜单
+                    this.openConfirm(CONFIRM_PROMPT_HOME, () => this.closeShop(false));
                     return;
                 }
                 break;
@@ -2198,6 +2235,74 @@ export class GameShell extends Component {
         const before = this.save().energy;
         this.sim.syncEnergy();
         if (this.save().energy !== before) this.syncEnergy();
+    }
+
+    /* ================= 二次确认弹层(覆盖层,不挂路由) ================= */
+
+    /**
+     * 弹层装配 —— Web `drawConfirm`(1208-1240) 与 `handleTap` 的确认优先分支(555-562) 的两层替换:
+     * `confirm/ConfirmModel.ts`(几何 + 内容 + 命中,cc-free)+ `confirm/ConfirmView.ts`(唯一节点层),
+     * 本文件只接线。**盒与两枚钮的矩形来自共享层 `game/ui/theme.ts:confirmRects`**(模型层转调),
+     * 宿主与视图都不重算其中任何一个数。
+     *
+     * 三条与十六屏不同的口径:
+     *  ① **不挂路由**:`SCREEN_KEYS` 仍是 16 态一枚键都不加,弹层节点挂在 `Overlay` 常驻层上
+     *     (与 toast 同一条通路)。Web 的 `if (this.confirm) this.drawConfirm(...)` 是 `render()` 的
+     *     最后一步(1927),覆盖在所有屏之上且不随 `state` 切换消失 —— 挂进任何 `Screen:<key>` 都会
+     *     在切屏那一刻跟着 `active = false` 一起没掉;
+     *  ② **点击拦截排在所有屏级热区之前**:引擎的触摸派发按兄弟序自上而下取第一个命中就 break,
+     *     `Overlay` 是 `World` 的末子节点(晚于 `Screen` 建出),弹层开着时它那张整屏 Capture 因此
+     *     先于任何屏级 Capture 拿到 TOUCH_START,屏级热区连 claim 都拿不到;Capture 内部同时显式
+     *     `propagationStopped`,并且**命中为 null 也照样吃掉这一下**(Web 那一段末尾是无条件 `return`);
+     *  ③ **没有写入意图**:确认后执行的是宿主持有的闭包(Web 的 `confirm.ok`),弹层本身一个存档字段
+     *     都不改,所以本节没有 `commit*`、也没有广告闸门(本件没有广告位)。
+     */
+    private buildConfirmLayer(): void {
+        const parent = this.overlay ?? this.worldLayer;
+        this.confirmView = new ConfirmView(parent, this.frames, {
+            layout: () => this.confirmFrame.layout,
+            content: () => this.confirmFrame.content,
+            onAction: (a) => this.onConfirmAction(a),
+        });
+        this.syncConfirm();
+    }
+
+    /** 弹一次确认(Web `openConfirm(text, ok)`,全仓唯一入口;两个调用点都在商店右上角工具钮) */
+    private openConfirm(text: string, ok: () => void): void {
+        this.confirm = { text, ok };
+        this.syncConfirm();
+    }
+
+    /**
+     * 一帧重排:开层、换串与晚到贴图流式加载后各调一次。几何与文案一次算完存进 `confirmFrame`,
+     * 视图的两个钩子各取一半 —— 正文条数会改基线档(一行 `+80` / 两行 `+67`·`+89`),
+     * 那条「量字 → 折行 → 基线」的链整个在模型层,量字函数注入 `ui/PanelKit.approxW`。
+     */
+    private syncConfirm(): void {
+        this.confirmFrame = confirmScreenLayout(DESIGN_W, logicalH(), this.confirm ? this.confirm.text : "", approxW);
+        const v = this.confirmView;
+        if (!v) return;
+        v.root.active = !!this.confirm;
+        if (!this.confirm) return;
+        // Web 的 drawConfirm 是 render 的最后一步:toast 节点是懒建的,先建出来就会压在弹层之上,
+        // 故每次开层都把弹层顶到 Overlay 末位(渲染与触摸派发都按兄弟序,一并跟上)
+        const parent = v.root.parent;
+        if (parent) v.root.setSiblingIndex(parent.children.length - 1);
+        v.sync();
+    }
+
+    /**
+     * 热区 → 玩法(对标 Web `handleTap` 的确认分支)。顺序照 Web 逐字:
+     * `const ok = this.confirm.ok; this.confirm = null; ok();` —— **先清空再执行**,
+     * 于是闭包里再切屏(重开可能弹体力屏、回主页切菜单)时读到的是已收掉的弹层;
+     * 取消那一支只清空,不执行任何闭包。
+     */
+    private onConfirmAction(a: ConfirmAction): void {
+        const req = this.confirm;
+        if (!req) return;
+        this.confirm = null;
+        this.syncConfirm();
+        if (a.kind === "ok") req.ok();
     }
 
     /* ================= 主循环 ================= */
