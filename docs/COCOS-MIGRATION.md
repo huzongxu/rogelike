@@ -275,6 +275,16 @@ clientY = rect.top  + (H - wy) * (rect.height / H)
 - 菜单：`menu_row_plate` 九宫格三行 + 金色标题，`RowText p0,-2`、`BackText p0,-4` 均在父矩形内居中。
 - 路由：切 `menu` 时 `Screen:battle active=false`，战场占位与 HUD 不再漏画；切回 `battle` 时完整恢复。
 
+### 7.5 门 5：全 script 树类型检查
+`npm run typecheck:cocos`（`scripts/cocos-typecheck.mjs`）把 `cocos-prototype/assets/scripts/**/*.ts` 整棵树过一遍 `tsc --noEmit`，把类型检查补到门 2 与门 3 都够不着的那半棵树上：
+
+- **覆盖面**：根 `tsconfig.json` 的 `include` = `src` / `tests` / `cocos-prototype/assets/scripts/game`，所以门 2 那次 `tsc --noEmit`（严格档、含 DOM）只看得到共享层；`game/` 之外的那半棵树 —— `core/`、`battle/`、各屏目录、`GameShell.ts`、`ui/PanelKit.ts` —— 只有门 3 的 CLI 构建会编译它们，而编译走打包器自己的 transpile，`error TS` 计数为 0 不代表做过类型检查。漏 import 一类的引用错误就落在这条缝里，只有实机进屏才炸。
+- **口径**：`-p cocos-prototype/tsconfig.json` 继承编辑器生成的 `temp/tsconfig.cocos.json`（拿到 `cc` 的 `types` 与 `db://assets/*` 映射），命令行再覆盖三项 —— `--skipLibCheck`（引擎 `.d.ts` 自身不干净，屏蔽后工程外报错归 0）、`--strictNullChecks`（把档位抬到与根配置一致；`game/data/menuSkin.ts` 那条 TS2322 是缺这个开关造成的，抬上去就消失）、`--lib es2020,dom`（补 `window` / `localStorage` 之类宿主声明）。不取整档 `--strict`：那会给 `battle/HudView.ts` 的四枚 `@property` 字段带来 `TS2564` 误报（cc 组件的字段由编辑器注入）。
+- **依赖门 3**：`temp/tsconfig.cocos.json` 由编辑器或命令行构建生成，`rm -rf temp` 后要等 `build:cocos` 跑完才有。缺它时本门直接给出这句话并退出，不去猜配置。
+- **判据**：只数路径落在 `cocos-prototype/assets/` 下的报错，与脚本里的 `BASELINE` 逐条对账（键 = 文件 + 错误码 + 条数）。新增、条数超出基线、基线条目已失效这三种形态都判红，所以基线不会随时间只涨不落。
+- **基线 0 条**（零容忍：任何工程内报错都判红）。唯一曾在基线上的 `battle/JoystickView.ts:71` `TS2322` 已修 —— cc typings 把 `EventTouch.getID()` 标成 `number | null`，而 `stickId` 字段是 `number`，赋值处改成落回本文件既有的无杆哨兵 `e.getID() ?? -1`（与构造初值和 `touchEnd` 复位值同一个 `-1`）。改动由 `.probe/probe-joystick.js` 14 条实机断言收口：起杆 → 拖动出单位方向 → 超程钳在底盘半径（表值 56，探针现读）→ 同 id 复位，外加右半屏不起杆、第二指不抢杆、异 id 的 move/end 不改状态，以及 `getID()` 真返回 `null` 时 `stickId` 仍是 `-1` 且不产生移动输入。
+- 屏层的漏 import 另有 `tests/cocos-phase5-energy.test.ts` 的 `missingImports()` 做同口径对账（拿被测文件代码体与它的 import 清单互查，并反向量已落地的 `VictoryView`）。两条互补：那几处断言钉住被扫文件的"用到了就必须 import"，本门钉住整棵树的引用可解。
+
 ---
 
 ## 8. 分期计划
