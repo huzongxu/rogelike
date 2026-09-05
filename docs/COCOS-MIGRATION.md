@@ -447,8 +447,8 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 | 编号 | 风险 | 影响 | 处置 |
 | --- | --- | --- | --- |
 | R1 | 纯逻辑与 Cocos 侧各留一份拷贝 | 数值/系统行为双端漂移，回归成本极高 | 已闭合。Phase 0 把 42 个纯逻辑文件进共享层 + `@game` alias；Phase 1 把战斗编排层也抽进 `game/systems/battleWorld.ts`，`src/game.ts` 与 `BattleSim` 共用同一份（`damageEnemy`/`killEnemy`/`updateProjectiles` 等在 `src/game.ts` 中已各 0 处）。两道测试守住：`tests/shared-purity.test.ts` 挡宿主依赖混入共享层，`tests/battle-fingerprint.test.ts` 挡编排行为漂移 |
-| R2 | 152 张 PNG 全量入 `resources` | 包体超限、首屏变慢 | 全量镜像 152/152 已完成；Phase 6 分组进 bundle（战斗/皮肤/背景），背景与皮肤走远程资源，并实测包体与首屏耗时 |
-| R3 | 微信小游戏端资源与广告 API | 上线受阻 | `AdChannel` 已按端分流；Phase 6 用 `scripts/smoke-wechat.cjs` 的思路补 Cocos 版冒烟 |
+| R2 | 152 张 PNG 全量入 `resources` | 包体超限、首屏变慢 | 实测已闭合（见「Phase 6 包体与首屏实测」）：整包 45,709,014 B，其中贴图 41,537,590 B（90.9%），首屏关键路径仅 ≈4.78 MB。**原处置中"分组进 bundle"覆盖不了背景** —— `bg_*` 10 张 = 32,682,562 B（31.17 MiB）= 贴图 78.7%，任何小游戏包体上限都装不下，分组能覆盖的只有 8,855,028 B 非背景资产；背景必须减重（10 张 alpha 恒 255，去通道转 JPG/WebP）或走远程资源，属**发布阻塞项**。2026-09-06 拍板：本轮只记账不动资产，以免破坏"与 Web 逐屏像素对标"闸门 |
+| R3 | 微信小游戏端资源与广告 API | 上线受阻 | `AdChannel` 已按端分流；Cocos 版冒烟已落地 `scripts/smoke-cocos.mjs`（`npm run smoke:cocos`，7 项断言，无头 Edge 真实启动构建产物）。**wechatgame 平台构建与真机/官方模拟器验收仍未做** —— 本机无微信开发者工具，无法自证，属发布前必须在有工具的环境补的一步 |
 | R4 | `Label` 每帧改文本 | 明显掉帧 | 全量走 `bindLabel`；Phase 1 加命中率打点 |
 | R5 | 文本落位口径：子局部矩形忘传父尺寸 / 把对齐锚点当盒左沿 | 文字飞出屏幕，或右对齐与居中标签整体右移半个盒宽（越出 560 右界、压住相邻文本） | 三屏文本统一走 `ui/PanelKit.placeLine`（唯一入口，`box` 为子局部矩形参数），锚点折盒集中在 cc-free 的 `ui/TextBand.ts:anchorBand`；`tests/cocos-phase3.test.ts` 第 7 节按 `shopLayoutPure` / `heroSelectLayout` 全网格断言每条文本带落在 `0..560`，Code Review 检查所有 `rect` 调用 |
 | R6 | 视图节点挂到 `World` 而非 `Screen:<key>` | 屏幕间互相漏画 | §2.2 写成约定；Phase 1 起屏幕组件构造签名强制接收所属屏幕节点 |
@@ -566,3 +566,103 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 - **1246 档在构建包实机上进不去**(同转生 / 委托 / 融合 / 赛季 / 体力屏挂账),探针只在 996 档写断言,那一档由纯函数矩阵覆盖(`tests/cocos-phase5-confirm.test.ts` 的 1246 段:盒 `{100,538}`、横幅 `{114,548}`、两枚钮 y 648、标题基线 568、正文一行档 618 / 两行档 605 / 627、两枚钮文字 674 / 675,与 996 档逐位差 125)。
 - **共享出口的三类视觉偏差在本件同样存在**:S3 文字基线偏低、S4 贴图拉满盒、`Plate.show` 残余描边(见「逐屏视觉对标挂账」一节),本轮按既定口径正常调用这些出口、不对齐也不绕过、不开新单。
 - **跨层纪律一条**:门 5(`npm run typecheck:cocos`)之外,`tests/cocos-phase5-confirm.test.ts` 的 `missingImports()` 继续做「代码体与 import 清单对账」—— 对 `ConfirmModel` 的每一个出口,凡在 `ConfirmView` 或 `GameShell` 的代码体里出现就必须出现在各自的 import 清单里(`ui/PanelKit` 那一份引了 `cc` 不能直载,故手列出口名交给同一把尺子),同一把尺子反向量已落地的 `EnergyView` / `VictoryView` 与 `GameShell` 的 energy 出口;视图层另有「数字只允许 0 / 1 / 1.25 / 2」与「不出现 `rowTextY` / `confirmRects` / `CONFIRM_*` / 折行函数」两条源码守卫。
+
+---
+
+## Phase 6 包体与首屏实测（数据）
+
+采集日 2026-09-06，对象 = `adb8774` 工作树上 `npm run build:cocos` 的既有产物（`cocos/build/web-desktop/`，产物时间 01:01，本节不触发重建）。测量机为本机 Windows + 无头 Edge（`--headless=new`，窗口 684×1217，即 560×996 档），静态服务 `scripts/serve-build.mjs`（localhost）。本机 harness 在 `.probe/p29-size-boot.sh`（`.probe/` gitignored，复跑 `bash .probe/p29-size-boot.sh`；包体数字也可用文末的纯命令口径重导）。**本节数据是 bundle 分组与远程资源两项待决策（§9 R2）的输入**，不是结论；两项决策与 wechatgame 平台构建均不在本单范围。
+
+### 包体构成（`cocos/build/web-desktop/`，全为实测字节）
+
+总字节 **45,709,014**（43.59 MiB），分项和与总字节逐位相等：
+
+| 分项 | 字节 | 占整包 | 备注 |
+| --- | --- | --- | --- |
+| `assets/resources/` | 41,696,230 | 91.22% | 其中 `native/` 152 枚 PNG = **41,537,590（90.87%）**；`import/`（序列化元数据+config）123,717；bundle 清单 `config.json` 34,318；`index.js` 605 |
+| `cocos-js/`（引擎运行时 js） | 3,140,951 | 6.87% | `_virtual_cc-*.js` 2,522,764 + spine 四件 385,128 + `assets/` 225,173 + `cc.js` 7,886 |
+| `assets/main/`（业务包） | 558,880 | 1.22% | 业务 js `index.js` = **556,111**；场景序列化 `import/` 2,189；`config.json` 580 |
+| `assets/internal/`（引擎内置资源） | 240,753 | 0.53% | 默认材质/贴图等 |
+| `src/`（引导与设置） | 64,286 | 0.14% | `settings.json` 21,366、polyfills 14,750、system.bundle 12,259、chunks 10,116、effect.bin 5,755 |
+| 根文件 | 7,914 | 0.02% | `application.js`/`index.html`/`index.js`/`style.css`/`favicon.ico` |
+
+`resources/config/` 两枚表在产物里被序列化成 JsonAsset 落进 `import/`：`balance.json` 2,099 → 1,530 B、`viewTable.json` 5,969 → 4,145 B（源文件不带 `.meta` 共 8,068 B）。
+
+**贴图镜像 1:1（逐文件 md5 对账通过）**：源图 `cocos/assets/resources/textures/` 152 枚 PNG = `public/assets/` 152 枚 = 产物 `assets/resources/native/` 152 枚，三方字节和同为 41,537,590，按文件名的 md5 与按 md5 多重集合的比对全部一致。源目录另有 152 枚 `.meta` 共 445,521 B，不入包。§7.1 的"全量镜像 152/152"由此从文件数升级为逐字节核实。
+
+**与 Web 侧同口径对比**（`dist/` = `npm run build` 生产构建）：
+
+| 口径 | Cocos web-desktop | Web dist |
+| --- | --- | --- |
+| 目录总字节 | 45,709,014 | 46,884,070（含 `layout-*` 布局台开发件 5,035,901） |
+| 游戏载荷 | 45,709,014 | **41,848,169**（= dist/assets 41,845,126 + config 2,099 + index.html 944） |
+| 业务 js | 556,111 | 306,679（`assets/index-B8WQ68vA.js`） |
+| PNG 贴图 | 41,537,590（152 枚，同一套字节） | 41,537,590（152 枚） |
+| 非贴图部分 | 4,171,424 | 310,579 |
+
+差值 **+3,860,845 B（+9.2%）** 全部落在非贴图部分：引擎运行时 +3,140,951（Web 自研引擎无此层）、业务 js +249,432（Cocos 组件层比 Canvas2D 单文件重）、资源序列化/internal/src 等 +470,462。
+
+### 首屏加载耗时（无头 Edge 实测，冷缓存 ×3 取中位数）
+
+**量法**：`cdp-eval.mjs` 的 `CDP_PRELOAD` 在新文档 document-start 注入 5ms 轮询器（`.probe/p29-preload.js`），第一次观察到里程碑为真时用页内 `performance.now()` 打点，基准 = 该次导航的 navigationStart，粒度 ±5ms。**三轮全部冷缓存**：每轮全新 `--user-data-dir`（HTTP 缓存与 V8 code cache 皆空），Edge 先落在 404 占位页，被计时的 `CDP_GOTO` 导航是该 profile 的第一次真实加载。里程碑定义：`inited` = `cc.game.inited === true`；`ready` = `GameShell.ready === true`（`GameShell.ts:204` 私有字段，boot 里 HUD 预载贴图 + `buildLayers` 完成后置真）；`firstFrame` = `cc.director.getTotalFrames() > 0`。
+
+| 里程碑 | 中位数 | run0 | run1 | run2 |
+| --- | --- | --- | --- | --- |
+| `cc.game.inited` | **654 ms** | 654 | 614 | 689 |
+| 首帧画出（totalFrames > 0） | **2,051 ms** | 2,054 | 2,051 | 2,051 |
+| `GameShell.ready` | **2,452 ms** | 2,436 | 2,452 | 2,457 |
+
+三轮实际时序均为 inited → firstFrame → ready（首帧先于 ready：director 起转在前，boot 的资源等待在后）。
+
+**到 ready 为止的关键路径资源**（Performance resource entries，encodedBodySize 口径）：91~106 个请求、**约 4.77 MB**（中位 4,777,712 B），其中 PNG 恰 22 枚 = 1,079,175 B（`HUD_PRELOAD_KEYS` 全量，一枚不多）；其余为引擎 js（2.5 MB `_virtual_cc` 为主）、业务 js、场景与 bundle 序列化、config。**ready 之后还有 128 枚 PNG = 40,453,728 B 在后台流式加载**（`restFrameKeys()` = `ASSET_MANIFEST` 的 150 键减去 22 枚预载；语义 = Web `assets.beginLoad()`），不阻塞首屏。
+
+清单与磁盘差 2 枚：`resources/textures/` 有 152 枚 PNG，`ASSET_MANIFEST` 只有 150 键，多出的 `gen-badge-gear-lv.png`（1,646 B）与 `gen-entry-gearup.png`（3,041 B）是出图管线残留 —— `public/assets/` 里同样有这两枚（字节相同），`src/game.ts` 与 Cocos 侧都零引用，两端运行时都不会加载，但都进了包。合计 4,687 B，量级可忽略；记在此处只为让「152 枚」与「128 枚流式」两个数各自有据，不是同一集合的两种数法。冒烟脚本的「产物贴图枚数 == 源图枚数」两边都是 152，抓不到这类残留。
+
+给 R2 决策的读法（只摆事实）：首屏关键路径 ≈ 4.78 MB，只占整包 10.4%；整包的 90.9% 是 PNG，其中 97.4% 的 PNG 字节（40.5/41.5 MB）在 ready 后才需要。"进本地包的必须集"与"可分组/可远程的候选集"的天然分界已经存在于加载时序里（22 枚预载 vs 128 枚流式）。
+
+### 源资产构成：R2 处置口径的修正（2026-09-06 拍板：只记账，不动资产）
+
+产物侧的 41,537,590 B 贴图是源图逐字节镜像，所以「哪部分能分组、哪部分不能」要看源资产的构成。实测（`cocos/assets/resources/textures/`，152 枚全为 RGBA 8bit）：
+
+| 项 | 张数 | 字节 | 占贴图 |
+| --- | --- | --- | --- |
+| `bg_*`（背景） | 10 | 32,682,562（31.17 MiB） | **78.7%** |
+| 其余全部（icon/banner/frame/enemy/menu/avatar…） | 142 | 8,855,028（8.44 MiB） | 21.3% |
+| 合计 | 152 | 41,537,590（39.61 MiB） | 100% |
+
+三条决定处置形态的事实：
+
+1. **152 枚全平铺在 `resources/textures/` 单一目录**，没有子目录。Cocos 的 bundle 按文件夹配置，因此"分组进 bundle"的前置条件是先物理拆子目录（`git mv`，`.meta` 随迁、uuid 不变）。
+2. **10 枚背景一律 1024×1792 RGBA，alpha 逐像素解码后恒为 255**（零依赖 IHDR+IDAT 解码实测，工具在 `.probe/png-alpha.cjs`，gitignored）—— alpha 通道是纯浪费，没有一张用到透明。未压 RGBA 单张 1024×1792×4 = 7,340,032 B（7.00 MiB），PNG 实存 2.17~3.97 MiB。
+3. **属继承问题，非迁移引入**：`public/assets/` 154 枚 / 44.41 MiB，其中 10 枚 `bg_*` 与 Cocos 镜像 `cmp` 逐字节相同（10/10）。Web 版本身就背着这个重量。
+
+**据此修正 §9 R2 的处置口径**：原文"分组进 bundle（战斗/皮肤/背景），背景与皮肤走远程资源"里，对背景真正起作用的只有后半句。32,682,562 B（31.17 MiB）无论怎么分组都装不进小游戏的任何包体上限（主包 4 MB 量级；整包上限的当前确切值需按官方文档核实，不影响此结论），**bundle 分组能覆盖的只有那 8,855,028 B（8.44 MiB）非背景资产**。背景必须靠减重（去 alpha 转 JPG/WebP，或重出图）或远程资源解决 —— 这是发布阻塞项，不是优化项。
+
+**2026-09-06 拍板：只记账，不动资产。** 不减重、不转格式、不上 CDN。理由：改资产会让 10 枚背景变成有损，破坏"与 Web 逐屏像素对标"这条验收闸门，而迁移整体验收尚未完成；且重出图 / 转格式 / 上 CDN 三条路都属发布链路决策。本小节只固化实测事实与修正后的处置口径，供发布前重新起决策时直接取用。
+
+### 冒烟脚本 `npm run smoke:cocos`
+
+`scripts/smoke-cocos.mjs`（入库，零新依赖：node 内置模块 + 全局 fetch/WebSocket + 本机 Edge，路径候选与 `.probe/p28-confirm.sh` 同；不依赖微信开发者工具）。它是 `smoke-wechat.cjs` 的 Cocos 对应物：wx 桩泵帧换成无头 Edge 真实启动构建产物。七项断言全过 exit 0，任何一项不过 exit 1：
+
+1. 产物齐全（`index.html`、业务 js、`resources/native` 贴图枚数 == 源图枚数、`import/` 里 balance 与 viewTable 的序列化体、引擎 js、settings）；
+2. `SCREEN_KEYS` 从 `core/ScreenRouter.ts` 运行时解析 = 16 键（不手抄）；
+3. `cc.game.inited === true`；
+4. `GameShell` 组件存在且 `ready === true`（字符串 `getComponent('GameShell')` 口径）；
+5. 首帧已画出（`getTotalFrames() > 0`）；
+6. 16 个 `Screen:<key>` 节点齐全，且显式核验路径为 `Main/Canvas/World/Screen`（不是 Canvas 直接子级）；
+7. 未捕获异常（白名单外）= 0（CDP `Runtime.exceptionThrown` 从导航前 enable，盖住整个启动期；ready 后等计数稳定再结账）。
+
+服务与调试端口都自选空闲（`listen(0)` / `--remote-debugging-port=0` 读 stderr 回读），不与探针 harness 的固定端口冲突。
+
+**异常白名单判据**（与 `scripts/smoke-cocos.mjs` 头注释同一份文字）：既有挂账 `loadFrames` null-frames `TypeError` 的触发条件本轮已实测钉死 —— 它是**场景重建撞上后台流式加载**的产物，不是每次启动必发：ready 之后 128 枚贴图在飞时页内 `loadScene('Main')` 销毁 GameShell（引擎 destroy 把实例字段置 null），在飞回调读 `this.frames.set(...)` 逐条抛 `TypeError: Cannot read properties of null (reading 'set')`。实测四种形态：ready 点重载场景 → **128 条**（全部在飞）；p28 探针 harness（探针开头条件式 `loadScene('Main')` 与自举抢跑）→ **113 条**；**单次冷导航（冒烟与 p29 的形态）→ 0 条**；整页 reload（文档级销毁，回调不再执行）→ 0 条。白名单签名 = 该 TypeError 文本开头 + 首栈帧 URL 含 `/assets/main/index.js`；FAIL 只数白名单外，白名单命中单独计数打印 —— 既不让既有挂账把冒烟判红，也不把它当成"没有异常"。计数是报告值（0~128 随触发时在飞数浮动），不作硬断言。
+
+复跑口径：
+
+```bash
+npm run smoke:cocos                # 入库冒烟，7 项 PASS/FAIL 清单
+bash .probe/p29-size-boot.sh       # 本机 harness（gitignored）：包体表 + 镜像 md5 对账 + 首屏 ×3 取中位
+# 包体数字的纯命令重导（不依赖 harness）：
+du -sb cocos/build/web-desktop
+du -sb cocos/build/web-desktop/{cocos-js,src} cocos/build/web-desktop/assets/{main,internal,resources}
+find cocos/build/web-desktop/assets/resources/native -name '*.png' -printf '%s\n' | awk '{s+=$1;n++} END{print n, s}'
+```

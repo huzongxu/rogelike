@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "build:minigame": "vite build --config vite.config.minigame.ts && node scripts/copy-assets.cjs",
     "smoke:wechat": "node scripts/smoke-wechat.cjs",
+    "smoke:cocos": "node scripts/smoke-cocos.mjs",
     "sync:cocos": "node scripts/sync-cocos.mjs",
     "build:cocos": "C:/ProgramData/cocos/editors/Creator/3.8.8/CocosCreator.exe --project cocos --build \"platform=web-desktop\"",
     "typecheck:cocos": "node scripts/cocos-typecheck.mjs",
