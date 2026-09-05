@@ -26,13 +26,9 @@ import type { EffectType } from "../game/data/affixes";
 import { seasonTheme } from "../game/data/seasonSets";
 import {
     calcStars,
-    DAY_MS,
     FIRST_CLEAR_ECHO_MULT,
     FIRST_CLEAR_TICKET_MULT,
-    seasonEnded,
     seasonScore,
-    seasonStardust,
-    SEASON_DAYS,
     stageUnlocked,
     THREE_STAR_TICKETS,
 } from "../game/data/season";
@@ -304,9 +300,8 @@ export class BattleSim {
     update(dt: number): void {
         if (!this.world.started || this.world.over) return;
         this.world.beginFrame(dt);
-        // 每日重置与赛季翻页(任何推进帧都执行,与 Web 同口径)
+        // 每日重置(任何推进帧都执行,与 Web 同口径;赛季翻页已上移到宿主,见 GameShell.tickSeason)
         this.checkDailyReset();
-        this.syncSeason();
         // 首局引导
         if (this.guide.enabled) {
             this.guide.update(this.world.guideCtx(true, false), dt);
@@ -347,26 +342,6 @@ export class BattleSim {
             changed = true;
         }
         return changed;
-    }
-
-    /** 赛季到期结算翻页:赛季分→星尘,重置星数/赛季最佳,赛季 +1(循环处理离线跨多赛季) */
-    private syncSeason(): void {
-        const now = Date.now();
-        if (!seasonEnded(this.save.seasonStartAt, now)) return;
-        let rolled = false;
-        while (seasonEnded(this.save.seasonStartAt, now)) {
-            const score = seasonScore(this.save.stageStars, this.save.seasonBest);
-            this.save.stardust += seasonStardust(score);
-            this.save.seasonId += 1;
-            this.save.seasonStartAt += SEASON_DAYS * DAY_MS;
-            this.save.stageStars = [0, 0, 0, 0, 0, 0, 0, 0];
-            this.save.seasonBest = 0;
-            rolled = true;
-        }
-        if (rolled) {
-            this.rankImprovedTo = null;
-            this.persist();
-        }
     }
 
     /** 广告复活(结算屏调用):战场部分走共享层,本层解除结算挂起 */

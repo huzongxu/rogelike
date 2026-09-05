@@ -72,6 +72,9 @@ import {
     type FusionSelection,
 } from "./fusion/FusionModel";
 import { fusionScreenLayout } from "./game/ui/fusionLayout";
+import { SeasonView } from "./season/SeasonView";
+import { buildSeasonContent, seasonRoll, type SeasonAction, type SeasonRollClaim, type SeasonSaveView, type SeasonSummary } from "./season/SeasonModel";
+import { seasonScreenLayout } from "./game/ui/seasonLayout";
 import type { TripleMode } from "./game/data/fusion";
 import type { Equipment } from "./game/data/equipmentGen";
 
@@ -229,8 +232,17 @@ export class GameShell extends Component {
      * 开屏**不**清空:整局会话内跨开屏 / 关屏保留,与选中三件的节奏不同。
      */
     private fusMode: TripleMode = FUSION_DEFAULT_TRIPLE_MODE;
+    /** 赛季结算屏:内容与翻页意图来自 cc-free 的 season/SeasonModel.ts(本屏没有广告位,也没有手动入口) */
+    private seasonView: SeasonView | null = null;
+    /**
+     * 最近一次到期翻页的摘要 —— **宿主持有的瞬时态,不入档**(对标 Web 的 `private seasonSummary`,
+     * `SaveData` 里没有这一项)。翻页那一刻算出,贴底钮收起它;离线跨多赛季只留最后一轮。
+     */
+    private seasonSummary: SeasonSummary | null = null;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
+    /** 赛季切片同样被 `tickSeason` 逐帧读,故与 heroSlice 同性质地复用同一枚对象 */
+    private seasonSlice: SeasonSaveView = { seasonId: 1, seasonStartAt: 0, stageStars: [], seasonBest: 0, stardust: 0 };
     private overlay: Node | null = null;
     private toastNode: Node | null = null;
     private toastLabel: Label | null = null;
@@ -293,6 +305,7 @@ export class GameShell extends Component {
             this.prestigeView?.setFrames(this.frames);
             this.commissionView?.setFrames(this.frames);
             this.fusionView?.setFrames(this.frames);
+            this.seasonView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             if (this.router.current === "daily") this.dailyView?.sync();
@@ -302,6 +315,7 @@ export class GameShell extends Component {
             if (this.router.current === "prestige") this.prestigeView?.sync();
             if (this.router.current === "commission") this.commissionView?.sync();
             if (this.router.current === "fusion") this.fusionView?.sync();
+            if (this.router.current === "season") this.seasonView?.sync();
             this.refreshMenu();
         });
     }
@@ -320,6 +334,7 @@ export class GameShell extends Component {
         this.buildPrestigeScreen();
         this.buildCommissionScreen();
         this.buildFusionScreen();
+        this.buildSeasonScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
@@ -337,8 +352,9 @@ export class GameShell extends Component {
             prestige: () => this.syncPrestige(),
             commission: () => this.syncCommission(),
             fusion: () => this.syncFusion(),
+            season: () => this.syncSeason(),
         };
-        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion"] as ScreenKey[]).forEach((key) => {
+        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
             const refresh = hooks[key];
@@ -1576,6 +1592,108 @@ export class GameShell extends Component {
         this.refreshMenu();
     }
 
+    /* ================= 赛季结算屏(Phase 4 第九屏:到期翻页入账 + 无手动入口) ================= */
+
+    /**
+     * 赛季结算屏装配。三层分工与前八屏同构:
+     *  ① 几何全部来自共享层 `game/ui/seasonLayout.ts`(经 `seasonScreenLayout` 单一出口,徽标盒 /
+     *     横幅盒 / 标题与摘要四行与贴底钮及其文字位,与 Web 逐项同数)。本屏内容条数不随存档变
+     *     (恒为徽标 + 横幅 + 标题 + 四行摘要 + 一枚钮),几何入参只有一个摘要形态位,
+     *     所以不像每日 / 扭蛋 / 融合屏那样把条数传进去;
+     *  ② 文案、命中与**写入意图**来自 cc-free 的 `season/SeasonModel.ts`(到期判据、赛季分、
+     *     星尘折算与主题名全部走共享层既有函数,本文件不复制任何一条规则);
+     *  ③ 模型不碰存档:落 `stardust` / `seasonId` / `seasonStartAt` / `stageStars` / `seasonBest`
+     *     与 `persist()` 全在本文件(`commitSeasonRoll`)。**本屏没有广告位**,也就没有 `watchAd` 分支。
+     * **本屏没有手动入口**:Web 侧唯一的进屏路径是翻页判定写下摘要后那句
+     * `if (seasonSummary && state === "menu") state = "season"`(主菜单、HUD、任何钮都不指向它),
+     * Cocos 侧同构 —— `tickSeason` 每帧跑在路由闸门之前,真翻页时先落账、再按同一条件自动弹屏。
+     * 复核要构造触发条件:把存档的 `seasonStartAt` 往前推过 `SEASON_DAYS × DAY_MS` 整,
+     * 或直接调 `openSeason()`(它就是把屏切过去,不产生任何写入)。
+     */
+    private buildSeasonScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:season");
+        if (!node) return;
+        node.removeAllChildren();
+        this.seasonView = new SeasonView(node, this.frames, {
+            layout: () => seasonScreenLayout(DESIGN_W, logicalH(), this.seasonSummary !== null),
+            content: (L) => buildSeasonContent(this.seasonSave(), this.seasonSummary, L),
+            onAction: (a) => this.onSeasonAction(a),
+        });
+        this.seasonView.sync();
+    }
+
+    /** 本屏要读的存档字段就这五项(五项也都在这一屏被写,摘要是会话态、不在存档里);`tickSeason` 逐帧调它,故覆写复用切片 */
+    private seasonSave(): SeasonSaveView {
+        const s = this.save();
+        const slice = this.seasonSlice;
+        slice.seasonId = s.seasonId;
+        slice.seasonStartAt = s.seasonStartAt;
+        slice.stageStars = s.stageStars;
+        slice.seasonBest = s.seasonBest;
+        slice.stardust = s.stardust;
+        return slice;
+    }
+
+    /** 进屏:切屏即触发路由 refresh 钩子 → syncSeason(现算一帧几何与文案)。没有第二个调用方(本屏无手动入口) */
+    private openSeason(): void {
+        this.router.show("season");
+    }
+
+    /**
+     * 到期翻页的每帧判定,排在路由闸门之前 —— Web 的 `syncSeason` 在 `update()` 里任何状态下都跑,
+     * 所以停在菜单 / 通行证 / 排行这类非战斗屏跨了赛季也要照常翻页(与 `syncDaily` 同一条口)。
+     * 真翻页时先落账,再按 Web 那句 `seasonSummary && state === "menu"` 自动弹屏;
+     * 弹屏之后 `commitSeasonRoll` 留在档上的账就是既成事实,贴底钮那一下只收起摘要。
+     */
+    private tickSeason(): void {
+        const claim = seasonRoll(this.seasonSave(), Date.now());
+        if (!claim) return;
+        this.commitSeasonRoll(claim);
+        // 赛季字段被多张只读屏直接消费(排行榜号与分数、通行证高级轨的归属赛季、英雄解锁季、
+        // 主菜单赛季行):Web 靠逐帧重绘自然跟上,Cocos 侧翻页这一帧必须显式重排当前屏,
+        // 否则读数会停在已结算的那个赛季(与 syncDaily 之后重排 daily / gacha 同一理由)
+        this.router.refresh();
+        if (this.seasonSummary && this.router.current === "menu") this.openSeason();
+    }
+
+    private syncSeason(): void {
+        this.seasonView?.sync();
+    }
+
+    /**
+     * 热区 → 玩法(对标 Web onSeasonClick + closeSeason:整屏只有贴底那一枚钮,钮外一律吞掉)。
+     * 收起摘要与切回主菜单都不写存档,所以这一支不产写入意图;返回落点恒为主菜单 ——
+     * Web 的 `closeSeason` 写的就是 `state = "menu"`,本屏没有 `overlayFrom` 这一档。
+     * **本屏没有广告位**,action 里也没有 `adPending` 闸门 —— 闸门只有 `watchAd` 首行那一道。
+     */
+    private onSeasonAction(a: SeasonAction): void {
+        if (a.kind !== "close") return;
+        this.seasonSummary = null;
+        this.router.show("menu");
+    }
+
+    /**
+     * 照着翻页意图落账(壳层是唯一的写入方)。五笔账面与 Web `syncSeason` 循环体的收尾段
+     * 逐字段对应:`stardust` 累加、`seasonId` 与 `seasonStartAt` 各推进 `rolls` 格、
+     * `stageStars` 换成八格全零、`seasonBest` 归零;随后作废幻影榜的名次提示
+     * (`rankImprovedTo`,赛季翻页换榜,旧提示不再成立)、落一次盘、记下摘要。
+     * 摘要与"当前显示哪张屏"都不入档,所以 `seasonSummary` 只在内存里。
+     */
+    private commitSeasonRoll(claim: SeasonRollClaim): void {
+        const save = this.save();
+        save.stardust += claim.stardustGain;
+        save.seasonId = claim.seasonIdTo;
+        save.seasonStartAt = claim.seasonStartAtTo;
+        save.stageStars = claim.starsTo;
+        save.seasonBest = claim.seasonBestTo;
+        this.sim.rankImprovedTo = null;
+        this.sim.persist();
+        this.seasonSummary = claim.summary;
+        this.syncSeason();
+        // 主菜单顶栏的星尘读数与赛季行(S{id} · 主题 · 第 N/14 天 · 赛季分)都直接读这几个字段
+        this.refreshMenu();
+    }
+
     /* ================= 主循环 ================= */
 
     update(dt: number): void {
@@ -1593,6 +1711,8 @@ export class GameShell extends Component {
             if (this.router.current === "gacha") this.syncGacha();
             this.refreshMenu();
         }
+        // 赛季到期翻页:与每日重置同一条口,任何状态下都跑,所以同样排在路由闸门之前
+        this.tickSeason();
         if (this.router.blocksPlay()) return;
         const step = Math.min(dt, viewTable().battle.maxFrameDt);
         this.joystick.update();

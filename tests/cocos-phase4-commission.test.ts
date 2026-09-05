@@ -1451,17 +1451,17 @@ describe("GameShell 的委托挂机屏接线", () => {
     expect(src.includes("this.buildCommissionScreen();")).toBe(true);
     expect(src.indexOf("this.buildCommissionScreen();")).toBeGreaterThan(src.indexOf("this.buildPrestigeScreen();"));
     expect(src.includes("commission: () => this.syncCommission(),")).toBe(true);
-    expect(src.includes('"gacha", "prestige", "commission", "fusion"]')).toBe(true);
+    expect(src.includes('"gacha", "prestige", "commission", "fusion", "season"]')).toBe(true);
   });
 
-  it("路由实际注册十二屏(SCREEN_KEYS 仍是 16 态全量)", () => {
+  it("路由实际注册十三屏(SCREEN_KEYS 仍是 16 态全量)", () => {
     const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
     expect(keysBlock[1].includes('"commission"')).toBe(true);
-    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion"')).toBe(true);
+    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(9);
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(10);
   });
 
   it("入口从占位轻提示换成 openCommission,占位表已随最后一屏落地整表下线", () => {

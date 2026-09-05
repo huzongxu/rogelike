@@ -1423,17 +1423,17 @@ describe("GameShell 的扭蛋屏接线", () => {
     expect(src.includes("this.buildGachaScreen();")).toBe(true);
     expect(src.indexOf("this.buildGachaScreen();")).toBeGreaterThan(src.indexOf("this.buildGearUpScreen();"));
     expect(src.includes("gacha: () => this.syncGacha(),")).toBe(true);
-    expect(src.includes('"gearup", "gacha", "prestige", "commission", "fusion"]')).toBe(true);
+    expect(src.includes('"gearup", "gacha", "prestige", "commission", "fusion", "season"]')).toBe(true);
   });
 
-  it("路由实际注册十二屏(SCREEN_KEYS 仍是 16 态全量)", () => {
+  it("路由实际注册十三屏(SCREEN_KEYS 仍是 16 态全量)", () => {
     const router = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ScreenRouter.ts", import.meta.url), "utf8");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
-    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion"')).toBe(true);
+    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
     // 九个屏走 sync*(heroes / leaderboard / daily / pass / gearup / gacha / prestige / commission / fusion);menu 走 refreshMenu、shop 走视图
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(9);
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(10);
     expect(hooks.includes("menu: () => this.refreshMenu(),")).toBe(true);
     expect(hooks.includes("shop: () => this.shopView?.sync(),")).toBe(true);
   });
@@ -1574,7 +1574,7 @@ describe("Web 基准的反直觉口径已原样带上", () => {
 
   it("派单核实 ②:dailyGachaAdUsed 由每日重置清零,BattleSim 与 Web 各只有那一处", () => {
     const sim = readFileSync(new URL("../cocos-prototype/assets/scripts/battle/BattleSim.ts", import.meta.url), "utf8");
-    const seg = sim.slice(sim.indexOf("private checkDailyReset()"), sim.indexOf("private syncSeason()"));
+    const seg = sim.slice(sim.indexOf("private checkDailyReset()"), sim.indexOf("/** 广告复活(结算屏调用)"));
     expect(seg.includes("this.save.dailyGachaAdUsed = false;")).toBe(true);
     const full = readFileSync(new URL("../src/game.ts", import.meta.url), "utf8");
     expect((full.match(/dailyGachaAdUsed = false/g) ?? []).length).toBe(1);

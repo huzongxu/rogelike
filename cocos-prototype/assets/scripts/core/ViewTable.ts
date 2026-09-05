@@ -516,6 +516,24 @@ export interface Phase4Params {
     fuHiddenCardFill: string;
     fuHiddenCardDesc: string;
     fuHiddenCardHint: string;
+
+    /* ---------- 赛季结算屏(Web drawSeason 3847-3880 的内联字面量) ---------- */
+    /** 全屏覆盖底(rgba(8,10,16,0.92);本屏没有面板底,这一笔就是全部背景) */
+    seDim: string;
+    /** 标题「赛季结算」(theme.gold) */
+    seTitle: string;
+    /** 摘要四行:赛季与主题名(#e8e8e8,与 textPrimary #E8ECF4 不同值,照 Web 字面量) */
+    seSummarySeason: string;
+    /** 赛季分行(theme.echo) */
+    seSummaryScore: string;
+    /** 星尘行(theme.stardust) */
+    seSummaryStardust: string;
+    /** 重置说明行(#8f9bb3,与 textSecondary 同值但 Web 写的是小写字面量) */
+    seSummaryNote: string;
+    /** 贴底钮(纯代码矩形):#2a3d55 + theme.gold 描边 + 白字(Web 写的是 `#fff`,本表色键一律 6 位档,故记作 #FFFFFF);描边宽度见共享层 SE_BTN_STROKE_W */
+    seBtnFill: string;
+    seBtnStroke: string;
+    seBtnText: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -770,6 +788,17 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     fuHiddenCardFill: "rgba(255,215,106,0.08)",
     fuHiddenCardDesc: "#CFCFCF",
     fuHiddenCardHint: "#8F9BB3",
+
+    /* 赛季结算屏(逐项对标 Web drawSeason) */
+    seDim: "rgba(8,10,16,0.92)",
+    seTitle: "#FFD76A",
+    seSummarySeason: "#E8E8E8",
+    seSummaryScore: "#C8B6FF",
+    seSummaryStardust: "#7FD8FF",
+    seSummaryNote: "#8F9BB3",
+    seBtnFill: "#2A3D55",
+    seBtnStroke: "#FFD76A",
+    seBtnText: "#FFFFFF",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */
