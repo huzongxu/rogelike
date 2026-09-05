@@ -97,6 +97,16 @@ import {
     type VictoryRunView,
 } from "./victory/VictoryModel";
 import { victoryScreenLayout } from "./game/ui/victoryLayout";
+import { EnergyView } from "./energy/EnergyView";
+import {
+    buildEnergyContent,
+    energyAdClaim,
+    energyDiamondClaim,
+    type EnergyAction,
+    type EnergyDiamondClaim,
+    type EnergySaveView,
+} from "./energy/EnergyModel";
+import { energyScreenLayout } from "./game/ui/energyLayout";
 import type { TripleMode } from "./game/data/fusion";
 import type { Equipment } from "./game/data/equipmentGen";
 
@@ -286,6 +296,15 @@ export class GameShell extends Component {
      * Cocos 侧同两笔 —— 四个开局点走 `resetGameOverTransients`,通关点走 `openVictory` 首行。
      */
     private doubleClaimed = false;
+    /** 体力不足屏:内容与命中与写入意图来自 cc-free 的 energy/EnergyModel.ts(本屏有一处广告位,走 watchAd) */
+    private energyView: EnergyView | null = null;
+    /**
+     * 被体力挡住的那次开局 —— **宿主持有的瞬时闭包,不入档**(对标 Web 的 `private energyPending`,
+     * `SaveData` 里没有这一项)。Web 在 `startStage` / `startEndless` 的体力闸门那一支写下它
+     * (`() => this.startStage(id, bypassGate)` 或 `() => this.startEndless()`),本屏的出口就是
+     * 这一枚闭包:领到体力就调它续上开局,关闭 / 返回就把它清掉再回主菜单。
+     */
+    private energyPending: (() => void) | null = null;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
     /** 赛季切片同样被 `tickSeason` 逐帧读,故与 heroSlice 同性质地复用同一枚对象 */
@@ -355,6 +374,7 @@ export class GameShell extends Component {
             this.seasonView?.setFrames(this.frames);
             this.gameOverView?.setFrames(this.frames);
             this.victoryView?.setFrames(this.frames);
+            this.energyView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             if (this.router.current === "daily") this.dailyView?.sync();
@@ -367,6 +387,7 @@ export class GameShell extends Component {
             if (this.router.current === "season") this.seasonView?.sync();
             if (this.router.current === "gameover") this.gameOverView?.sync();
             if (this.router.current === "victory") this.victoryView?.sync();
+            if (this.router.current === "energy") this.energyView?.sync();
             this.refreshMenu();
         });
     }
@@ -388,6 +409,7 @@ export class GameShell extends Component {
         this.buildSeasonScreen();
         this.buildGameOverScreen();
         this.buildVictoryScreen();
+        this.buildEnergyScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
@@ -408,8 +430,9 @@ export class GameShell extends Component {
             season: () => this.syncSeason(),
             gameover: () => this.syncGameOver(),
             victory: () => this.syncVictory(),
+            energy: () => this.syncEnergy(),
         };
-        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover", "victory"] as ScreenKey[]).forEach((key) => {
+        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover", "victory", "energy"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
             const refresh = hooks[key];
@@ -557,13 +580,7 @@ export class GameShell extends Component {
                 }
                 // 死亡后放弃本局改打别关:先结算死亡(必须排在 startStage 之前,否则挂起的账被 startRun 清掉)
                 sim.settlePendingRun();
-                if (!sim.startStage(a.id)) {
-                    this.toast("体力不足,稍后再试或改打无限关");
-                    return;
-                }
-                this.resetGameOverTransients();
-                this.refreshBackdrop();
-                this.router.show("battle");
+                this.requestStage(a.id);
                 return;
             }
             case "makeup":
@@ -572,13 +589,7 @@ export class GameShell extends Component {
             case "endless":
                 // 同上:放弃死亡局改打无限关也要先结算
                 sim.settlePendingRun();
-                if (!sim.startEndless()) {
-                    this.toast("体力不足,无法进入无限关");
-                    return;
-                }
-                this.resetGameOverTransients();
-                this.refreshBackdrop();
-                this.router.show("battle");
+                this.requestEndless();
                 return;
             case "hero":
                 this.openHeroes();
@@ -807,21 +818,16 @@ export class GameShell extends Component {
     }
 
     /**
-     * 重开本局(商店「重开」钮 / 转生屏「开始新轮回」):与 Web `restart()` 同一口径 ——
-     * 首行先结算挂起的死亡局,再当前关带门控豁免重开、无限关重掷词缀。
+     * 重开本局(商店「重开」钮 / 转生屏「开始新轮回」/ 死亡屏「重开」):与 Web `restart()` 同一
+     * 口径 —— 首行先结算挂起的死亡局,再当前关带门控豁免重开、无限关重掷词缀。两条都汇到
+     * 开局漏斗,所以体力不够时是**挂起这次重开并弹体力不足屏**(Web 同一条口),不再是留原屏轻提示。
      */
     private restartRun(): void {
         const sim = this.sim;
         if (!sim) return;
         sim.settlePendingRun(); // Web restart() 首行同位:死亡后放弃重开,先结算死亡
-        const ok = sim.currentStage ? sim.startStage(sim.currentStage.id, true) : sim.startEndless();
-        if (!ok) {
-            this.toast("体力不足,无法重开");
-            return;
-        }
-        this.resetGameOverTransients();
-        this.refreshBackdrop();
-        this.router.show("battle");
+        if (sim.currentStage) this.requestStage(sim.currentStage.id, true);
+        else this.requestEndless();
     }
 
     /**
@@ -2007,13 +2013,201 @@ export class GameShell extends Component {
         this.refreshMenu();
     }
 
+    /* ================= 体力不足屏(Phase 5 末屏) ================= */
+
+    /**
+     * 体力不足屏装配 —— Web `drawEnergy`(4674-4745) 与 `onEnergyClick`(4746-4781) 的三层替换:
+     * `game/ui/energyLayout.ts`(纯几何,cc-free)+ `energy/EnergyModel.ts`(内容与命中与写入意图,
+     * cc-free)+ `energy/EnergyView.ts`(唯一节点层),本文件只接线。三条纪律与前十几屏同构:
+     *  ① 几何单一出口 = `energyScreenLayout(DESIGN_W, logicalH())`,**本层没有形态位入参**
+     *     (两个位只换配色档与文案档,不换矩形),视图内零硬编码;
+     *  ② 模型不碰存档也不碰节点:体力口径的五支常量(`ENERGY_MAX` / `ENERGY_REGEN_SECONDS` /
+     *     `ENERGY_AD_GAIN` / `ENERGY_AD_LIMIT` / `ENERGY_DIAMOND_COST`)全在共享层
+     *     `game/data/daily.ts`(可被 `balance.json` 的 `energy` 段覆盖,与 Web 同表同源);
+     *  ③ 落 `energy` / `energyAdCount` / `diamond` 与 `persist()` 在本文件
+     *     (`commitEnergyAd` / `commitEnergyDiamond`),自然恢复那一步走战斗层同位出口
+     *     `sim.syncEnergy()`(= Web `syncEnergy`,同一支 `regenEnergy` )。
+     * **进屏判据不在本屏**:Web 是 `startStage` / `startEndless` 里那句
+     * `if (this.save.energy < cost) { this.energyPending = ...; this.state = "energy"; return; }`,
+     * Cocos 侧同位在 `requestStage` / `requestEndless` 这一对漏斗里 —— 全工程只有这两处会
+     * `router.show("energy")`,而它们就是三个开局入口(菜单关卡行 / 菜单无限关 / `restartRun`)
+     * 的唯一出口,所以「什么时候该弹屏」两端同一事实源。
+     * **本屏只有一个广告位**(看广告换体力),走 `watchAd` 唯一入口;闸门只有它首行那一道。
+     */
+    private buildEnergyScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:energy");
+        if (!node) return;
+        node.removeAllChildren();
+        this.energyView = new EnergyView(node, this.frames, {
+            layout: () => energyScreenLayout(DESIGN_W, logicalH()),
+            content: () => buildEnergyContent(this.energySave()),
+            onAction: (a) => this.onEnergyAction(a),
+        });
+        this.energyView.sync();
+    }
+
+    /**
+     * 本屏读数 —— 三个数,且 `energy` 必须先过自然恢复那一步(Web `drawEnergy` 首行就是
+     * `this.syncEnergy()`,与主菜单顶栏的 `⚡` 同一口径)。返回的是每轮现算的新对象,
+     * 本屏没有需要跨帧复用的切片。
+     */
+    private energySave(): EnergySaveView {
+        if (this.sim) this.sim.syncEnergy();
+        const save = this.save();
+        return { energy: save.energy, energyAdCount: save.energyAdCount, diamond: save.diamond };
+    }
+
+    /**
+     * 一次开局的完整宿主动作 —— 对标 Web `startRun()` 尾部那句 `this.state = "playing"`:
+     * 清死亡屏会话态、随模式换背景、切战斗屏。三个开局入口与「续上挂起的那次开局」都走它。
+     */
+    private enterBattleRun(): void {
+        this.resetGameOverTransients();
+        this.refreshBackdrop();
+        this.router.show("battle");
+    }
+
+    /**
+     * 开局请求(主线关卡)。顺序逐项对标 Web `startStage`:门控 → 体力闸门。**结算挂起的死亡局**
+     * 那一笔留在三个调用点同位(菜单选关 / 菜单无限关 / `restartRun`),与 Web 一样不在 `startStage`
+     * 里;所以本函数挂起的闭包重跑时也只重跑「门控 + 体力 + 开局」那一段,不多结一次。
+     * 门控判据取 `menuRows()` 里那一行的 `unlocked`(与 `menuStageOpen` 与战斗层 `stageOpen`
+     * 同一支共享层 `stageUnlocked`,不新起第二份口径),于是「未开放」是静默 return、
+     * 「体力不足」才会弹本屏 —— 两支不会混成一谈。
+     */
+    private requestStage(id: number, bypassGate = false): void {
+        const sim = this.sim;
+        if (!sim) return;
+        if (!bypassGate) {
+            const row = this.menuRows().find((r) => r.id === id);
+            if (!row || !row.unlocked) return;
+        }
+        if (sim.startStage(id, bypassGate)) {
+            this.enterBattleRun();
+            return;
+        }
+        this.energyPending = () => this.requestStage(id, bypassGate);
+        this.openEnergy();
+    }
+
+    /** 开局请求(无限关)。常开无门控,其余与 requestStage 同构(对标 Web `startEndless`)。 */
+    private requestEndless(): void {
+        const sim = this.sim;
+        if (!sim) return;
+        if (sim.startEndless()) {
+            this.enterBattleRun();
+            return;
+        }
+        this.energyPending = () => this.requestEndless();
+        this.openEnergy();
+    }
+
+    /** 进屏:由两个开局漏斗在体力不足那一刻弹进来(切屏即触发路由 refresh → syncEnergy) */
+    private openEnergy(): void {
+        this.router.show("energy");
+    }
+
+    private syncEnergy(): void {
+        this.energyView?.sync();
+    }
+
+    /**
+     * 热区 → 玩法(对标 Web `onEnergyClick` 四支:返回 → 广告 → 钻石 → 关闭)。
+     * **屏级不加「广告在途就吞点击」的守卫** —— 闸门只有 `watchAd` 首行那一道;用尽与钻石不足
+     * 两支的静默都发生在写入意图的守卫里(与 Web「命中之后再 return」同分层)。
+     * 两支放弃出口(返回 / 关闭)在 Web 完全同效:清掉挂起的那次开局再回主菜单。
+     */
+    private onEnergyAction(a: EnergyAction): void {
+        const sim = this.sim;
+        if (!sim) return;
+        const save = this.save();
+        if (a.kind === "ad") {
+            // Web: if (this.save.energyAdCount >= ENERGY_AD_LIMIT) return; —— 守卫在发起广告之前
+            if (!energyAdClaim(save.energy, save.energyAdCount)) return;
+            this.watchAd(() => this.commitEnergyAd(), () => this.toast("广告未看完,体力未入账"));
+            return;
+        }
+        if (a.kind === "diamond") {
+            const claim = energyDiamondClaim(save.energy, save.diamond);
+            if (!claim) return;
+            this.commitEnergyDiamond(claim);
+            return;
+        }
+        this.energyPending = null;
+        this.router.show("menu");
+    }
+
+    /**
+     * 广告回体力的那笔落账(壳层是唯一的写入方)。三行顺序逐项对标 Web 的 `watchAd` 回调:
+     * 先 `syncEnergy()` 把自然恢复结清、再按 `Math.min(ENERGY_MAX, energy + ENERGY_AD_GAIN)`
+     * 累加(与钻石那支的「直接置满」不同口径)、`energyAdCount += 1`、落一次盘,最后续上开局。
+     * 入账时刻重算意图(而不是沿用点击那一刻那一份),于是广告在途跨过的时间里长出来的那点体力
+     * 不会丢 —— Web 就是回调里现读 `this.save.energy`。上限之上仍会 `return`(Web 的守卫
+     * 在点击时查一次,这里再查一次只为不越过 `energyAdCount` 的口径,正常路径同结果)。
+     */
+    private commitEnergyAd(): void {
+        const sim = this.sim;
+        if (!sim) return;
+        const save = this.save();
+        sim.syncEnergy();
+        const claim = energyAdClaim(save.energy, save.energyAdCount);
+        if (!claim) return;
+        save.energy = claim.energyAfter;
+        save.energyAdCount = claim.adCountAfter;
+        sim.persist();
+        this.continueEnergyPending();
+    }
+
+    /**
+     * 钻石回满体力的那笔落账(无广告,即时结算)。顺序对标 Web:先扣费、再 `syncEnergy()`、
+     * 最后 `energy = ENERGY_MAX`,一次落盘,然后续上被挡住的那次开局。
+     */
+    private commitEnergyDiamond(claim: EnergyDiamondClaim): void {
+        const sim = this.sim;
+        if (!sim) return;
+        const save = this.save();
+        save.diamond = claim.diamondAfter;
+        sim.syncEnergy();
+        save.energy = claim.energyAfter;
+        sim.persist();
+        this.continueEnergyPending();
+    }
+
+    /**
+     * 续上被体力挡住的那次开局(对标 Web 的 `const act = this.energyPending; this.energyPending = null;
+     * if (act) act(); else this.state = "menu"`)。闭包本身就是 `requestStage` / `requestEndless`,
+     * 所以「续上」与「第一次点」在结算挂起局、清会话态、换背景、切屏这四件事上没有第二份实现;
+     * 体力仍然不够时它会再次落回本屏(读数已更新),就是 Web 的那个递归分支。
+     * `pending` 为空只剩一种可能:别的代码路径清过它(关闭 / 返回),那时回主菜单。
+     */
+    private continueEnergyPending(): void {
+        const act = this.energyPending;
+        this.energyPending = null;
+        if (act) act();
+        else this.router.show("menu");
+    }
+
+    /**
+     * 体力读数跟进(对标 Web `drawEnergy` 首行的 `syncEnergy()` 配上逐帧重绘):本屏停着不动时,
+     * 自然恢复每 `ENERGY_REGEN_SECONDS`(表值 360 秒 = 6 分钟)才跳一档,所以只在该屏现取、
+     * 只在真的多了一点时重排一次,不逐帧刷 Label。挂账的「本屏没有倒计时读数」见
+     * `energy/EnergyModel.ts` 文件头口径 1。
+     */
+    private tickEnergy(): void {
+        if (this.router.current !== "energy" || !this.sim || !this.energyView) return;
+        const before = this.save().energy;
+        this.sim.syncEnergy();
+        if (this.save().energy !== before) this.syncEnergy();
+    }
+
     /* ================= 主循环 ================= */
 
     update(dt: number): void {
-        // 轻提示、英雄列表惯性与委托面板读数都工作在非战斗屏上(blocksPlay 为真),所以排在推进世界之前
+        // 轻提示、英雄列表惯性、委托面板与体力读数都工作在非战斗屏上(blocksPlay 为真),所以排在推进世界之前
         this.tickToast(dt);
         this.tickHeroScroll(dt);
         this.tickCommission(dt);
+        this.tickEnergy();
         if (!this.ready) return;
         // 每日重置:Web 是"任何状态下都执行",所以必须排在路由闸门之前 —— 否则停在
         // 菜单/每日屏跨天就永远不清零,本屏会一直显示「已领取」(静默失效)

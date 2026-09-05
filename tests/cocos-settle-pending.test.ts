@@ -185,19 +185,22 @@ describe("宿主接线:六个放弃/开局入口都要结算在前", () => {
     const src = readFileSync(new URL("../cocos-prototype/assets/scripts/GameShell.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
     expect(src.split("sim.settlePendingRun();").length - 1, "六个入口各一次真实调用").toBe(6);
     // 逐处确认结算排在开新局 / 切屏之前
-    const stageAt = src.indexOf("sim.settlePendingRun();\n                if (!sim.startStage(a.id))");
-    const endlessAt = src.indexOf("sim.settlePendingRun();\n                if (!sim.startEndless())");
+    const stageAt = src.indexOf("sim.settlePendingRun();\n                this.requestStage(a.id);");
+    const endlessAt = src.indexOf("sim.settlePendingRun();\n                this.requestEndless();");
     const restartAt = src.indexOf("sim.settlePendingRun(); // Web restart() 首行同位");
     const prestigeAt = src.indexOf("sim.settlePendingRun();\n            this.openPrestige();");
     const menuAt = src.indexOf("sim.settlePendingRun();\n        this.router.show(\"menu\");");
     // 通关屏的底部条(Web 同位是 backToMenu,那里那句结算在通关路径上恒为守卫)
     const victoryMenuAt = src.indexOf("sim.settlePendingRun();", src.indexOf("private onVictoryAction"));
-    expect(stageAt, "菜单选关:结算紧贴 startStage 之前").toBeGreaterThan(0);
-    expect(endlessAt, "菜单无限关:结算紧贴 startEndless 之前").toBeGreaterThan(0);
+    expect(stageAt, "菜单选关:结算紧贴开局请求之前").toBeGreaterThan(0);
+    expect(endlessAt, "菜单无限关:结算紧贴开局请求之前").toBeGreaterThan(0);
     expect(restartAt, "重开本局:结算在 restartRun 首行").toBeGreaterThan(0);
     expect(prestigeAt, "结算屏「天赋」:结算紧贴切屏之前(Web 点击分支同两条语句)").toBeGreaterThan(0);
     expect(menuAt, "结算屏「菜单」:结算紧贴切回主菜单之前(Web backToMenu 同位)").toBeGreaterThan(0);
     expect(victoryMenuAt, "通关屏「返回菜单」:结算紧贴切回主菜单之前(Web backToMenu 同位)").toBeGreaterThan(src.indexOf("private onVictoryAction"));
+    // 开局漏斗自己不含结算:体力不足挂起的那次开局在领完体力后重跑漏斗,重跑不该再结一次
+    const funnel = src.slice(src.indexOf("private requestStage("), src.indexOf("private openEnergy()"));
+    expect(funnel.includes("sim.settlePendingRun();")).toBe(false);
     // boot 那一处开局不需要结算(刚启动时挂起标记必为假),别顺手加进去
     expect(src.indexOf("if (!this.sim.startStage(1)) this.sim.startEndless();")).toBeGreaterThan(0);
   });

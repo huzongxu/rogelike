@@ -848,10 +848,10 @@ describe("GameShell 的通关结算屏接线", () => {
     expect(src.includes("this.buildVictoryScreen();")).toBe(true);
     expect(src.indexOf("this.buildVictoryScreen();")).toBeGreaterThan(src.indexOf("this.buildGameOverScreen();"));
     expect(src.includes("victory: () => this.syncVictory(),")).toBe(true);
-    expect(src.includes('"season", "gameover", "victory"]')).toBe(true);
+    expect(src.includes('"season", "gameover", "victory", "energy"]')).toBe(true);
   });
 
-  it("路由实际注册十五屏(SCREEN_KEYS 仍是 16 态全量,energy 仍留空)", () => {
+  it("路由实际注册十六屏(SCREEN_KEYS 的 16 态全量已配齐,末位是 energy)", () => {
     const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     const all = keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean);
@@ -860,10 +860,11 @@ describe("GameShell 的通关结算屏接线", () => {
     expect(all).toContain("energy");
     expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover", "victory"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(12);
-    // 本单不做 energy 屏:它仍是没注册的键
-    expect(src.includes("energy: () =>")).toBe(false);
-    expect(src.includes('"energy"]')).toBe(false);
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(13);
+    // energy 已接上:注册表末位与 refresh 钩子各一处,SCREEN_KEYS 与注册表同为 16 态
+    expect(src.includes("energy: () => this.syncEnergy(),")).toBe(true);
+    expect(src.includes('"energy"]')).toBe(true);
+    expect((src.match(/this\.router\.show\("energy"\)/g) ?? []).length).toBe(1);
   });
 
   it("进屏判据只有一处:战斗层通关回调直连 openVictory,没有第二个弹屏点", () => {
@@ -917,7 +918,7 @@ describe("GameShell 的通关结算屏接线", () => {
   });
 
   it("存档写入只发生在 commitVictoryEcho;本屏分节里没有第二处写点", () => {
-    const seg = codeOf(src.slice(src.indexOf("/* ================= 通关结算屏"), src.indexOf("/* ================= 主循环")));
+    const seg = codeOf(src.slice(src.indexOf("/* ================= 通关结算屏"), src.indexOf("/* ================= 体力不足屏")));
     const commit = seg.slice(seg.indexOf("private commitVictoryEcho"));
     expect(commit.includes("save.points += claim.permanent;")).toBe(true);
     expect(commit.includes("save.dayEcho += claim.day;")).toBe(true);
@@ -943,7 +944,8 @@ describe("GameShell 的通关结算屏接线", () => {
     expect(reset.includes("this.victoryInfo = null;")).toBe(true);
     expect(reset.includes("this.doubleClaimed = false;")).toBe(true);
     expect(reset.includes("this.stardustEarnedThisRun = 0;")).toBe(true);
-    expect((src.match(/this\.resetGameOverTransients\(\);/g) ?? []).length).toBe(4);
+    expect((src.match(/this\.resetGameOverTransients\(\);/g) ?? []).length).toBe(2);
+    expect(src.slice(src.indexOf("private enterBattleRun()"), src.indexOf("private requestStage(")).includes("this.resetGameOverTransients();")).toBe(true);
     const web = webSource();
     const startRun = web.slice(web.indexOf("private startRun(): void"), web.indexOf("private startStage("));
     expect(startRun.includes("this.stageReward = null;")).toBe(true);

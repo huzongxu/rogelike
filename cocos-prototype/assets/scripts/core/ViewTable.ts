@@ -610,6 +610,42 @@ export interface Phase4Params {
     viMenuFallbackBg: string;
     viMenuFallbackStroke: string;
     viMenuText: string;
+
+    /* ---------- 体力不足屏(Phase 5;Web drawEnergy 4674-4745 的内联字面量) ---------- */
+    /** 全屏覆盖底 rgba(8,10,16,0.92)(与赛季屏同值;本屏在它之上再铺一层 panelPad 九宫格面板底) */
+    enDim: string;
+    /** 标题「体力不足」#5ac8fa(= theme.select;Web 写的是小写字面量) */
+    enTitle: string;
+    /** 体力读数行「体力 N/MAX · 每 X 分钟恢复 1 点」(#e8e8e8,与 textPrimary #E8ECF4 不同值,照 Web 字面量) */
+    enStat: string;
+    /** 提示行「补充体力继续闯关,或关闭回到主菜单」(#8f9bb3,与 textSecondary 同值但 Web 写的是小写字面量) */
+    enHint: string;
+    /** 广告钮可用档:btn_primary 九宫格优先,缺图退 #1d3d2e + #4dffc8(= theme.actionPrimaryBg / actionPrimary);描边宽度见共享层 EN_BTN_STROKE_W */
+    enAdFallbackBg: string;
+    enAdFallbackStroke: string;
+    /** 广告钮文字可用档 #4dffc8(theme.actionPrimary) */
+    enAdText: string;
+    /** 广告钮今日已用尽档:Web 的 `canAd && skinButtonBase(...)` 短路成纯代码形状 #1a1f2a + rgba(255,255,255,0.15),文字 #5a6a80(= theme.textMuted) */
+    enAdOffBg: string;
+    enAdOffStroke: string;
+    enAdTextOff: string;
+    /** 钻石钮充足档:btn_primary 优先,缺图退 #3a3320 + #ffd76a(= theme.gold) */
+    enDiamondFallbackBg: string;
+    enDiamondFallbackStroke: string;
+    /** 钻石钮文字充足档 theme.gold */
+    enDiamondText: string;
+    /** 钻石不足档:与广告用尽档同一套禁态配色(按用途分键,便于整屏翻新时单独换档) */
+    enDiamondOffBg: string;
+    enDiamondOffStroke: string;
+    enDiamondTextOff: string;
+    /** 关闭钮(纯代码矩形,Web 这里没有贴图):#2a3d55 + #8f9bb3,文字 #cfcfcf */
+    enCloseBg: string;
+    enCloseStroke: string;
+    enCloseText: string;
+    /** 返回钮(纯代码矩形,屏幕右上角):#2a3d55 + rgba(255,255,255,0.3),文字 #cfcfcf */
+    enBackBg: string;
+    enBackStroke: string;
+    enBackText: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -921,6 +957,30 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     viMenuFallbackBg: "#2A3D55",
     viMenuFallbackStroke: "#5AC8FA",
     viMenuText: "#FFFFFF",
+
+    /* 体力不足屏(逐项对标 Web drawEnergy) */
+    enDim: "rgba(8,10,16,0.92)",
+    enTitle: "#5AC8FA",
+    enStat: "#E8E8E8",
+    enHint: "#8F9BB3",
+    enAdFallbackBg: "#1D3D2E",
+    enAdFallbackStroke: "#4DFFC8",
+    enAdText: "#4DFFC8",
+    enAdOffBg: "#1A1F2A",
+    enAdOffStroke: "rgba(255,255,255,0.15)",
+    enAdTextOff: "#5A6A80",
+    enDiamondFallbackBg: "#3A3320",
+    enDiamondFallbackStroke: "#FFD76A",
+    enDiamondText: "#FFD76A",
+    enDiamondOffBg: "#1A1F2A",
+    enDiamondOffStroke: "rgba(255,255,255,0.15)",
+    enDiamondTextOff: "#5A6A80",
+    enCloseBg: "#2A3D55",
+    enCloseStroke: "#8F9BB3",
+    enCloseText: "#CFCFCF",
+    enBackBg: "#2A3D55",
+    enBackStroke: "rgba(255,255,255,0.3)",
+    enBackText: "#CFCFCF",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */

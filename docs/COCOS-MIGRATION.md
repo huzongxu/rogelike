@@ -488,7 +488,7 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 
 已知偏差与待办（不在本单修）：
 
-- **体力不足时的回落**：Web 的 `restart()` → `startStage` 会切到 `energy` 面板（`SCREEN_KEYS` 里那一态仍未注册，`victory` 已由下一节的通关结算屏补上），Cocos 侧回落成"留在结算屏 + 轻提示「体力不足,无法重开」"，此时死亡本账已在 `restartRun` 首行结清（再按天赋 / 菜单不会重复入账，`pendingSettle` 已清）。
+- **体力不足时的回落**：Web 的 `restart()` → `startStage` 在体力不够时切到 `energy` 面板并把这次重开挂成闭包，Cocos 侧同一条口（见下一节「Phase 5 体力不足屏落地记」的开局漏斗）；死亡本账已在 `restartRun` 首行结清，领完体力续上开局时不会重复入账（`pendingSettle` 已清，漏斗自身不结算）。
 - **广告 `onFail`**：Web 复活那一支没有 `onFail`（没看完就静默无事发生），本屏按派单口径补了轻提示（复活 / 双倍各一条），属于宿主侧新增反馈、不入账面。
 - **背景与暗底**：Web 的 `render` 把战场与 HUD 都门控在 `state === "playing"`，所以阵亡屏是暗底压住 `bg_outside`；Cocos 路由切屏把战斗屏整棵隐藏，语义一致。暗底色值 `rgba(0,0,0,0.8)` 已进表，S3 / S4 那两类共享出口偏差（文字基线、贴图拉满盒、`Plate.show` 描边）在本屏同样存在，随上一节一起处理。
 - **通关（victory）屏**：本屏落地时 `onVictory` 仍是空实现；现已由下一节的通关结算屏接上，两张结算屏共用同一套接线纪律与同一个广告闸门。
@@ -507,6 +507,30 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 
 挂账与待办：
 
-- **`energy` 屏仍未注册**：`SCREEN_KEYS` 里 `energy` 是最后一把没有屏的键。体力不足时 Web 切 `energy` 面板、Cocos 侧仍是"留在原屏 + 轻提示"，这条行为缺口与本轮同性质，由下一单补。
+- **`energy` 屏已接上**：`SCREEN_KEYS` 的 16 把键至此全部有屏，体力不足时的开局（含死亡后的重开）会挂起并切到 `energy` 面板，详见下一节。
 - **本屏没有键盘出口**：Web 的 victory 键盘分支 `r` / `m` 都只走 `backToMenu()`，与底部条同落点；Cocos 侧没有键盘通路，本屏只有点击那一条口（更严）。
 - **共享出口的三类视觉偏差在本屏同样存在**：S3 文字基线偏低、S4 贴图拉满盒、`Plate.show` 残余描边（见上一节「逐屏视觉对标挂账」），本轮按既定口径不动、不开新单。
+
+## Phase 5 体力不足屏落地记
+
+三层新文件：`game/ui/energyLayout.ts`（纯几何）+ `energy/EnergyModel.ts`（内容与命中与写入意图）+ `energy/EnergyView.ts`（只管节点）；接线在 `GameShell`（`buildEnergyScreen` / `energySave` / `enterBattleRun` / `requestStage` / `requestEndless` / `openEnergy` / `syncEnergy` / `onEnergyAction` / `commitEnergyAd` / `commitEnergyDiamond` / `continueEnergyPending` / `tickEnergy`）、`core/ScreenRouter`（实际注册 16 屏、`sync*` 钩子 13 条，与 `SCREEN_KEYS` 的 16 态全量配平）、`core/ViewTable.phase4`（22 键 `en*` 配色）。覆盖：`tests/cocos-phase5-energy.test.ts` 60 条 + 构建包探针 `.probe/probe-energy.js` 51 条（996 档，独立 profile、`CDP_MATCH` + `CDP_GOTO`、自举等待 12s）。
+
+- **本屏是「开局被挡住」才出现的屏，所以出口是续上那次开局**。Web 的两条进屏路径都在体力闸门那一支：`startStage(id, bypassGate)` 挂 `() => this.startStage(id, bypassGate)`、`startEndless()` 挂 `() => this.startEndless()`，并把 `state` 切成 `"energy"`。Cocos 侧同位做成一对**开局漏斗** `requestStage` / `requestEndless`：成功就走 `enterBattleRun()`（清会话态 + 换背景 + 切战斗屏，对标 Web `startRun()` 尾部那句 `state = "playing"`），失败就把这次开局挂成 `energyPending` 闭包并弹本屏。三个开局入口（菜单关卡行、菜单无限关、`restartRun` —— 后者同时是商店重开、转生「开始新轮回」与死亡屏「重开」的共用出口）全部走这一对漏斗，所以「第一次点」与「领完体力续上」在结算、复位、换背景、切屏这四件事上没有第二份实现。`energyPending` 是宿主持有的**瞬时闭包、不入档**（`SaveData` 里没有这一项）。
+- **`settlePendingRun` 留在三个调用点，漏斗自己不结算**（与 Web 完全同位：Web 的 `startStage` 里也没有这一句，是点击分支与 `restart()` 首行在结）。于是挂起的开局在领完体力后重跑漏斗时只重跑「门控 + 体力 + 开局」那一段，不会重复结算死亡账。测试 `tests/cocos-settle-pending.test.ts` 把「六处入口各一次、且都排在开局请求之前」与「漏斗体内不含结算」两条钉死。
+- **进屏判据全工程只有一处 `router.show("energy")`**：`openEnergy()`，且只被那两条漏斗的失败分支调用；`GameShell.buildBattle()` 里 boot 那一发 `if (!this.sim.startStage(1)) this.sim.startEndless();` 仍是直接调战斗层（刚启动时挂起标记必为假、也不需要弹补体力屏），这一支按原样保留。
+- **返回落点是本屏真实入口决定的两支**：广告与钻石两支领完即 `continueEnergyPending()` —— 有闭包就跑它（切战斗屏），没有就 `router.show("menu")`（Web 同一句 `if (act) act(); else this.state = "menu"`）；关闭与返回两支完全同效，`energyPending = null` + 回主菜单，Web 就是写了两个出口（右上角返回钮 + 钮列末尾关闭钮），本层不合并、也不改成"回上一屏"。热区顺序也照 Web：返回 → 广告 → 钻石 → 关闭，四片矩形互不相交。
+- **两个形态位都不改一枚矩形**，所以本层是十六屏里唯一一个 `layout(w, h)` 无形态入参的屏：`canAd`（今日广告余量 > 0）与 `canDiamond`（钻石 ≥ 价）只换配色档、文案档与"要不要试 `btn_primary` 贴图"这三件事。两处守卫都在**命中之后**（Web 的 `if (adCount >= LIMIT) return;` / `if (diamond < COST) return;` 都在点击分支里），所以模型层照样返回 `ad` / `diamond` 动作，静默发生在 `energyAdClaim` / `energyDiamondClaim` 的守卫里；测试与探针都按这个分层写（用尽与不足时 `adWatchCount`、`energy`、`energyAdCount` 三数全不动，`adPending` 仍是 `false`）。
+- **两支领体力的口径不同**：广告是 `Math.min(ENERGY_MAX, energy + ENERGY_AD_GAIN)` 累加（贴顶时只补到顶，探针实测 18 → 20 只补 2 点），并记 `energyAdCount += 1`；钻石是先扣 `ENERGY_DIAMOND_COST`、再 `syncEnergy()`、然后 `energy = ENERGY_MAX` 直接置满，不记广告次数。两支都在自己的 `commit*` 里落一次盘，然后 `continueEnergyPending()`。自然恢复那一步转调战斗层同位出口 `sim.syncEnergy()`（= Web `syncEnergy`，同一支共享层 `regenEnergy`）。
+- **本屏没有倒计时读数**：Web 那一行是 `体力 N/MAX · 每 ${ENERGY_REGEN_SECONDS / 60} 分钟恢复 1 点`，念的是**恢复节奏**（当前表值 360 秒 → 6），除的是共享层常量、不取整。屏上那个 `N` 会自己往上跳，是因为 Web `drawEnergy` 首行调 `syncEnergy()` 且逐帧重绘；节点化后由 `GameShell.tickEnergy()` 接上（挂在主循环的路由闸门之前、与 `tickToast` / `tickCommission` 同位，只在本屏现取、只在真的多了一点时重排一次）。探针实测：停在屏上把时间戳摆到 3 点差 1.5 秒，2.8 秒后读数与内容层同串（1 → 4）。与 Web 同口径的一点是：**自然恢复只改内存不落盘**（`persistSave` 不在 `syncEnergy` 里），要等下一次写入（开局或领取）才带上，探针把这前后两拍都钉住了。
+- **递归那一支实机可达**：`ENERGY_AD_GAIN`(5) 恰好等于第 1 关的 `stageCosts[0]`(5)，所以"领完一次仍然不够"只在消耗更高的关卡上才可达 —— 探针把 `highestStage` 摆到 5（`stageUnlocked` 的 `stageId <= highestStage` 那一支）后点第 5 行（消耗 7），实测第一次广告后仍留在本屏（读数 5、余量剩 4 次、闭包仍在），第二次广告才续上开局并落 3 点。
+- **体力五支常量全在共享层 `game/data/daily.ts`**（`ENERGY_MAX` / `ENERGY_REGEN_SECONDS` / `ENERGY_AD_GAIN` / `ENERGY_AD_LIMIT` / `ENERGY_DIAMOND_COST`，可被 `balance.json` 的 `energy` 段覆盖，当前表值 20 / 360 / 5 / 5 / 10 与代码默认逐项相同），布局层与模型层都不出现它们的抄本；关卡与无限关的消耗（`stageCosts` / `endlessCost`）只在战斗层的闸门里用，本屏不读。
+- **底板事实**：本屏**有面板底** —— Web 先一笔全屏暗底 `rgba(8,10,16,0.92)`（与赛季屏同值、与通关屏的 0.86 与死亡屏的 0.8 都不同值），再 `panelPad(g, w, h)` **不传专属键**，即 `panel_dark_corners` 九宫格铺满 `[pad, w − pad] × [pad, h − pad]`（切深实参 32 在 Cocos 侧由 `ViewTable.borderOf` 按图推导，`EN_PANEL_NINE` 与已落地各屏的同类常量一样没有消费者，只是把 Web 实参留在几何旁供断言与翻新取用）。标题横幅 `banner_mid_black` 是裸 `assets.draw` 的**整幅拉伸且不接返回值**（没有缺图回退档，缺图收成零位盒、文字照落位）；三枚钮里只有广告与钻石两枚在**可用档**试 `btn_primary`（Web 的 `canX && skinButtonBase(...)` 短路掉了禁档的贴图分支，视图因此给禁档传空键），关闭与返回两枚全是纯代码矩形。本屏没有半透明贴图件。
+- **几何要点**：两条纵向锚线 —— 文字族 `a = h × 0.3`（横幅 / 标题 / 读数 / 提示）、按钮族 `bt = h × 0.42`（三枚钮 `bt + 0 / +62 / +118`，高依次 52 / 46 / 40、钮间距恒 10、钮心恒屏心），另有屏幕角锚的返回钮 `{w − pad − 72, 22, 72, 34}` 与屏高无关。两档之间文字族下沉 75、按钮族下沉 105、返回钮不动，族间空档随屏高线性放大（61.52 → 91.52，差 30 = Δh × 0.12）；四处钮内文字基线**全走 `rowTextY`**（996 档实测 449 / 508 / 561，返回钮 43），与死亡、通关两屏的裸偏移口径不同。七处字号 22 / 14 / 13 / 14 / 13 / 14 / 13 全在 `fs` 表内 —— 本屏是结算两屏之后第一个没有 Web 表外字号档的屏。
+- **一条跨层新纪律**：派单点名的那类缺陷（视图用到某个布局出口但 import 清单漏了它，门 3 的 `error TS = 0` 照样放行、只有实机进屏才炸）在本单被钉成断言 —— `missingImports()` 拿被测文件的代码体与它的 import 清单对账，对 `energyLayout` / `EnergyModel` 的每一个出口，凡在体内出现就必须出现在清单里；同一把尺子反向量已落地的 `VictoryView`（含曾经漏掉的那枚 `victoryBadgeTextLine`）。energy 屏自身的实机证据也在：探针 51 条里第一组就是进屏与七处文字上屏。
+
+挂账与待办：
+
+- **宿主侧新增一条轻提示**：`广告未看完,体力未入账` 是本屏 `watchAd` 的 `onFail` 文案，Web 的 `onEnergyClick` 没有 `onFail`（没看完就静默无事发生）。这条与已落地各屏的同类提示（复活 / 双倍 / 每日 / 扭蛋 / 委托各一条）同口径，属于宿主侧新增反馈、不入账面，因此**门 4 的双命中扫描面只含本屏三层**（13/13 全配对），宿主分节单独出诊断行。
+- **本屏没有键盘出口**：Web 的 `daily / energy / gearup` 共用一条 Escape → `state = "menu"`，且**不清 `energyPending`**；Cocos 侧没有键盘通路，两支放弃出口都清挂起，比 Web 更严。
+- **1246 档在构建包实机上进不去**（同转生 / 委托 / 融合 / 赛季屏挂账），探针只在 996 档写断言，那一档由纯函数矩阵覆盖（`tests/cocos-phase5-energy.test.ts` 的 1246 段：锚线 373.8、按钮族顶 523.32、三处基线 554 / 613 / 666、返回钮逐位相同）。
+- **共享出口的三类视觉偏差在本屏同样存在**：S3 文字基线偏低、S4 贴图拉满盒、`qualityBox` / `Plate.show` 残余描边（见「逐屏视觉对标挂账」一节），本轮按既定口径正常调用这些出口、不对齐也不绕过、不开新单。

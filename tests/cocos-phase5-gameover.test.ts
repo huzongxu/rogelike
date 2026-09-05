@@ -720,16 +720,16 @@ describe("GameShell 的死亡结算屏接线", () => {
     expect(src.includes("this.buildGameOverScreen();")).toBe(true);
     expect(src.indexOf("this.buildGameOverScreen();")).toBeGreaterThan(src.indexOf("this.buildSeasonScreen();"));
     expect(src.includes("gameover: () => this.syncGameOver(),")).toBe(true);
-    expect(src.includes('"commission", "fusion", "season", "gameover", "victory"]')).toBe(true);
+    expect(src.includes('"commission", "fusion", "season", "gameover", "victory", "energy"]')).toBe(true);
   });
 
-  it("路由实际注册十五屏（SCREEN_KEYS 仍是 16 态全量）", () => {
+  it("路由实际注册十六屏（SCREEN_KEYS 仍是 16 态全量）", () => {
     const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
     expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(12);
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(13);
   });
 
   it("进屏判据只有一处：战斗层死亡回调直连 openGameOver，没有第二个弹屏点", () => {
@@ -765,7 +765,7 @@ describe("GameShell 的死亡结算屏接线", () => {
     // restartRun 自己的首行就是那句结算（与 Web restart 同位）
     const restart = codeOf(src.slice(src.indexOf("private restartRun()"), src.indexOf("/**\n     * 英雄选择屏装配")));
     expect(restart.includes("sim.settlePendingRun();")).toBe(true);
-    expect(restart.indexOf("sim.settlePendingRun();")).toBeLessThan(restart.indexOf("sim.startStage("));
+    expect(restart.indexOf("sim.settlePendingRun();")).toBeLessThan(restart.indexOf("this.requestStage("));
   });
 
   it("两个广告位都只经 watchAd 唯一入口；本屏 action 段不含屏级广告闸门", () => {
@@ -799,10 +799,14 @@ describe("GameShell 的死亡结算屏接线", () => {
     for (const f of ["points:", "dayEcho:", "bestRun:", "dailyTalentClaimed:"]) {
       expect(saveModel.includes(f), f).toBe(true);
     }
-    // 开局复位排在四个开局点的成功分支之后（失败时不重置，与 Web startRun 只在真正开局时跑同口径）
-    expect((src.match(/this\.resetGameOverTransients\(\);/g) ?? []).length).toBe(4);
+    // 开局复位收进宿主漏斗:文本上只剩 boot 与 enterBattleRun 两处,逻辑上仍覆盖四个开局点
+    // (boot / 菜单选关 / 菜单无限关 / restartRun),且只在开局成功时跑(体力不足进 energy 屏时不复位)
+    expect((src.match(/this\.resetGameOverTransients\(\);/g) ?? []).length).toBe(2);
+    const enter = codeOf(src.slice(src.indexOf("private enterBattleRun()"), src.indexOf("private requestStage(")));
+    expect(enter.includes("this.resetGameOverTransients();")).toBe(true);
     const menuStage = src.slice(src.indexOf('case "stage"'), src.indexOf('case "makeup"'));
-    expect(menuStage.indexOf("this.resetGameOverTransients();")).toBeGreaterThan(menuStage.indexOf('this.toast("体力不足'));
+    expect(menuStage.includes("this.requestStage(a.id);"), "菜单选关走开局漏斗").toBe(true);
+    expect(menuStage.includes('this.toast("体力不足'), "体力不足不再是留在菜单的轻提示").toBe(false);
   });
 
   it("晚到贴图流到位后本屏也换引用并在当前屏时补排一次", () => {

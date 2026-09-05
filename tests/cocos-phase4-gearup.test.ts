@@ -988,7 +988,7 @@ describe("GameShell 的装备升级屏接线", () => {
     // buildGearUpScreen 排在 buildPassScreen 之后
     expect(src.indexOf("this.buildGearUpScreen();")).toBeGreaterThan(src.indexOf("this.buildPassScreen();"));
     expect(src.includes("gearup: () => this.syncGearUp(),")).toBe(true);
-    expect(src.includes('"pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover", "victory"]')).toBe(true);
+    expect(src.includes('"pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover", "victory", "energy"]')).toBe(true);
   });
 
   it("入口从占位轻提示换成 openGearUp,占位表已随最后一屏落地整表下线", () => {
