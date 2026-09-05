@@ -1344,17 +1344,17 @@ describe("GameShell 的转生与天赋屏接线", () => {
     expect(src.includes("this.buildPrestigeScreen();")).toBe(true);
     expect(src.indexOf("this.buildPrestigeScreen();")).toBeGreaterThan(src.indexOf("this.buildGachaScreen();"));
     expect(src.includes("prestige: () => this.syncPrestige(),")).toBe(true);
-    expect(src.includes('"gacha", "prestige", "commission", "fusion", "season"]')).toBe(true);
+    expect(src.includes('"gacha", "prestige", "commission", "fusion", "season", "gameover"]')).toBe(true);
   });
 
-  it("路由实际注册十三屏(SCREEN_KEYS 仍是 16 态全量)", () => {
+  it("路由实际注册十四屏(SCREEN_KEYS 仍是 16 态全量)", () => {
     const router = readFileSync(new URL("../cocos-prototype/assets/scripts/core/ScreenRouter.ts", import.meta.url), "utf8");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
-    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season"')).toBe(true);
+    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
-    // 九个屏走 sync*(heroes 除外:它走 syncHeroes;这里数的是箭头里直接调 syncX 的那九条)
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(10);
+    // 箭头里直接调 syncX 的那十一条(season / gameover 落地后各 +1;heroes 走 syncHeroes 也在其列)
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(11);
     expect(hooks.includes("menu: () => this.refreshMenu(),")).toBe(true);
     expect(hooks.includes("shop: () => this.shopView?.sync(),")).toBe(true);
   });

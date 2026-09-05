@@ -534,6 +534,45 @@ export interface Phase4Params {
     seBtnFill: string;
     seBtnStroke: string;
     seBtnText: string;
+
+    /* ---------- 死亡结算屏(Phase 5;Web drawGameOver 4015-4113 的内联字面量) ---------- */
+    /** 全屏覆盖底 rgba(0,0,0,0.8)(本屏没有面板底,这一笔就是全部背景) */
+    goDim: string;
+    /** 标题「阵亡」(theme.hp 的近似值,Web 写的是 #ff5a5a,与 theme.hp #FF5A6E 不同值,照 Web 字面量) */
+    goTitle: string;
+    /** 生存行与波次·击杀行同为 #e8e8e8(与 textPrimary #E8ECF4 不同值,照 Web 字面量) */
+    goStat: string;
+    /** 回响行与星尘行共用同一笔金(Web 在 if 之前就把 fillStyle 定成 theme.gold,两档只差文案) */
+    goEcho: string;
+    /** 最佳纪录行 #8f9bb3(与 textSecondary 同值但 Web 写的是小写字面量) */
+    goBest: string;
+    /** 复活钮:btn_primary 九宫格优先,缺图退 #1d3d2e + #4dffc8(= theme.actionPrimaryBg / actionPrimary);描边宽度见共享层 GO_BTN_STROKE_W */
+    goReviveFallbackBg: string;
+    goReviveFallbackStroke: string;
+    /** 复活钮文字 #4dffc8(theme.actionPrimary) */
+    goReviveText: string;
+    /** 重开钮:btn_minor 九宫格优先,缺图退 #2a3d55 + #5ac8fa(= theme.select) */
+    goRestartFallbackBg: string;
+    goRestartFallbackStroke: string;
+    /** 三钮行文字一律白色(Web 三处都写 `#fff`,本表色键一律 6 位档) */
+    goBtnText: string;
+    /** 天赋钮(Web 这里没有贴图,纯代码矩形):#3a2d4d + #c06cff */
+    goPrestigeBg: string;
+    goPrestigeStroke: string;
+    /** 菜单钮(Web 这里没有贴图,纯代码矩形):#1d2a3a + #8f9bb3 */
+    goMenuBg: string;
+    goMenuStroke: string;
+    /** 幻影榜名次提示行(theme.gold) */
+    goRank: string;
+    /** 双倍钮可领档:btn_primary 优先,缺图退 #3a3320 + theme.gold */
+    goDoubleBg: string;
+    goDoubleStroke: string;
+    /** 双倍钮文字可领档 theme.gold */
+    goDoubleText: string;
+    /** 双倍钮已领档:Web 的 `canDouble && skinButtonBase(...)` 短路成纯代码形状 #1a1f2a + rgba(255,255,255,0.15),文字 #5a6a80(= theme.textMuted) */
+    goDoubleClaimedBg: string;
+    goDoubleClaimedStroke: string;
+    goDoubleTextClaimed: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -799,6 +838,28 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     seBtnFill: "#2A3D55",
     seBtnStroke: "#FFD76A",
     seBtnText: "#FFFFFF",
+    goDim: "rgba(0,0,0,0.8)",
+    goTitle: "#FF5A5A",
+    goStat: "#E8E8E8",
+    goEcho: "#FFD76A",
+    goBest: "#8F9BB3",
+    goReviveFallbackBg: "#1D3D2E",
+    goReviveFallbackStroke: "#4DFFC8",
+    goReviveText: "#4DFFC8",
+    goRestartFallbackBg: "#2A3D55",
+    goRestartFallbackStroke: "#5AC8FA",
+    goBtnText: "#FFFFFF",
+    goPrestigeBg: "#3A2D4D",
+    goPrestigeStroke: "#C06CFF",
+    goMenuBg: "#1D2A3A",
+    goMenuStroke: "#8F9BB3",
+    goRank: "#FFD76A",
+    goDoubleBg: "#3A3320",
+    goDoubleStroke: "#FFD76A",
+    goDoubleText: "#FFD76A",
+    goDoubleClaimedBg: "#1A1F2A",
+    goDoubleClaimedStroke: "rgba(255,255,255,0.15)",
+    goDoubleTextClaimed: "#5A6A80",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */

@@ -75,6 +75,17 @@ import { fusionScreenLayout } from "./game/ui/fusionLayout";
 import { SeasonView } from "./season/SeasonView";
 import { buildSeasonContent, seasonRoll, type SeasonAction, type SeasonRollClaim, type SeasonSaveView, type SeasonSummary } from "./season/SeasonModel";
 import { seasonScreenLayout } from "./game/ui/seasonLayout";
+import { GameOverView } from "./gameover/GameOverView";
+import {
+    buildGameOverContent,
+    gameOverEchoClaim,
+    gameOverForms,
+    type GameOverAction,
+    type GameOverEchoClaim,
+    type GameOverRunView,
+    type GameOverSaveView,
+} from "./gameover/GameOverModel";
+import { gameOverScreenLayout } from "./game/ui/gameOverLayout";
 import type { TripleMode } from "./game/data/fusion";
 import type { Equipment } from "./game/data/equipmentGen";
 
@@ -239,6 +250,20 @@ export class GameShell extends Component {
      * `SaveData` 里没有这一项)。翻页那一刻算出,贴底钮收起它;离线跨多赛季只留最后一轮。
      */
     private seasonSummary: SeasonSummary | null = null;
+    /** 死亡结算屏:内容与命中与写入意图来自 cc-free 的 gameover/GameOverModel.ts(本屏有两处广告位,都走 watchAd) */
+    private gameOverView: GameOverView | null = null;
+    /**
+     * 本局星尘所得 —— **宿主持有的瞬时态,不入档**(对标 Web 的 `private stardustEarnedThisRun`)。
+     * Web 只在 `victory()` 里写非零值,死亡路径与每次开局都写 0,于是结算屏上「星尘 +…」
+     * 那一支在两端都是死分支;本层原样保留这一项与那个判断,不在这里"修好"。
+     */
+    private stardustEarnedThisRun = 0;
+    /**
+     * 本局双倍是否已领 —— **宿主持有的瞬时态,不入档**(对标 Web 的 `private doubleClaimed`,
+     * `SaveData` 里没有这一项)。Web 在两处清零:每次开局(`startRun`)与通关(`victory`);
+     * Cocos 侧通关屏尚未接线,故只在开局点复位。
+     */
+    private doubleClaimed = false;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
     /** 赛季切片同样被 `tickSeason` 逐帧读,故与 heroSlice 同性质地复用同一枚对象 */
@@ -306,6 +331,7 @@ export class GameShell extends Component {
             this.commissionView?.setFrames(this.frames);
             this.fusionView?.setFrames(this.frames);
             this.seasonView?.setFrames(this.frames);
+            this.gameOverView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             if (this.router.current === "daily") this.dailyView?.sync();
@@ -316,6 +342,7 @@ export class GameShell extends Component {
             if (this.router.current === "commission") this.commissionView?.sync();
             if (this.router.current === "fusion") this.fusionView?.sync();
             if (this.router.current === "season") this.seasonView?.sync();
+            if (this.router.current === "gameover") this.gameOverView?.sync();
             this.refreshMenu();
         });
     }
@@ -335,6 +362,7 @@ export class GameShell extends Component {
         this.buildCommissionScreen();
         this.buildFusionScreen();
         this.buildSeasonScreen();
+        this.buildGameOverScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
@@ -353,8 +381,9 @@ export class GameShell extends Component {
             commission: () => this.syncCommission(),
             fusion: () => this.syncFusion(),
             season: () => this.syncSeason(),
+            gameover: () => this.syncGameOver(),
         };
-        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season"] as ScreenKey[]).forEach((key) => {
+        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
             const refresh = hooks[key];
@@ -404,8 +433,10 @@ export class GameShell extends Component {
             starterEffect: () => this.runConfig.blueprintEffect,
             callbacks: {
                 onDamage: (pos, text, color) => this.fxView.popDamage(pos, text, color),
-                // 死亡/通关结算屏属 Phase 5:先停住世界推进(sim.over),不做入账交互
-                onDeath: () => {},
+                // 死亡 → 弹结算屏(Phase 5):判据在战斗层(onPlayerDown / onStageFailed 两条都汇到
+                // BattleSim.onDeath,那里已把 over / pendingSettle / 预计算回响 / 名次提示四件事做完),
+                // 宿主只负责把屏切过去;通关结算屏不在本单,仍留空。
+                onDeath: () => this.openGameOver(),
                 onVictory: () => {},
                 // 章末 → 弹章间商店屏(买完/关闭后回到战斗并继续下一章)
                 onChapterShop: () => this.openShop(),
@@ -415,6 +446,7 @@ export class GameShell extends Component {
         this.hudView.onSkipGuide = () => this.sim.skipGuide();
         // 开局:主线第 1 关(体力不足回落无限关),背景随模式切换
         if (!this.sim.startStage(1)) this.sim.startEndless();
+        this.resetGameOverTransients();
         this.refreshBackdrop();
     }
 
@@ -501,6 +533,7 @@ export class GameShell extends Component {
                     this.toast("体力不足,稍后再试或改打无限关");
                     return;
                 }
+                this.resetGameOverTransients();
                 this.refreshBackdrop();
                 this.router.show("battle");
                 return;
@@ -515,6 +548,7 @@ export class GameShell extends Component {
                     this.toast("体力不足,无法进入无限关");
                     return;
                 }
+                this.resetGameOverTransients();
                 this.refreshBackdrop();
                 this.router.show("battle");
                 return;
@@ -757,6 +791,7 @@ export class GameShell extends Component {
             this.toast("体力不足,无法重开");
             return;
         }
+        this.resetGameOverTransients();
         this.refreshBackdrop();
         this.router.show("battle");
     }
@@ -1691,6 +1726,141 @@ export class GameShell extends Component {
         this.seasonSummary = claim.summary;
         this.syncSeason();
         // 主菜单顶栏的星尘读数与赛季行(S{id} · 主题 · 第 N/14 天 · 赛季分)都直接读这几个字段
+        this.refreshMenu();
+    }
+
+    /* ================= 死亡结算屏(Phase 5:三出口 + 两处广告位,阵亡即弹) ================= */
+
+    /**
+     * 死亡结算屏装配。三层分工与前九屏同构:
+     *  ① 几何全部来自共享层 `game/ui/gameOverLayout.ts`(经 `gameOverScreenLayout` 单一出口,横幅盒 /
+     *     立绘盒 / 标题与四行读数 / 复活钮与三钮行与贴底双倍钮及其文字位,与 Web 逐项同数)。
+     *     本屏内容条数不随存档变(只有「最佳纪录」与「名次提示」两行有没档),几何入参是两个形态位;
+     *  ② 文案、命中与**写入意图**来自 cc-free 的 `gameover/GameOverModel.ts`(复活上限、回响折算、
+     *     mm:ss 格式全部走既有函数,本文件不复制判据);
+     *  ③ 模型不碰存档:落 `points` / `dayEcho` 与 `persist()` 在本文件(`commitGameOverEcho`),
+     *     死亡本账那一笔在战斗层(`sim.settlePendingRun`,54dc2a6 已落),宿主只在三个出口前调它。
+     * **进屏判据不在本屏也不在宿主**:Web 是 `onDeath()` 里那句 `state = "gameover"`,Cocos 侧同位
+     * —— 战斗层的 `BattleSim.onDeath`(由共享世界层的 `onPlayerDown` 与 `onStageFailed` 两条事件汇流)
+     * 抛 `cb.onDeath` 时已把 `world.over` / `pendingSettle` / 预计算回响 / 名次提示四件事做完,
+     * 宿主回调只有一句 `openGameOver()`,所以「什么时候该弹屏」这一条两端同一事实源。
+     * **本屏有两个广告位**(复活 / 双倍),都走 `watchAd` 唯一入口;闸门只有它首行那一道。
+     */
+    private buildGameOverScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:gameover");
+        if (!node) return;
+        node.removeAllChildren();
+        this.gameOverView = new GameOverView(node, this.frames, {
+            layout: () => gameOverScreenLayout(DESIGN_W, logicalH(), gameOverForms(this.gameOverSave(), this.gameOverRun())),
+            content: (L) => buildGameOverContent(this.gameOverSave(), this.gameOverRun(), L),
+            onAction: (a) => this.onGameOverAction(a),
+        });
+        this.gameOverView.sync();
+    }
+
+    /** 本屏要读的存档字段就这三项(累计回响 / 最佳纪录 / 当日已领的每日天赋);本屏一个存档字段都不写死在这里 */
+    private gameOverSave(): GameOverSaveView {
+        const s = this.save();
+        return { points: s.points, bestRun: s.bestRun, dailyTalentClaimed: s.dailyTalentClaimed };
+    }
+
+    /**
+     * 本局读数切片 —— **全部是会话态**(世界在 `over` 后停止推进,故这一份就是死亡那一刻的定格;
+     * 与 Web 一样没有一个进 `localStorage`)。`stardustEarnedThisRun` 与 `doubleClaimed` 两项
+     * 在宿主字段上,其余六项从战斗层现取。
+     */
+    private gameOverRun(): GameOverRunView {
+        const sim = this.sim;
+        return {
+            elapsed: sim.elapsed,
+            wave: sim.waves.wave,
+            kills: sim.kills,
+            pointsEarnedThisRun: sim.pointsEarnedThisRun,
+            stardustEarnedThisRun: this.stardustEarnedThisRun,
+            reviveUsed: sim.world.reviveUsed,
+            rankImprovedTo: sim.rankImprovedTo,
+            doubleClaimed: this.doubleClaimed,
+        };
+    }
+
+    /**
+     * 开局复位本屏两项会话态(对标 Web `startRun` 里的 `doubleClaimed = false` 与
+     * `stardustEarnedThisRun = 0`);四个开局点(自举首局 / 菜单选关 / 菜单无限关 / `restartRun`)
+     * 都调它,后者同时是商店重开与转生「开始新轮回」的共用出口。
+     */
+    private resetGameOverTransients(): void {
+        this.doubleClaimed = false;
+        this.stardustEarnedThisRun = 0;
+    }
+
+    /**
+     * 进屏:死亡那一刻由战斗层回调弹进来。先按 Web `onDeath` 同位把本局星尘所得写 0
+     * (于是「星尘 +…」那一支在两端都取不到),再切屏(切屏即触发路由 refresh → syncGameOver)。
+     */
+    private openGameOver(): void {
+        this.stardustEarnedThisRun = 0;
+        this.router.show("gameover");
+    }
+
+    private syncGameOver(): void {
+        this.gameOverView?.sync();
+    }
+
+    /**
+     * 热区 → 玩法(对标 Web handleTap 的 gameover 分支五支:复活 → 双倍 → 重开 → 天赋 → 菜单)。
+     * 广告闸门只有 `watchAd` 首行那一道,这一层不加 `adPending`;失败分支各走 `watchAd` 的 `onFail`。
+     * 三个「放弃本局」出口的首行都是 `sim.settlePendingRun()`(必须排在任何开局调用之前 ——
+     * `startRun()` 会把 `pendingSettle` 清零,顺序错了这一笔就静默丢掉),`restartRun` 已把这一句
+     * 放在自己的首行,故重开那一支只调它。复活与双倍都不离开本屏以外的状态机:复活成功才回战斗。
+     */
+    private onGameOverAction(a: GameOverAction): void {
+        const sim = this.sim;
+        if (!sim) return;
+        if (a.kind === "revive") {
+            // Web: watchAd(() => this.revive()) —— 复活那一下不写任何账,落盘的只有广告钻石那一笔
+            this.watchAd(
+                () => {
+                    sim.revive();
+                    this.router.show("battle");
+                },
+                () => this.toast("广告未看完,未能复活")
+            );
+            return;
+        }
+        if (a.kind === "double") {
+            const claim = gameOverEchoClaim(sim.pointsEarnedThisRun, this.doubleClaimed);
+            if (!claim) return;
+            this.watchAd(() => this.commitGameOverEcho(claim), () => this.toast("广告未看完,双倍未入账"));
+            return;
+        }
+        if (a.kind === "restart") {
+            this.restartRun();
+            return;
+        }
+        if (a.kind === "prestige") {
+            sim.settlePendingRun();
+            this.openPrestige();
+            return;
+        }
+        // 菜单:Web 的 backToMenu 就是「先结算挂起的死亡局,再切主菜单」
+        sim.settlePendingRun();
+        this.router.show("menu");
+    }
+
+    /**
+     * 照着双倍回响的意图落账(壳层是唯一的写入方)。两笔账面与 Web `settleEcho` 逐字段对应:
+     * `permanent → points`、`day → dayEcho`,外加把会话态 `doubleClaimed` 置真并落一次盘。
+     * **这一笔不清 `pendingSettle`、也不改 `pointsEarnedThisRun`**(Web 同口径),于是离开本屏时
+     * `settleRun()` 会把同一数额再结一次 —— 两笔相加就是「翻倍」。
+     */
+    private commitGameOverEcho(claim: GameOverEchoClaim): void {
+        const save = this.save();
+        save.points += claim.permanent;
+        save.dayEcho += claim.day;
+        this.doubleClaimed = true;
+        this.sim.persist();
+        this.syncGameOver();
+        // 主菜单顶栏的回响读数与转生屏的可支配点数都直接读 points / dayEcho
         this.refreshMenu();
     }
 

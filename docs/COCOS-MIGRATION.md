@@ -457,3 +457,38 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 4. **布局台在 Phase 2 重定向**（而不是先做完屏幕再回头补工具）。理由：后面 13 屏的几何调整都靠它，早一期拿到工具，后面省的是"标注→猜像素"的循环。
 5. **包体与远程资源策略延后到 Phase 6**，但它是发布阻塞项，不随本轮重写关闭。
 6. **逐模块重写的推进节奏**：一个 Phase 一次提交、一次截图对标、一次你的确认。需要更快时可以合并 Phase 3/4，但风险是单次对标面变宽。
+
+## 逐屏视觉对标挂账（2026-09-05，Phase 4 三屏同尺度对标）
+
+证据在 `.probe/pair/`（该目录被 `.gitignore` 忽略，不入提交）：三屏 8 张 **560×996** 的 Web/Cocos 对照图、逐元素表 `table-*.md`、定点取色 `color-*.md`、描边四边覆盖率剖面 `resample.md`，汇总见 `report.md`（A/B/C = 16/10/7）。四类机制按处置分列：
+
+- **S1 / S2 描边不出图（已修在一处共享出口）**：`ui/PanelKit.ts` 的 `flatBox().draw()` 原先走 `lineWidth/strokeColor/rect/stroke`，实测 Cocos 侧描边**可见宽度恒为 `lineWidth − 1.5` 设备像素**（w=1 → 0 像素、w=2 → 两行各 0.50、w=4/8/16 → 2.5/6.5/14.5 行，五点共线），故 1px 档 21 处整条消失、2px 档 5 处只剩半强度。顶点与索引都正常、颜色也没被覆盖，丢在光栅。现改成四条 `fill` 拼成 `OUTER(外扩 lw/2) \ INNER(内缩 lw/2)` 环带，与 Web `strokeRect` 逐像素同分布（w=1 摊两行各 0.50、w=2 铺满 1.00）。带描边实参的调用点共 27 处：commission 7、fusion 5、prestige 4、gacha 3、pass 2、shop 2、season 1、daily 1、gearup 1、heroes 1。
+- **同一出口下本次未动的两处**：同文件的 `qualityBox`（描边宽 1.5px / 1px）与 `Plate.show`（1px）仍走 `Graphics.stroke()`，按上面那条 −1.5 定律它们的描边同样接近 0 像素。**待另单**，与 S3/S4 一起处理。
+- **S3 文字基线整体偏低**：委托列表 35 行里 33 行比 Web 低 4~7px（22px 粗体标题差 −2）、面板态可分的 10 行低 4~6px、融合 18 行低 4~7px、赛季 6 行低 6~8px（钮题落到钮中心下方）。**记账待整界面翻新**。
+- **S4 贴图被拉满节点盒**：两侧节点盒逐位相同，Web 保比例内接、Cocos 直接铺满 —— 立绘 1.39×/1.28×、碎片图标 1.38×/1.27×、羊皮纸底板 1.088×/1.115×、赛季徽标 1.26×/1.31×。**这一条否证了赛季单里"徽标源图非方被画进 48×48、两端同样横向压扁"的旧口径**（Web 实测墨迹只有 38×36）。**记账待整界面翻新**。
+- **判据教训**：门 4 用「grep 产物里的模块私有函数名」判「改动有没有编进去」会**假阴**——打包器会改名，私有符号根本不留名。能定论的只有导出名、文案字面量与像素。
+
+## Phase 5 死亡结算屏落地记（最后一屏）
+
+三层新文件：`game/ui/gameOverLayout.ts`（纯几何）+ `gameover/GameOverModel.ts`（内容与命中与写入意图）+ `gameover/GameOverView.ts`（只管节点）；接线在 `GameShell`（八件套：`buildGameOverScreen` / `gameOverSave` / `gameOverRun` / `resetGameOverTransients` / `openGameOver` / `syncGameOver` / `onGameOverAction` / `commitGameOverEcho`）、`core/ScreenRouter`（实际注册 14 屏、`sync*` 钩子 11 条）、`core/ViewTable.phase4`（22 档 `go*` 配色）。
+
+- **进屏判据两端同一事实源**：Web 是 `onDeath()` 里那句 `state = "gameover"`；Cocos 侧 `BattleSim.onDeath`（由共享世界层 `onPlayerDown` 与 `onStageFailed` 两条事件汇流）已把 `world.over` / `pendingSettle` / 预计算回响 / 名次提示四件事做完并抛 `cb.onDeath`，宿主回调只有一句 `openGameOver()`。全仓 `openGameOver()` 调用点只有这一处。
+- **三出口 + 两处广告位**：`重开` 复用 `restartRun()`（首行 `settlePendingRun` → 当前关带门控豁免重开、无限关重掷词缀）；`天赋` 就地 `settlePendingRun` 后 `openPrestige()`；`菜单` 就地 `settlePendingRun` 后 `router.show("menu")`。`看广告复活` 与 `广告 ×2 回响` 都走 `watchAd` 唯一入口，屏级 action 段不含 `adPending`（全文件闸门仍只有一道）。
+- **休眠通路已激活**：54dc2a6 那条 `settlePendingRun` 通路此前没有触发面（工程里没有离开战斗屏的路径），本屏落地后正常游玩下阵亡即弹屏，`prestiges` 会真实累加，主菜单与其下挂的十一张屏由「选关 / 无限关 / 天赋 / 委托」四条正常路径可达，不再依赖探针直调 `shell.open*()`。
+
+本屏照抄的 Web 怪癖（只列不改）：
+
+1. **广告双倍 = 把同一笔回响结两次**：领取时 `settleEcho(pointsEarnedThisRun)` 入账，但既不清 `pendingSettle` 也不改 `pointsEarnedThisRun`，离开本屏时 `settleRun()` 用同一个数额再结一次；屏上「回响点数 +N」那一行领取前后不变，只有括号里的「累计」和钮的配色会动。
+2. **「星尘 +…」那一行是死代码**：Web 的 `onDeath` 与 `startRun` 都把 `stardustEarnedThisRun` 写 0，唯一非零写入在 `victory()`，而胜利屏与死亡屏互斥。宿主按 `openGameOver` 同位写 0，两端同样取不到那一支。
+3. **复活那一下不写任何账**：满血 / 无敌盾 / 清贴身 / `reviveUsed + 1` 都在世界层与会话态，`persist` 一次都没有；上限 = `1 + 不屈(1)`，当日天赋决定 1 或 2 次，`startRun` 清零、不入档。
+4. **热区矩形在 Web 由上一帧绘制写入**（`restartBtn` / `talentsBtn` / `menuBtn` / `reviveBtn` / `doubleBtn` 都是 draw 里赋值的私有字段，共 6 笔赋值）；Cocos 侧几何是 `(w, h, 形态位)` 的纯函数，不存在「首帧未绘制 → 热区为空」这一族时序问题。双倍钮已领后热区仍然存在，只是那一支进不去。
+5. **键盘 `T` 与点击 `T` 不同账**：Web 的 gameover 键盘分支 `this.state = "prestige"` 少了点击分支里那句 `settlePendingRun()`，靠下一个开局点兜底。Cocos 侧没有键盘通路，本屏只有点击那一条口（更严）。
+6. **`gameover` 状态没有 Escape 出口**，三钮行就是返回出口；返回落点因此不是"回菜单"这一刀切，而是本屏真实的三个落点。
+7. **三处钮内文字基线都是裸偏移**（`+21 / +28 / +22`），其中三钮行那一档与 `rowTextY` 不同源（996 档 `rowTextY` 给 496、Web 落 496.8）；「看广告复活(剩余 1 次)」按 15px 量出来比 220 的钮宽，Web 就是让它压出钮缘，所以本屏所有居中文本的限宽一律给整屏带宽，避免 `fitOne` 造出 Web 没有的「…」。
+
+已知偏差与待办（不在本单修）：
+
+- **体力不足时的回落**：Web 的 `restart()` → `startStage` 会切到 `energy` 面板（`SCREEN_KEYS` 里那一态与 `victory` 仍未注册），Cocos 侧回落成"留在结算屏 + 轻提示「体力不足,无法重开」"，此时死亡本账已在 `restartRun` 首行结清（再按天赋 / 菜单不会重复入账，`pendingSettle` 已清）。
+- **广告 `onFail`**：Web 复活那一支没有 `onFail`（没看完就静默无事发生），本屏按派单口径补了轻提示（复活 / 双倍各一条），属于宿主侧新增反馈、不入账面。
+- **背景与暗底**：Web 的 `render` 把战场与 HUD 都门控在 `state === "playing"`，所以阵亡屏是暗底压住 `bg_outside`；Cocos 路由切屏把战斗屏整棵隐藏，语义一致。暗底色值 `rgba(0,0,0,0.8)` 已进表，S3 / S4 那两类共享出口偏差（文字基线、贴图拉满盒、`Plate.show` 描边）在本屏同样存在，随上一节一起处理。
+- **通关（victory）屏不在本单**：`onVictory` 仍是空实现，通关后世界停住、不弹屏。

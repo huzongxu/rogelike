@@ -1362,17 +1362,17 @@ describe("GameShell 的词缀融合屏接线", () => {
     expect(src.includes("this.buildFusionScreen();")).toBe(true);
     expect(src.indexOf("this.buildFusionScreen();")).toBeGreaterThan(src.indexOf("this.buildCommissionScreen();"));
     expect(src.includes("fusion: () => this.syncFusion(),")).toBe(true);
-    expect(src.includes('"gacha", "prestige", "commission", "fusion", "season"]')).toBe(true);
+    expect(src.includes('"gacha", "prestige", "commission", "fusion", "season", "gameover"]')).toBe(true);
   });
 
-  it("路由实际注册十三屏(SCREEN_KEYS 仍是 16 态全量)", () => {
+  it("路由实际注册十四屏(SCREEN_KEYS 仍是 16 态全量)", () => {
     const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
     expect(keysBlock[1].includes('"fusion"')).toBe(true);
-    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season"')).toBe(true);
+    expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(10);
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(11);
   });
 
   it("占位轻提示整表下线:PENDING_SCREEN 与它的文案在 GameShell 里都不存在了", () => {
