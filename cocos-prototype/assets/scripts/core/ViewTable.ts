@@ -573,6 +573,43 @@ export interface Phase4Params {
     goDoubleClaimedBg: string;
     goDoubleClaimedStroke: string;
     goDoubleTextClaimed: string;
+
+    /* ---------- 通关结算屏(Phase 5;Web drawVictory 3746-3849 的内联字面量) ---------- */
+    /** 全屏覆盖底 rgba(8,10,16,0.86)(本屏没有面板底,这一笔就是全部背景;与死亡屏那档不同值) */
+    viDim: string;
+    /** 标题「通关!」(theme.gold) */
+    viTitle: string;
+    /** 关卡行「第N关 · 关名」(#e8e8e8,与 textPrimary #E8ECF4 不同值,照 Web 字面量) */
+    viStage: string;
+    /** 星数行的替代字形档(星数贴图整幅缺图时才落这一行):theme.gold */
+    viStarText: string;
+    /** 每日首通行与扭蛋券行同为 #4dffc8(= theme.actionPrimary;Web 两处都写这个字面量,按用途分键) */
+    viFirst: string;
+    viTicket: string;
+    /** 回响点数行(theme.gold) */
+    viEcho: string;
+    /** 星尘行与掉落行同为 #c8b6ff(= theme.echo;Web 两处都写这个字面量,按用途分键) */
+    viStardust: string;
+    viDrop: string;
+    /** 幻影榜名次提示行(theme.gold) */
+    viRank: string;
+    /** 关卡框行两档:缺图档 #c8b6ff(= theme.echo);有图档被 Web 的 drawAvatarFrame 泄漏成金色 12px 粗体屏心左起笔 */
+    viFrameText: string;
+    viFrameTextGold: string;
+    /** 框心关卡号(Web drawAvatarFrame 内部那一笔,固定 theme.gold) */
+    viFrameBadgeText: string;
+    /** 双倍钮可领档:btn_primary 优先,缺图退 #3a3320 + theme.gold(与死亡屏那两档同值,按屏分键) */
+    viDoubleBg: string;
+    viDoubleStroke: string;
+    viDoubleText: string;
+    /** 双倍钮已领档:`canDouble && skinButtonBase(...)` 短路成纯代码形状 #1a1f2a + rgba(255,255,255,0.15),文字 #5a6a80 */
+    viDoubleClaimedBg: string;
+    viDoubleClaimedStroke: string;
+    viDoubleTextClaimed: string;
+    /** 返回钮:btn_minor 九宫格优先,缺图退 #2a3d55 + #5ac8fa(= theme.select),文字白色 */
+    viMenuFallbackBg: string;
+    viMenuFallbackStroke: string;
+    viMenuText: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -860,6 +897,30 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     goDoubleClaimedBg: "#1A1F2A",
     goDoubleClaimedStroke: "rgba(255,255,255,0.15)",
     goDoubleTextClaimed: "#5A6A80",
+
+    /* 通关结算屏(逐项对标 Web drawVictory) */
+    viDim: "rgba(8,10,16,0.86)",
+    viTitle: "#FFD76A",
+    viStage: "#E8E8E8",
+    viStarText: "#FFD76A",
+    viFirst: "#4DFFC8",
+    viTicket: "#4DFFC8",
+    viEcho: "#FFD76A",
+    viStardust: "#C8B6FF",
+    viDrop: "#C8B6FF",
+    viRank: "#FFD76A",
+    viFrameText: "#C8B6FF",
+    viFrameTextGold: "#FFD76A",
+    viFrameBadgeText: "#FFD76A",
+    viDoubleBg: "#3A3320",
+    viDoubleStroke: "#FFD76A",
+    viDoubleText: "#FFD76A",
+    viDoubleClaimedBg: "#1A1F2A",
+    viDoubleClaimedStroke: "rgba(255,255,255,0.15)",
+    viDoubleTextClaimed: "#5A6A80",
+    viMenuFallbackBg: "#2A3D55",
+    viMenuFallbackStroke: "#5AC8FA",
+    viMenuText: "#FFFFFF",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */

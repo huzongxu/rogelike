@@ -673,17 +673,17 @@ describe("GameShell 的赛季结算屏接线", () => {
     expect(src.includes("this.buildSeasonScreen();")).toBe(true);
     expect(src.indexOf("this.buildSeasonScreen();")).toBeGreaterThan(src.indexOf("this.buildFusionScreen();"));
     expect(src.includes("season: () => this.syncSeason(),")).toBe(true);
-    expect(src.includes('"commission", "fusion", "season", "gameover"]')).toBe(true);
+    expect(src.includes('"commission", "fusion", "season", "gameover", "victory"]')).toBe(true);
   });
 
-  it("路由实际注册十四屏(SCREEN_KEYS 仍是 16 态全量)", () => {
+  it("路由实际注册十五屏(SCREEN_KEYS 仍是 16 态全量)", () => {
     const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
     expect(keysBlock[1].includes('"season"')).toBe(true);
     expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(11);
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(12);
   });
 
   it("晚到贴图流到位后本屏也换引用并在当前屏时补排一次", () => {

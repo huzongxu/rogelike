@@ -468,7 +468,7 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 - **S4 贴图被拉满节点盒**：两侧节点盒逐位相同，Web 保比例内接、Cocos 直接铺满 —— 立绘 1.39×/1.28×、碎片图标 1.38×/1.27×、羊皮纸底板 1.088×/1.115×、赛季徽标 1.26×/1.31×。**这一条否证了赛季单里"徽标源图非方被画进 48×48、两端同样横向压扁"的旧口径**（Web 实测墨迹只有 38×36）。**记账待整界面翻新**。
 - **判据教训**：门 4 用「grep 产物里的模块私有函数名」判「改动有没有编进去」会**假阴**——打包器会改名，私有符号根本不留名。能定论的只有导出名、文案字面量与像素。
 
-## Phase 5 死亡结算屏落地记（最后一屏）
+## Phase 5 死亡结算屏落地记
 
 三层新文件：`game/ui/gameOverLayout.ts`（纯几何）+ `gameover/GameOverModel.ts`（内容与命中与写入意图）+ `gameover/GameOverView.ts`（只管节点）；接线在 `GameShell`（八件套：`buildGameOverScreen` / `gameOverSave` / `gameOverRun` / `resetGameOverTransients` / `openGameOver` / `syncGameOver` / `onGameOverAction` / `commitGameOverEcho`）、`core/ScreenRouter`（实际注册 14 屏、`sync*` 钩子 11 条）、`core/ViewTable.phase4`（22 档 `go*` 配色）。
 
@@ -488,7 +488,25 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 
 已知偏差与待办（不在本单修）：
 
-- **体力不足时的回落**：Web 的 `restart()` → `startStage` 会切到 `energy` 面板（`SCREEN_KEYS` 里那一态与 `victory` 仍未注册），Cocos 侧回落成"留在结算屏 + 轻提示「体力不足,无法重开」"，此时死亡本账已在 `restartRun` 首行结清（再按天赋 / 菜单不会重复入账，`pendingSettle` 已清）。
+- **体力不足时的回落**：Web 的 `restart()` → `startStage` 会切到 `energy` 面板（`SCREEN_KEYS` 里那一态仍未注册，`victory` 已由下一节的通关结算屏补上），Cocos 侧回落成"留在结算屏 + 轻提示「体力不足,无法重开」"，此时死亡本账已在 `restartRun` 首行结清（再按天赋 / 菜单不会重复入账，`pendingSettle` 已清）。
 - **广告 `onFail`**：Web 复活那一支没有 `onFail`（没看完就静默无事发生），本屏按派单口径补了轻提示（复活 / 双倍各一条），属于宿主侧新增反馈、不入账面。
 - **背景与暗底**：Web 的 `render` 把战场与 HUD 都门控在 `state === "playing"`，所以阵亡屏是暗底压住 `bg_outside`；Cocos 路由切屏把战斗屏整棵隐藏，语义一致。暗底色值 `rgba(0,0,0,0.8)` 已进表，S3 / S4 那两类共享出口偏差（文字基线、贴图拉满盒、`Plate.show` 描边）在本屏同样存在，随上一节一起处理。
-- **通关（victory）屏不在本单**：`onVictory` 仍是空实现，通关后世界停住、不弹屏。
+- **通关（victory）屏**：本屏落地时 `onVictory` 仍是空实现；现已由下一节的通关结算屏接上，两张结算屏共用同一套接线纪律与同一个广告闸门。
+
+## Phase 5 通关结算屏落地记
+
+三层新文件：`game/ui/victoryLayout.ts`（纯几何）+ `victory/VictoryModel.ts`（内容与命中与写入意图）+ `victory/VictoryView.ts`（只管节点）；接线在 `GameShell`（六件套：`buildVictoryScreen` / `victoryRun` / `openVictory` / `syncVictory` / `onVictoryAction` / `commitVictoryEcho`，并让 `resetGameOverTransients` 多清一项 `victoryInfo`）、`core/ScreenRouter`（实际注册 15 屏、`sync*` 钩子 12 条，`SCREEN_KEYS` 仍是 16 态全量，只剩 `energy` 没注册）、`core/ViewTable.phase4`（22 档 `vi*` 配色）。覆盖：`tests/cocos-phase5-victory.test.ts` 63 条 + 构建包探针 `.probe/probe-victory.js`。
+
+- **账不在本屏**：Web 的 `victory()`(1704-1766) 与 Cocos 的 `BattleSim.victory()`(415-472) 早已逐字段对齐 —— 星数、每日首通翻倍、成长奖励、券、回响按 40/60 分账、星尘、装备掉落（重复折星尘）、解锁下一关、名次提示、`doubleClaimed` 复位十件事全在战斗层并当场落盘，然后一次性抛 `cb.onVictory(VictoryInfo)`。本屏读的就是那份 payload，模型里 `calcStars` / `CLEAR_REWARD_GROWTH` / `stageDropCount` / `generateEquipment` 出现 0 次，测试用一条源码守卫钉住"不许在屏上重算第二遍"。
+- **进屏判据两端同一事实源**：Web 是 `victory()` 尾部那句 `state = "victory"`（全仓唯一），Cocos 是宿主回调那一句 `openVictory(info)`（全仓唯一，`router.show("victory")` 也只有这一处）。
+- **两枚热区、一个广告位、落点是 menu**：Web victory 分支只有两支 —— 双倍回响（带 `!doubleClaimed` 前置）与底部条 `{x ∈ [w/2−95, w/2+95], y ∈ [h−62, h−18]}` → `backToMenu()`。返回钮因此接 `sim.settlePendingRun()` + `router.show("menu")`，不是 `battle` 也不是 `prestige`；除此之外本屏不响应任何点击。`settlePendingRun` 在通关路径上是恒空守卫（`victory()` 从不置 `pendingSettle`），按 Web `backToMenu` 同位带上。
+- **本屏是唯一会读到非零本局星尘的屏**：`stardustEarnedThisRun` 在两端都只由 `victory()` 写非零（死亡路径与四个开局点都写 0），而通关与阵亡互斥，所以死亡屏那一支恒为死代码 —— 两张屏共用这条口径。屏上那一行星尘读 `stageReward.stardust`（与本源同数）。
+- **照抄的 Web 口径四条**：① 双倍取数是 `pointsEarnedThisRun || stageEchoReward(currentStage?.id ?? 1)`，回落档读的是**关卡表基础值**（不带成长与首通倍率），而 `?? 1` 在通关屏上永远取不到（`victory()` 首行 `if (!st) return`），做成显式入参以便单测钉住无尽档；② 领取后 `settleEcho` 顺手把 `pointsEarnedThisRun` 改成本次 `total`，而屏上三行读数念的是 payload，于是领取前后纹丝不动、只有钮的配色与文字会动；③ 立绘 `player_pose_1` 挂在**屏心右侧**（`w/2 + 132`，死亡屏那枚是左侧 `w/2 − 196`），且本屏没有任何半透明贴图件（Web 这里一次都不动 `globalAlpha`）；④ 星数行的替代 ★/☆ 字形只在**第一枚**贴图缺失时才落（Web 的循环 `break` 使 `drawn === 0` 等价于首枚失败），关卡框那枚 `drawAvatarFrame` **没有代码回退形状**（缺图时提前 `return false` 且调用方不接返回值），与幻影榜那处的金圈分支不同形。
+- **一处 Web 的画布状态泄漏被原样带上（本屏最大的反直觉项）**：`drawAvatarFrame` 成功分支结尾把 `g.textAlign` 复位成 `"left"`、并在框心那一笔里把 `fillStyle` / `font` 换成金 / `fs.micro` 粗体，而 `drawVictory` 在调用它之前设好的 `#c8b6ff / 16px` 之后再没被重设 —— 于是「解锁关卡框 · 第 N 关」那一行的实际外观取决于**框贴图到不到位**：有图（五档 `avatar_*` 在两端资源里都在，这就是线上档）走**金色 12px 粗体、以屏心为左起笔**，缺图才回到 `#c8b6ff 16px` 屏心居中。布局层把两档都算出来（`frameLineLeaked` / `frameLineFlat`，基线同一个 `a + 210`），视图按 `iconNode.show()` 的返回值取档；两端读同一份资源表故必然同档。探针直接把这一档钉成实机断言（`fontSize === 12 && isBold && horizontalAlign === LEFT && color === #FFD76A`）。
+- **几何要点**：整屏仍是 `a = h × 0.3` 一族的十一处基线 + 两枚贴底钮（底边分别 `h − 82` 与 `h − 18`），两档之间锚线族平移 75px、贴底族平移 250px；**三枚奖励行的前置图标与关卡框的横向位置跟随文案量宽**（Web 的 `g.measureText(...).width`，Cocos 侧走 `PanelKit.approxW`），布局层因此把「行锚 + 边长 + 间距」与「量宽 → 矩形」分成两个出口（`victoryIconRect` 左上角锚 / `victoryBadgeRect` 框心锚，间距分别是 20 与 18 且都量在「文字左缘 ←→ 该点」之间）；星数行是**唯一一个随内容变枚数的几何族**，故 `stars` 是布局入参而非形态位，`canDouble` 则一律不改矩形（Web 的 `doubleBtn = dbl` 无条件赋值）。本屏没有面板底，`rgba(8,10,16,0.86)` 那一笔就是全部背景（与死亡屏的 `rgba(0,0,0,0.8)` 不同值）。
+
+挂账与待办：
+
+- **`energy` 屏仍未注册**：`SCREEN_KEYS` 里 `energy` 是最后一把没有屏的键。体力不足时 Web 切 `energy` 面板、Cocos 侧仍是"留在原屏 + 轻提示"，这条行为缺口与本轮同性质，由下一单补。
+- **本屏没有键盘出口**：Web 的 victory 键盘分支 `r` / `m` 都只走 `backToMenu()`，与底部条同落点；Cocos 侧没有键盘通路，本屏只有点击那一条口（更严）。
+- **共享出口的三类视觉偏差在本屏同样存在**：S3 文字基线偏低、S4 贴图拉满盒、`Plate.show` 残余描边（见上一节「逐屏视觉对标挂账」），本轮按既定口径不动、不开新单。

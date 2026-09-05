@@ -720,21 +720,21 @@ describe("GameShell 的死亡结算屏接线", () => {
     expect(src.includes("this.buildGameOverScreen();")).toBe(true);
     expect(src.indexOf("this.buildGameOverScreen();")).toBeGreaterThan(src.indexOf("this.buildSeasonScreen();"));
     expect(src.includes("gameover: () => this.syncGameOver(),")).toBe(true);
-    expect(src.includes('"commission", "fusion", "season", "gameover"]')).toBe(true);
+    expect(src.includes('"commission", "fusion", "season", "gameover", "victory"]')).toBe(true);
   });
 
-  it("路由实际注册十四屏（SCREEN_KEYS 仍是 16 态全量）", () => {
+  it("路由实际注册十五屏（SCREEN_KEYS 仍是 16 态全量）", () => {
     const router = fileSource("../cocos-prototype/assets/scripts/core/ScreenRouter.ts");
     const keysBlock = /\[\s*([\s\S]*?)\]\s*as const/.exec(router.slice(router.indexOf("export const SCREEN_KEYS")))!;
     expect(keysBlock[1].split(",").map((s) => s.trim().replace(/"/g, "")).filter(Boolean)).toHaveLength(16);
     expect(src.includes('"battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover"')).toBe(true);
     const hooks = src.slice(src.indexOf("const hooks: Partial<Record<ScreenKey"), src.indexOf("as ScreenKey[]"));
-    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(11);
+    expect((hooks.match(/\(\) => this\.sync[A-Z]\w*\(\),/g) ?? []).length).toBe(12);
   });
 
   it("进屏判据只有一处：战斗层死亡回调直连 openGameOver，没有第二个弹屏点", () => {
     expect(src.includes("onDeath: () => this.openGameOver(),")).toBe(true);
-    expect(src.includes("onVictory: () => {}")).toBe(true);
+    expect(src.includes("onVictory: (info) => this.openVictory(info),"), "通关回调已接线").toBe(true);
     expect((src.match(/this\.openGameOver\(\)/g) ?? []).length).toBe(1);
     expect((src.match(/this\.router\.show\("gameover"\)/g) ?? []).length).toBe(1);
     // Web 侧同样只有一个入口：onDeath 里那一句 state = "gameover"
@@ -778,7 +778,7 @@ describe("GameShell 的死亡结算屏接线", () => {
   });
 
   it("存档写入只发生在 commitGameOverEcho；本屏分节里没有第二处写点", () => {
-    const seg = codeOf(src.slice(src.indexOf("/* ================= 死亡结算屏"), src.indexOf("/* ================= 主循环")));
+    const seg = codeOf(src.slice(src.indexOf("/* ================= 死亡结算屏"), src.indexOf("/* ================= 通关结算屏")));
     const commit = seg.slice(seg.indexOf("private commitGameOverEcho"));
     expect(commit.includes("save.points += claim.permanent;")).toBe(true);
     expect(commit.includes("save.dayEcho += claim.day;")).toBe(true);

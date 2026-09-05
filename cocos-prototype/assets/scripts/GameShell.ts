@@ -18,7 +18,7 @@ import { applyMenuSkin } from "./game/data/menuSkin";
 import { normalizeSave, type SaveModel } from "./core/SaveModel";
 import { STAGES } from "./game/data/stages";
 import { canStarMakeup, STAR_MAKEUP_COST, THREE_STAR_TICKETS } from "./game/data/season";
-import { BattleSim } from "./battle/BattleSim";
+import { BattleSim, type VictoryInfo } from "./battle/BattleSim";
 import { BattleWorldView } from "./battle/BattleWorldView";
 import { HudView } from "./battle/HudView";
 import { FxView } from "./battle/FxView";
@@ -86,6 +86,17 @@ import {
     type GameOverSaveView,
 } from "./gameover/GameOverModel";
 import { gameOverScreenLayout } from "./game/ui/gameOverLayout";
+import { VictoryView } from "./victory/VictoryView";
+import {
+    buildVictoryContent,
+    victoryEchoClaim,
+    victoryEchoTotal,
+    victoryForms,
+    type VictoryAction,
+    type VictoryEchoClaim,
+    type VictoryRunView,
+} from "./victory/VictoryModel";
+import { victoryScreenLayout } from "./game/ui/victoryLayout";
 import type { TripleMode } from "./game/data/fusion";
 import type { Equipment } from "./game/data/equipmentGen";
 
@@ -252,16 +263,27 @@ export class GameShell extends Component {
     private seasonSummary: SeasonSummary | null = null;
     /** 死亡结算屏:内容与命中与写入意图来自 cc-free 的 gameover/GameOverModel.ts(本屏有两处广告位,都走 watchAd) */
     private gameOverView: GameOverView | null = null;
+    /** 通关结算屏:内容与命中与写入意图来自 cc-free 的 victory/VictoryModel.ts(本屏有一处广告位,走 watchAd) */
+    private victoryView: VictoryView | null = null;
+    /**
+     * 最近一次通关的 payload —— **宿主持有的瞬时态,不入档**(对标 Web 的 `stageReward` /
+     * `victoryStars` / `stageDrops` / `firstClearBonus` / `frameUnlockedThisRun` 五个私有字段:
+     * Web 把它们摊在实例上,Cocos 侧收成一枚 `VictoryInfo`,因为战斗层已经把六件事算完并
+     * 一次性抛给 `cb.onVictory`)。通关那一刻写入,每个开局点清空,回主菜单后不再被读。
+     */
+    private victoryInfo: VictoryInfo | null = null;
     /**
      * 本局星尘所得 —— **宿主持有的瞬时态,不入档**(对标 Web 的 `private stardustEarnedThisRun`)。
-     * Web 只在 `victory()` 里写非零值,死亡路径与每次开局都写 0,于是结算屏上「星尘 +…」
+     * Web 只在 `victory()` 里写非零值,死亡路径与每次开局都写 0,于是**死亡**屏上「星尘 +…」
      * 那一支在两端都是死分支;本层原样保留这一项与那个判断,不在这里"修好"。
+     * 通关屏上那一行星尘读的是 `stageReward.stardust`(与本源同数),本字段由 onVictory 回调
+     * 按 Web 同位写入,只为让两端的那一份会话态真的同源,不再被其它屏读到。
      */
     private stardustEarnedThisRun = 0;
     /**
      * 本局双倍是否已领 —— **宿主持有的瞬时态,不入档**(对标 Web 的 `private doubleClaimed`,
      * `SaveData` 里没有这一项)。Web 在两处清零:每次开局(`startRun`)与通关(`victory`);
-     * Cocos 侧通关屏尚未接线,故只在开局点复位。
+     * Cocos 侧同两笔 —— 四个开局点走 `resetGameOverTransients`,通关点走 `openVictory` 首行。
      */
     private doubleClaimed = false;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
@@ -332,6 +354,7 @@ export class GameShell extends Component {
             this.fusionView?.setFrames(this.frames);
             this.seasonView?.setFrames(this.frames);
             this.gameOverView?.setFrames(this.frames);
+            this.victoryView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             if (this.router.current === "daily") this.dailyView?.sync();
@@ -343,6 +366,7 @@ export class GameShell extends Component {
             if (this.router.current === "fusion") this.fusionView?.sync();
             if (this.router.current === "season") this.seasonView?.sync();
             if (this.router.current === "gameover") this.gameOverView?.sync();
+            if (this.router.current === "victory") this.victoryView?.sync();
             this.refreshMenu();
         });
     }
@@ -363,6 +387,7 @@ export class GameShell extends Component {
         this.buildFusionScreen();
         this.buildSeasonScreen();
         this.buildGameOverScreen();
+        this.buildVictoryScreen();
         this.overlay = makeNode("Overlay", this.worldLayer);
     }
 
@@ -382,8 +407,9 @@ export class GameShell extends Component {
             fusion: () => this.syncFusion(),
             season: () => this.syncSeason(),
             gameover: () => this.syncGameOver(),
+            victory: () => this.syncVictory(),
         };
-        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover"] as ScreenKey[]).forEach((key) => {
+        (["battle", "menu", "shop", "heroes", "leaderboard", "daily", "pass", "gearup", "gacha", "prestige", "commission", "fusion", "season", "gameover", "victory"] as ScreenKey[]).forEach((key) => {
             const node = makeNode("Screen:" + key, this.screenLayer);
             node.active = false;
             const refresh = hooks[key];
@@ -433,11 +459,13 @@ export class GameShell extends Component {
             starterEffect: () => this.runConfig.blueprintEffect,
             callbacks: {
                 onDamage: (pos, text, color) => this.fxView.popDamage(pos, text, color),
-                // 死亡 → 弹结算屏(Phase 5):判据在战斗层(onPlayerDown / onStageFailed 两条都汇到
-                // BattleSim.onDeath,那里已把 over / pendingSettle / 预计算回响 / 名次提示四件事做完),
-                // 宿主只负责把屏切过去;通关结算屏不在本单,仍留空。
+                // 死亡与通关 → 弹两张结算屏(Phase 5):判据都在战斗层(onPlayerDown / onStageFailed
+                // 两条都汇到 BattleSim.onDeath,那里已把 over / pendingSettle / 预计算回响 / 名次提示
+                // 四件事做完;打过关底则进 BattleSim.victory,那里已把星数 / 首通 / 券 / 回响 / 星尘 /
+                // 掉落 / 解锁下一关 / 名次提示 / 双倍复位九件事算完并落盘)。
+                // 宿主回调只负责把屏切过去并把 payload 存成会话态,一张屏都不重算第二遍账。
                 onDeath: () => this.openGameOver(),
-                onVictory: () => {},
+                onVictory: (info) => this.openVictory(info),
                 // 章末 → 弹章间商店屏(买完/关闭后回到战斗并继续下一章)
                 onChapterShop: () => this.openShop(),
             },
@@ -1784,13 +1812,15 @@ export class GameShell extends Component {
     }
 
     /**
-     * 开局复位本屏两项会话态(对标 Web `startRun` 里的 `doubleClaimed = false` 与
-     * `stardustEarnedThisRun = 0`);四个开局点(自举首局 / 菜单选关 / 菜单无限关 / `restartRun`)
-     * 都调它,后者同时是商店重开与转生「开始新轮回」的共用出口。
+     * 开局复位两张结算屏的三项会话态(对标 Web `startRun` 里同段的 `doubleClaimed = false` /
+     * `stardustEarnedThisRun = 0` / `stageReward = null`);四个开局点(自举首局 / 菜单选关 /
+     * 菜单无限关 / `restartRun`)都调它,后者同时是商店重开与转生「开始新轮回」的共用出口。
+     * 名字沿用 GameOver 是因为它就是 Web 那一段的对应物,而 Web 那一段在 `startRun` 里只有一份。
      */
     private resetGameOverTransients(): void {
         this.doubleClaimed = false;
         this.stardustEarnedThisRun = 0;
+        this.victoryInfo = null;
     }
 
     /**
@@ -1860,6 +1890,119 @@ export class GameShell extends Component {
         this.doubleClaimed = true;
         this.sim.persist();
         this.syncGameOver();
+        // 主菜单顶栏的回响读数与转生屏的可支配点数都直接读 points / dayEcho
+        this.refreshMenu();
+    }
+
+    /* ================= 通关结算屏(Phase 5 第二屏) ================= */
+
+    /**
+     * 通关结算屏装配 —— Web `drawVictory`(3746-3849) 与 `handleTap` 的 victory 分支(582-596)
+     * 的三层替换:`game/ui/victoryLayout.ts`(纯几何,cc-free)+ `victory/VictoryModel.ts`
+     * (内容与命中与写入意图,cc-free)+ `victory/VictoryView.ts`(唯一节点层),本文件只接线。
+     * 三条纪律与前十屏同构:
+     *  ① 几何单一出口 = `victoryScreenLayout(DESIGN_W, logicalH(), forms)`,视图内零硬编码;
+     *  ② 模型不重算通关账:星数 / 首通翻倍 / 成长奖励 / 券 / 回响 / 星尘 / 装备掉落 /
+     *     解锁下一关 / 回响结算这九件事全在战斗层 `BattleSim.victory()`(与 Web `victory()`
+     *     同源同数,已对齐并落盘),屏上读的就是它抛出的那一份 payload;
+     *  ③ 模型不碰存档:落 `points` / `dayEcho` / `pointsEarnedThisRun` 与 `persist()` 在本文件
+     *     (`commitVictoryEcho`),宿主只在返回出口前调一次 `sim.settlePendingRun()`。
+     * **进屏判据不在本屏也不在宿主**:Web 是 `victory()` 尾部那句 `state = "victory"`,Cocos 侧
+     * 同位 —— 战斗层算完账后抛 `cb.onVictory(info)`,宿主回调只有一句 `openVictory(info)`,
+     * 所以「什么时候该弹屏」这一条两端同一事实源。
+     * **本屏只有一个广告位**(双倍回响),走 `watchAd` 唯一入口;闸门只有它首行那一道。
+     */
+    private buildVictoryScreen(): void {
+        const node = this.screenLayer.getChildByName("Screen:victory");
+        if (!node) return;
+        node.removeAllChildren();
+        this.victoryView = new VictoryView(node, this.frames, {
+            layout: () => victoryScreenLayout(DESIGN_W, logicalH(), victoryForms(this.victoryRun())),
+            content: (L) => buildVictoryContent(this.victoryRun(), L),
+            onAction: (a) => this.onVictoryAction(a),
+        });
+        this.victoryView.sync();
+    }
+
+    /**
+     * 本屏读数 —— **全部是会话态**,没有一个进 `localStorage`(与 Web 摊在实例上的那九个私有
+     * 字段同性质)。六项冻结自战斗层通关那一刻抛出的 payload;三项按 Web 同位现取:
+     * 关卡行读 `sim.world.currentStage`(Web 的 `this.currentStage`,无尽局为 null 故那一行不出)、
+     * 名次提示读 `sim.rankImprovedTo`、双倍取数读 `sim.pointsEarnedThisRun`。
+     * 世界在 `over` 之后停止推进,所以这一份就是通关那一刻的定格快照。
+     */
+    private victoryRun(): VictoryRunView {
+        const sim = this.sim;
+        const info = this.victoryInfo;
+        const st = sim ? sim.world.currentStage : null;
+        return {
+            stage: st ? { id: st.id, name: st.name } : null,
+            stars: info ? info.stars : 0,
+            reward: info ? { tickets: info.reward.tickets, points: info.reward.points, stardust: info.reward.stardust } : null,
+            drops: info ? info.drops : 0,
+            firstClearBonus: info ? info.firstClearBonus : false,
+            frameUnlocked: info ? info.frameUnlocked : null,
+            rankImprovedTo: sim ? sim.rankImprovedTo : null,
+            pointsEarnedThisRun: sim ? sim.pointsEarnedThisRun : 0,
+            doubleClaimed: this.doubleClaimed,
+        };
+    }
+
+    /**
+     * 进屏:通关那一刻由战斗层回调弹进来。前三行是 Web `victory()` 尾部对会话态的三笔写入
+     * (`stageReward` 摊成 payload、`stardustEarnedThisRun = stardustGain`、`doubleClaimed = false`),
+     * 第四行切屏(切屏即触发路由 refresh → syncVictory)。**本屏是唯一会读到非零本局星尘的屏**
+     * —— 通关与阵亡互斥,死亡屏上那一支因此恒为死分支。
+     */
+    private openVictory(info: VictoryInfo): void {
+        this.victoryInfo = info;
+        this.stardustEarnedThisRun = info.reward.stardust;
+        this.doubleClaimed = false;
+        this.router.show("victory");
+    }
+
+    private syncVictory(): void {
+        this.victoryView?.sync();
+    }
+
+    /**
+     * 热区 → 玩法(对标 Web handleTap 的 victory 分支两支:双倍 → 底部条;除此之外本屏不响应点击)。
+     * 广告闸门只有 `watchAd` 首行那一道,这一层不加 `adPending`;失败分支走 `watchAd` 的 `onFail`。
+     * **返回落点是 `menu`,不是 `battle`**:Web 本屏唯一的非广告出口就是底部条 → `backToMenu()`,
+     * 那里那句 `settlePendingRun()` 在本屏是恒空的守卫(通关路径从不置 `pendingSettle`,
+     * 战斗层 `victory()` 只写 `world.over`),按同位带上,不产生第二笔账。
+     */
+    private onVictoryAction(a: VictoryAction): void {
+        const sim = this.sim;
+        if (!sim) return;
+        if (a.kind === "double") {
+            // Web: watchAd(() => { const echo = pointsEarnedThisRun || stageEchoReward(currentStage?.id ?? 1); ... })
+            const total = victoryEchoTotal(sim.pointsEarnedThisRun, sim.world.currentStage ? sim.world.currentStage.id : null);
+            const claim = victoryEchoClaim(total, this.doubleClaimed);
+            if (!claim) return;
+            this.watchAd(() => this.commitVictoryEcho(claim), () => this.toast("广告未看完,双倍未入账"));
+            return;
+        }
+        // 菜单:Web 的 backToMenu 就是「先结算挂起的那笔,再切主菜单」;通关路径从不置 pendingSettle
+        sim.settlePendingRun();
+        this.router.show("menu");
+    }
+
+    /**
+     * 照着双倍回响的意图落账(壳层是唯一的写入方)。三笔账面与 Web `settleEcho(echo)` 逐字段对应:
+     * `permanent → points`、`day → dayEcho`、`total → pointsEarnedThisRun`,外加把会话态
+     * `doubleClaimed` 置真并落一次盘。与死亡屏那一笔的实质差别:通关账已在战斗层结清且
+     * **没有 `pendingSettle` 会被再结一次**,所以本屏的双倍就是干净的「同一笔再结一次」,
+     * 屏上那三行读数(念的是 payload 里的 `reward`)领取前后纹丝不动,只有钮的配色与文字会动。
+     */
+    private commitVictoryEcho(claim: VictoryEchoClaim): void {
+        const save = this.save();
+        save.points += claim.permanent;
+        save.dayEcho += claim.day;
+        if (this.sim) this.sim.pointsEarnedThisRun = claim.total;
+        this.doubleClaimed = true;
+        this.sim.persist();
+        this.syncVictory();
         // 主菜单顶栏的回响读数与转生屏的可支配点数都直接读 points / dayEcho
         this.refreshMenu();
     }
