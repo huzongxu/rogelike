@@ -144,6 +144,33 @@ export function qualityBox(name: string, parent: Node): { node: Node; draw: (r: 
 /** 卡框暗底(Web drawQualityFrame 的 fillStyle);主题表里没有对应令牌,故在此定一处 */
 export const QUALITY_FRAME_BG = "rgba(0,0,0,0.5)";
 
+/**
+ * 描边环带:`(r.x, r.y, r.w, r.h)` 这一圈的实心形状。语义对标 Canvas2D `strokeRect`
+ * —— **中心线压在矩形边界上**、带宽由调用方给、颜色不参与额外混合(Web 侧依据见
+ * `src/game.ts:1221`/`1374`/`1469` 的 `lineWidth` + `strokeRect` 同一矩形两件套),
+ * 于是被涂到的像素集 = 外扩半带宽的 OUTER 减去内缩半带宽的 INNER。
+ *
+ * 为什么不走 `Graphics.stroke()`:本构建包实测该出口的成图带宽恒为 `lineWidth - 1.5`
+ * —— 1px 描边四边覆盖率峰值 0.00(一个像素都没有)、2px 峰值 0.50(只到一半强度)、
+ * 4/8/16px 分别 2.5/6.5/14.5 行,五档同一条直线。顶点是生成了(同矩形重描后
+ * vertexStart 4→14、indexStart 6→30,带宽与位置都对),丢在成图那一步,不是路径被吃掉。
+ * 改成真形状填充后由 UI 材质的 MSAA 负责覆盖率:奇数带宽正好摊在两行各半(峰值 0.50)、
+ * 偶数带宽铺满两行(峰值 1.00),与 Web 逐像素剖面同分布。
+ *
+ * 上下两条走整宽(含两角),左右两条只占上下边之间:四条拼成环带、互不重叠,
+ * 免得半透明描边色在角上被混两遍。
+ */
+function strokeRing(g: Graphics, w: number, h: number, lw: number): void {
+  const hw = w / 2, hh = h / 2, hf = lw / 2;
+  g.rect(-hw - hf, hh - hf, w + lw, lw);
+  g.rect(-hw - hf, -hh - hf, w + lw, lw);
+  if (h > lw) {
+    g.rect(-hw - hf, -hh + hf, lw, h - lw);
+    g.rect(hw - hf, -hh + hf, lw, h - lw);
+  }
+  g.fill();
+}
+
 /** 纯色 + 描边的平面块(禁态按钮 / 分区条缺图回退;对标 Web 的 fillRect + strokeRect) */
 export function flatBox(name: string, parent: Node): { node: Node; draw: (r: Rect, fill: string, stroke?: string, strokeWidth?: number) => void } {
   const node = makeNode(name, parent);
@@ -154,10 +181,8 @@ export function flatBox(name: string, parent: Node): { node: Node; draw: (r: Rec
     g.rect(-r.w / 2, -r.h / 2, r.w, r.h);
     g.fill();
     if (stroke) {
-      g.lineWidth = strokeWidth;
-      g.strokeColor = hexToColor(stroke);
-      g.rect(-r.w / 2, -r.h / 2, r.w, r.h);
-      g.stroke();
+      g.fillColor = hexToColor(stroke);
+      strokeRing(g, r.w, r.h, strokeWidth);
     }
     placeRect(node, r);
   };
