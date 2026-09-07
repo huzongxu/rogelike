@@ -1,0 +1,41 @@
+{
+  "$comment": "商店屏(第三屏)批次出图规格。五档品质卡框来自一行五格的卡板雪碧图,bg_shop 为整幅背景。module=2 逻辑 px / art px;走九宫格的卡框按 export=2 把 art 网格烘进 PNG,viewTable.nineSlice.keys 里写 frame_<品质> = slice × module = 16。rects 逐格钉框:生成器把相邻两画的 13px 外描边画成共用一条(描边带落在 x=29/322/615/907/1201/1495),均匀 grid 无论怎么取 pitch 都会让某几格丢掉一条描边,故按实测格线逐格给框,每格含自己左右两条完整描边;cropBBox=false 让五格共用同一参照框,免得圆角造成的逐格 bbox 漂移把框切歪。slice=8 是「容纳既有五行卡内文本」的下限口径:卡最短 160 逻辑 px,切边带每侧 24 会把内缩区压到放不下(实测算过 127 的行带),故取 16;再大就要动商店信息架构。本张源图底色是生成器实出的米白 (243,251,251) 而非约定品红,抠底色按管线既有逃生口 keyout.color 显式声明,判据仍是「约定色 + 四角实测色」。水印压在整幅右下角(y 982..1024),已在格框之外,故 wm=false 关掉格内镜像修补,免得抹掉卡框底边。量化落点走 quant.distance=「lab」(近似 CIELAB),调色板沿用 33 色深渊蓝黑基表原样:本批五档顶带的源色是一圈淡黄绿渐变,基表里骨白/灰蓝那几档与它亮度几乎齐平,而纯 RGB 加权距离只量「差多少」不量「往哪差」,Lab 把明度与红绿轴、黄蓝轴分开计距离,于是五档顶带逐档落定为骨白 #c8cdd6 / 蓝 #4aa3ff / 紫 #c8b6ff / 橙 #d9a63c / 虹绿 #4dffc8。",
+  "module": 2,
+  "quant": { "distance": "lab" },
+  "export": 1,
+  "keyout": { "color": "#f3f9f9", "tolerance": 120, "erode": 2, "keyTolerance": 60 },
+  "palette": [
+    "#05070c", "#0b0e14", "#121826", "#1a2233", "#232e44",
+    "#2a3548", "#38465e", "#4a5a76", "#62738f", "#8391a8",
+    "#a9b4c4", "#c8cdd6", "#e8ecf4",
+    "#0e3b36", "#17624f", "#2e9e7f", "#4dffc8",
+    "#2b1f47", "#4b3a7a", "#8a6fd1", "#c8b6ff",
+    "#4a3410", "#8a6220", "#d9a63c", "#ffd76a",
+    "#3a1218", "#7a1f2a", "#c0374a", "#ff5a6e",
+    "#10294a", "#1f4e8a", "#2f7fd1", "#4aa3ff"
+  ],
+  "sheets": [
+    {
+      "src": "vibe_images/px_sheet_quality.png",
+      "grid": { "cols": 5, "rows": 1 },
+      "wm": false,
+      "rects": [
+        [29, 281, 335, 743],
+        [322, 281, 628, 743],
+        [615, 281, 920, 743],
+        [907, 281, 1214, 743],
+        [1201, 281, 1507, 743]
+      ],
+      "cells": [
+        { "key": "frame_common", "artH": 104, "slice": 8, "fit": "stretch", "export": 2, "cropBBox": false },
+        { "key": "frame_rare", "artH": 104, "slice": 8, "fit": "stretch", "export": 2, "cropBBox": false },
+        { "key": "frame_epic", "artH": 104, "slice": 8, "fit": "stretch", "export": 2, "cropBBox": false },
+        { "key": "frame_legendary", "artH": 104, "slice": 8, "fit": "stretch", "export": 2, "cropBBox": false },
+        { "key": "frame_hidden", "artH": 104, "slice": 8, "fit": "stretch", "export": 2, "cropBBox": false }
+      ]
+    }
+  ],
+  "singles": [
+    { "key": "bg_shop", "src": "vibe_images/px_bg_shop.png", "art": [560, 996], "fit": "cover", "keyout": false, "cropBBox": false }
+  ]
+}

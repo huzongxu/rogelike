@@ -1,0 +1,88 @@
+{
+  "$comment": "像素暗黑翻新出图规格。module=1 art px 对应的逻辑 px;export=导出倍率(1 表示按 art 网格 1:1 落盘,交给 GPU 最近邻放大)。fit=stretch 的面板走九宫格,slice 为 art px 边距。keys 表示同一份美术复用到多个清单 key。走九宫格的 key 单独 export=2:Cocos 的 SLICED 组装器按『inset 贴图 px = inset 设计 px』画切边带且只缩不放,GPU 放大只作用于拉伸带,所以这些格必须把 art 网格烘焙进 PNG,viewTable.nineSlice.keys 里写的边距 = slice × module。",
+  "module": 2,
+  "export": 1,
+  "keyout": { "tolerance": 120, "erode": 2 },
+  "palette": [
+    "#05070c", "#0b0e14", "#121826", "#1a2233", "#232e44",
+    "#2a3548", "#38465e", "#4a5a76", "#62738f", "#8391a8",
+    "#a9b4c4", "#c8cdd6", "#e8ecf4",
+    "#0e3b36", "#17624f", "#2e9e7f", "#4dffc8",
+    "#2b1f47", "#4b3a7a", "#8a6fd1", "#c8b6ff",
+    "#4a3410", "#8a6220", "#d9a63c", "#ffd76a",
+    "#3a1218", "#7a1f2a", "#c0374a", "#ff5a6e",
+    "#10294a", "#1f4e8a", "#2f7fd1", "#4aa3ff"
+  ],
+  "sheets": [
+    {
+      "src": "vibe_images/px_sheet_entry.png",
+      "grid": { "cols": 3, "rows": 2 },
+      "inset": 0.04,
+      "cells": [
+        { "key": "entry_forge", "art": [16, 16] },
+        { "key": "entry_gacha", "art": [16, 16] },
+        { "key": "entry_gearup", "art": [16, 16] },
+        { "key": "entry_pass", "art": [16, 16] },
+        { "key": "entry_quests", "art": [16, 16] },
+        { "key": "entry_talents", "art": [16, 16] }
+      ]
+    },
+    {
+      "src": "vibe_images/px_sheet_chrome.png",
+      "grid": { "cols": 2, "rows": 2 },
+      "inset": 0.02,
+      "cells": [
+        {
+          "key": "menu_row_plate",
+          "keys": ["menu_note_plate", "menu_strip_plate", "menu_chip_plate", "menu_section_strip", "menu_set_plate"],
+          "artH": 24,
+          "slice": 8,
+          "export": 2,
+          "fit": "stretch"
+        },
+        { "key": "menu_set_plate_selected", "keys": ["menu_title_plate"], "artH": 24, "slice": 8, "export": 2, "fit": "stretch" },
+        { "key": "btn_primary", "artH": 28, "slice": 10, "export": 2, "fit": "stretch" },
+        { "key": "btn_minor", "artH": 20, "slice": 8, "export": 2, "fit": "stretch" }
+      ]
+    },
+    {
+      "src": "vibe_images/px_sheet_currency.png",
+      "grid": { "cols": 2, "rows": 2 },
+      "inset": 0.06,
+      "cells": [
+        { "key": "icon_gold", "art": [14, 14] },
+        { "key": "icon_echo", "art": [14, 14] },
+        { "key": "icon_stardust", "art": [14, 14] },
+        { "key": "icon_ticket", "art": [14, 14] }
+      ]
+    },
+    {
+      "src": "vibe_images/px_sheet_digits.png",
+      "grid": { "cols": 4, "rows": 4 },
+      "inset": 0.06,
+      "keyGlobal": true,
+      "cells": [
+        { "key": "pxnum_0", "art": [8, 10] },
+        { "key": "pxnum_1", "art": [8, 10] },
+        { "key": "pxnum_2", "art": [8, 10] },
+        { "key": "pxnum_3", "art": [8, 10] },
+        { "key": "pxnum_4", "art": [8, 10] },
+        { "key": "pxnum_5", "art": [8, 10] },
+        { "key": "pxnum_6", "art": [8, 10] },
+        { "key": "pxnum_7", "art": [8, 10] },
+        { "key": "pxnum_8", "art": [8, 10] },
+        { "key": "pxnum_9", "art": [8, 10] },
+        { "key": "pxnum_dot", "art": [8, 10] },
+        { "key": "pxnum_comma", "art": [8, 10] },
+        { "key": "pxnum_plus", "art": [8, 10] },
+        { "key": "pxnum_times", "art": [8, 10] },
+        { "key": "pxnum_pct", "art": [8, 10] },
+        { "key": "pxnum_slash", "art": [8, 10] }
+      ]
+    }
+  ],
+  "singles": [
+    { "key": "bg_menu", "src": "vibe_images/px_bg_menu.png", "art": [560, 996], "fit": "cover", "keyout": false, "cropBBox": false },
+    { "key": "crest_echo", "keys": ["crest"], "src": "vibe_images/px_crest_echo.png", "art": [20, 20] }
+  ]
+}

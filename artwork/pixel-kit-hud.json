@@ -1,0 +1,41 @@
+{
+  "$comment": "战斗 HUD 批次出图规格。module=2 逻辑 px / art px;export 默认 1,走九宫格的 4 格覆写 export=2(切边带必须把 art 网格烘进 PNG,见 docs/UI-PIXEL-REFRESH.md §1)。",
+  "module": 2,
+  "export": 1,
+  "keyout": { "tolerance": 96, "erode": 2 },
+  "palette": [
+    "#05070c", "#0b0e14", "#121826", "#1a2233", "#232e44",
+    "#2a3548", "#38465e", "#4a5a76", "#62738f", "#8391a8",
+    "#a9b4c4", "#c8cdd6", "#e8ecf4",
+    "#0e3b36", "#17624f", "#2e9e7f", "#4dffc8",
+    "#2b1f47", "#4b3a7a", "#8a6fd1", "#c8b6ff",
+    "#4a3410", "#8a6220", "#d9a63c", "#ffd76a",
+    "#3a1218", "#7a1f2a", "#c0374a", "#ff5a6e",
+    "#10294a", "#1f4e8a", "#2f7fd1", "#4aa3ff"
+  ],
+  "sheets": [
+    {
+      "src": "vibe_images/px_sheet_hud2.png",
+      "grid": { "cols": 2, "rows": 2 },
+      "inset": 0.02,
+      "cells": [
+        { "key": "hud_dock_top", "artH": 12, "slice": 4, "fit": "stretch", "export": 2, "flatCenter": true },
+        { "key": "hud_dock_bottom", "artH": 12, "slice": 4, "fit": "stretch", "export": 2, "flatCenter": true },
+        { "key": "slot_skill", "art": [24, 24], "slice": 6, "fit": "stretch", "export": 2 },
+        { "key": "bar_capsule", "artH": 10, "slice": 4, "fit": "stretch", "export": 2, "flatCenter": true }
+      ]
+    },
+    {
+      "src": "vibe_images/px_sheet_joystick2.png",
+      "grid": { "cols": 2, "rows": 1 },
+      "inset": 0.02,
+      "cells": [
+        { "key": "joy_base", "art": [32, 32] },
+        { "key": "joy_knob", "art": [16, 16] }
+      ]
+    }
+  ],
+  "singles": [
+    { "key": "bg_stage_1", "src": "vibe_images/px_bg_stage_1.png", "art": [560, 996], "fit": "cover", "keyout": false, "cropBBox": false }
+  ]
+}
