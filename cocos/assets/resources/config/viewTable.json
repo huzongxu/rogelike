@@ -25,7 +25,8 @@
             "frame_epic": 16,
             "frame_legendary": 16,
             "frame_hidden": 16,
-            "panel_dark_corners": 32
+            "panel_dark_corners": 32,
+            "banner_mid_navy": 12
         }
     },
     "battle": {

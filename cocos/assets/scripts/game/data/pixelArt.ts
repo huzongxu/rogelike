@@ -2,7 +2,8 @@
  * 像素贴图清单 —— 纯数据,不含渲染调用。
  *
  * 事实源 = `artwork/pixel-kit*.json`(主菜单 `pixel-kit.json` / 战斗 `pixel-kit-hud.json` /
- * 商店 `pixel-kit-shop.json` / 三屏 `pixel-kit-batch3.json` 四份出图规格)。
+ * 商店 `pixel-kit-shop.json` / 三屏 `pixel-kit-batch3.json` / 每日与委托 `pixel-kit-batch5.json`
+ * 五份出图规格)。
  * 这里只回答一个问题:「哪些资产键的值是像素艺术,必须最近邻采样」。
  *
  * 分工:本文件被共享层与 Cocos 两侧同时读到,`setFilters()` 只发生在
@@ -34,6 +35,9 @@ const NINE_SLICE_KEYS: readonly string[] = [
   /* 三屏批(artwork/pixel-kit-batch3.json):本批唯一走 Plate 的 slice 档的键,
      扭蛋 / 装备升级 / 通行证的面板底都落在这张上(export=2 已把 art 网格烘进 PNG) */
   "panel_dark_corners",
+  /* 五批(artwork/pixel-kit-batch5.json):confirm 的标题横幅,Web 走 drawNine(切深 13),
+     本批按 art 边 6 + export=2 出图,viewTable.nineSlice.keys 记 12(= 6 × module) */
+  "banner_mid_navy",
 ];
 
 /** 主菜单入口图标 */
@@ -116,6 +120,25 @@ const BATCH3_STRETCH_KEYS: readonly string[] = [
   "mark_check_green",
 ];
 
+/**
+ * 五批(artwork/pixel-kit-batch5.json)的整图拉伸件:每日 / 委托两屏的标题横幅与进度条、
+ * 羊皮纸面板与页签整条,以及后续屏的横幅件,单个四边形拉满绘制矩形,永不切边;
+ * `module=2` → 屏上 2 倍最近邻。羊皮纸面板在 commission 走 Plate 的 stretch 档。
+ */
+const BATCH5_STRETCH_KEYS: readonly string[] = [
+  "banner_title_gold_c",
+  "banner_title_iron",
+  "banner_purple_cosmic",
+  "banner_mid_blue",
+  "banner_mid_bronze",
+  "banner_mid_black",
+  "banner_large_navy_a",
+  "banner_large_red",
+  "bar_progress_teal",
+  "tabs_talent_three",
+  "panel_parchment",
+];
+
 /** 本批全部像素 key(去重后的稳定顺序) */
 export const PIXEL_ART_KEYS: readonly string[] = [
   ...NINE_SLICE_KEYS,
@@ -126,6 +149,7 @@ export const PIXEL_ART_KEYS: readonly string[] = [
   ...BACKDROP_KEYS,
   ...HUD_KEYS,
   ...BATCH3_STRETCH_KEYS,
+  ...BATCH5_STRETCH_KEYS,
 ];
 
 const PIXEL_ART_SET = new Set<string>(PIXEL_ART_KEYS);
