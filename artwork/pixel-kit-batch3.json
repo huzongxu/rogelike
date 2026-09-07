@@ -1,0 +1,242 @@
+{
+ "$comment": "第三批(扭蛋 gacha / 装备升级 gearup / 通行证 pass)换皮出图规格。module=2(1 art px = 2 逻辑 px)、export=1(整图拉伸件贴图像素 = art 像素,屏上按 2 倍最近邻放大,边缘保持硬)。四张源图分两类:①贴边件(banner / bar / panel)按实测内容带钉 rects,走 fit=stretch + cropBBox=false + fillBox=true,让整带铺满 art 盒,格间的漂移品红留白不进盒。fillBox 是本批给管线加的显式档:拉伸件的长宽比与屏上绘制矩形本就不同,沿用等比档的居中留边会凭空多出一段透明边、把另一侧内容挤出盒外;既有三批不开这一档,重跑逐字节不变。②smallbits 走默认 contain + alpha bbox 裁剪,四格内容居中留空。rects 取自 .probe/probe-batch3-bands.mjs 的行带实测(非底色连续段 + 该段横向跨度):banners 两条横幅在 y 0..480 与 525..1024(中间是分隔品红条,均匀 1x2 网格会在 512 处连横幅底缘一起切掉),bars 三条胶囊条在 0..338 / 385..681 / 729..1024,panel 整幅面板实测 (7,9)-(1018,768)。art 盒逐件按「该键在屏上的绘制矩形 ÷ module」钉死,与共享层布局同源:gacha 横幅 240x46 → 120x23(GC_BANNER_W/H)、pass 横幅 220x42 → 110x21(PS_HEADER_W/H)、gacha 保底条 402x6 → 201x3(barW = rowW − (pad + GC_PITY_BAR_DX))、pass 节点轨与进度条 528x10 → 264x5(PS_NODE_TRACK_H / PS_PROGRESS_H)、返回钮图标 22x22 → 11x11(ui.backH − 12,Web skinIconButton 的 ih = h − 12)、装备等级徽记 12x12 → 6x6(GU_STAR_BOX)、高级轨旗徽 11x14 → 6x7(PS_PREM_BADGE_W/H)、已领取对勾 13x13 → 7x7(PS_CHECK_BOX)。长宽比提示口径:横幅两格 3.20 / 3.08 对 art 盒 5.22 / 5.24,差 39% / 41% 在 45% 阈内;胶囊条是「铺满的横条压进细长绘制矩形」,纵向压缩正是本件要的语义(横向只 2 倍放大,刻度与节点细节保住),故按 art 盒优先、留这三条提示。抠底:约定色取 panel 源图实出的米白 #fefefd(该图生成器出的是白底),小徽章格底色是漂移品红 (190,30,119),距约定色 271 超容差,由管线既有判据(四角实测色属品红族就改用它)自动接管;横幅与胶囊条的格边是自身深色描边,洪水播种天然不启动,贴边板保持完整。水印:生成器把署名压在整幅右下角,只有落在内容带内的三格需要处理 —— banners 下格给紧框 [0.703,0.872,0.297,0.128](署名实测 y 960..1012,横幅下缘骨白绳带在 932..950,镜像行落在绳带之下的暗底带),bars 下格给 [0.69,0.68,0.31,0.21](署名 y 936..985 压在第三条节点轨下方的平涂腔体上,镜像行 929 是腔体本色),panel 给 [0.717,0.926,0.285,0.074](署名 y 712..768,镜像行 711);上格横幅与上两条胶囊条的署名区在内容带之外,直接 wm=false 保住绳带与条体;smallbits 四格内容离署名区最远,整张表 wm=false。九宫格只有 panel_dark_corners 一件:它是本批唯一走 Plate 的 slice 档的键(Web game.ts:1205 的 panelPad 那笔就是 drawNine(..., 32)),故 slice=16 + export=2 把 art 网格烘进 PNG、1 贴图像素 = 1 逻辑 px,viewTable.nineSlice.keys 写 panel_dark_corners = slice × module = 32,与 GC_PANEL_NINE / GU_PANEL_NINE 同档;其余 banner / bar / 徽章 / 对勾两端都是整图拉伸(Web assets.draw / skinBar / skinHeader 一路),不入 nineSlice 表。palette 沿用 33 色深渊蓝黑基表,量化落点走默认 RGB 加权距离,与骨白绳带 / 紫绸 / 金绸 / 蓝紫胶囊 / 虹绿对勾的既有批次口径一致。",
+ "module": 2,
+ "export": 1,
+ "keyout": {
+  "color": "#fefefd",
+  "tolerance": 96,
+  "erode": 2,
+  "keyTolerance": 60
+ },
+ "palette": [
+  "#05070c",
+  "#0b0e14",
+  "#121826",
+  "#1a2233",
+  "#232e44",
+  "#2a3548",
+  "#38465e",
+  "#4a5a76",
+  "#62738f",
+  "#8391a8",
+  "#a9b4c4",
+  "#c8cdd6",
+  "#e8ecf4",
+  "#0e3b36",
+  "#17624f",
+  "#2e9e7f",
+  "#4dffc8",
+  "#2b1f47",
+  "#4b3a7a",
+  "#8a6fd1",
+  "#c8b6ff",
+  "#4a3410",
+  "#8a6220",
+  "#d9a63c",
+  "#ffd76a",
+  "#3a1218",
+  "#7a1f2a",
+  "#c0374a",
+  "#ff5a6e",
+  "#10294a",
+  "#1f4e8a",
+  "#2f7fd1",
+  "#4aa3ff"
+ ],
+ "sheets": [
+  {
+   "src": "vibe_images/px_sheet_banners.png",
+   "grid": {
+    "cols": 1,
+    "rows": 2
+   },
+   "rects": [
+    [
+     0,
+     0,
+     1536,
+     480
+    ],
+    [
+     0,
+     525,
+     1536,
+     1024
+    ]
+   ],
+   "cells": [
+    {
+     "key": "banner_large_purple",
+     "art": [
+      120,
+      23
+     ],
+     "fit": "stretch",
+     "fillBox": true,
+     "cropBBox": false,
+     "wm": false
+    },
+    {
+     "key": "banner_title_gold_b",
+     "art": [
+      110,
+      21
+     ],
+     "fit": "stretch",
+     "fillBox": true,
+     "cropBBox": false,
+     "wm": [
+      0.703,
+      0.872,
+      0.297,
+      0.128
+     ]
+    }
+   ]
+  },
+  {
+   "src": "vibe_images/px_sheet_bars.png",
+   "grid": {
+    "cols": 1,
+    "rows": 3
+   },
+   "rects": [
+    [
+     0,
+     0,
+     1536,
+     338
+    ],
+    [
+     0,
+     385,
+     1536,
+     681
+    ],
+    [
+     0,
+     729,
+     1536,
+     1024
+    ]
+   ],
+   "cells": [
+    {
+     "key": "bar_progress_blue_b",
+     "art": [
+      201,
+      3
+     ],
+     "fit": "stretch",
+     "fillBox": true,
+     "cropBBox": false,
+     "wm": false
+    },
+    {
+     "key": "bar_progress_purple",
+     "art": [
+      264,
+      5
+     ],
+     "fit": "stretch",
+     "fillBox": true,
+     "cropBBox": false,
+     "wm": false
+    },
+    {
+     "key": "bar_pass_nodes",
+     "art": [
+      264,
+      5
+     ],
+     "fit": "stretch",
+     "fillBox": true,
+     "cropBBox": false,
+     "wm": [
+      0.69,
+      0.68,
+      0.31,
+      0.21
+     ]
+    }
+   ]
+  },
+  {
+   "src": "vibe_images/px_sheet_smallbits.png",
+   "grid": {
+    "cols": 2,
+    "rows": 2
+   },
+   "wm": false,
+   "cells": [
+    {
+     "key": "btn_back",
+     "art": [
+      11,
+      11
+     ]
+    },
+    {
+     "key": "badge_gear_lv",
+     "art": [
+      6,
+      6
+     ]
+    },
+    {
+     "key": "badge_pennant_purple",
+     "art": [
+      6,
+      7
+     ]
+    },
+    {
+     "key": "mark_check_green",
+     "art": [
+      7,
+      7
+     ]
+    }
+   ]
+  },
+  {
+   "src": "vibe_images/px_panel_dark_corners.png",
+   "grid": {
+    "cols": 1,
+    "rows": 1
+   },
+   "rects": [
+    [
+     7,
+     9,
+     1018,
+     768
+    ]
+   ],
+   "cells": [
+    {
+     "key": "panel_dark_corners",
+     "art": [
+      64,
+      48
+     ],
+     "slice": 16,
+     "export": 2,
+     "fit": "stretch",
+     "fillBox": true,
+     "cropBBox": false,
+     "wm": [
+      0.717,
+      0.926,
+      0.285,
+      0.074
+     ],
+     "flatCenter": true
+    }
+   ]
+  }
+ ],
+ "quant": {
+  "distance": "lab"
+ }
+}
