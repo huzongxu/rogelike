@@ -1,25 +1,35 @@
 /**
- * 章间商店纯布局测试(重设计):
- * 固定几何——内容不越顶信息条(≥64)、进化区底缘恒 942(贴底坞 948)、
- * 相邻区块零重叠、行高钳制、横向 ⊂[14,546]、常量与战斗双坞一致、与屏高无关。
- * 网格:武器 0..8 × 进化 0..4 全组合(含第 8 件可见化修复)。
+ * 章间商店纯布局测试(像素翻新重排版):
+ * 顶带恒 0..64,底坞与全部内容带贴本帧屏高,内容底缘恒 = 屏高 − 底坞高 − 6(富余由行高 /
+ * 带距 / 卡高吃干,武器行带与进化条之间不再堆空洞)。
+ * 不变量:相邻零重叠、越界 0、坐标取偶、热区 ≥44、横向 ⊂[16,544]、行数 clamp、随屏高单调生长。
+ * 网格:武器 0..8 × 进化 0..4 × 屏高 {996,1212,1246} 全组合。
  */
 
 import { describe, it, expect } from "vitest";
-import { shopLayoutPure, SHOP_TOP, SHOP_BOTTOM, SHOP_ROW_BOTTOM, SHOP_PAD } from "@game/ui/shop";
-import { HUD_TOP_H, HUD_BOT_H } from "@game/ui/hud";
+import { shopLayoutPure, SHOP_TOP, SHOP_BOTTOM, SHOP_ROW_BOTTOM, SHOP_PAD, SHOP_CALIBRATION_H, SHOP_FOOT, type ShopLayoutPure } from "@game/ui/shop";
+import { HUD_BOT_H, HUD_TOP_H } from "@game/ui/hud";
 
-/** 区块包络(顶缘/底缘),用于相邻零重叠断言 */
-function blocks(L: ReturnType<typeof shopLayoutPure>): { name: string; y0: number; y1: number }[] {
+const HEIGHTS = [996, 1212, SHOP_CALIBRATION_H + 250];
+/** 底坞高:底坞顶缘 = 屏高 − 它 */
+const DOCK_H = HUD_BOT_H;
+
+/** 区块包络(顶缘/底缘),用于相邻零重叠与空洞度量 */
+function blocks(L: ShopLayoutPure): { name: string; y0: number; y1: number }[] {
   const out: { name: string; y0: number; y1: number }[] = [];
-  out.push({ name: "toolRow", y0: 72, y1: 108 });
-  out.push({ name: "cards", y0: 116, y1: 116 + L.cardH });
+  out.push({ name: "toolRow", y0: L.toolBtns[0].y, y1: L.toolBtns[0].y + L.toolBtns[0].h });
+  out.push({ name: "cards", y0: L.cards[0].y, y1: L.cards[0].y + L.cardH });
   out.push({ name: "slotBtn", y0: L.slotBtn.y, y1: L.slotBtn.y + L.slotBtn.h });
-  out.push({ name: "weaponHeader", y0: L.weaponLabelY, y1: L.weaponLabelY + 26 });
+  out.push({ name: "weaponHeader", y0: L.weaponLabelY, y1: L.weaponLabelY + L.headerH });
   L.weaponRows.forEach((r, i) => out.push({ name: `weaponRow${i}`, y0: r.y, y1: r.y + r.h }));
-  out.push({ name: "mergeHeader", y0: L.mergeLabelY, y1: L.mergeLabelY + 26 });
+  out.push({ name: "mergeHeader", y0: L.mergeLabelY, y1: L.mergeLabelY + L.headerH });
   L.merges.forEach((r, i) => out.push({ name: `mergeRow${i}`, y0: r.y, y1: r.y + r.h }));
   return out.sort((a, b) => a.y0 - b.y0);
+}
+
+/** 本布局产出的全部矩形 */
+function rects(L: ShopLayoutPure) {
+  return [...L.toolBtns, ...L.cards, L.slotBtn, ...L.weaponRows, ...L.destroyRects, ...L.merges, L.nextBtn];
 }
 
 describe("商店几何常量(与战斗双坞同源)", () => {
@@ -27,80 +37,95 @@ describe("商店几何常量(与战斗双坞同源)", () => {
     expect(SHOP_TOP).toBe(64);
     expect(SHOP_TOP).toBe(HUD_TOP_H);
   });
-  it("底操作条顶缘 = 996 − 战斗底坞高 = 948", () => {
+  it("标定档:底操作条顶缘 = 996 − 战斗底坞高 = 948,内容末行底缘 942", () => {
     expect(SHOP_BOTTOM).toBe(948);
     expect(SHOP_BOTTOM).toBe(996 - HUD_BOT_H);
-  });
-  it("内容末行底缘 942(贴底坞留 6px 呼吸缝)", () => {
+    expect(SHOP_ROW_BOTTOM).toBe(SHOP_BOTTOM - SHOP_FOOT);
     expect(SHOP_ROW_BOTTOM).toBe(942);
-    expect(SHOP_PAD).toBe(14);
+  });
+  it("页边距 16 / 内容宽 528:右缘落 544", () => {
+    expect(SHOP_PAD).toBe(16);
+    const L = shopLayoutPure(1, 1);
+    expect(L.slotBtn.w).toBe(528);
+    expect(L.slotBtn.x + L.slotBtn.w).toBe(544);
   });
 });
 
-describe("商店布局网格(武器 0..8 × 进化 0..4)", () => {
-  for (let nw = 0; nw <= 8; nw++) {
-    for (let nm = 0; nm <= 4; nm++) {
-      const L = shopLayoutPure(nw, nm);
+describe("商店布局网格(武器 0..8 × 进化 0..4 × 三档屏高)", () => {
+  for (const h of HEIGHTS) {
+    for (let nw = 0; nw <= 8; nw++) {
+      for (let nm = 0; nm <= 4; nm++) {
+        const L = shopLayoutPure(nw, nm, h);
+        const tag = `h=${h} weapons=${nw} merges=${nm}`;
 
-      it(`weapons=${nw} merges=${nm}:首块顶缘 ≥64,内容不越顶信息条`, () => {
-        for (const b of blocks(L)) {
-          expect(b.y0).toBeGreaterThanOrEqual(64);
-        }
-        expect(L.toolBtns[0].y).toBe(72);
-      });
+        it(`${tag}:首块顶缘 ≥64,内容不越顶信息条`, () => {
+          for (const b of blocks(L)) expect(b.y0, `${tag} ${b.name}`).toBeGreaterThanOrEqual(SHOP_TOP);
+          expect(L.toolBtns[0].y, tag).toBeGreaterThanOrEqual(SHOP_TOP + 6);
+          for (const b of L.toolBtns) expect(b.y, `${tag} 工具钮同一行`).toBe(L.toolBtns[0].y);
+        });
 
-      it(`weapons=${nw} merges=${nm}:进化区底缘恒 942(贴底坞)`, () => {
-        const last = L.merges[L.merges.length - 1];
-        expect(last.y + last.h).toBe(942);
-      });
+        it(`${tag}:进化区底缘贴底坞(屏高富余被内容吃干,只剩呼吸缝)`, () => {
+          const last = L.merges[L.merges.length - 1];
+          expect(L.contentBottom, tag).toBe(h - DOCK_H - SHOP_FOOT);
+          expect(last.y + last.h, tag).toBeLessThanOrEqual(L.contentBottom);
+          // 呼吸缝必须不足一行高 —— 再留一行放得下就是没把富余吃干
+          expect(L.contentBottom - (last.y + last.h), tag).toBeLessThan(L.mergeRowH);
+        });
 
-      it(`weapons=${nw} merges=${nm}:nextBtn 恒 (266,950,280,44) ⊂ 底坞 948..996`, () => {
-        expect(L.nextBtn).toEqual({ x: 266, y: 950, w: 280, h: 44 });
-        expect(L.nextBtn.y).toBeGreaterThanOrEqual(SHOP_BOTTOM);
-        expect(L.nextBtn.y + L.nextBtn.h).toBeLessThanOrEqual(996);
-      });
+        it(`${tag}:nextBtn 贴本帧底坞,逐位 (264, 坞顶+2, 280, 44)`, () => {
+          expect(L.nextBtn, tag).toEqual({ x: 264, y: h - DOCK_H + 2, w: 280, h: 44 });
+        });
 
-      it(`weapons=${nw} merges=${nm}:相邻区块零重叠`, () => {
-        const bs = blocks(L);
-        for (let i = 1; i < bs.length; i++) {
-          expect(bs[i].y0, `${bs[i - 1].name} → ${bs[i].name}`).toBeGreaterThanOrEqual(bs[i - 1].y1);
-        }
-      });
+        it(`${tag}:相邻区块零重叠`, () => {
+          const bs = blocks(L);
+          for (let i = 1; i < bs.length; i++) expect(bs[i].y0, `${tag} ${bs[i - 1].name} → ${bs[i].name}`).toBeGreaterThanOrEqual(bs[i - 1].y1);
+        });
 
-      it(`weapons=${nw} merges=${nm}:行高钳制 + 横向 ⊂[14,546]`, () => {
-        for (const r of L.weaponRows) {
-          expect(r.h).toBeGreaterThanOrEqual(32);
-          expect(r.h).toBeLessThanOrEqual(56);
-        }
-        for (const r of L.merges) {
-          expect(r.h).toBeGreaterThanOrEqual(32);
-          expect(r.h).toBeLessThanOrEqual(56);
-        }
-        const all = [
-          ...L.toolBtns,
-          ...L.cards,
-          L.slotBtn,
-          ...L.weaponRows,
-          ...L.destroyRects,
-          ...L.merges,
-        ];
-        for (const r of all) {
-          expect(r.x).toBeGreaterThanOrEqual(14);
-          expect(r.x + r.w).toBeLessThanOrEqual(546);
-        }
-      });
+        it(`${tag}:带距有度 —— 武器行带与进化条之间的空洞不超过实测包络 60`, () => {
+          const lastW = L.weaponRows[L.weaponRows.length - 1];
+          expect(L.mergeLabelY - (lastW.y + lastW.h), tag).toBeLessThanOrEqual(60);
+        });
 
-      it(`weapons=${nw} merges=${nm}:销毁钮含于所在武器行`, () => {
-        L.weaponRows.forEach((r, i) => {
-          const d = L.destroyRects[i];
-          for (const b of [d]) {
-            expect(b.x).toBeGreaterThanOrEqual(r.x);
-            expect(b.x + b.w).toBeLessThanOrEqual(r.x + r.w);
-            expect(b.y).toBeGreaterThanOrEqual(r.y);
-            expect(b.y + b.h).toBeLessThanOrEqual(r.y + r.h);
+        it(`${tag}:热区下限 44 与行高区间(带内等高)`, () => {
+          for (const b of L.toolBtns) expect(b.h, tag).toBeGreaterThanOrEqual(44);
+          expect(L.slotBtn.h, tag).toBeGreaterThanOrEqual(44);
+          for (const r of L.weaponRows) {
+            expect(r.h, `${tag} 武器行等高`).toBe(L.weaponRowH);
+            expect(r.h, tag).toBeGreaterThanOrEqual(40);
+            expect(r.h, tag).toBeLessThanOrEqual(172);
+          }
+          for (const r of L.merges) {
+            expect(r.h, `${tag} 进化行等高`).toBe(L.mergeRowH);
+            expect(r.h, tag).toBeGreaterThanOrEqual(36);
+            expect(r.h, tag).toBeLessThanOrEqual(172);
+          }
+          expect(L.cardH, tag).toBeGreaterThanOrEqual(160);
+        });
+
+        it(`${tag}:越界 0 / 横向 ⊂[16,544] / 坐标取偶`, () => {
+          for (const r of rects(L)) {
+            expect(r.x, `${tag} x`).toBeGreaterThanOrEqual(0);
+            expect(r.x + r.w, `${tag} 右`).toBeLessThanOrEqual(560);
+            expect(r.y, `${tag} 上`).toBeGreaterThanOrEqual(0);
+            expect(r.y + r.h, `${tag} 下`).toBeLessThanOrEqual(h);
+            for (const v of [r.x, r.y, r.w, r.h]) expect(v % 2, `${tag} ${JSON.stringify(r)}`).toBe(0);
+          }
+          for (const r of [...L.toolBtns, ...L.cards, L.slotBtn, ...L.weaponRows, ...L.destroyRects, ...L.merges]) {
+            expect(r.x, `${tag} 内容列左缘`).toBeGreaterThanOrEqual(SHOP_PAD);
+            expect(r.x + r.w, `${tag} 内容列右缘`).toBeLessThanOrEqual(560 - SHOP_PAD);
           }
         });
-      });
+
+        it(`${tag}:销毁钮含于所在武器行`, () => {
+          L.weaponRows.forEach((r, i) => {
+            const d = L.destroyRects[i];
+            expect(d.x).toBeGreaterThanOrEqual(r.x);
+            expect(d.x + d.w).toBeLessThanOrEqual(r.x + r.w);
+            expect(d.y).toBeGreaterThanOrEqual(r.y);
+            expect(d.y + d.h).toBeLessThanOrEqual(r.y + r.h);
+          });
+        });
+      }
     }
   }
 });
@@ -115,43 +140,74 @@ describe("商店布局形状语义", () => {
     expect(shopLayoutPure(12, 9).nM).toBe(4);
   });
 
-  it("卡高三档:行越多卡越矮", () => {
+  it("卡带三档恒值(标定档):N≤5 → 208,N=6 → 176,N≥10 → 160;且卡带与屏高无关", () => {
     expect(shopLayoutPure(1, 1).cardH).toBe(208); // N=2 ≤5
     expect(shopLayoutPure(4, 2).cardH).toBe(176); // N=6
     expect(shopLayoutPure(6, 4).cardH).toBe(160); // N=10
+    expect(shopLayoutPure(8, 4).cardH).toBe(160); // N=12
+    // 行数越多卡越矮(相对关系与上面的等值同时成立)
+    expect(shopLayoutPure(8, 4, 996).cardH).toBeLessThan(shopLayoutPure(4, 2, 996).cardH);
+    expect(shopLayoutPure(4, 2, 996).cardH).toBeLessThan(shopLayoutPure(1, 1, 996).cardH);
+    // 卡带定高:同一入参换屏高,cardH 一分不动
+    for (const [nw, nm] of [[1, 1], [4, 2], [8, 4]] as const) {
+      expect(shopLayoutPure(nw, nm, 1246).cardH, `${nw},${nm}`).toBe(shopLayoutPure(nw, nm, 996).cardH);
+    }
   });
 
-  it("工具钮恒四枚:刷新/融合/重开/主页,等宽一行", () => {
+  it("工具钮恒四枚:刷新/融合/重开/主页,等宽一行、右缘收进内容列", () => {
     const L = shopLayoutPure(3, 1);
     expect(L.toolBtns.map((b) => b.id)).toEqual(["refresh", "fusion", "restart", "home"]);
     for (const b of L.toolBtns) {
-      expect(b.h).toBe(36);
-      expect(b.w).toBe(127);
-      expect(b.y).toBe(72);
+      expect(b.w).toBe(126);
+      expect(b.h).toBe(L.toolBtns[0].h);
+      expect(b.y).toBe(L.toolBtns[0].y);
+      expect(b.h).toBeGreaterThanOrEqual(44);
     }
-    expect(L.toolBtns[3].x + L.toolBtns[3].w).toBe(546);
+    expect(L.toolBtns[3].x + L.toolBtns[3].w).toBe(544);
+  });
+
+  it("标定档(996)最满形态数值锚点:8 武器 + 4 进化逐位落位", () => {
+    const L = shopLayoutPure(8, 4);
+    expect(L.contentBottom).toBe(942);
+    expect(L.cardH).toBe(160);
+    expect(L.cards[0].y).toBe(120);
+    expect(L.slotBtn).toEqual({ x: 16, y: 286, w: 528, h: 44 });
+    expect(L.weaponLabelY).toBe(336);
+    expect(L.weaponRows[0]).toEqual({ x: 16, y: 366, w: 528, h: 42 });
+    expect(L.mergeLabelY).toBe(746);
+    expect(L.merges[0]).toEqual({ x: 16, y: 776, w: 528, h: 38 });
+    const last = L.merges[L.merges.length - 1];
+    expect([last.y, last.y + last.h]).toEqual([902, 940]);
+    expect(L.nextBtn).toEqual({ x: 264, y: 950, w: 280, h: 44 });
+  });
+
+  it("标定档最省形态数值锚点:1 武器 + 1 进化,富余全给行带", () => {
+    const L = shopLayoutPure(1, 1);
+    expect(L.slotBtn).toEqual({ x: 16, y: 456, w: 528, h: 64 });
+    expect(L.weaponLabelY).toBe(560);
+    expect(L.weaponRows[0]).toEqual({ x: 16, y: 636, w: 528, h: 76 });
+    expect(L.mergeLabelY).toBe(756);
+    expect(L.merges[0]).toEqual({ x: 16, y: 832, w: 528, h: 74 });
   });
 
   it("三张可购卡恒等宽 172 对齐内容列", () => {
     const L = shopLayoutPure(3, 1);
     expect(L.cards.length).toBe(3);
-    expect(L.cards[0].x).toBe(14);
-    expect(L.cards[2].x + L.cards[2].w).toBe(546);
+    expect(L.cards[0].x).toBe(16);
+    expect(L.cards[0].w).toBe(172);
+    expect(L.cards[2].x + L.cards[2].w).toBe(544);
   });
 
-  it("与屏高无关:签名不收屏高,输出纯确定(双高等价的结构保证)", () => {
-    const a = shopLayoutPure(5, 2);
-    const b = shopLayoutPure(5, 2);
-    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+  it("收屏高参数并随它生长:屏高越高内容底缘越低、行带越高;卡带定高不随屏高走", () => {
+    expect(shopLayoutPure.length).toBe(2); /* 第三实参带默认值 → 缺省即标定高 996 */
+    const a = shopLayoutPure(5, 2, 996);
+    const b = shopLayoutPure(5, 2, 1212);
+    expect(b.contentBottom).toBeGreaterThan(a.contentBottom);
+    expect(b.weaponRowH).toBeGreaterThan(a.weaponRowH); expect(b.cardH).toBe(a.cardH);
+    expect(JSON.stringify(a)).not.toBe(JSON.stringify(b));
   });
 
-  it("最满形态(8 武器 + 4 进化)数值锚点", () => {
-    const L = shopLayoutPure(8, 4);
-    expect(L.cardH).toBe(160);
-    expect(L.weaponRows[0].y).toBe(358); // 198+160
-    expect(L.weaponRows[0].h).toBe(43);
-    expect(L.merges[0].h).toBe(42);
-    const last = L.merges[L.merges.length - 1];
-    expect(last.y + last.h).toBe(942);
+  it("同一入参两次调用逐位相同(纯确定,无隐藏态)", () => {
+    expect(JSON.stringify(shopLayoutPure(5, 2, 1100))).toBe(JSON.stringify(shopLayoutPure(5, 2, 1100)));
   });
 });

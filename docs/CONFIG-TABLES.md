@@ -99,32 +99,32 @@
 
 | 字段 | 默认 | 范围 | 说明 |
 |---|---|---|---|
-| pad | 14 | 0~40 | 全界面统一边距(与 `ui.pad` 同值,改此处即改主菜单边距) |
-| entryH / entryY | 36 / 100 | 20~60 / 40~160 | 场外入口钮高度 / 入口行顶缘 Y |
-| setH | 50 | 34~90 | 武器套组卡高(低于 34 两行文字必压底板凸饰) |
-| setDescH | 46 | 30~90 | 套组说明板高 |
-| setGapY | 1 | 0~20 | 说明板与套组卡间隙;套组底缘 = 屏高 − setDescH − setH − 本值 |
-| sectionH | 32 | 0~60 | 分区标题条高(缺贴图时自动归零,退回纯文字标签) |
-| sectionSrcW / sectionSrcH | 512 / 73 | 1~2048 | 标题条源图宽高(条带端柱只能整图等比绘制 → 绘制宽由本比例反推) |
-| stageHdrY | 140 | 100~300 | 有标题条时"主线关卡"标题带顶缘 Y |
-| listYNoSection | 152 | 100~300 | 无标题条时列表顶缘 Y |
-| hdrBand | 4 | 0~20 | 标题条底缘 → 列表顶缘呼吸缝 |
-| setHdrGap | 13 | 0~40 | 套组标题带相对套组卡顶缘的上抬量 |
-| endlessGapSet / endlessGapSet2 | 29 / 13 | 0~80 | 有标题条时无限关钮与套组区的间隙基值 / 标题带占位(原式分别写死,故保持两个独立旋钮) |
-| endlessGapFlat | 34 | 0~80 | 无标题条时无限关钮与套组区的间隙 |
-| endlessW / endlessH | 260 / 48 | 120~560 / 30~80 | 无限关主按钮尺寸(水平居中) |
-| endlessListGap | 12 | 0~40 | 列表可用下界 = 主按钮顶缘 − 本值 |
-| rowMinH / rowMaxH / rowMaxGap | 72 / 84 / 30 | 40~120 / 40~160 / 0~60 | 关卡行展开三参数,交给 `spreadRows`(行越多越矮,富余落列表尾留白) |
-| phantomAnchor | 180 | 60~560 | 幻影榜筹码右锚宽(x = 屏宽 − 本值,w = 本值 − pad;热区有意宽于可见筹码) |
-| phantomY / phantomH | 64 / 24 | 20~160 / 14~60 | 幻影榜筹码顶缘 Y / 高(与货币行同基线) |
-| entryGap | 8 | 0~20 | 入口钮横向间距 |
+| pad | 16 | 0~40 | 页边距(内容宽 = 屏宽 − 2pad = 528;module=2 的整数倍档) |
+| entryH / entryY | 44 / 148 | 20~60 / 40~160 | 场外入口钮高度(= 热区下界)/ 入口带顶缘 Y |
+| setH | 34 | 34~90 | 尾块英雄带高度加数(展示带净高) |
+| setDescH | 46 | 30~90 | 尾块英雄带高度加数(说明文字带) |
+| setGapY | 16 | 0~20 | 英雄带底缘到屏底的下留白;英雄带顶缘 = 屏高 − 本值 − (heroRise + setH + setDescH) |
+| sectionH | 32 | 0~60 | 分区条高(缺贴图时自动归零,退回纯文字标签) |
+| sectionSrcW / sectionSrcH | 528 / 32 | 1~2048 | 分区条绘制比例(绘制宽 = sectionH × 本比值 → 通栏落在内容宽) |
+| stageHdrY | 200 | 100~300 | 有分区条时"主线关卡"条顶缘 Y |
+| listYNoSection | 240 | 100~300 | 无分区条时列表顶缘 Y |
+| hdrBand | 8 | 0~20 | 分区条底缘 → 列表顶缘呼吸缝(带间缝档) |
+| setHdrGap | 13 | 0~40 | 套组标题带相对套组卡顶缘的上抬量(套组卡一带算而不画,保留旋钮) |
+| endlessGapSet / endlessGapSet2 | 4 / 4 | 0~80 | 有分区条时主 CTA 与英雄带的间隙(两段独立旋钮) |
+| endlessGapFlat | 8 | 0~80 | 无分区条时主 CTA 与英雄带的间隙 |
+| endlessW / endlessH | 528 / 56 | 120~560 / 30~80 | 主 CTA 尺寸(水平居中,通栏 = 内容宽) |
+| endlessListGap | 8 | 0~40 | 列表可用下界 = 主 CTA 顶缘 − 本值 |
+| rowMinH / rowMaxH / rowMaxGap | 72 / 96 / 28 | 40~120 / 40~160 / 0~60 | 关卡行展开三参数,交给 `spreadRowsGrid`:行高与行距都落偶数,富余先加行高再加行距,末段余数落在列表与主 CTA 之间的缝 |
+| phantomAnchor | 124 | 60~560 | 幻影榜筹码右锚宽(x = 屏宽 − 本值,w = 本值 − pad → 右缘恒落内容右界) |
+| phantomY / phantomH | 96 / 44 | 20~160 / 14~60 | 幻影榜筹码顶缘 Y / 高(与筹码带同档 44) |
+| entryGap | 12 | 0~24 | 入口钮横向间距(6×78 + 5×12 = 528 正好铺满内容宽) |
 | entryCount | 6 | 1~12 | 入口钮个数(等宽 = (屏宽 − 2pad − entryGap×(本值−1)) / 本值) |
-| setGap | 8 | 0~20 | 套组卡横向间距 |
-| rowPlateF | 0.35 | 0.05~0.5 | 行底板九宫格角深系数(源图短边占比;行内容内缩量随之变) |
+| setGap | 8 | 0~20 | 套组卡横向间距(算而不画,保留旋钮) |
+| rowPlateF | 0.35 | 0.05~0.5 | 行底板角深系数(仅在调用方没给九宫格边距时用作回退内缩量) |
 | setBandNum / setBandDen | 20 / 124 | 0~200 / 1~512 | 套组卡贴边装饰带厚 = setH ×(本分子/本分母),文字落在带间净空 |
 | noteBandNum / noteBandDen | 8 / 45 | 0~200 / 1~512 | 说明板装饰带厚同口径(menu_note_plate 源图上下各 8 行、总高 45) |
-| heroRise / heroClearance | 60 / 8 | 8~160 / 0~40 | 英雄展示带自 setY 向上生长的高 / 带顶缘与无限关钮底缘的最小间隙(缺标题条时间距只有 34 → 带高会被本值夹紧,此时 heroRise 拖不动属正常) |
-| heroBtnW / heroBtnH | 88 / 36 | 40~200 / 20~60 | 「更换英雄」按钮尺寸(带内右锚 + 垂直居中;高按 ×2 换算才跟手) |
+| heroRise / heroClearance | 8 / 8 | 8~160 / 0~40 | 英雄带高度加数 / 带顶缘与主 CTA 底缘的最小间隙(富余量不足时 heroRise 拖不动属正常) |
+| heroBtnW / heroBtnH | 96 / 44 | 40~200 / 20~60 | 「选择英雄 / 更换英雄」按钮尺寸(带内右锚 + 垂直居中;高按 ×2 换算才跟手) |
 
 ### menuLayout.deco · 装饰内缩与绘制档
 
@@ -132,14 +132,14 @@
 
 | 区块 | 字段 = 默认 |
 |---|---|
-| 标题横幅 | `banInset`=6 `banY`=6 `banH`=58 · 纹章 `crestOffX`=2 `crestOffY`=16 `crestW`=26 `crestH`=26 · 标题 `titleOffX`=34 `titleOffY`=36 · 赛季行 `seasonInset`=6 `seasonOffY`=24 · 体力/钻石行 `row2OffY`=47 `energyGap`=12 · 钻石图标 `gemOffX`=18 `gemOffY`=13 `gemW`=14 `gemH`=16 |
-| 货币条 | 底板 `stripY`=66 `stripH`=26 · 筹码 `chipH`=22 `chipX1`=6 `chipX2`=90 `chipX3`=188 `chipIconW`=15 `chipIconGap`=4 `chipProbePad`=20 `chipSlide`=5 `chipInnerGap`=4 `chipTailPad`=11 · 幻影筹码 `phChipProbeW`=40 `phChipPadAdd`=8 `phChipPadMin`=14 `phRightGap`=8 |
-| 关卡行 | 基线 `rowC1Off`=3 `rowC2Gap`=19 · 列 `rowTxOff`=54 `rowRightInset`=26 `descClipPad`=10 · 补星钮 `rowMakeupReserve`=66 `makeupW`=56 `makeupH`=26 `makeupRightGap`=2 · 徽章 `badgeOffX`=26 `badgeSize`=42 `badgeR`=18 `badgeStroke`=2 `badgeTextOffY`=6 · 通关勾 `checkOffX`=4 `checkOffY`=11 `checkSize`=13 `checkAdvance`=16 · 星数 `starSize`=13 `starGap`=2 `starOffX`=4 `starLift`=2 |
-| 分区标题 | `sectionTextPad`=30(标题条整图宽 − 本值)/ `listHintFallbackY`=144(缺条时文字基线 Y) |
-| 红点 | `dotR`=5 `dotInsetX`=8 `dotInsetY`=7(圆心相对宿主钮右上角) |
+| 标题横幅 | `banInset`=0 `banY`=8 `banH`=56 · 纹章 `crestOffX`=16 `crestOffY`=8 `crestW`=40 `crestH`=40 · 标题 `titleOffX`=64 `titleOffY`=36 · 赛季行 `seasonInset`=0 `seasonOffY`=76(右缘 = 屏宽 − pad)· 体力/钻石行 `row2OffY`=88 `energyGap`=8 · 钻石图标 `gemOffX`=8 `gemOffY`=14 `gemW`=28 `gemH`=28 |
+| 货币条 | 能量筹码板 `stripY`=96 `stripH`=44 · 筹码 `chipH`=44 `chipW`=96 `energyW`=84 `chipGap`=12 `chipX1`=0 `chipX2`=0 `chipX3`=0(三枚货币筹码由右界反推左挂,本三值只做逐枚微调)· 图标 `chipIconW`=28 `chipIconGap`=4 `chipSlide`=8 `chipInnerGap`=4 `chipTailPad`=8 `chipProbePad`=20 · 幻影筹码 `phChipProbeW`=40 `phChipPadAdd`=8 `phChipPadMin`=14 `phRightGap`=0 |
+| 关卡行 | 基线 `rowC1Off`=8 `rowC2Gap`=18 · 列 `rowTxOff`=52 `rowRightInset`=16 `descClipPad`=88(右尾列「N 章 · Boss」预留宽)· 补星钮 `rowMakeupReserve`=80 `makeupW`=72 `makeupH`=44 `makeupRightGap`=0 · 序号牌 `badgeOffX`=20 `badgeSize`=40 `badgeR`=18 `badgeStroke`=2 `badgeTextOffY`=6 · 通关勾 `checkOffX`=4 `checkOffY`=11 `checkSize`=13 `checkAdvance`=16 · 星数 `starSize`=13 `starGap`=2 `starOffX`=4 `starLift`=2 |
+| 分区标题 | `sectionTextPad`=30(条文可用宽 = 条宽 − 本值)/ `listHintFallbackY`=200(缺条时文字基线 Y) |
+| 红点 | `dotR`=5 `dotInsetX`=8 `dotInsetY`=8(圆心相对宿主钮右上角) |
 | 套组卡 | 图标 `setIconOffX`=6 `setIconOffY`=9 `setIconW`=18 `setIconH`=18 · 选中态 `setFramePad`=2 `setBadgeInsetX`=16 `setBadgeOffY`=6 `setBadgeSize`=18 · 内容列 `setColPadL`=28 `setColPadR`=34 `setRow1Off`=12 `setRow2Gap`=15 · 赛季标记 `tagPad`=4 |
-| 说明板 | `noteCapNum`=20 `noteCapDen`=45(带厚下限,取 `noteBand` 与本换算的较大值)· `noteTopOff`=1 `noteInsetX`=12 `noteSlide`=6 `noteRow1Off`=12 `noteRow2Gap`=14 |
-| 英雄展示带 | 内缩 `heroPadX`=10(立绘左缘 / 按钮右缘 / 图文列距共用一节)· 立绘 `heroPortW`=96 `heroPortH`=96 `heroPortOffX`=0 `heroPortOffY`=0(0 = 带内垂直居中;带高不足时按带高收缩保持正方形)· 图文列 `heroNameOffY`=34 `heroRow2Gap`=18 `heroRow3Gap`=16 |
+| 说明板 | `noteCapNum`=20 `noteCapDen`=45(带厚下限,取 `noteBand` 与本换算的较大值)· 说明板与英雄带同一矩形:`noteTopOff`=0 `noteInsetX`=0 `noteSlide`=0 · 文字 `noteRow1Off`=12 `noteRow2Gap`=14 |
+| 英雄展示带 | 内缩 `heroPadX`=16(立绘左缘 / 按钮右缘 / 图文列距共用一节)· 立绘 `heroPortW`=56 `heroPortH`=56 `heroPortOffX`=0 `heroPortOffY`=0(0 = 带内垂直居中;带高不足时按带高收缩保持正方形)· 图文列 `heroNameOffY`=30 `heroRow2Gap`=18 `heroRow3Gap`=16 |
 
 > 只动 `deco` 不会移动任何区块,只改区块内部的对齐/避让;想让整块挪位置改 `origin`。缺贴图时相关尺寸按原"纯代码形状"回退口径,布局与接入贴图前逐像素一致。
 

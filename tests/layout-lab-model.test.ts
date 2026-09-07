@@ -91,11 +91,11 @@ const CASES = [
 /* ==================== 1. 字段清单 ==================== */
 
 describe("字段清单", () => {
-  it("origin 37 + deco 88 = 125,且 id 唯一", () => {
+  it("origin 37 + deco 91 = 128,且 id 唯一", () => {
     expect(ORIGIN_KEYS.length).toBe(37);
-    expect(DECO_KEYS.length).toBe(88);
-    expect(ALL_FIELDS.length).toBe(125);
-    expect(new Set(ALL_FIELDS.map((f) => f.id)).size).toBe(125);
+    expect(DECO_KEYS.length).toBe(91);
+    expect(ALL_FIELDS.length).toBe(128);
+    expect(new Set(ALL_FIELDS.map((f) => f.id)).size).toBe(128);
   });
 
   it("每个字段都有取值域、默认值在域内", () => {
@@ -257,8 +257,8 @@ describe("dragValue / nudgeValue", () => {
     const prev = readValues().deco.crestOffX;
     expect(clampValue("deco", "crestOffX", 9999)).toBe(200);
     expect(clampValue("deco", "crestOffX", -9999)).toBe(-200);
-    expect(clampValue("origin", "entryGap", 9999)).toBe(20);
-    expect(clampValue("origin", "pad", NaN)).toBe(14);
+    expect(clampValue("origin", "entryGap", 9999)).toBe(24);
+    expect(clampValue("origin", "pad", NaN)).toBe(16);
     expect(clampValue("origin", "rowPlateF", 0.37)).toBeCloseTo(0.35, 6);
     let last = -9999;
     for (let d = -300; d <= 300; d += 7) {
@@ -297,7 +297,7 @@ describe("exportJson 闭环", () => {
     expect(Object.keys(payload.menuLayout.origin).length).toBe(1);
 
     resetAll();
-    expect(readValues().origin.pad).toBe(14);
+    expect(readValues().origin.pad).toBe(16);
     applyBalance(payload.menuLayout);
     const back = readValues();
     expect(back.origin.pad).toBe(22);
@@ -305,11 +305,11 @@ describe("exportJson 闭环", () => {
     expect(dirtyFields(back)).toEqual(["origin.pad", "deco.banY"]);
   });
 
-  it("all=true 导出完整 125 字段", () => {
+  it("all=true 导出完整 128 字段", () => {
     resetAll();
     const payload = JSON.parse(exportJson(readValues(), { all: true })) as { menuLayout: Record<string, Record<string, number>> };
     expect(Object.keys(payload.menuLayout.origin).length).toBe(37);
-    expect(Object.keys(payload.menuLayout.deco).length).toBe(88);
+    expect(Object.keys(payload.menuLayout.deco).length).toBe(91);
   });
 
   it("拖到取值上界也能被加载器接受(编辑器钳到边界的意义)", () => {
@@ -336,7 +336,7 @@ describe("exportJson 闭环", () => {
 describe("parseFieldDocs(直接吃 docs/CONFIG-TABLES.md)", () => {
   const docs = parseFieldDocs(CONFIG_MD);
 
-  it("125 字段全部拿到说明,且带区块", () => {
+  it("128 字段全部拿到说明,且带区块", () => {
     const missing = ALL_FIELDS.filter((f) => !docs.has(f.id)).map((f) => f.id);
     expect(missing).toEqual([]);
     for (const f of ALL_FIELDS) {
@@ -369,10 +369,10 @@ describe("parseFieldDocs(直接吃 docs/CONFIG-TABLES.md)", () => {
     expect(only.get("deco.banY")!.group).toContain("测试");
   });
 
-  it("buildFieldRows:125 行,可拖集合与手柄集合完全一致", () => {
+  it("buildFieldRows:128 行,可拖集合与手柄集合完全一致", () => {
     const { handles } = snapshot(1246, true);
     const rows = buildFieldRows(docs, handles);
-    expect(rows.length).toBe(125);
+    expect(rows.length).toBe(128);
     const draggable = new Set(rows.filter((r) => r.draggable).map((r) => r.id));
     expect([...draggable].sort()).toEqual([...new Set(handles.map((h) => h.id))].sort());
     for (const r of rows) {

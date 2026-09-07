@@ -13,11 +13,12 @@
  *     配色档通过读 `core/ViewTable.ts` 源码里那段 `PHASE4_DEFAULTS` 字面量来锁
  *     (那一侧 import 了 `cc`,node 侧不能直载)。
  *
- * 本屏的重点是**四格溢出矩阵**:`h ∈ {996, 1246} × nRes ∈ {0, 5}` 四格各自钉死 `rowH` / `gap` /
- * 末行底边 `rowsEnd` 的精确值、越界量与"首个越出 `h − pad` 的件数 n"。这些数字按
- * `game/ui/theme.ts:spreadRows` 的真实实现算出并由本文件实测(不是推算):每格都同时用
- * `spreadRows` 直算一遍与布局函数对照,所以矩阵不是从布局里抄回来的同义反复。
- * 越界那一档按 Web 的性质原样保留(两端一致),矩阵也锁住了"两端共读同一个 spreadRows"。
+ * 本屏的重点是**带链 + 富余吸收矩阵**:`h ∈ {996, 1100, 1246} × nRes ∈ {0, 5}`。纵向每一档顶缘都由
+ * `gachaBands` 的带高逐位累加推出,标定档 996 的带链数字由本文件逐位写死(以实测为准),
+ * 于是"链上每一档都等于前档 + 带高"不是两端互相引用的同义反复。行带另按
+ * `game/ui/theme.ts:spreadRows` 的真实实现独立直算一遍与布局函数对照。
+ * 件数多到装不下时行仍照排(本屏不裁不滚的既有性质),越出量线性放大,
+ * 首个越出 `h − pad` 的件数同样写死(996 / nRes 0 → 14 件)。
  *
  * 另锁本屏照抄的 Web 口径:行以 `id` 为键反查(id 重复永远命中第一条、find 落空那一行不画)、
  * pity 是一次性拷贝且被按引用改、命中七段且热区外没有兜底、禁用态仍返回动作、
@@ -56,7 +57,6 @@ import {
   GC_PITY_BAR_DY_LEGENDARY,
   GC_PITY_BAR_H,
   GC_PITY_DY,
-  GC_PITY_LABEL_DY_LEGENDARY,
   GC_RES_DY,
   GC_RES_LINE_H,
   GC_RES_MAX,
@@ -70,6 +70,14 @@ import {
   GC_TICKET_DY,
   GC_TICKET_H,
   gachaBarRects,
+  GC_BACK_H,
+  GC_PAD,
+  GC_ROW_GAP_MAX,
+  GC_BACK_ICON_SHRINK,
+  GC_BONUS_DX,
+  GC_TICKET_BASE_Y,
+  GC_TITLE_BASE_Y,
+  gachaBands,
   gachaCollLabelY,
   gachaLayout,
   gachaPityLabelY,
@@ -92,7 +100,7 @@ import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
-const PAD = UI.pad;
+const PAD = GC_PAD;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
 const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
@@ -146,18 +154,28 @@ function lastRowBottom(L: GachaLayout): number {
   return L.rowsTop + (L.rows.length - 1) * L.rowStep + L.rowH;
 }
 
-/** spreadRows 直算一遍(矩阵里的数不是从布局函数里抄回来的) */
-const direct = (n: number, rowsTop: number, h: number) => spreadRows(n, rowsTop, h - PAD, GC_ROW_MIN_H, GC_ROW_MAX_H);
+/**
+ * 独立直算行带:走共享层 `spreadRows` 的真实实现,再按本屏同口径向偶数收一次、
+ * 行距钳到 4..GC_ROW_GAP_MAX。矩阵里的 rowH/gap 由它核一遍,不是从布局函数里抄回来的。
+ */
+const direct = (n: number, rowsTop: number, listBottom: number) => {
+  const s = spreadRows(n, rowsTop, listBottom, GC_ROW_MIN_H, GC_ROW_MAX_H);
+  return {
+    rowH: n > 0 ? s.rowH - (s.rowH % 2) : 0,
+    gap: n > 1 ? Math.max(4, Math.min(GC_ROW_GAP_MAX, s.gap - (s.gap % 2))) : 0,
+  };
+};
 
-/** 首个越出 h − pad 的件数(n 从 1 起递增;矩阵四格各自算一次) */
-function firstOverflowN(rowsTop: number, h: number): number {
-  const y1 = h - PAD;
+/** 首个末行底缘越出 h − pad 的件数(n 从 1 起递增;每档的 rowsTop 由布局自己给) */
+function firstOverflowN(h: number, nRes: number): number {
   for (let n = 1; n <= 300; n++) {
-    const { rowH, gap } = direct(n, rowsTop, h);
-    if (rowsTop + (n - 1) * (rowH + gap) + rowH > y1) return n;
+    const L = gachaLayout(W, h, ids(n), nRes);
+    if (L.rowsEnd > h - GC_PAD) return n;
   }
   return -1;
 }
+
+
 
 /* ==================== 0. 端间同一实现与派单要求核实的常量 ==================== */
 
@@ -264,25 +282,43 @@ describe("分区纵线(Web 的裸加数链)", () => {
       const nRes = Math.min(n, 5);
       expect(L.nRes).toBe(nRes);
       expect(L.resRows).toHaveLength(nRes);
-      expect(L.rowsTop).toBe(gachaRowsTop(n));
-      expect(L.resLineH).toBe(GC_RES_LINE_H);
+      /* 纵线由本档带链逐位推出:弹性只把 rowsTop 往下推,推多少是可算的,不是"≥"就算完 */
+      const B = gachaBands(H_STD, n, 0);
+      const chainTop = GC_PAD + B.headH + B.btnH + B.ticketDy + B.ticketH + B.pityDy + B.pityBand + B.resDy + B.resBand + B.collDy + B.rowsDy;
+      expect(L.rowsTop, `nRes=${n}`).toBe(chainTop);
+      expect(L.rowsTop).toBeGreaterThanOrEqual(gachaRowsTop(n));
+      expect(L.resLineH, `nRes=${n}`).toBe(B.resLineH);
+      expect(L.resLabel.baseY).toBe(GC_PAD + B.headH + B.btnH + B.ticketDy + B.ticketH + B.pityDy + B.pityBand + B.resDy);
       L.resRows.forEach((row, i) => {
-        expect(row.name.baseY).toBe(gachaResLabelY() + (i + 1) * GC_RES_LINE_H);
+        expect(row.name.baseY).toBe(L.resLabel.baseY + (i + 1) * L.resLineH);
         expect(row.dup.baseY).toBe(row.name.baseY);
       });
     }
   });
 });
 
-/* ==================== 2. 屏级矩形:四枚热区 + 面板 + 横幅 + 图标 + 返回钮 ==================== */
+/* ==================== 2. 屏级矩形:列向弹性带的落位与硬约束 ==================== */
 
-describe("屏级矩形(与 Web gachaLayout 的返回值逐位对应)", () => {
+describe("屏级矩形(面板铺满内容列,富余由带链吸收)", () => {
   const L = gachaLayout(W, H_STD, [1, 2], 0);
+  const B = gachaBands(H_STD, 0, 2);
+
+  it("页边距抬到像素网格 16(比共享 ui.pad 的 14 更宽),内容列右缘落 544", () => {
+    expect(GC_PAD).toBe(16);
+    expect(PAD).toBeGreaterThan(UI.pad);
+    expect(L.panel.x + L.panel.w).toBe(W - PAD);
+    expect(L.ticketBtn.x + L.ticketBtn.w).toBe(W - PAD);
+    expect(L.adBtn.x + L.adBtn.w).toBe(W - PAD);
+    expect(L.backBtn.x + L.backBtn.w).toBe(W - PAD);
+  });
 
   it("三枚抽取钮同处一行带:单抽 110 宽、十连在 pad+120 且 170 宽、广告钮吃掉剩余", () => {
-    expect(L.singleBtn).toEqual({ x: PAD, y: GC_BTN_Y, w: GC_SINGLE_W, h: GC_BTN_H });
-    expect(L.tenBtn).toEqual({ x: PAD + GC_TEN_DX, y: GC_BTN_Y, w: GC_TEN_W, h: GC_BTN_H });
-    expect(L.adBtn).toEqual({ x: PAD + GC_AD_DX, y: GC_BTN_Y, w: W - PAD * 2 - GC_AD_DX, h: GC_BTN_H });
+    expect(L.singleBtn.x).toBe(PAD);
+    expect(L.singleBtn.w).toBe(GC_SINGLE_W);
+    expect(L.tenBtn.x).toBe(PAD + GC_TEN_DX);
+    expect(L.tenBtn.w).toBe(GC_TEN_W);
+    expect(L.adBtn.x).toBe(PAD + GC_AD_DX);
+    expect(L.adBtn.w).toBe(W - PAD * 2 - GC_AD_DX);
     expect(GC_SINGLE_W).toBe(110);
     expect(GC_TEN_DX).toBe(120);
     expect(GC_TEN_W).toBe(170);
@@ -295,213 +331,280 @@ describe("屏级矩形(与 Web gachaLayout 的返回值逐位对应)", () => {
     expect(gachaLayout(W + 40, H_STD, [], 0).adBtn.w).toBe(L.adBtn.w + 40);
   });
 
-  it("五枚热区都在画布内;换券条与广告钮右缘贴 w − pad", () => {
-    expect(L.ticketBtn).toEqual({ x: PAD, y: gachaTicketY(), w: W - PAD * 2, h: GC_TICKET_H });
-    expect(L.ticketBtn.x + L.ticketBtn.w).toBe(W - PAD);
-    expect(L.adBtn.x + L.adBtn.w).toBe(W - PAD);
+  it("四枚热区同行带、行带高就是 btnH;五枚热区都在画布内", () => {
+    expect(L.tenBtn.y).toBe(L.singleBtn.y);
+    expect(L.adBtn.y).toBe(L.singleBtn.y);
+    expect(L.singleBtn.h).toBe(B.btnH);
     for (const r of [L.singleBtn, L.tenBtn, L.adBtn, L.ticketBtn, L.backBtn]) {
       expect(r.x).toBeGreaterThanOrEqual(0);
       expect(r.x + r.w).toBeLessThanOrEqual(W);
       expect(r.y).toBeGreaterThanOrEqual(0);
-      expect(r.h).toBeGreaterThan(0);
+      expect(r.y + r.h).toBeLessThanOrEqual(H_STD);
+      // 热区下限 44:单抽 / 十连 / 广告 / 换券条 / 返回钮无一低于一档触摸高
+      expect(Math.min(r.w, r.h)).toBeGreaterThanOrEqual(44);
+    }
+    for (const v of [L.singleBtn.x, L.singleBtn.y, L.singleBtn.w, L.singleBtn.h]) expect(v % 2).toBe(0);
+  });
+
+  it("面板底 = 整幅内容板(顶缘 pad、底缘 h − pad)+ 空键走代码底板", () => {
+    expect(L.panelKey).toBe("");
+    expect(L.panel).toEqual({ x: PAD, y: PAD, w: W - PAD * 2, h: H_STD - PAD * 2 });
+    // 件数扫一遍:板底缘恒贴 h − pad(板下不再出现整段未绘制区),行溢出档也不把板拉长
+    for (const n of [0, 1, 2, 8, 14, 15, 30]) {
+      const S = gachaLayout(W, H_STD, ids(n), 0);
+      expect(S.panel.y + S.panel.h, `n=${n}`).toBe(H_STD - PAD);
+      expect(S.panel.x + S.panel.w, `n=${n}`).toBe(W - PAD);
+      expect(S.panel.h, `n=${n}`).toBeGreaterThan(0);
+      if (S.empty) expect(S.panel.y + S.panel.h, `n=${n} 盖住空态提示`).toBeGreaterThan(S.collEmpty.baseY);
+    }
+    for (const n of [0, 3, 9]) {
+      const S = gachaLayout(W, H_TALL, ids(n), 0);
+      expect(S.panel.y + S.panel.h, `tall n=${n}`).toBe(H_TALL - PAD);
+    }
+    // 代码底板的两色就是 Web panel() 的 theme.bgPanel + 金描边(与 confirm 屏的 cfPanelFallback* 同档)
+    const defs = phase4Defaults();
+    expect(defs.gcPanelFallbackBg.toLowerCase()).toBe(String(theme.bgPanel).toLowerCase());
+    expect(defs.gcPanelFallbackStroke.toLowerCase()).toBe(String(theme.gold).toLowerCase());
+    // Web 那一笔(panelPad 默认分支的 drawNine 32)仍然在案,两端各记各的
+    expect(GC_PANEL_NINE).toBe(32);
+  });
+
+  it("带链把屏高富余摊给内容与带距:板内不留整段空腔,行带至少吃掉一半富余", () => {
+    for (const h of [H_STD, 1100, H_TALL]) {
+      for (const n of [1, 3, 6]) {
+        const S = gachaLayout(W, h, ids(n), 0);
+        const voidBelow = h - PAD - S.rowsEnd;
+        const foot = gachaBands(h, 0, n).foot;
+        // 末行底缘之下的空腔 = 板底缝 + 行带取整零头;单件那一档行高先撞到上限,余量才落到板底
+        expect(voidBelow, `h=${h} n=${n}`).toBeLessThanOrEqual(n === 1 ? 300 : foot + 24);
+        expect(S.rowsEnd, `h=${h} n=${n}`).toBeGreaterThan(S.rowsTop);
+        expect(S.rowsEnd, `h=${h} n=${n} 度量式同值`).toBe(lastRowBottom(S));
+        expect(S.rowH, `h=${h} n=${n}`).toBeGreaterThanOrEqual(GC_ROW_MIN_H);
+        // 行高随屏高单调不减:同一件数下,屏越高行越高(或至少不矮)
+        const taller = gachaLayout(W, h + 100, ids(n), 0);
+        expect(taller.rowH, `h=${h}→${h + 100} n=${n}`).toBeGreaterThanOrEqual(S.rowH);
+      }
     }
   });
 
-  it("面板底就是 panel_dark_corners、矩形 (pad, pad, w−2pad, h−2pad)、九宫切深 32(Web 不传专属键)", () => {
-    expect(L.panelKey).toBe("panel_dark_corners");
-    expect(L.panel).toEqual({ x: PAD, y: PAD, w: W - PAD * 2, h: H_STD - PAD * 2 });
-    expect(GC_PANEL_NINE).toBe(32);
-    // 本屏没有专属面板贴图键(与 gearup 的 panel_gearup 不同)
-    expect(L.panelKey).not.toBe("panel_gearup");
-  });
-
-  it("标题横幅 = banner_large_purple 显式 240×46、盒 (pad−8, 36−46+8);与 daily 同参数", () => {
+  it("标题横幅 = banner_large_purple 显式 240×46、盒 (pad−8, 36−46+10) 顶缘贴画布;与 daily 同参数", () => {
+    expect(L.headerBanner).toEqual({ x: PAD - 8, y: 36 - 46 + 10, w: 240, h: 46 });
+    expect(L.headerBanner.y).toBe(0);
     expect(GC_BANNER_W).toBe(240);
     expect(GC_BANNER_H).toBe(46);
-    expect(L.headerBanner).toEqual({ x: PAD - 8, y: 36 - 46 + 8, w: 240, h: 46 });
-    // 有横幅:标题居中于横幅、基线 36 − 4;缺图:左起笔 pad、基线 36
-    expect(L.titleWithBanner).toMatchObject({ x: L.headerBanner.x + 120, baseY: 32, maxW: 240, px: FS.title, align: "center" });
-    expect(L.titleBare).toMatchObject({ x: PAD, baseY: 36, px: FS.title, align: "left" });
+    expect(L.titleWithBanner.x).toBe(L.headerBanner.x + L.headerBanner.w / 2);
+    expect(L.titleWithBanner.baseY).toBe(GC_TITLE_BASE_Y - 4);
+    expect(L.titleWithBanner.maxW).toBe(GC_BANNER_W);
+    expect(L.titleWithBanner.px).toBe(FS.title);
+    expect(L.titleWithBanner.align).toBe("center");
+    expect(L.titleBare.x).toBe(PAD);
+    expect(L.titleBare.baseY).toBe(GC_TITLE_BASE_Y);
+    expect(L.titleBare.px).toBe(FS.title);
+    expect(L.titleBare.align).toBe("left");
+    // 两档标题都收进返回钮起笔前,不压钮
+    expect(L.titleBare.x + L.titleBare.maxW).toBeLessThan(L.backBtn.x);
+    expect(L.titleWithBanner.x + L.titleWithBanner.maxW / 2).toBeLessThan(L.backBtn.x);
   });
 
   it("券数图标盒 = (pad, 60−15+2, 15, 15);缺图档文字回到 pad", () => {
     expect(GC_ICON_SIZE).toBe(15);
-    expect(L.ticketIcon).toEqual({ x: PAD, y: 47, w: GC_ICON_SIZE, h: GC_ICON_SIZE });
+    expect(L.ticketIcon).toEqual({ x: PAD, y: GC_TICKET_BASE_Y - GC_ICON_SIZE + 2, w: GC_ICON_SIZE, h: GC_ICON_SIZE });
     expect(L.ticketTextWithIcon.x).toBe(PAD + GC_ICON_SIZE + 4);
-    expect(L.ticketTextWithIcon.baseY).toBe(60);
     expect(L.ticketTextBare.x).toBe(PAD);
-    expect(L.ticketTextBare.baseY).toBe(60);
+    expect(L.ticketTextBare.baseY).toBe(GC_TICKET_BASE_Y);
+    expect(L.ticketTextWithIcon.baseY).toBe(GC_TICKET_BASE_Y);
     expect(L.ticketTextBare.px).toBe(FS.body);
     expect(L.ticketTextBare.align).toBe("left");
+    expect(L.ticketTextWithIcon.align).toBe("left");
+    // 两档券数文字都收进返回钮起笔前
+    expect(L.ticketTextBare.x + L.ticketTextBare.maxW).toBeLessThan(L.backBtn.x);
+    expect(L.ticketTextWithIcon.x + L.ticketTextWithIcon.maxW).toBeLessThan(L.backBtn.x);
   });
 
-  it("返回钮 = (w−pad−backW, 22, backW, backH) + 图标盒 + 两档文字位", () => {
+  it("返回钮 = (w−pad−backW, 22, backW, 44) + 图标盒 + 两档文字位(钮高抬到热区下限)", () => {
+    expect(L.backBtn).toEqual({ x: W - PAD - UI.backW, y: GC_BACK_Y, w: UI.backW, h: GC_BACK_H });
+    expect(GC_BACK_H).toBe(44);
     expect(GC_BACK_Y).toBe(22);
-    expect(L.backBtn).toEqual({ x: W - PAD - UI.backW, y: 22, w: UI.backW, h: UI.backH });
-    const ih = UI.backH - 12;
-    expect(L.backIcon).toEqual({ x: L.backBtn.x + GC_BACK_ICON_DX, y: 22 + (UI.backH - ih) / 2, w: ih, h: ih });
-    expect(L.backTextBare).toMatchObject({ x: L.backBtn.x + L.backBtn.w / 2, baseY: 22 + UI.backH / 2 + GC_BACK_TEXT_DY, align: "center" });
-    expect(L.backTextWithIcon.baseY).toBe(L.backTextBare.baseY);
-    expect(L.backTextWithIcon.x).toBe(L.backBtn.x + GC_BACK_ICON_DX + ih + (L.backBtn.w - GC_BACK_ICON_DX - ih) / 2);
     expect(GC_BACK_ICON_DX).toBe(4);
-    expect(GC_BACK_TEXT_DY).toBe(5);
+    expect(L.backIcon).toEqual({ x: L.backBtn.x + GC_BACK_ICON_DX, y: GC_BACK_Y + (GC_BACK_H - L.backIcon.h) / 2, w: L.backIcon.h, h: L.backIcon.h });
+    expect(L.backIcon.h).toBe(GC_BACK_H - GC_BACK_ICON_SHRINK);
+    expect(L.backTextBare.x).toBe(L.backBtn.x + L.backBtn.w / 2);
+    expect(L.backTextBare.baseY).toBe(GC_BACK_Y + GC_BACK_H / 2 + GC_BACK_TEXT_DY);
+    expect(L.backTextBare.align).toBe("center");
+    expect(L.backTextWithIcon.baseY).toBe(L.backTextBare.baseY);
+    expect(L.backTextWithIcon.x).toBe(L.backBtn.x + GC_BACK_ICON_DX + L.backIcon.h + (L.backBtn.w - GC_BACK_ICON_DX - L.backIcon.h) / 2);
   });
 
   it("保底条:从 pad+110 起到 w−pad、高 6;两档顶缘是 pityLabelY 的 +8 / +12", () => {
-    expect(GC_PITY_BAR_DX).toBe(110);
-    expect(GC_PITY_BAR_H).toBe(6);
-    const py = gachaPityLabelY();
-    expect(L.pityEpicBar).toEqual({ x: PAD + 110, y: py + GC_PITY_BAR_DY_EPIC, w: W - PAD * 2 - (PAD + 110), h: 6 });
-    expect(L.pityLegendBar.y).toBe(py + GC_PITY_BAR_DY_LEGENDARY);
+    expect(L.pityEpicBar.x).toBe(PAD + GC_PITY_BAR_DX);
+    expect(L.pityEpicBar.w).toBe(W - PAD * 2 - (PAD + GC_PITY_BAR_DX));
+    expect(L.pityEpicBar.h).toBe(GC_PITY_BAR_H);
+    expect(L.pityEpicBar.y).toBe(L.pityEpicLabel.baseY + GC_PITY_BAR_DY_EPIC);
+    expect(L.pityLegendBar.y).toBe(L.pityEpicLabel.baseY + GC_PITY_BAR_DY_LEGENDARY);
     expect(L.pityLegendBar.x).toBe(L.pityEpicBar.x);
     expect(L.pityLegendBar.w).toBe(L.pityEpicBar.w);
-    expect(L.pityLegendLabel.baseY).toBe(py + GC_PITY_LABEL_DY_LEGENDARY);
-    expect(L.pityEpicLabel.baseY).toBe(py);
+    expect(L.pityLegendLabel.baseY).toBeGreaterThan(L.pityLegendBar.y + GC_PITY_BAR_H);
+    expect(L.pityEpicLabel.baseY).toBe(GC_PAD + B.headH + B.btnH + B.ticketDy + B.ticketH + B.pityDy);
+    expect(L.pityLegendLabel.baseY).toBe(L.pityEpicLabel.baseY + B.pityBand);
+    expect(GC_PITY_BAR_DX).toBe(110);
+    expect(GC_PITY_BAR_H).toBe(6);
     expect(GC_PITY_BAR_DY_EPIC).toBe(8);
     expect(GC_PITY_BAR_DY_LEGENDARY).toBe(12);
-    expect(GC_PITY_LABEL_DY_LEGENDARY).toBe(18);
-  });
-
-  it("Web 原样重叠:两条保底条纵向互相压 2px,传奇标签基线正好在传奇条底缘", () => {
-    // 史诗条 244..250,传奇条 248..254 → 重叠 2;传奇标签基线 254
-    expect(L.pityBarOverlap).toBe(2);
-    expect(L.pityEpicBar.y + L.pityEpicBar.h - L.pityLegendBar.y).toBe(2);
-    expect(L.pityLegendLabel.baseY).toBe(L.pityLegendBar.y + L.pityLegendBar.h);
     // 标签列限宽收到条起笔前,不压条
     expect(L.pityEpicLabel.x + L.pityEpicLabel.maxW).toBeLessThan(L.pityEpicBar.x);
     expect(L.pityLegendLabel.x + L.pityLegendLabel.maxW).toBeLessThan(L.pityLegendBar.x);
   });
 
+  it("Web 原样重叠:两条保底条纵向互相压 2px(弹性带只挪标签,不动这两档裸加数)", () => {
+    expect(L.pityBarOverlap).toBe(GC_PITY_BAR_DY_EPIC + GC_PITY_BAR_H - GC_PITY_BAR_DY_LEGENDARY);
+    expect(L.pityBarOverlap).toBe(2);
+  });
+
+  it("纵线由带链累加推出:每一档顶缘 = 前档底缘 + 该档带高(三档屏高 × nRes 0/5)", () => {
+    for (const h of [H_STD, 1100, H_TALL]) {
+      for (const r of [0, 5]) {
+        const S = gachaLayout(W, h, ids(4), r);
+        const T = gachaBands(h, r, 4);
+        expect(S.singleBtn.y, `h=${h} nRes=${r}`).toBe(GC_PAD + T.headH);
+        expect(S.ticketBtn.y, `h=${h} nRes=${r}`).toBe(S.singleBtn.y + T.btnH + T.ticketDy);
+        expect(S.pityEpicLabel.baseY, `h=${h} nRes=${r}`).toBe(S.ticketBtn.y + T.ticketH + T.pityDy);
+        expect(S.pityLegendLabel.baseY, `h=${h} nRes=${r}`).toBe(S.pityEpicLabel.baseY + T.pityBand);
+        expect(S.resLabel.baseY, `h=${h} nRes=${r}`).toBe(S.pityLegendLabel.baseY + T.resDy);
+        expect(S.collLabel.baseY, `h=${h} nRes=${r}`).toBe(S.resLabel.baseY + T.resBand + T.collDy);
+        expect(S.rowsTop, `h=${h} nRes=${r}`).toBe(S.collLabel.baseY + T.rowsDy);
+        expect(S.rowH % 2, `h=${h} nRes=${r}`).toBe(0);
+        expect(S.rowGap % 2, `h=${h} nRes=${r}`).toBe(0);
+        expect(S.resLineH % 2, `h=${h} nRes=${r}`).toBe(0);
+        expect(S.singleBtn.h).toBe(T.btnH);
+        expect(S.ticketBtn).toEqual({ x: GC_PAD, y: S.singleBtn.y + T.btnH + T.ticketDy, w: W - GC_PAD * 2, h: T.ticketH });
+      }
+    }
+  });
+
+  it("带链绝对锚点(以实测为准):标定档 996 的 gachaBands 逐位写死,链上没有一个数是互相推出来的", () => {
+    expect(gachaBands(996, 0, 3)).toEqual({ pad: 16, headH: 130, btnH: 64, ticketDy: 24, ticketH: 54, pityDy: 28, pityBand: 30, resDy: 34, resLineH: 32, resBand: 32, collDy: 38, rowsDy: 50, rowBand: 440, foot: 40, nRes: 0, gearCount: 3 });
+    expect(gachaBands(996, 5, 3)).toEqual({ pad: 16, headH: 130, btnH: 64, ticketDy: 24, ticketH: 54, pityDy: 28, pityBand: 30, resDy: 34, resLineH: 32, resBand: 160, collDy: 38, rowsDy: 50, rowBand: 312, foot: 40, nRes: 5, gearCount: 3 });
+    expect(gachaBands(996, 0, 1)).toEqual({ pad: 16, headH: 156, btnH: 64, ticketDy: 28, ticketH: 54, pityDy: 34, pityBand: 30, resDy: 40, resLineH: 32, resBand: 32, collDy: 46, rowsDy: 60, rowBand: 168, foot: 252, nRes: 0, gearCount: 1 });
+    // 高屏那一档整条逐位写死:headH / rowsDy / rowBand / foot 一起跟涨
+    expect(gachaBands(1246, 5, 3)).toEqual({ pad: 16, headH: 134, btnH: 64, ticketDy: 28, ticketH: 54, pityDy: 30, pityBand: 30, resDy: 36, resLineH: 32, resBand: 160, collDy: 40, rowsDy: 52, rowBand: 544, foot: 42, nRes: 5, gearCount: 3 });
+  });
+
   it("收藏标签带:标签与加成同基线、加成起笔 pad+170;空态提示下移 24", () => {
-    expect(L.collLabel.baseY).toBe(gachaCollLabelY(0));
-    expect(L.collBonus.x).toBe(PAD + 170);
+    expect(L.collBonus.x).toBe(PAD + GC_BONUS_DX);
     expect(L.collBonus.baseY).toBe(L.collLabel.baseY);
     expect(L.collBonus.px).toBe(FS.micro);
     expect(L.collEmpty.baseY).toBe(L.collLabel.baseY + GC_EMPTY_DY);
+    expect(L.collEmpty.x).toBe(PAD);
     expect(GC_EMPTY_DY).toBe(24);
     // 标签限宽收到加成起笔前(Web 两处都不限宽,这一档只在 Cocos 侧生效)
     expect(L.collLabel.x + L.collLabel.maxW).toBeLessThan(L.collBonus.x);
+    expect(L.collLabel.baseY).toBe(GC_PAD + B.headH + B.btnH + B.ticketDy + B.ticketH + B.pityDy + B.pityBand + B.resDy + B.resBand + B.collDy);
   });
 });
 
-/* ==================== 3. 四格溢出矩阵(派单要求:以实测为准) ==================== */
+/* ==================== 3. 富余吸收矩阵:h ∈ {996,1100,1246} × nRes ∈ {0,5} × 件数网格 ==================== */
 
-describe("四格溢出矩阵:h ∈ {996,1246} × nRes ∈ {0,5}", () => {
-  /*
-   * 行区预算是 [rowsTop, h − pad],`spreadRows` 把 rowH 钳在 40..64、gap 上限 20,
-   * 但 rowH 与 gap 各有下限(40 与 4),件数一多两个下限同时兜住 → 每多一件就多 44px。
-   * 下面每格写死两个档:最后一个不越界的件数、第一个越界的件数,以及各自的 rowH/gap/末行底边。
-   */
-  type Cell = { h: number; nRes: number; rowsTop: number; lastOk: number; firstOver: number; ok: { rowH: number; gap: number; rowsEnd: number }; over: { rowH: number; gap: number; rowsEnd: number } };
-  const MATRIX: Cell[] = [
-    // 格 ①:h = 996、nRes = 0 → rowsTop 354、预算 982 − 354 = 628
-    { h: 996, nRes: 0, rowsTop: 354, lastOk: 14, firstOver: 15, ok: { rowH: 40, gap: 5, rowsEnd: 979 }, over: { rowH: 40, gap: 4, rowsEnd: 1010 } },
-    // 格 ②:h = 996、nRes = 5 → rowsTop 434、预算 548
-    { h: 996, nRes: 5, rowsTop: 434, lastOk: 12, firstOver: 13, ok: { rowH: 40, gap: 6, rowsEnd: 980 }, over: { rowH: 40, gap: 4, rowsEnd: 1002 } },
-    // 格 ③:h = 1246、nRes = 0 → rowsTop 354、预算 878
-    { h: 1246, nRes: 0, rowsTop: 354, lastOk: 20, firstOver: 21, ok: { rowH: 40, gap: 4, rowsEnd: 1230 }, over: { rowH: 40, gap: 4, rowsEnd: 1274 } },
-    // 格 ④:h = 1246、nRes = 5 → rowsTop 434、预算 798
-    { h: 1246, nRes: 5, rowsTop: 434, lastOk: 18, firstOver: 19, ok: { rowH: 40, gap: 4, rowsEnd: 1222 }, over: { rowH: 40, gap: 4, rowsEnd: 1266 } },
-  ];
+describe("富余吸收矩阵:板铺满、带不空转、件数多时按既有性质溢出", () => {
+  const HS = [H_STD, 1100, H_TALL];
 
-  for (const cell of MATRIX) {
-    const tag = `h=${cell.h} nRes=${cell.nRes}`;
-    it(`${tag}:rowsTop = ${cell.rowsTop},末行底边在 n = ${cell.lastOk} 仍 ≤ h−pad、n = ${cell.firstOver} 起越界`, () => {
-      expect(gachaRowsTop(cell.nRes)).toBe(cell.rowsTop);
-      const okL = gachaLayout(W, cell.h, ids(cell.lastOk), cell.nRes);
-      expect(okL.rowsTop).toBe(cell.rowsTop);
-      expect(okL.rowsBottom).toBe(cell.h - PAD);
-      expect(okL.rowH).toBe(cell.ok.rowH);
-      expect(okL.rowGap).toBe(cell.ok.gap);
-      expect(okL.rowStep).toBe(cell.ok.rowH + cell.ok.gap);
-      expect(okL.rowsEnd).toBe(cell.ok.rowsEnd);
-      expect(okL.rowsEnd).toBe(lastRowBottom(okL));
-      expect(okL.rowsEnd).toBeLessThanOrEqual(okL.rowsBottom);
-      expect(cell.h - PAD - cell.ok.rowsEnd).toBeGreaterThan(0);
-      // 第一个越界的档:越界量 = rowsEnd − (h − pad)
-      const badL = gachaLayout(W, cell.h, ids(cell.firstOver), cell.nRes);
-      expect(badL.rowH).toBe(cell.over.rowH);
-      expect(badL.rowGap).toBe(cell.over.gap);
-      expect(badL.rowsEnd).toBe(cell.over.rowsEnd);
-      expect(badL.rowsEnd - (cell.h - PAD)).toBeGreaterThan(0);
-      // 首个越界件数由 spreadRows 真实实现独立推出,与写死的两档一致
-      expect(firstOverflowN(cell.rowsTop, cell.h)).toBe(cell.firstOver);
-      // 末行矩形自己也是同一个底边
-      expect(badL.rows[badL.rows.length - 1].rect.y + badL.rowH).toBe(badL.rowsEnd);
-    });
+  for (const h of HS) {
+    for (const r of [0, 5]) {
+      it(`h=${h} nRes=${r}:行区顶缘随最近条数下移、行带随富余生长`, () => {
+        const S = gachaLayout(W, h, ids(3), r);
+        expect(S.nRes).toBe(Math.min(r, GC_RES_MAX));
+        expect(S.resRows).toHaveLength(Math.min(r, GC_RES_MAX));
+        expect(S.rowsTop).toBeGreaterThan(S.collLabel.baseY);
+        // nRes = 0 那一支照样让出一整行(Web 的三元表达式),富余方向上只会更远
+        const zero = gachaLayout(W, h, ids(3), 0);
+        expect(S.rowsTop).toBeGreaterThanOrEqual(zero.rowsTop);
+        // 面板内底 = h − pad,末行底缘到面板内底的距离就是板底缝
+        expect(h - PAD - S.rowsEnd).toBeGreaterThanOrEqual(0);
+      });
+    }
   }
 
-  it("矩阵两侧都核对 spreadRows 的直算值(不是从布局函数里抄回来的同义反复)", () => {
-    for (const cell of MATRIX) {
-      for (const n of [cell.lastOk, cell.firstOver]) {
-        const d = direct(n, cell.rowsTop, cell.h);
-        const L = gachaLayout(W, cell.h, ids(n), cell.nRes);
-        expect(L.rowH, `n=${n} ${cell.h}/${cell.nRes}`).toBe(d.rowH);
-        expect(L.rowGap).toBe(d.gap);
-        expect(L.rowStep).toBe(d.rowH + d.gap);
-        expect(L.rowsEnd).toBe(cell.rowsTop + (n - 1) * (d.rowH + d.gap) + d.rowH);
-      }
+  it("件数增加时行带让位:行高单调不增,板底缝始终收在同一量级", () => {
+    let prevH = Infinity;
+    for (const n of [1, 4, 8, 12]) {
+      const S = gachaLayout(W, H_STD, ids(n), 0);
+      expect(S.rows.length).toBe(n);
+      expect(S.rowH, `n=${n}`).toBeLessThanOrEqual(prevH);
+      expect(H_STD - PAD - S.rowsEnd, `n=${n}`).toBeLessThanOrEqual(n === 1 ? 300 : gachaBands(H_STD, 0, n).foot + 24);
+      prevH = S.rowH;
     }
   });
 
-  it("越界是线性放大的(两个下限同时兜住后每多一件多 44px),本屏不裁不缩", () => {
-    const a = gachaLayout(W, H_STD, ids(15), 0);
-    const b = gachaLayout(W, H_STD, ids(16), 0);
-    const c = gachaLayout(W, H_STD, ids(20), 0);
-    expect(b.rowsEnd - a.rowsEnd).toBe(44);
-    expect(c.rowsEnd - b.rowsEnd).toBe(4 * 44);
-    expect(b.rowH).toBe(GC_ROW_MIN_H);
-    expect(b.rowGap).toBe(4);
-    expect(c.rows).toHaveLength(20);
-    for (const L of [a, b, c]) expect(L.rows.length).toBe(L.gearCount);
-  });
-
-  it("行距步进用的是 spreadRows 的 gap(gearup 丢弃它硬编码 4 —— 两屏正相反,不许统一)", () => {
-    for (const [h, nRes] of [[H_STD, 0], [H_TALL, 5]] as const) {
-      for (const n of [2, 5, 9]) {
-        const L = gachaLayout(W, h, ids(n), nRes);
-        expect(L.rowStep).toBe(L.rowH + L.rowGap);
-        L.rows.forEach((row, i) => expect(row.rect.y).toBe(L.rowsTop + i * L.rowStep));
+  it("行高钳在 44..168、行距 ≤ 20,且 spreadRows 的直算值就是这两档", () => {
+    for (const n of [1, 2, 3, 6, 10]) {
+      for (const h of HS) {
+        for (const r of [0, 5]) {
+          const S = gachaLayout(W, h, ids(n), r);
+          expect(S.rowH, `n=${n} h=${h}`).toBeGreaterThanOrEqual(GC_ROW_MIN_H);
+          expect(S.rowH, `n=${n} h=${h}`).toBeLessThanOrEqual(GC_ROW_MAX_H);
+          expect(S.rowGap, `n=${n} h=${h}`).toBeLessThanOrEqual(GC_ROW_GAP_MAX);
+          expect(S.rowStep).toBe(S.rowH + S.rowGap);
+          expect(S.rows.length, `n=${n}`).toBe(n);
+          // 独立直算一遍:矩阵数字不是从布局函数里抄回来的同义反复
+          const d = direct(n, S.rowsTop, S.rowsBottom - gachaBands(h, r, n).foot);
+          expect([S.rowH, S.rowGap], `n=${n} h=${h} nRes=${r} 与 spreadRows 直算不符`).toEqual([d.rowH, d.gap]);
+        }
       }
     }
-    // 少件数时 gap 是富余摊出来的,不是硬编码 4
-    const few = gachaLayout(W, H_STD, ids(3), 0);
-    expect(few.rowGap).toBe(20);
-    expect(few.rowStep).not.toBe(few.rowH + 4);
+    expect([GC_ROW_MIN_H, GC_ROW_MAX_H, GC_ROW_GAP_MAX]).toEqual([44, 168, 20]);
   });
 
-  it("行高钳制两档就是 Web 的 40 / 64,且 maxGap 走默认 20(spreadRows 只传五个实参)", () => {
-    expect(GC_ROW_MIN_H).toBe(40);
-    expect(GC_ROW_MAX_H).toBe(64);
-    const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/game/ui/gachaLayout.ts", import.meta.url), "utf8"));
-    const call = /=\s*spreadRows\(([^)]*)\)/.exec(src);
-    expect(call, "本屏应有一处 spreadRows 调用").not.toBe(null);
-    const args = call![1].split(",").map((s) => s.trim());
-    expect(args).toHaveLength(5);
-    expect(args).toEqual(["ownedIds.length", "rowsTop", "rowsBottom", "GC_ROW_MIN_H", "GC_ROW_MAX_H"]);
-    for (const n of [1, 3, 8, 14, 25]) {
-      for (const h of [H_STD, H_TALL]) {
-        const L = gachaLayout(W, h, ids(n), 0);
-        if (n > 0) expect(L.rowH).toBeGreaterThanOrEqual(GC_ROW_MIN_H);
-        expect(L.rowH).toBeLessThanOrEqual(GC_ROW_MAX_H);
-        expect(L.rowGap).toBeLessThanOrEqual(20);
-      }
+  it("件数多到装不下时行仍照排(本屏不裁不滚的既有性质),越出量随行数线性放大", () => {
+    const ok = gachaLayout(W, H_STD, ids(6), 0);
+    const over = gachaLayout(W, H_STD, ids(20), 0);
+    expect(ok.rowsEnd).toBeLessThanOrEqual(ok.rowsBottom);
+    expect(over.rowsEnd).toBeGreaterThan(over.rowsBottom);
+    expect(over.rows.length).toBe(20);
+    /* 首个越出面板内底的件数由实测扫出并写死:rowsTop 随件数变,不能只按一行的顶缘推 */
+    const n0 = firstOverflowN(H_STD, 0);
+    expect(n0).toBe(14);
+    expect(gachaLayout(W, H_STD, ids(n0 - 1), 0).rowsEnd).toBeLessThanOrEqual(H_STD - PAD);
+    expect(gachaLayout(W, H_STD, ids(n0), 0).rowsEnd).toBeGreaterThan(H_STD - PAD);
+    const step = over.rowStep;
+    expect([over.rowH, over.rowGap, step]).toEqual([44, 4, 48]);
+    expect(over.rowsEnd - gachaLayout(W, H_STD, ids(19), 0).rowsEnd).toBe(step);
+    // 越出量随行数线性放大:钳到硬下限后每多一件多一个 rowStep
+    expect(gachaLayout(W, H_STD, ids(15), 0).rowsEnd - gachaLayout(W, H_STD, ids(14), 0).rowsEnd).toBe(step);
+    expect(gachaLayout(W, H_STD, ids(20), 0).rowsEnd - gachaLayout(W, H_STD, ids(15), 0).rowsEnd).toBe(5 * step);
+    // 行仍然逐位落在同一列上,越界的行不改宽度、不改 x
+    for (const row of over.rows) {
+      expect(row.rect.x).toBe(PAD);
+      expect(row.rect.w).toBe(W - PAD * 2);
+      expect(row.rect.h).toBe(over.rowH);
     }
   });
 
   it("0 件:spreadRows 返回 rowH 0 / gap 0,rowsEnd 落在 rowsTop(Web 的空列表同值)", () => {
-    for (const h of [H_STD, H_TALL]) {
-      const L = gachaLayout(W, h, [], 0);
-      expect(L.rows).toEqual([]);
-      expect(L.gearCount).toBe(0);
-      expect(L.empty).toBe(true);
-      expect(L.rowH).toBe(0);
-      expect(L.rowGap).toBe(0);
-      expect(L.rowsEnd).toBe(L.rowsTop);
-      expect(L.rowsEnd).toBeLessThanOrEqual(L.rowsBottom);
+    for (const h of [H_STD, 1100, H_TALL]) {
+      const S = gachaLayout(W, h, [], 0);
+      expect(S.rowH, `h=${h}`).toBe(0);
+      expect(S.rowGap, `h=${h}`).toBe(0);
+      expect(S.rows, `h=${h}`).toHaveLength(0);
+      expect(S.gearCount, `h=${h}`).toBe(0);
+      expect(S.rowsEnd, `h=${h}`).toBe(S.rowsTop);
+      expect(S.rowsEnd, `h=${h}`).toBeLessThanOrEqual(S.rowsBottom);
+      expect(S.empty, `h=${h}`).toBe(true);
+      expect(S.panel.y + S.panel.h, `h=${h}`).toBe(h - PAD);
     }
   });
+
+  it("行距步进用的是 spreadRows 的 gap(gearup 丢弃它硬编码 4 —— 两屏正相反,不许统一)", () => {
+    const S = gachaLayout(W, H_STD, ids(4), 0);
+    expect(S.rowStep).toBe(S.rowH + S.rowGap);
+    for (let i = 1; i < S.rows.length; i++) expect(S.rows[i].rect.y - S.rows[i - 1].rect.y).toBe(S.rowStep);
+  });
+
+  it("行以 id 为键、原序不排序(绘制与命中都拿 id 反查)", () => {
+    const S = gachaLayout(W, H_STD, [7, 3, 9], 0);
+    expect(S.rows.map((r) => r.id)).toEqual([7, 3, 9]);
+    expect(S.rows.map((r) => r.index)).toEqual([0, 1, 2]);
+  });
 });
+
 
 /* ==================== 4. 文本带全网格落在 0..560(R5) ==================== */
 
@@ -1123,7 +1226,7 @@ function webGachaSource(): string {
 }
 
 const GC_KEYS = [
-  "gcDim", "gcTitle", "gcTicketText", "gcTicketGlyph",
+  "gcDim", "gcPanelFallbackBg", "gcPanelFallbackStroke", "gcTitle", "gcTicketText", "gcTicketGlyph",
   "gcBackBg", "gcBackStroke", "gcBackText",
   "gcSingleBg", "gcSingleStroke", "gcSingleText",
   "gcTenBg", "gcTenStroke", "gcTenText",
@@ -1138,6 +1241,8 @@ const GC_KEYS = [
 /** 与共享 theme 同值的几键(Web 那里写的是字面量,这里锁住"同一个色只有一个来源") */
 const GC_THEME_EQUIVALENTS: Record<string, keyof typeof theme> = {
   gcTicketText: "gold",
+  gcPanelFallbackStroke: "gold",
+  gcPanelFallbackBg: "bgPanel",
   gcSwapStroke: "gold",
   gcTenText: "gold",
   gcTenStroke: "gold",
@@ -1182,7 +1287,7 @@ describe("phase4 表的扭蛋屏配色档", () => {
     expect(new Set(inTable).size).toBe(inTable.length);
   });
 
-  it("与共享 theme 同值的十八键", () => {
+  it("与共享 theme 同值的二十键", () => {
     for (const [k, token] of Object.entries(GC_THEME_EQUIVALENTS)) expect(defs[k].toLowerCase(), `${k} 应等于 theme.${token}`).toBe(String(theme[token]).toLowerCase());
   });
 
@@ -1405,7 +1510,7 @@ describe("GachaView 的落位纪律(R5)", () => {
     for (const k of ["banner_large_purple", "icon_ticket", "btn_minor", "btn_primary", "btn_back", "bar_progress_blue_b"]) {
       expect(src.includes(`"${k}"`), k).toBe(true);
     }
-    // 面板底走 layout.panelKey(= Web panelPad 不传专属键的那一档),视图里不写死那串
+    // 面板底的键由几何层给(layout.panelKey),视图里不写死那串
     expect(src.includes("this.panel.show(L.panelKey")).toBe(true);
     expect(src.includes('"panel_dark_corners"')).toBe(false);
   });

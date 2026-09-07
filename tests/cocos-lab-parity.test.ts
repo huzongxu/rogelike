@@ -2,7 +2,7 @@
  * Phase 2 布局台闸门:共享层纯模型的端间平价与 JSON 往返。
  *
  * 三条硬性断言(R9 的验收面):
- *  1. **手柄数与字段数不低于 Web 侧实测的 76 / 125**,且 Cocos 侧读的确实是同一份实现
+ *  1. **手柄数与字段数不低于 Web 侧实测的 76 / 128**,且 Cocos 侧读的确实是同一份实现
  *     (模块同一性断言:两端 import 到的是同一个函数引用,不是两份抄本);
  *  2. **导出的 JSON 灌回加载器再导出一次,结果逐字节相同**(幂等)——
  *     这是"导出 → 粘进 balance.json → 刷新后一致"那条验收里唯一能在 node 侧证死的部分;
@@ -81,15 +81,15 @@ describe("Phase 2 端间平价", () => {
     expect(counts[2]).toBe(76);
     // 缺标题条那一档少 6 个:stageHdrY / sectionH / sectionTextPad / hdrBand /
     // endlessGapSet / endlessGapSet2 / setHdrGap 这七个手柄按环境退化为 listYNoSection + endlessGapFlat
-    expect(counts[1]).toBe(70);
-    expect(counts[3]).toBe(70);
+    expect(counts[1]).toBe(71);
+    expect(counts[3]).toBe(71);
     for (const n of counts) expect(n).toBeGreaterThanOrEqual(70);
   });
 
-  it("字段数 = 125(origin 37 + deco 88)", () => {
+  it("字段数 = 128(origin 37 + deco 91)", () => {
     expect(sharedModel.ORIGIN_KEYS.length).toBe(37);
-    expect(sharedModel.DECO_KEYS.length).toBe(88);
-    expect(sharedModel.ALL_FIELDS.length).toBe(125);
+    expect(sharedModel.DECO_KEYS.length).toBe(91);
+    expect(sharedModel.ALL_FIELDS.length).toBe(128);
   });
 
   it("Cocos 侧与 Web 侧读到的是同一份实现(不是两份抄本)", () => {
@@ -122,8 +122,8 @@ describe("钳制与拖动", () => {
   });
 
   it("非有限输入回退默认,不产生 NaN 落表", () => {
-    expect(sharedModel.clampValue("origin", "pad", NaN)).toBe(14);
-    expect(sharedModel.clampValue("deco", "chipH", Infinity)).toBe(22);
+    expect(sharedModel.clampValue("origin", "pad", NaN)).toBe(16);
+    expect(sharedModel.clampValue("deco", "chipH", Infinity)).toBe(44);
     sharedModel.applyValue("origin", "pad", NaN);
     expect(Number.isFinite(snapshotMenuLayout().origin.pad)).toBe(true);
   });
@@ -200,7 +200,7 @@ describe("导出与回灌的幂等", () => {
     expect(snapshotMenuSkin().insets.row).toEqual({ t: 2, r: 0, b: -2, l: 0 });
   });
 
-  it("只导 dirty;all=true 导出完整 125 字段", () => {
+  it("只导 dirty;all=true 导出完整 128 字段", () => {
     edit();
     const dirty = exportBundle(sharedModel.readValues(), snapshotMenuSkin(), defaultTableState()).balanceText;
     const parsed = JSON.parse(dirty) as { menuLayout: { origin: Record<string, number>; deco: Record<string, number> } };
@@ -208,7 +208,7 @@ describe("导出与回灌的幂等", () => {
     const all = exportBundle(sharedModel.readValues(), snapshotMenuSkin(), defaultTableState(), { all: true }).balanceText;
     const allParsed = JSON.parse(all) as { menuLayout: { origin: Record<string, number>; deco: Record<string, number> } };
     expect(Object.keys(allParsed.menuLayout.origin).length).toBe(37);
-    expect(Object.keys(allParsed.menuLayout.deco).length).toBe(88);
+    expect(Object.keys(allParsed.menuLayout.deco).length).toBe(91);
   });
 
   it("空改动 → menuLayout 内空段、menuSkin 段省略;viewTable 段为 '{}'", () => {
@@ -270,7 +270,7 @@ describe("导出与回灌的幂等", () => {
     const d = decodeDraft(encodeDraft({ logicalH: 996, vals: { origin: { pad: 9999 }, deco: { banY: 0 } }, skin: snapshotMenuSkin(), table: defaultTableState() }));
     restoreDraft(d!);
     // applyBalance 对越界回退默认(与编辑器的钳到边界相对)
-    expect(snapshotMenuLayout().origin.pad).toBe(14);
+    expect(snapshotMenuLayout().origin.pad).toBe(16);
   });
 });
 

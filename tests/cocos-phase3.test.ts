@@ -36,7 +36,7 @@ import { HERO_LIST_TOP, HERO_ROW_GAP, HERO_ROW_H, heroSelectLayout } from "@game
 import * as sharedScroll from "@game/ui/scrollList";
 import { allHeroes, applyHeroSelection, heroDef, isHeroReleased, releasedHeroes, type HeroId, type HeroSelection } from "@game/data/heroes";
 import { setDef, type SetId } from "@game/data/sets";
-import { SHOP_BOTTOM, SHOP_ROW_BOTTOM, SHOP_TOP, shopLayoutPure } from "@game/ui/shop";
+import { SHOP_BOTTOM, SHOP_CALIBRATION_H, SHOP_ROW_BOTTOM, SHOP_TOP, shopLayoutPure } from "@game/ui/shop";
 import { SHOP_SLOT_CAP, generateEquipment, qualityBasePrice, slotExpandCost, type Equipment } from "@game/data/equipmentGen";
 import { shopCardPrice, shopRefreshPrice } from "@game/data/shop";
 import { DAILY_BOXES, ENERGY_MAX } from "@game/data/daily";
@@ -614,16 +614,23 @@ describe("商店账本(纯逻辑输入 → 输出)", () => {
           expect(r.y, `nw=${nw} nm=${nm}`).toBeGreaterThanOrEqual(SHOP_TOP);
           expect(r.y + r.h, `nw=${nw} nm=${nm}`).toBeLessThanOrEqual(SHOP_ROW_BOTTOM);
         }
+        expect(L.nextBtn).toEqual({ x: 264, y: 950, w: 280, h: 44 });
         expect(L.nextBtn.y).toBeGreaterThanOrEqual(SHOP_BOTTOM);
         expect(L.nextBtn.y + L.nextBtn.h).toBeLessThanOrEqual(996);
         const last = L.merges[L.merges.length - 1];
-        expect(last.y + last.h).toBe(SHOP_ROW_BOTTOM);
+        /* 末行底缘贴底坞,只剩不足一行的呼吸缝(列向弹性把富余摊给了行高与带距) */
+        expect(last.y + last.h).toBeLessThanOrEqual(SHOP_ROW_BOTTOM);
+        expect(SHOP_ROW_BOTTOM - (last.y + last.h)).toBeLessThan(last.h);
       }
     }
-    // 底部带常量与宿主出口同数;且布局函数签名不收屏高 → "屏高变化仍成立" 是结构保证
+    // 底部带常量与宿主出口同数;缺省屏高 = 标定档 → 宿主不传第三实参时拿到的就是 996 那一档
     expect(SHOP_CONTENT_BOTTOM).toBe(SHOP_ROW_BOTTOM);
     expect([SHOP_TOP, SHOP_BOTTOM, SHOP_ROW_BOTTOM]).toEqual([64, 948, 942]);
-    expect(shopLayoutPure.length).toBe(2); // 收不到屏高参数 → 屏高变化时几何必然不变
+    expect([SHOP_CALIBRATION_H, shopLayoutPure.length]).toEqual([996, 2]);
+    expect(shopLayoutPure(3, 2)).toEqual(shopLayoutPure(3, 2, SHOP_CALIBRATION_H));
+    // 行带随屏高生长,卡带不随屏高走
+    expect(shopLayoutPure(3, 2, 1246).contentBottom).toBeGreaterThan(shopLayoutPure(3, 2).contentBottom);
+    expect(shopLayoutPure(3, 2, 1246).cardH).toBe(shopLayoutPure(3, 2).cardH);
     // 纯函数 + 行数封顶:超上限的行数并到 8 / 4 档
     expect(shopLayoutPure(9, 5)).toEqual(shopLayoutPure(8, 4));
     expect([shopLayoutPure(0, 0).nW, shopLayoutPure(0, 0).nM]).toEqual([1, 1]);
@@ -802,6 +809,8 @@ interface TextRequest {
   maxW: number;
   px: number;
   align: TextAlign;
+  /** 该文本所在容器的 nineMargin 内缩区;给出即受「落在内缩区内」这条断言约束 */
+  box?: { x: number; y: number; w: number; h: number };
 }
 
 const bandOf = (t: TextRequest): Band => anchorBand(t.x, t.baseY, t.maxW, t.px, t.align, LIFT);
@@ -814,6 +823,30 @@ function expectInsideScreen(bands: TextRequest[]): void {
       const b = bandOf(bands[i]);
       return b.x < 0 || b.x + b.w > W;
     });
+  expect(bad).toEqual([]);
+}
+
+/**
+ * nineMargin 内缩判定:登记了 `box`(贴图卡框按九宫格边距吃进来的一块内缩区)的那些文本带,
+ * 整条带必须落在内缩区内 —— 切边带是画框的,压上去就是"文字啃框"。
+ * 违规项连四边各自的超出量一起列出,便于直接指回视图里的那一行。
+ */
+function expectInsideNineMargin(bands: TextRequest[]): void {
+  const bad = bands
+    .filter((t) => t.box)
+    .map((t) => {
+      const b = bandOf(t);
+      const box = t.box as NonNullable<TextRequest["box"]>;
+      const over = {
+        左: box.x - b.x,
+        右: b.x + b.w - (box.x + box.w),
+        上: box.y - b.y,
+        下: b.y + b.h - (box.y + box.h),
+      };
+      const hits = Object.entries(over).filter(([, v]) => v > 0);
+      return hits.length ? `${t.at} 越内缩区 ${hits.map(([k, v]) => `${k}+${v}`).join(" ")}` : "";
+    })
+    .filter((s) => s !== "");
   expect(bad).toEqual([]);
 }
 
@@ -837,18 +870,24 @@ function shopTextBands(L: ReturnType<typeof shopLayoutPure>): TextRequest[] {
     { at: "底栏推荐", x: pad, baseY: SHOP_BOTTOM + 37, maxW: 238, px: FS.micro, align: "left" },
   ];
   for (const [i, b] of L.toolBtns.entries()) out.push({ at: `工具钮${i}`, x: b.x + b.w / 2, baseY: b.y + 18, maxW: b.w - 12, px: FS.body, align: "center" });
+  /** 卡框走 frame_<品质> 九宫格时吃进的内缩量(viewTable.nineSlice.keys.frame_* = slice × module) */
+  const CARD_BORDER = 16;
   for (const [i, r] of L.cards.entries()) {
     const icx = r.x + r.w / 2;
-    const inner = r.w - 16;
+    // 与 shop/ShopView.ts 同一口径:行位让出 dy,限宽按内缩量的两倍(内缩量不足 7 时退到 8 的既有一圈)
+    const dy = Math.max(0, CARD_BORDER - 7);
+    const dyb = Math.max(14, CARD_BORDER + 12);
+    const inner = r.w - Math.max(8, CARD_BORDER) * 2;
+    const box = { x: r.x + CARD_BORDER, y: r.y + CARD_BORDER, w: inner, h: r.h - CARD_BORDER * 2 };
     out.push(
-      { at: `卡${i}图标首字`, x: icx, baseY: r.y + 38, maxW: 40, px: FS.section, align: "center" },
-      { at: `卡${i}名`, x: icx, baseY: r.y + 66, maxW: inner, px: FS.body, align: "center" },
-      { at: `卡${i}品质`, x: icx, baseY: r.y + 84, maxW: inner, px: FS.muted, align: "center" },
-      { at: `卡${i}效果行`, x: icx, baseY: r.y + 104, maxW: inner, px: FS.micro, align: "center" },
-      { at: `卡${i}价格`, x: icx, baseY: r.y + r.h - 14, maxW: inner, px: FS.body, align: "center" },
-      { at: `卡${i}套组角标`, x: r.x + r.w - 8, baseY: r.y + 19, maxW: 44, px: FS.micro, align: "right" },
-      { at: `卡${i}售罄主行`, x: icx, baseY: r.y + r.h / 2 + 6, maxW: inner, px: FS.section, align: "center" },
-      { at: `卡${i}售罄副行`, x: icx, baseY: r.y + r.h / 2 + 28, maxW: inner, px: FS.micro, align: "center" }
+      { at: `卡${i}图标首字`, x: icx, baseY: r.y + 38 + dy, maxW: 40, px: FS.section, align: "center", box },
+      { at: `卡${i}名`, x: icx, baseY: r.y + 66 + dy, maxW: inner, px: FS.body, align: "center", box },
+      { at: `卡${i}品质`, x: icx, baseY: r.y + 84 + dy, maxW: inner, px: FS.muted, align: "center", box },
+      { at: `卡${i}效果行`, x: icx, baseY: r.y + 104 + dy, maxW: inner, px: FS.micro, align: "center", box },
+      { at: `卡${i}价格`, x: icx, baseY: r.y + r.h - dyb, maxW: inner, px: FS.body, align: "center", box },
+      { at: `卡${i}套组角标`, x: r.x + r.w - 8 - dy, baseY: r.y + 19 + dy, maxW: 44, px: FS.micro, align: "right", box },
+      { at: `卡${i}售罄主行`, x: icx, baseY: r.y + r.h / 2 + 6, maxW: inner, px: FS.section, align: "center", box },
+      { at: `卡${i}售罄副行`, x: icx, baseY: r.y + r.h / 2 + 28, maxW: inner, px: FS.micro, align: "center", box }
     );
   }
   for (const [i, y] of [L.weaponLabelY, L.mergeLabelY].entries()) {
@@ -943,6 +982,22 @@ describe("文本带右界(shopLayoutPure / heroSelectLayout 全网格)", () => {
         expectInsideScreen(bands);
       }
     }
+  });
+
+  it("商店卡框换 frame_<品质> 贴图后:卡内每行文本都落在 nineMargin 内缩区(三档卡高全过)", () => {
+    for (let nw = 0; nw <= 8; nw++) {
+      for (let nm = 0; nm <= 4; nm++) {
+        const bands = shopTextBands(shopLayoutPure(nw, nm));
+        expect(bands.filter((t) => t.box).length).toBe(24);
+        expectInsideNineMargin(bands);
+      }
+    }
+    // 三档卡高各自实测一次,确认最矮那档(160)也还放得下五行
+    for (const [nw, nm] of [[8, 4], [5, 1], [1, 1]] as const) {
+      const L = shopLayoutPure(nw, nm);
+      expectInsideNineMargin(shopTextBands(L));
+    }
+    expect([shopLayoutPure(8, 4).cardH, shopLayoutPure(5, 1).cardH, shopLayoutPure(1, 1).cardH]).toEqual([160, 176, 208]);
   });
 
   it("英雄屏 996 / 1246 两档 × 四季 × 首中末滚动位:每条文本带都落在 0..560", () => {
