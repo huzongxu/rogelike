@@ -1,8 +1,9 @@
 /**
  * 章间商店屏 —— Web `src/game.ts:drawShop` 的节点化替换。
  *
- * 三层分工:几何问共享层 `game/ui/shop.ts:shopLayoutPure()`(顶/底带恒 64/948,与战斗双坞
- * 同源同位),账本与文案问 `shop/ShopModel.ts`,本文件只把两者落到节点上。
+ * 三层分工:几何问共享层 `game/ui/shop.ts:shopLayoutPure()`(顶带恒 0..64,底带与全部
+ * 内容带贴本帧逻辑屏高,富余摊给行高 / 带距 / 卡高),账本与文案问 `shop/ShopModel.ts`,
+ * 本文件只把两者落到节点上。
  * 顶信息条与底操作条复用 `hud_dock_top` / `hud_dock_bottom` 九宫格(边距走 borderOf),
  * 所以章间商店与战斗屏看上去就是同一块面板 —— 这正是商店骨架重设计的原意。
  *
@@ -16,10 +17,10 @@
 import { Graphics, Label, Node, Sprite, SpriteFrame } from "cc";
 import { DESIGN_W, coverRect, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
-import { FS, HEX, UI, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
+import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
 import { Plate, approxW, fitOne, flatBox, iconNode, placeLine, qualityBox } from "../ui/PanelKit";
 import { HUD_BOT_H, HUD_TOP_H } from "../game/ui/hud";
-import { SHOP_BOTTOM } from "../game/ui/shop";
+import { SHOP_PAD } from "../game/ui/shop";
 import type { ShopAction, ShopModel } from "./ShopModel";
 
 /** 坞板缺图回退(与 HudView.dockPlate 同一形态:深色板 + 朝战场一侧的紫色细描边) */
@@ -182,7 +183,7 @@ export class ShopView {
     for (let i = 0; i < 4; i++) this.tools.push({ plate: new Plate("Tool" + i, this.root, frames), flat: flatBox("ToolFlat" + i, this.root), text: new Txt("ToolText" + i, this.root) });
     for (let i = 0; i < 3; i++) {
       this.cards.push({
-        frame: qualityBox("CardFrame" + i, this.root),
+        frame: qualityBox("CardFrame" + i, this.root, frames),
         icon: iconNode("CardIcon" + i, this.root, frames, { x: 0, y: 0, w: 36, h: 36 }),
         iconChar: new Txt("CardIconChar" + i, this.root),
         name: new Txt("CardName" + i, this.root),
@@ -199,7 +200,7 @@ export class ShopView {
     this.weaponHeader = { plate: new Plate("WeaponHeader", this.root, frames), title: new Txt("WeaponHeaderTitle", this.root), right: new Txt("WeaponHeaderRight", this.root) };
     for (let i = 0; i < 8; i++) {
       this.weapons.push({
-        frame: qualityBox("WeaponFrame" + i, this.root),
+        frame: qualityBox("WeaponFrame" + i, this.root, frames),
         icon: iconNode("WeaponIcon" + i, this.root, frames, { x: 0, y: 0, w: 24, h: 24 }),
         name: new Txt("WeaponName" + i, this.root),
         sub: new Txt("WeaponSub" + i, this.root),
@@ -208,7 +209,7 @@ export class ShopView {
     }
     this.weaponEmpty = new Txt("WeaponEmpty", this.root);
     this.mergeHeader = { plate: new Plate("MergeHeader", this.root, frames), title: new Txt("MergeHeaderTitle", this.root), right: new Txt("MergeHeaderRight", this.root) };
-    for (let i = 0; i < 4; i++) this.merges.push({ frame: qualityBox("MergeFrame" + i, this.root), name: new Txt("MergeName" + i, this.root), fee: new Txt("MergeFee" + i, this.root) });
+    for (let i = 0; i < 4; i++) this.merges.push({ frame: qualityBox("MergeFrame" + i, this.root, frames), name: new Txt("MergeName" + i, this.root), fee: new Txt("MergeFee" + i, this.root) });
     this.mergeEmpty = new Txt("MergeEmpty", this.root);
     this.nextIntel = new Txt("NextIntel", this.root);
     this.nextRec = new Txt("NextRec", this.root);
@@ -222,7 +223,7 @@ export class ShopView {
       Node.EventType.TOUCH_END,
       (e: { getUILocation(): { x: number; y: number } }) => {
         const p = toDesignSpace(this.capture, e.getUILocation());
-        const a = this.model.hitTest(p.x, p.y);
+        const a = this.model.hitTest(p.x, p.y, logicalH());
         if (a) this.onAction(a);
       },
       this
@@ -239,19 +240,23 @@ export class ShopView {
   sync(): void {
     const p3 = viewTable().phase3;
     const hud = viewTable().hud;
-    const L = this.model.layout();
+    const h = logicalH();
+    const L = this.model.layout(h);
     const c = this.model.content();
-    const pad = UI.pad;
+    const pad = SHOP_PAD;
     const rx = DESIGN_W - pad;
 
     this.paintBackdrop();
     this.topDock.show("hud_dock_top", { x: 0, y: 0, w: DESIGN_W, h: HUD_TOP_H }, "slice", DOCK_FILL, DOCK_STROKE);
-    this.bottomDock.show("hud_dock_bottom", { x: 0, y: SHOP_BOTTOM, w: DESIGN_W, h: HUD_BOT_H }, "slice", DOCK_FILL, DOCK_STROKE);
+    this.bottomDock.show("hud_dock_bottom", { x: 0, y: L.dockTop, w: DESIGN_W, h: HUD_BOT_H }, "slice", DOCK_FILL, DOCK_STROKE);
     const zoneY = L.weaponLabelY - 8;
-    this.zone.draw({ x: 8, y: zoneY, w: DESIGN_W - 16, h: SHOP_BOTTOM - 4 - zoneY }, p3.listZone);
-    const rest = logicalH() - this.wh;
+    this.zone.draw({ x: 8, y: zoneY, w: DESIGN_W - 16, h: L.dockTop - 4 - zoneY }, p3.listZone);
+    /** 底坞贴本帧屏高、内容带吃满富余 → 标定高以下那条平色带不再有落点;
+     *  仍按 `this.wh`(战场标定高 996)兜一层:几何少盖一格,这条带立刻补上,不留背景断口。 */
+    const covered = Math.max(L.dockTop + HUD_BOT_H, this.wh);
+    const rest = Math.max(0, h - covered);
     this.rest.node.active = rest > 0;
-    if (rest > 0) this.rest.draw({ x: 0, y: this.wh, w: DESIGN_W, h: rest }, hud.colors.restZoneFill);
+    if (rest > 0) this.rest.draw({ x: 0, y: covered, w: DESIGN_W, h: rest }, hud.colors.restZoneFill);
 
     /* --- 顶信息条:三行基线 19/39/58,与战斗顶坞同骨架 --- */
     this.title.bold(true);
@@ -308,12 +313,17 @@ export class ShopView {
       slot.frame.node.active = !!r && !!v;
       if (!r || !v) return;
       const icx = r.x + r.w / 2;
-      slot.frame.draw(r, v.soldOut ? p3.soldOutFrame : v.color, true);
+      // 卡框走 frame_<品质> 贴图时按九宫格边距吃进一圈,行位与限宽随之内让;回退画描边时占位为 0,行位不变
+      const ib = slot.frame.draw(r, v.soldOut ? p3.soldOutFrame : v.color, true, v.frameKey);
+      const dy = Math.max(0, ib - 7);
+      // 价格行贴卡底:Label 文本盒在基线以下还有 ≈12 逻辑 px 降部,让出量取「既有 14」与「切边带 + 降部」的较大者
+      const dyb = Math.max(14, ib + 12);
+      const inner = r.w - Math.max(8, ib) * 2;
       const iconOn = !v.soldOut && !!v.iconKey && slot.icon.show(v.iconKey);
       slot.icon.node.active = iconOn;
-      if (iconOn) placeRect(slot.icon.node, { x: icx - 18, y: r.y + 14, w: 36, h: 36 });
+      if (iconOn) placeRect(slot.icon.node, { x: icx - 18, y: r.y + 14 + dy, w: 36, h: 36 });
       slot.iconChar.active(!v.soldOut && !iconOn);
-      if (!v.soldOut && !iconOn) slot.iconChar.set(icx, r.y + 38, 40, FS.section, v.name.slice(0, 1), "center", v.color);
+      if (!v.soldOut && !iconOn) slot.iconChar.set(icx, r.y + 38 + dy, 40, FS.section, v.name.slice(0, 1), "center", v.color);
       const sold = v.soldOut;
       slot.name.active(!sold);
       slot.quality.active(!sold);
@@ -328,17 +338,17 @@ export class ShopView {
         slot.seal.show("card_soldout");
         placeRect(slot.seal.node, { x: icx - seal / 2, y: r.y + (r.h - seal) / 2, w: seal, h: seal });
         slot.soldTitle.bold(true);
-        slot.soldTitle.set(icx, r.y + r.h / 2 + 6, r.w - 16, FS.section, "售 罄", "center", HEX.textSecondary);
-        slot.soldHint.set(icx, r.y + r.h / 2 + 28, r.w - 16, FS.micro, v.sub, "center", HEX.textSecondary);
+        slot.soldTitle.set(icx, r.y + r.h / 2 + 6, inner, FS.section, "售 罄", "center", HEX.textSecondary);
+        slot.soldHint.set(icx, r.y + r.h / 2 + 28, inner, FS.micro, v.sub, "center", HEX.textSecondary);
         return;
       }
       slot.name.bold(true);
-      slot.name.set(icx, r.y + 66, r.w - 16, FS.body, v.name, "center", v.color);
-      slot.quality.set(icx, r.y + 84, r.w - 16, FS.muted, v.qualityName, "center", v.color);
-      slot.sub.set(icx, r.y + 104, r.w - 16, FS.micro, v.sub, "center", "#CFCFCF");
+      slot.name.set(icx, r.y + 66 + dy, inner, FS.body, v.name, "center", v.color);
+      slot.quality.set(icx, r.y + 84 + dy, inner, FS.muted, v.qualityName, "center", v.color);
+      slot.sub.set(icx, r.y + 104 + dy, inner, FS.micro, v.sub, "center", "#CFCFCF");
       slot.price.bold(true);
-      slot.price.set(icx, r.y + r.h - 14, r.w - 16, FS.body, v.priceText, "center", v.afford ? HEX.gold : HEX.textMuted);
-      if (v.setBadge) slot.setTag.set(r.x + r.w - 8, r.y + 19, 44, FS.micro, v.setBadge, "right", v.setBadgeColor ?? HEX.echo);
+      slot.price.set(icx, r.y + r.h - dyb, inner, FS.body, v.priceText, "center", v.afford ? HEX.gold : HEX.textMuted);
+      if (v.setBadge) slot.setTag.set(r.x + r.w - 8 - dy, r.y + 19 + dy, 44, FS.micro, v.setBadge, "right", v.setBadgeColor ?? HEX.echo);
     });
 
     /* --- 槽位 +1(金币出口) --- */
@@ -354,7 +364,7 @@ export class ShopView {
     }
 
     /* --- 武器管理(≤8 行) --- */
-    this.sectionHeader(this.weaponHeader, L.weaponLabelY, c.weaponHeader.title, c.weaponHeader.right);
+    this.sectionHeader(this.weaponHeader, L.weaponLabelY, L.headerH, c.weaponHeader.title, c.weaponHeader.right);
     this.weapons.forEach((slot, i) => {
       const r = L.weaponRows[i];
       const v = c.weapons[i];
@@ -381,7 +391,7 @@ export class ShopView {
     }
 
     /* --- 进化(底锚 942 贴底坞) --- */
-    this.sectionHeader(this.mergeHeader, L.mergeLabelY, c.mergeHeaderTitle, "");
+    this.sectionHeader(this.mergeHeader, L.mergeLabelY, L.headerH, c.mergeHeaderTitle, "");
     this.merges.forEach((slot, i) => {
       const r = L.merges[i];
       const v = c.merges[i];
@@ -400,9 +410,9 @@ export class ShopView {
       this.mergeEmpty.set(ph.x + ph.w / 2, ph.y + ph.h / 2 + FS.muted / 3, ph.w - 16, FS.muted, c.mergeEmpty, "center", HEX.textSecondary);
     }
 
-    /* --- 底操作条:左两行下一章预告 / 右开始下一章 --- */
-    this.nextIntel.set(pad, SHOP_BOTTOM + 19, 238, FS.micro, c.nextIntelText, "left", HEX.textSecondary);
-    this.nextRec.set(pad, SHOP_BOTTOM + 37, 238, FS.micro, c.nextRecText, "left", c.nextRecColor ?? HEX.textMuted);
+    /* --- 底操作条:左两行下一章预告 / 右开始下一章(整条贴本帧 dockTop) --- */
+    this.nextIntel.set(pad, L.dockTop + 19, 238, FS.micro, c.nextIntelText, "left", HEX.textSecondary);
+    this.nextRec.set(pad, L.dockTop + 37, 238, FS.micro, c.nextRecText, "left", c.nextRecColor ?? HEX.textMuted);
     this.nextBtn.plate.show("btn_primary", L.nextBtn, "slice");
     this.nextBtn.text.set(L.nextBtn.x + L.nextBtn.w / 2, L.nextBtn.y + L.nextBtn.h / 2 + FS.body / 3, L.nextBtn.w - 16, FS.body, c.nextText, "center", HEX.textPrimary);
   }
@@ -430,24 +440,30 @@ export class ShopView {
     };
   }
 
-  /** 分区标题条:banner_mid_navy 九宫格 + 左标题金字 / 右副信息(条高走表) */
-  private sectionHeader(slot: HeaderSlot, y: number, title: string, right: string): void {
+  /** 分区标题条:banner_mid_navy 九宫格铺满整带 + 左标题金字 / 右副信息(带高由列向弹性给) */
+  private sectionHeader(slot: HeaderSlot, y: number, bandH: number, title: string, right: string): void {
     const p3 = viewTable().phase3;
-    const bw = DESIGN_W - UI.pad * 2;
-    slot.plate.show("banner_mid_navy", { x: UI.pad, y, w: bw, h: p3.sectionBarH }, "slice", p3.sectionFallbackBg, SECTION_STROKE);
+    const bw = DESIGN_W - SHOP_PAD * 2;
+    const baseY = y + bandH / 2 + FS.muted / 3;
+    slot.plate.show("banner_mid_navy", { x: SHOP_PAD, y, w: bw, h: bandH }, "slice", p3.sectionFallbackBg, SECTION_STROKE);
     slot.title.bold(true);
-    slot.title.set(UI.pad + 10, y + 18, 330, FS.muted, title, "left", HEX.gold);
+    slot.title.set(SHOP_PAD + 10, baseY, 330, FS.muted, title, "left", HEX.gold);
     slot.right.active(right !== "");
-    if (right !== "") slot.right.set(UI.pad + bw - 10, y + 18, 150, FS.micro, right, "right", HEX.textSecondary);
+    if (right !== "") slot.right.set(SHOP_PAD + bw - 10, y + bandH / 2 + FS.micro / 3, 150, FS.micro, right, "right", HEX.textSecondary);
   }
 
-  /** bg_shop 满幅 cover + 单层压暗(对标 Web render() 铺底 + drawShop 的 fillRect 暗底) */
+  /**
+   * bg_shop 满幅 cover + 单层压暗。参照系与主菜单 `MenuLayoutView.backdrop()` 同一口径:
+   * cover 与暗层都铺满**整个逻辑屏**(高度随视口在 996~1246 之间变),这样高视口下不会
+   * 在 996 以下露出一条没有背景的平色带 —— 那条带子是内容带与 restZone 的锚点
+   * (`this.wh` = 战场标定高 996)所在,底坞与货架区仍锚它,与背景铺不铺满无关。
+   */
   private paintBackdrop(): void {
     const p3 = viewTable().phase3;
     const frame = this.frames.get("bg_shop");
     this.coverSp.enabled = !!frame;
     this.coverGfx.enabled = !frame;
-    const band = { x: 0, y: 0, w: DESIGN_W, h: this.wh };
+    const band = fullRect();
     if (frame) {
       this.coverSp.spriteFrame = frame;
       this.coverSp.type = Sprite.Type.SIMPLE;
@@ -457,7 +473,7 @@ export class ShopView {
     }
     this.dimGfx.clear();
     this.dimGfx.fillColor = hexToColor(p3.shopDim);
-    this.dimGfx.rect(-DESIGN_W / 2, -this.wh / 2, DESIGN_W, this.wh);
+    this.dimGfx.rect(-band.w / 2, -band.h / 2, band.w, band.h);
     this.dimGfx.fill();
     placeRect(this.dim, band);
   }

@@ -113,10 +113,14 @@ export const ASSET_MANIFEST: Record<string, string> = {
   menu_set_plate: "menu_set_plate.png",
   menu_set_plate_selected: "menu_set_plate_selected.png",
   menu_chip_plate: "menu_chip_plate.png",
-  menu_section_strip: "menu_section_strip.png", // 主菜单分区标题条:整图 512:73 等比绘制(端柱+菱形纹不可九宫格)
+  menu_section_strip: "menu_section_strip.png", // 主菜单分区标题条:与面板族共用的九宫格底板,走 slice 通路
   menu_note_plate: "menu_note_plate.png",
   hud_dock_top: "hud_dock_top.png",
   hud_dock_bottom: "hud_dock_bottom.png",
+  slot_skill: "slot_skill.png",
+  bar_capsule: "bar_capsule.png",
+  joy_base: "joy_base.png",
+  joy_knob: "joy_knob.png",
   panel_dark_corners: "panel_dark_corners.png",
   panel_parchment: "panel_parchment.png",
   panel_gearup: "panel_gearup.png",

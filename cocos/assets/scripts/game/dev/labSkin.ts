@@ -175,7 +175,7 @@ export function applyToggle(skin: MenuSkinTable, layerId: string, on: boolean): 
     next.hidden = [...set];
   } else {
     const panel = layerId.split(".")[0] as MenuPanelId;
-    next.textHidden = on ? next.textHidden.filter((p) => p !== panel) : [...new Set([...next.textHidden, panel])];
+    next.textHidden = on ? next.textHidden.filter((p) => p !== panel) : Array.from(new Set([...next.textHidden, panel]));
   }
   return next;
 }
@@ -254,12 +254,12 @@ export function exportSkinJson(skin: MenuSkinTable): string {
 
   if (Array.isArray(raw.hidden)) {
     const hidden = (raw.hidden as unknown[]).filter((v): v is string => typeof v === "string");
-    if (hidden.length) out.hidden = [...new Set(hidden)];
+    if (hidden.length) out.hidden = Array.from(new Set(hidden));
   }
 
   if (Array.isArray(raw.textHidden)) {
     const textHidden = (raw.textHidden as unknown[]).filter((v): v is MenuPanelId => MENU_PANEL_IDS.includes(v as MenuPanelId));
-    if (textHidden.length) out.textHidden = [...new Set(textHidden)];
+    if (textHidden.length) out.textHidden = Array.from(new Set(textHidden));
   }
 
   const layers: Record<string, { name: string }> = {};

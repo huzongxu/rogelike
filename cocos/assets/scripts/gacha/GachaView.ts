@@ -9,7 +9,9 @@
  * 收藏标签带 + 收藏行(按需增长的对象池) + 右上返回钮 + 整屏 Capture 热区。
  *
  * 贴图分支与 Web 一一对应(八件都在 `ASSET_MANIFEST` 里,"贴图优先、缺图回退代码形状"):
- *  - 面板底走 `panel_dark_corners`(Web 的 `panelPad(g, w, h)` **不传专属键**,本屏没有专属面板);
+ *  - 面板底是几何层给的**贴内容矩形**,由 `PanelBase`(纯 Graphics)按 phase4 的
+ *    `gcPanelFallbackBg` + `gcPanelFallbackStroke` 画(与 Web `panel()` 同值);几何层给空键时
+ *    贴图板 `Panel` 整节点收起,给键时代码底垫在贴图板之下;
  *  - 标题走 `banner_large_purple` **显式 240×46**(与 daily 同参数、与 gearup 的纯文字不同),
  *    缺图时标题从"横幅内居中、基线 32"切到"左起笔于 pad、基线 36"(Web `themePaint.header`);
  *  - 券数走 `icon_ticket`,缺图时文字回到 pad 并前置替代字形「✦」(Web `iconText` 的 fallbackGlyph);
@@ -131,6 +133,8 @@ export class GachaView {
   private hooks: GachaViewHooks;
 
   private dim: Node;
+  /** 板底(纯 Graphics):几何层给空键时这一档就是屏的面板底,给键时垫在贴图板之下 */
+  private panelBase: ReturnType<typeof flatBox>;
   private panel: Plate;
   private banner: ReturnType<typeof iconNode>;
   private title: Txt;
@@ -163,6 +167,7 @@ export class GachaView {
 
     this.dim = makeNode("Dim", this.root);
     this.dim.addComponent(Graphics);
+    this.panelBase = flatBox("PanelBase", this.root);
     this.panel = new Plate("Panel", this.root, frames);
 
     // 节点创建顺序 = Web drawGacha 的绘制顺序(横幅 → 标题 → 券数 → 返回 → 三枚钮 → 换券条 → 保底 → 最近 → 收藏)
@@ -215,14 +220,15 @@ export class GachaView {
 
   /** 一帧重排:切屏(refresh)、落账之后与晚到贴图流式加载后各调一次 */
   sync(): void {
-    const p3 = viewTable().phase3;
     const p4 = viewTable().phase4;
     const L = this.hooks.layout();
     const c = this.hooks.content(L);
 
-    // 覆盖底 + 面板底(Web panelPad 不传专属键,那一笔就是 panel_dark_corners 九宫格)
+    // 覆盖底(整屏) + 面板底(贴内容矩形;空键 = 只画代码底板,有键时代码底垫在贴图板之下)
     this.paintDim(p4.gcDim);
-    this.panel.show(L.panelKey, L.panel, "slice", p3.detailBg, p3.detailStroke);
+    this.panelBase.draw(L.panel, p4.gcPanelFallbackBg, p4.gcPanelFallbackStroke);
+    this.panel.node.active = !!L.panelKey;
+    if (L.panelKey) this.panel.show(L.panelKey, L.panel, "slice", p4.gcPanelFallbackBg, p4.gcPanelFallbackStroke);
 
     // 标题:横幅优先(两档文字位),缺图回到 themePaint.header 那一档
     const banner = this.banner.show(KEY_BANNER);

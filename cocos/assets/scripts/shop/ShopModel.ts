@@ -81,6 +81,8 @@ export interface ShopCardView {
   name: string;
   qualityName: string;
   color: string;
+  /** 品质卡框贴图键 `frame_<品质>`;空串 = 无品质(售罄),视图走代码描边回退 */
+  frameKey: string;
   /** 效果图标键;null = 视图走品质色圆底 + 效果首字回退 */
   iconKey: string | null;
   sub: string;
@@ -212,9 +214,9 @@ export class ShopModel {
     return this.w.mergeGroups();
   }
 
-  /** 纯几何 + 身份:行数由实际持有量决定,视图只按数组落位 */
-  layout(): ShopLayoutPure {
-    return shopLayoutPure(this.weapons().length, this.merges().length);
+  /** 纯几何 + 身份:行数由实际持有量决定,纵向由本帧逻辑屏高决定,视图只按数组落位 */
+  layout(screenH?: number): ShopLayoutPure {
+    return shopLayoutPure(this.weapons().length, this.merges().length, screenH);
   }
 
   /* ================= 操作 ================= */
@@ -345,8 +347,8 @@ export class ShopModel {
    * 热区顺序对标 Web `onShopClick`:工具钮 → 槽位 → 三卡 → 武器行(销毁优先) → 进化 → 下一章。
    * 空态占位行不产热区(没有可操作的武器),销毁钮在行内优先于整行。
    */
-  hitTest(x: number, y: number): ShopAction | null {
-    const L = this.layout();
+  hitTest(x: number, y: number, screenH?: number): ShopAction | null {
+    const L = this.layout(screenH);
     for (const b of L.toolBtns) {
       if (rectHit(b, x, y)) return { kind: "tool", id: b.id };
     }
@@ -394,7 +396,7 @@ export class ShopModel {
     for (let i = 0; i < SHOP_CARD_SLOTS; i++) {
       const eq = this.offers[i];
       if (!eq) {
-        cards.push({ soldOut: true, name: "售 罄", qualityName: "", color: "#3a465c", iconKey: null, sub: "点「刷新」补货", priceText: "", afford: false, setBadge: null, setBadgeColor: null });
+        cards.push({ soldOut: true, name: "售 罄", qualityName: "", color: "#3a465c", frameKey: "", iconKey: null, sub: "点「刷新」补货", priceText: "", afford: false, setBadge: null, setBadgeColor: null });
         continue;
       }
       const q = qualityDef(eq.quality);
@@ -406,6 +408,7 @@ export class ShopModel {
         name: eq.effect.def.name,
         qualityName: q.name,
         color: q.color,
+        frameKey: `frame_${eq.quality}`,
         iconKey: `icon_fx_${eq.effect.def.type}`,
         sub: `${trig}${mod ? "·" + mod : ""}`,
         priceText: gold >= price && this.freeSlots() > 0 ? `购买 ${price}金` : `¥${price}`,

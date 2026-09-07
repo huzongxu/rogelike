@@ -177,7 +177,7 @@ export class GearUpView {
     // 徽记槽数 = GEAR_UPGRADE_MAX,与共享层 row.stars 的长度同一来源(颗数由该常量门控)
     for (let s = 0; s < GEAR_UPGRADE_MAX; s++) stars.push({ icon: iconNode(name + "Star" + s, this.root, this.frames, ZERO), glyph: new Txt(name + "StarGlyph" + s, this.root) });
     return {
-      frame: qualityBox(name + "Frame", this.root),
+      frame: qualityBox(name + "Frame", this.root, this.frames),
       name: new Txt(name + "Name", this.root),
       desc: new Txt(name + "Desc", this.root),
       stars,

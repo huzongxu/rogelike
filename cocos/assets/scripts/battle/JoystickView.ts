@@ -2,11 +2,12 @@
  * 虚拟摇杆 + 键盘移动 —— Web 版 core/input.ts 与 drawJoystick 的节点化替换。
  * 全屏 TOUCH_START/MOVE/END 驱动:左半屏起杆(右半屏留给 UI 点击,与 Web 同一分区规则),
  * 键盘 WASD/方向键优先于摇杆(与 Web Input.update 同一合成顺序),F6 切换挂机/手动。
- * 视觉:底盘描边圆 + 旋钮填充圆,单个 Graphics 按状态重绘;参数全部读 viewTable.joystick。
+ * 视觉:joy_base 底盘 + joy_knob 旋钮两枚像素贴图(半径仍读 viewTable.joystick);
+ * 缺图回退底盘描边圆 + 旋钮填充圆的 Graphics 画法。
  */
 
-import { EventKeyboard, EventTouch, Graphics, Input, KeyCode, Node, UITransform, input as ccInput, view } from "cc";
-import { DESIGN_W, logicalH, placeRect, fullRect } from "../core/DesignMetrics";
+import { EventKeyboard, EventTouch, Graphics, Input, KeyCode, Node, Sprite, SpriteFrame, UITransform, input as ccInput, view } from "cc";
+import { DESIGN_W, logicalH, placeRect, fullRect, Rect } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { hexToColor, makeNode } from "../ui/Widgets";
 import { type Vec2, vec2 } from "../game/core/math";
@@ -35,15 +36,35 @@ export class JoystickView implements MoveInput {
     private knob = vec2(0, 0);
     private visible = false;
 
+    /** 像素皮两枚(joy_base / joy_knob);缺图恒 null,绘制回落 Graphics 圆 */
+    private baseSpr: Sprite | null = null;
+    private knobSpr: Sprite | null = null;
+
     /** F6 等宿主级按键回调(挂机/手动切换) */
     onToggleAuto: (() => void) | null = null;
 
-    constructor(parent: Node) {
+    constructor(parent: Node, frames: Map<string, SpriteFrame>) {
         this.root = makeNode("Joystick", parent);
         placeRect(this.root, fullRect());
         const ui = this.root.getComponent(UITransform) || this.root.addComponent(UITransform);
         ui.setContentSize(DESIGN_W, logicalH());
         this.gfx = makeNode("Stick", this.root).addComponent(Graphics);
+        const baseFrame = frames.get("joy_base");
+        const knobFrame = frames.get("joy_knob");
+        if (baseFrame) {
+            const n = makeNode("Base", this.root);
+            this.baseSpr = n.addComponent(Sprite);
+            this.baseSpr.spriteFrame = baseFrame;
+            this.baseSpr.sizeMode = Sprite.SizeMode.CUSTOM;
+            n.active = false;
+        }
+        if (knobFrame) {
+            const n = makeNode("Knob", this.root);
+            this.knobSpr = n.addComponent(Sprite);
+            this.knobSpr.spriteFrame = knobFrame;
+            this.knobSpr.sizeMode = Sprite.SizeMode.CUSTOM;
+            n.active = false;
+        }
 
         this.root.on(Node.EventType.TOUCH_START, this.touchStart, this);
         this.root.on(Node.EventType.TOUCH_MOVE, this.touchMove, this);
@@ -157,7 +178,30 @@ export class JoystickView implements MoveInput {
         const j = viewTable().joystick;
         const g = this.gfx;
         g.clear();
-        if (!this.visible) return;
+        if (!this.visible) {
+            if (this.baseSpr) this.baseSpr.node.active = false;
+            if (this.knobSpr) this.knobSpr.node.active = false;
+            return;
+        }
+        if (this.baseSpr && this.knobSpr) {
+            const baseRect: Rect = {
+                x: this.stickStart.x - j.baseRadius,
+                y: this.stickStart.y - j.baseRadius,
+                w: j.baseRadius * 2,
+                h: j.baseRadius * 2,
+            };
+            placeRect(this.baseSpr.node, baseRect, DESIGN_W, logicalH());
+            this.baseSpr.node.active = true;
+            const knobRect: Rect = {
+                x: this.knob.x - j.knobRadius,
+                y: this.knob.y - j.knobRadius,
+                w: j.knobRadius * 2,
+                h: j.knobRadius * 2,
+            };
+            placeRect(this.knobSpr.node, knobRect, DESIGN_W, logicalH());
+            this.knobSpr.node.active = true;
+            return;
+        }
         g.lineWidth = j.lineWidth;
         g.strokeColor = hexToColor(j.baseColor);
         g.circle(this.lx(this.stickStart.x), this.ly(this.stickStart.y), j.baseRadius);

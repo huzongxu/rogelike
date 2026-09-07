@@ -60,7 +60,10 @@ export class Plate {
     this.node = makeNode(name, parent);
     this.sp = this.node.addComponent(Sprite);
     this.sp.sizeMode = Sprite.SizeMode.CUSTOM;
-    this.g = this.node.addComponent(Graphics);
+    // 兜底形状挂在**子节点**,不与 Sprite 同节点:2D 批处理每个节点只收一个 UIRenderer
+    // (`batcher-2d.walk` 取 `node._uiProps.uiComp`),先挂上的 Sprite 永久占住这个槽位,
+    // 于是缺图时把 Sprite 一关,整块板(连同同节点的 Graphics)一起不上屏。
+    this.g = makeNode("Fallback", this.node).addComponent(Graphics);
   }
 
   /**
@@ -111,32 +114,59 @@ export function iconNode(name: string, parent: Node, frames: Map<string, SpriteF
 }
 
 /**
- * 品质卡框(对标 Web drawQualityFrame):圆角暗底 + 品质色描边 +
- * 内缩内发光 + 可选顶部品质色条。返回 draw 句柄,因为商店卡的品质与矩形每轮 sync 都会变。
+ * 品质卡框。两条绘制路径,`draw` 回传本框实际占掉的内缩量(走贴图 = 九宫格边距,回退 = 0),
+ * 调用方据此把卡内文本让进 `nineMargin` 内缩区。
+ *
+ * ① 有 `frame_<品质>` 贴图且四条边都留得下可拉伸带 → `SLICED` 画框。贴图**不整体染色**:
+ *    五档顶带色已烘在各自那张板上(乘性 tint 会把暗底压成死黑),品质语义色改由代码在
+ *    板内缩 2px 处画一圈 35% 透明度的品质色环带 —— 与回退路径的「内缩内发光」同一口径。
+ * ② 缺图 / 薄条(武器行、进化行这类 34~56 高的行板) → 沿用原代码描边:圆角暗底 +
+ *    品质色描边 + 内缩内发光 + 可选顶部品质色条。九宫格的切边带比行高的一半还宽时,
+ *    可拉伸带退化成一对角块,不如描边干净。
  */
-export function qualityBox(name: string, parent: Node): { node: Node; draw: (r: Rect, color: string, topBar?: boolean) => void } {
+export function qualityBox(
+  name: string,
+  parent: Node,
+  frames: Map<string, SpriteFrame>
+): { node: Node; draw: (r: Rect, color: string, topBar?: boolean, frameKey?: string) => number } {
   const node = makeNode(name, parent);
+  const sp = node.addComponent(Sprite);
+  sp.sizeMode = Sprite.SizeMode.CUSTOM;
+  sp.type = Sprite.Type.SLICED;
   const g = node.addComponent(Graphics);
-  const draw = (r: Rect, color: string, topBar = false) => {
+  const draw = (r: Rect, color: string, topBar = false, frameKey = ""): number => {
     const radius = 4;
+    const frame = frameKey ? frames.get(frameKey) : undefined;
+    const border = frame ? borderOf(frameKey, frame.width, frame.height) : 0;
+    // 可拉伸带(h - 2·border)至少要与两条切边带等宽,否则九宫格只剩角块
+    const skinned = !!frame && border > 0 && r.w >= border * 4 && r.h >= border * 4;
     g.clear();
-    g.fillColor = hexToColor(QUALITY_FRAME_BG);
-    g.roundRect(-r.w / 2, -r.h / 2, r.w, r.h, radius);
-    g.fill();
-    g.lineWidth = 1.5;
-    g.strokeColor = hexToColor(color);
-    g.roundRect(-r.w / 2, -r.h / 2, r.w, r.h, radius);
-    g.stroke();
-    g.lineWidth = 1;
-    g.strokeColor = hexToColor(hexA(color, 0.35));
-    g.rect(-r.w / 2 + 2.5, -r.h / 2 + 2.5, r.w - 5, r.h - 5);
-    g.stroke();
-    if (topBar) {
-      g.fillColor = hexToColor(color);
-      g.rect(-r.w / 2 + 3, r.h / 2 - 6, r.w - 6, 3);
+    sp.enabled = skinned;
+    if (skinned) {
+      sp.spriteFrame = insetFrame(frameKey, frame, border);
+      sp.color = hexToColor("#ffffff");
+      g.fillColor = hexToColor(hexA(color, 0.35));
+      strokeRing(g, r.w - border * 2 - 3, r.h - border * 2 - 3, 1);
+    } else {
+      g.fillColor = hexToColor(QUALITY_FRAME_BG);
+      g.roundRect(-r.w / 2, -r.h / 2, r.w, r.h, radius);
       g.fill();
+      g.lineWidth = 1.5;
+      g.strokeColor = hexToColor(color);
+      g.roundRect(-r.w / 2, -r.h / 2, r.w, r.h, radius);
+      g.stroke();
+      g.lineWidth = 1;
+      g.strokeColor = hexToColor(hexA(color, 0.35));
+      g.rect(-r.w / 2 + 2.5, -r.h / 2 + 2.5, r.w - 5, r.h - 5);
+      g.stroke();
+      if (topBar) {
+        g.fillColor = hexToColor(color);
+        g.rect(-r.w / 2 + 3, r.h / 2 - 6, r.w - 6, 3);
+        g.fill();
+      }
     }
     placeRect(node, r);
+    return skinned ? border : 0;
   };
   return { node, draw };
 }

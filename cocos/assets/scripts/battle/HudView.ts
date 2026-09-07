@@ -45,6 +45,8 @@ export class HudView {
     /* 顶坞 */
     private hpBar: Graphics;
     private hpBarSig = "";
+    /** 胶囊条是否垫了 bar_capsule 九宫格板:垫了就不再画 Graphics 轨道与外描边 */
+    private barPlate = false;
     private shieldBadge!: Node;
     private hpText!: Label;
     private hpTx = -1;
@@ -183,6 +185,13 @@ export class HudView {
     }
 
     private makeBarNodeIn(parent: Node, name: string, rect: Rect): Graphics {
+        const frame = this.frames.get("bar_capsule");
+        if (frame) {
+            // 切边带 = 表值(逻辑 px),但比条还厚的边距会让九宫格退化,按条高钳到「上下各留 1px 拉伸带」
+            const border = Math.min(borderOf("bar_capsule", frame.width, frame.height), Math.max(1, Math.floor(rect.h / 2) - 1));
+            sliced(name + "Plate", parent, frame, rect, border);
+            this.barPlate = true;
+        }
         const n = makeNode(name, parent);
         const g = n.addComponent(Graphics);
         placeRect(n, rect, DESIGN_W, logicalH());
@@ -190,36 +199,44 @@ export class HudView {
     }
 
     /**
-     * 胶囊条(对标 Web ui/skin.ts drawBar):暗轨道 + 填充(最小宽 = h 保胶囊头)+
-     * 上半叠光 + 盾覆层 + 细描边。填充宽走共享 barFillW。
+     * 胶囊条(对标 Web ui/skin.ts drawBar):有 bar_capsule 板时只画内填充(板提供轨道/描边/叠光底),
+     * 缺图回退暗轨道 + 填充(最小宽 = h 保胶囊头)+ 上半叠光 + 盾覆层 + 细描边。填充宽走共享 barFillW。
      */
     private drawCapsuleBar(g: Graphics, w: number, hh: number, frac: number, color: string, overlayFrac = 0): void {
         const h = viewTable().hud;
         const r = hh / 2;
+        const inset = this.barPlate ? 2 : 0;
+        const iw = w - inset * 2;
+        const ih = hh - inset * 2;
+        const ir = ih / 2;
         g.clear();
-        g.fillColor = hexToColor(h.barTrack);
-        g.roundRect(-w / 2, -r, w, hh, r);
-        g.fill();
-        const fw = barFillW(w, hh, frac);
+        if (!this.barPlate) {
+            g.fillColor = hexToColor(h.barTrack);
+            g.roundRect(-w / 2, -r, w, hh, r);
+            g.fill();
+        }
+        const fw = barFillW(iw, ih, frac);
         if (fw > 0) {
             g.fillColor = hexToColor(color);
-            g.roundRect(-w / 2, -r, fw, hh, r);
+            g.roundRect(-iw / 2, -ir, fw, ih, ir);
             g.fill();
             // 上半白色叠光(Web 为 clip 后 fillRect;此处以半高圆角矩形近似)
             g.fillColor = hexToColor(h.barGloss);
-            g.roundRect(-w / 2, 0, fw, hh / 2, Math.min(r, hh / 4));
+            g.roundRect(-iw / 2, 0, fw, ih / 2, Math.min(ir, ih / 4));
             g.fill();
         }
         if (overlayFrac > 0) {
-            const ow = barFillW(w, hh, overlayFrac);
+            const ow = barFillW(iw, ih, overlayFrac);
             g.fillColor = hexToColor(h.shieldOverlay);
-            g.roundRect(-w / 2, -r, ow, hh, r);
+            g.roundRect(-iw / 2, -ir, ow, ih, ir);
             g.fill();
         }
-        g.lineWidth = 1;
-        g.strokeColor = hexToColor(h.barStroke);
-        g.roundRect(-w / 2, -r, w, hh, r);
-        g.stroke();
+        if (!this.barPlate) {
+            g.lineWidth = 1;
+            g.strokeColor = hexToColor(h.barStroke);
+            g.roundRect(-w / 2, -r, w, hh, r);
+            g.stroke();
+        }
     }
 
     /* ================= 构建 ================= */
@@ -674,6 +691,12 @@ export class HudView {
             g.strokeColor = hexToColor(hexA(q.color, 0.35));
             g.rect(-L.cardW / 2 + 2.5, -cardH / 2 + 2.5, L.cardW - 5, cardH - 5);
             g.stroke();
+            // 技能槽底板:slot_skill 九宫格,垫在效果图标之下(图标盒 5,6,24x24 → 槽 3,4,28x28 同中心)
+            const socket = this.frames.get("slot_skill");
+            if (socket) {
+                const sp = sliced("Socket", card, socket, { x: 3, y: 4, w: 28, h: 28 }, borderOf("slot_skill", socket.width, socket.height));
+                placeRect(sp.node, { x: 3, y: 4, w: 28, h: 28 }, L.cardW, cardH);
+            }
             // 效果图标(缺图回退:品质色圆底 + 效果名首字)
             const frame = this.frames.get(`icon_fx_${eq.effect.def.type}`);
             if (frame) {

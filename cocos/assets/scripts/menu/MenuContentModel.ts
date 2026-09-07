@@ -40,7 +40,12 @@ import type { MenuLayout, MenuRect } from "../game/ui/menuLayout";
 export interface MenuRowContent {
   id: number;
   name: string;
+  /** 副题全串(= sub + tail);Web 与文案对账读这一条 */
   desc: string;
+  /** 行中部副题(不含右尾列) */
+  sub: string;
+  /** 行右尾列:"· N 章 · Boss" 那一段(与 desc 尾部同一字面量,只是换个落位) */
+  tail: string;
   /** 头像徽章资产键(品质框);null = 走代码圆/方块回退 */
   badgeKey: string | null;
   badgeText: string;
@@ -182,11 +187,10 @@ export function lockHint(stageId: number, chaptersPerStage: number, save: MenuSa
   return [`打到第${stageId - 1}关第${need}章解锁`, prog].filter(Boolean).join(" · ");
 }
 
-/** 筹码矩形:视图绘制与点击判定同读一处(宽度由 chipXs 间距推出) */
+/** 筹码矩形:视图绘制与点击判定同读一处(板宽由规范表 chipW 给,不再由间距反推) */
 export function menuChipRects(L: MenuLayout): MenuRect[] {
   const d = L.d;
-  const w = Math.max(24, d.chipXs.length > 1 ? d.chipXs[1] - d.chipXs[0] - 4 : Math.round(d.strip.w / 3));
-  return d.chipXs.map((x) => ({ x: x - d.chipSlide, y: d.chipY, w, h: d.chipH }));
+  return d.chipXs.map((x) => ({ x, y: d.chipY, w: d.chipW, h: d.chipH }));
 }
 
 /** 六个场外入口矩形(顺序即 entries 数组顺序,与视图一致) */
@@ -244,10 +248,13 @@ export function buildMenuContent(o: MenuContentInput): MenuTextContent {
   const rows: MenuRowContent[] = states.map((st) => {
     const stage = stageOf(st.id);
     const tail = ` · ${stage.chapters} 章${stage.bossChapter ? " · Boss" : ""}`;
+    const sub = st.unlocked ? stage.desc : lockHint(st.id, stage.chapters, save);
     return {
       id: st.id,
       name: `第${st.id}关 · ${stage.name}${st.cleared ? " ✓" : ""}${st.stars > 0 ? ` ${starsGlyphs(st.stars)}` : ""}`,
-      desc: (st.unlocked ? stage.desc : lockHint(st.id, stage.chapters, save)) + tail,
+      desc: sub + tail,
+      sub,
+      tail,
       badgeKey: `avatar_${frameQualityForStage(st.id)}`,
       badgeText: String(st.id),
       current: o.currentStageId === st.id || (st.unlocked && !st.cleared),

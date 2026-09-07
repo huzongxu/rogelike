@@ -5,12 +5,13 @@
  * 本模块**无 DOM、无平台依赖**(只 `import type` 资源类型),因此可在 node 侧直接测;
  * 贴图固有尺寸由调用方经环境传入,角深换算与 AssetManager.nineMargin 同一公式(nineMarginPure 为镜像)。
  *
- * 纵向骨架:尾块贴底(说明板 → 英雄展示带 → 无限关钮),关卡列表 spreadRows 吃满剩余高度。
- * 英雄展示带自**未改动的 setY** 向上生长(套组卡那一带被它接管),带高受 heroClearance 夹紧;
+ * 纵向骨架(像素重排版,七条带自上而下):标题带 → 赛季/筹码带(整带右对齐,右缘 = 屏宽 − pad) →
+ * 入口带 → 分区条 → 关卡列表带(吃满剩余高度) → 主 CTA → 尾块英雄带(底缘 = 屏高 − setGapY)。
+ * 列表走本文件的 `spreadRowsGrid`:行高与行距一律落偶数(2px 像素模块),富余先加行高、再加行距。
+ * 英雄带改为**贴底锚定**(底缘 = 屏高 − setGapY),主 CTA 再贴着它上沿排;说明板与英雄带同一矩形。
  * `setBtns/setBand` 等套组卡几何继续按原式计算(基线锚点),只是不再画。
  */
 
-import { spreadRows } from "./theme";
 import type { MenuLayoutTable } from "../data/layoutMenu";
 import type { MenuSkinTable } from "../data/menuSkin";
 import type { SetId } from "../data/sets";
@@ -41,6 +42,12 @@ export interface MenuLayoutEnv {
   sectionStripReady: boolean;
   /** 行底板 menu_row_plate 源图固有尺寸(缺图传 null → 角深 0) */
   rowPlateSize: { w: number; h: number } | null;
+  /**
+   * 行底板九宫格边距(逻辑 px,来自 viewTable.nineSlice.keys)。
+   * 给了它就以它为准 —— 内容内缩必须等于装饰带厚度,而行高是可变的,按行高等比推角深
+   * 会让同一族的行在不同屏高下拿到不同内缩。没给(如 node 侧旧环境)回落 nineMarginPure。
+   */
+  rowPlateBorder?: number | null;
   /** 皮肤表快照(不传 = 无皮肤):只消费 insets 加性增量,缺省布局逐像素不变 */
   skin?: MenuSkinTable;
 }
@@ -58,8 +65,12 @@ export interface MenuDecoRects {
   strip: MenuRect;
   chipH: number;
   chipY: number;
-  /** 三枚货币筹码内容左缘 */
+  /** 三枚货币筹码**板**左缘(整带右对齐后落定的绝对 x;右缘恒 ≤ 屏宽 − pad) */
   chipXs: number[];
+  /** 货币筹码板宽 / 能量筹码板宽 / 板间距(draw 与 hit-test 共用) */
+  chipW: number;
+  energyW: number;
+  chipGap: number;
   /** 筹码最小宽估算基准(iconW + gap + 一位数字宽由 draw 补) */
   chipIconW: number;
   chipIconGap: number;
@@ -198,6 +209,36 @@ export function nineMarginPure(imgW: number, imgH: number, w: number, h: number,
   return Math.round(Math.min((h * sm) / imgH, w / 2, h / 2));
 }
 
+/** 落偶数:像素模块 module=2,任何行高/行距/坐标都要能被 2 整除 */
+export function evenGrid(v: number): number {
+  const n = Math.floor(v);
+  return n - (n % 2);
+}
+
+/**
+ * 关卡列表的行分布(偶数网格版)。
+ *
+ * 与 `theme.spreadRows` 的差别有两处,都是本屏要付的代价:
+ *  1. 行高与行距一律落**偶数**(否则九宫格的 16 边距与 2px 模块会错位出软边);
+ *  2. 先按"行距取下界 baseGap"解出可行行高,富余先加行高、加到 maxH 才加行距,
+ *     剩下的余数(≤ maxGap)落在**末行与主 CTA 之间的缝**里 —— 列表下方不长空洞。
+ */
+export function spreadRowsGrid(
+  n: number,
+  y0: number,
+  y1: number,
+  minH: number,
+  maxH: number,
+  maxGap: number,
+  baseGap = 8
+): { rowH: number; gap: number } {
+  if (n <= 0) return { rowH: 0, gap: 0 };
+  const avail = Math.max(0, y1 - y0);
+  const rowH = Math.max(evenGrid(minH), Math.min(evenGrid(maxH), evenGrid((avail - (n - 1) * baseGap) / n)));
+  const gap = n > 1 ? Math.max(0, Math.min(evenGrid(maxGap), evenGrid((avail - n * rowH) / (n - 1)))) : 0;
+  return { rowH, gap };
+}
+
 export function menuLayoutPure(w: number, h: number, env: MenuLayoutEnv): MenuLayout {
   const t = env.table;
   const o = t.origin;
@@ -207,6 +248,7 @@ export function menuLayoutPure(w: number, h: number, env: MenuLayoutEnv): MenuLa
   const entryY = o.entryY;
   const setH = o.setH;
   const setDescH = o.setDescH;
+  /** 套组卡基线锚点(尾块贴底改造后只服务 setBtns/setHdrY 这类"算而不画"的历史出口) */
   const setY = h - setDescH - setH - o.setGapY;
   const sectionH = env.sectionStripReady ? o.sectionH : 0;
   const sectionW = (sectionH * o.sectionSrcW) / o.sectionSrcH;
@@ -214,11 +256,21 @@ export function menuLayoutPure(w: number, h: number, env: MenuLayoutEnv): MenuLa
   const stageHdrY = sectionH > 0 ? o.stageHdrY : 0;
   const setHdrY = sectionH > 0 ? setY - o.setHdrGap - sectionH : 0;
   const listY = sectionH > 0 ? stageHdrY + sectionH + o.hdrBand : o.listYNoSection;
-  const gapAboveSet = sectionH > 0 ? o.endlessGapSet + sectionH + o.endlessGapSet2 : o.endlessGapFlat;
-  const endlessBtn: MenuRect = { x: w / 2 - o.endlessW / 2, y: setY - gapAboveSet - o.endlessH, w: o.endlessW, h: o.endlessH };
-  const { rowH, gap } = spreadRows(env.stageIds.length, listY, endlessBtn.y - o.endlessListGap, o.rowMinH, o.rowMaxH, o.rowMaxGap);
-  const rows: MenuRow[] = [];
+  const gapAboveSet = sectionH > 0 ? o.endlessGapSet + o.endlessGapSet2 : o.endlessGapFlat;
   const rowW = w - pad * 2;
+
+  /* --- 尾块英雄带:贴底锚定,底缘 = 屏高 − setGapY;说明板与它同一矩形(一族板,不再叠两层) --- */
+  const heroBandH = o.heroRise + setH + setDescH;
+  const heroBand: MenuRect = {
+    x: pad - dc.noteSlide,
+    y: h - o.setGapY - heroBandH + dc.noteTopOff,
+    w: rowW + dc.noteSlide + dc.noteInsetX,
+    h: heroBandH,
+  };
+  const endlessBtn: MenuRect = { x: w / 2 - o.endlessW / 2, y: heroBand.y - gapAboveSet - o.endlessH, w: o.endlessW, h: o.endlessH };
+  const listBottom = endlessBtn.y - o.endlessListGap;
+  const { rowH, gap } = spreadRowsGrid(env.stageIds.length, listY, listBottom, o.rowMinH, o.rowMaxH, o.rowMaxGap);
+  const rows: MenuRow[] = [];
   env.stageIds.forEach((id, i) => {
     rows.push({ id, x: pad, y: listY + i * (rowH + gap), w: rowW, h: rowH });
   });
@@ -234,14 +286,14 @@ export function menuLayoutPure(w: number, h: number, env: MenuLayoutEnv): MenuLa
   const gearupBtn: MenuRect = { x: entryX(5), y: entryY, w: entryW, h: entryH };
   const setW = (w - pad * 2 - o.setGap * (env.setIds.length - 1)) / env.setIds.length;
   const setBtns: MenuSetBtn[] = env.setIds.map((id, i) => ({ id, x: pad + i * (setW + o.setGap), y: setY, w: setW, h: setH }));
-  const rowMargin = nineMarginPure(env.rowPlateSize?.w ?? 0, env.rowPlateSize?.h ?? 0, rowW, rowH, o.rowPlateF);
+  const nineMargin = nineMarginPure(env.rowPlateSize?.w ?? 0, env.rowPlateSize?.h ?? 0, rowW, rowH, o.rowPlateF);
+  const rowMargin = env.rowPlateBorder && env.rowPlateBorder > 0 ? Math.min(env.rowPlateBorder, rowH / 2, rowW / 2) : nineMargin;
   const setBand = Math.round(setH * (o.setBandNum / o.setBandDen));
   const noteBand = Math.round(setDescH * (o.noteBandNum / o.noteBandDen));
 
-  /* 英雄展示带:从未改动的 setY 向上生长,底缘吸收原套组卡那一行(带高不吞掉与无限关钮的呼吸缝) */
-  const heroMaxRise = Math.max(0, setY - o.heroClearance - (endlessBtn.y + o.endlessH));
-  const heroRise = Math.min(o.heroRise, heroMaxRise);
-  const heroBand: MenuRect = { x: pad, y: setY - heroRise, w: rowW, h: heroRise + setH };
+  /* 英雄带还能向上长多少:列表被压到行高下界之前的那点富余(布局台据此决定 heroRise 手柄给不给) */
+  const rowsFloor = env.stageIds.length * evenGrid(o.rowMinH) + Math.max(0, env.stageIds.length - 1) * 8;
+  const heroMaxRise = Math.max(0, o.heroRise + (listBottom - listY - rowsFloor));
   const heroPortH = Math.min(dc.heroPortH, heroBand.h);
   const heroPort: MenuRect = {
     x: heroBand.x + dc.heroPadX + dc.heroPortOffX,
@@ -262,10 +314,14 @@ export function menuLayoutPure(w: number, h: number, env: MenuLayoutEnv): MenuLa
   const heroRow3Y = heroRow2Y + dc.heroRow3Gap;
 
   const ban: MenuRect = { x: pad - dc.banInset, y: dc.banY, w: w - pad * 2 + dc.banInset * 2, h: dc.banH };
-  const noteTop = setY + setH + dc.noteTopOff;
-  const noteW = w - pad * 2 + dc.noteInsetX;
+  const noteTop = heroBand.y;
+  const noteW = heroBand.w;
   const noteCap = Math.max(noteBand, Math.round(setDescH * (dc.noteCapNum / dc.noteCapDen)));
-  const noteX = pad - dc.noteSlide + noteCap;
+  const noteX = heroBand.x + noteCap;
+  /* 筹码带:整带右对齐,由右界(屏宽 − pad)反推 —— 幻影榜 → 能量 → 三枚货币,依次左挂。
+     deco.chipX1~3 只是"把某一枚挪开一点"的微调量(默认 0),带位本身全由 chipW/chipGap/energyW 算出。 */
+  const energyX = phantomBtn.x - dc.chipGap - dc.energyW;
+  const chipSlots = [0, 1, 2].map((i) => energyX - dc.chipGap - dc.chipW * (3 - i) - dc.chipGap * (2 - i));
   const chipY = dc.stripY + (dc.stripH - dc.chipH) / 2;
   const d: MenuDecoRects = {
     ban,
@@ -273,10 +329,14 @@ export function menuLayoutPure(w: number, h: number, env: MenuLayoutEnv): MenuLa
     titlePos: { x: pad + dc.titleOffX, y: ban.y + dc.titleOffY },
     seasonPos: { x: w - pad - dc.seasonInset, y: ban.y + dc.seasonOffY },
     row2Y: ban.y + dc.row2OffY,
-    strip: { x: pad, y: dc.stripY, w: w - pad * 2, h: dc.stripH },
+    /** 能量筹码板:整带右对齐,左挂在幻影榜筹码的 chipGap 之外 */
+    strip: { x: energyX, y: dc.stripY, w: dc.energyW, h: dc.stripH },
     chipH: dc.chipH,
     chipY,
-    chipXs: [pad + dc.chipX1, pad + dc.chipX2, pad + dc.chipX3],
+    chipXs: [chipSlots[0] + dc.chipX1, chipSlots[1] + dc.chipX2, chipSlots[2] + dc.chipX3],
+    chipW: dc.chipW,
+    energyW: dc.energyW,
+    chipGap: dc.chipGap,
     chipIconW: dc.chipIconW,
     chipIconGap: dc.chipIconGap,
     chipProbePad: dc.chipProbePad,
@@ -322,7 +382,7 @@ export function menuLayoutPure(w: number, h: number, env: MenuLayoutEnv): MenuLa
     setBadgeOffY: dc.setBadgeOffY,
     setBadgeSize: dc.setBadgeSize,
     tagPad: dc.tagPad,
-    note: { x: pad - dc.noteSlide, y: noteTop, w: noteW, h: setDescH },
+    note: heroBand,
     noteCap,
     noteX,
     noteMaxW: noteW - noteCap * 2,

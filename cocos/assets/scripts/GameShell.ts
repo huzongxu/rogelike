@@ -1,4 +1,4 @@
-import { _decorator, Component, Graphics, Label, Node, SpriteFrame, resources } from "cc";
+import { _decorator, Component, Graphics, Label, Node, SpriteFrame, Texture2D, resources } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, refreshDesignResolution, toDesignSpace, worldH } from "./core/DesignMetrics";
 import { ScreenRouter, ScreenKey } from "./core/ScreenRouter";
 import { loadBalance } from "./core/ConfigChannel";
@@ -7,6 +7,8 @@ import { readSave, writeSave } from "./core/SaveChannel";
 import { showRewardedAd } from "./core/AdChannel";
 import { HEX, UI, bindLabel, hexToColor, label, makeNode, solidRect } from "./ui/Widgets";
 import { ASSET_MANIFEST } from "./game/data/assets";
+import { PIXEL_ART_KEYS, isPixelArtKey, isPixelNumFrameKey } from "./game/data/pixelArt";
+import { neutraliseGlyphHoles } from "./ui/PixelNumber";
 import { applyBalance as applyDaily, DIAMOND_AD_DAILY, DIAMOND_PER_AD } from "./game/data/daily";
 import { applyBalance as applyStages } from "./game/data/stages";
 import { applyBalance as applyWaves } from "./game/systems/waves";
@@ -140,6 +142,11 @@ const COMMISSION_TICK_SECONDS = 1;
 const HUD_PRELOAD_KEYS = [
     "hud_dock_top",
     "hud_dock_bottom",
+    "slot_skill",
+    "bar_capsule",
+    "joy_base",
+    "joy_knob",
+    "bg_stage_1",
     "badge_shield_bronze",
     "icon_echo",
     "icon_stardust",
@@ -164,7 +171,7 @@ const HUD_PRELOAD_KEYS = [
 
 /** 预载集之外的全部清单键(世界美术 + 后续阶段菜单美术,后台流式加载) */
 function restFrameKeys(): string[] {
-    const pre = new Set(HUD_PRELOAD_KEYS);
+    const pre = new Set([...HUD_PRELOAD_KEYS, ...PIXEL_ART_KEYS]);
     return Object.keys(ASSET_MANIFEST).filter((k) => !pre.has(k));
 }
 
@@ -354,6 +361,10 @@ export class GameShell extends Component {
     /* ================= 启动 ================= */
 
     private loadFrames(keys: string[] = Object.keys(ASSET_MANIFEST)): Promise<void> {
+        // 组件可能在加载途中随场景销毁(探针重载 / 热重启):引擎销毁时会把自有字段置 null,
+        // 迟到的回调再读 this.frames 就是「null (reading 'set')」。进 Promise 前捕获引用,
+        // 销毁后的回调只推进计数、不再写这枚已无人引用的表。
+        const sink = this.frames;
         return new Promise((resolve) => {
             if (keys.length === 0) {
                 resolve();
@@ -366,7 +377,21 @@ export class GameShell extends Component {
             };
             keys.forEach((key) => {
                 resources.load("textures/" + key + "/spriteFrame", SpriteFrame, (err, asset) => {
-                    if (!err && asset) this.frames.set(key, asset as SpriteFrame);
+                    if (!err && asset && sink) {
+                        const sf = asset as SpriteFrame;
+                        // 字形是掩码:先键出封闭字腔里的红族残留,再定采样,否则 tint 相乘出饱和红块
+                        if (isPixelNumFrameKey(key)) neutraliseGlyphHoles(sf);
+                        // 像素批次:非整数倍放大也必须保持硬边。Cocos 的 SLICED 组装器只按
+                        // 1 贴图像素 = 1 逻辑 px 画切边带,放大发生在拉伸带与整图 sprite 上。
+                        // 顺带一提,把采样从 LINEAR 换走即自动退出动态图集
+                        // (DynamicAtlasManager.insertSpriteFrame 只收 LINEAR/LINEAR 的帧),
+                        // 无需再动 SpriteFrame.packable。
+                        if (isPixelArtKey(key) && sf.texture) {
+                            sf.texture.setFilters(Texture2D.Filter.NEAREST, Texture2D.Filter.NEAREST);
+                            sf.texture.setWrapMode(Texture2D.WrapMode.CLAMP_TO_EDGE, Texture2D.WrapMode.CLAMP_TO_EDGE);
+                        }
+                        sink.set(key, sf);
+                    }
                     done();
                 });
             });
@@ -374,19 +399,25 @@ export class GameShell extends Component {
     }
 
     private async boot(): Promise<void> {
-        // 数值表先行(ENERGY_MAX/章节时长等常量影响 HUD 与开局)
+        // 场景可能在 await 途中重挂(探针 loadScene / 热重启):组件被销毁后引擎会把自有字段置 null,
+        // 继续建树或读 this.worldView 就是 null.xxx。每个 await 之后以 this.node 验活,销毁即整条 boot 作废。
         const balance = await loadBalance();
+        if (!this.node) return;
         applySharedBalance(balance);
         await loadViewTable();
-        // HUD 构建期一次性贴图先到位(坞板/图标/横幅/装备卡图标),再建界面
-        await this.loadFrames(HUD_PRELOAD_KEYS);
+        if (!this.node) return;
+        // HUD 构建期一次性贴图先到位(坞板/图标/横幅/装备卡图标 + 像素翻新批次的菜单皮与字形),再建界面
+        // 用 Array.from 而非 [...new Set(...)]:构建把展开一个 Set downlevel 成 [].concat(Set),
+        // 而 concat 只摊平数组、不摊 Set,会把整枚 Set 当成一个键(→ textures/[object Set] 加载失败)。
+        await this.loadFrames(Array.from(new Set([...HUD_PRELOAD_KEYS, ...PIXEL_ART_KEYS])));
+        if (!this.node) return;
         this.buildLayers();
         this.ready = true;
         this.router.show("battle");
         // 其余世界美术后台流式加载:每帧从 frames 读取,到位即自动换上(语义 = Web assets.beginLoad())
         this.loadFrames(restFrameKeys()).then(() => {
             // 背景与视图贴图就绪态都是一次性读取,流到位后补刷一次
-            if (!this.ready) return;
+            if (!this.ready || !this.node) return;
             this.refreshBackdrop();
             this.menuView?.setFrames(this.frames);
             // 商店与英雄屏的图标/立绘在 sync 时才换上:换引用 + 当前屏补排一次
@@ -495,7 +526,7 @@ export class GameShell extends Component {
         // 层级顺序 = Web render():背景 → 世界(网格…飘字)→ HUD 双坞 → 摇杆最上
         this.worldView = new BattleWorldView(battleScreen, this.frames, wh);
         this.hudView = new HudView(battleScreen, this.frames, wh);
-        this.joystick = new JoystickView(battleScreen);
+        this.joystick = new JoystickView(battleScreen, this.frames);
         this.fxView = new FxView({
             particles: this.worldView.fxParticlesNode,
             telegraphs: this.worldView.telegraphNode,

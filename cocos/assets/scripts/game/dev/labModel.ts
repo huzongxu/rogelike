@@ -346,7 +346,7 @@ export function buildHandles(L: MenuLayout, ctx: HandleContext): Handle[] {
       add("套组卡", "y", c0.y + c0.h / 2 - d.setIconOffY, c0.x + d.setIconOffX + 6, deco("setIconOffY", -1));
       const sel = L.setBtns.find((b) => b.id === ctx.selectedSet) ?? L.setBtns[L.setBtns.length - 1];
       if (sel) {
-        add("套组卡", "x", sel.x + sel.w - d.setBadgeInsetX, sel.y + 4, deco("setBadgeInsetX", -1));
+        add("套组卡", "x", sel.x + sel.w - d.setBadgeInsetX, sel.y + 10, deco("setBadgeInsetX", -1));
         add("套组卡", "y", sel.y - d.setBadgeOffY, sel.x + sel.w - d.setBadgeInsetX + 6, deco("setBadgeOffY", -1));
       }
     }
@@ -362,8 +362,8 @@ export function buildHandles(L: MenuLayout, ctx: HandleContext): Handle[] {
     const band = L.heroBand;
     const port = L.heroPort;
     const btn = L.heroBtn;
-    // 带高被 heroClearance 夹紧时拖 heroRise 画面不动 → 与 stageHdrY 同一口径:环境相关手柄
-    if (band.h - L.setH < L.heroMaxRise) add("英雄展示带", "y", band.y, band.x + 30, origin("heroRise", -1));
+    // 带高还有富余(没把列表压到行高下界)才给 heroRise 手柄 —— 与 stageHdrY 同一口径:环境相关手柄
+    if (band.h - L.setH - L.setDescH < L.heroMaxRise) add("英雄展示带", "y", band.y, band.x + 30, origin("heroRise", -1));
     add("英雄展示带", "x", port.x, band.y + 10, deco("heroPadX", 1));
     add("英雄展示带", "x", port.x, band.y + 26, deco("heroPortOffX", 1));
     add("英雄展示带", "y", port.y, port.x + 42, deco("heroPortOffY", 1));

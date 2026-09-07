@@ -287,7 +287,10 @@ export interface Phase4Params {
     /* ---------- 扭蛋机屏(Web drawGacha 3562-3702 与 onGachaClick 3704-3742 的内联字面量) ---------- */
     /** 全屏覆盖底(rgba(8,10,16,0.86),与 psDim / guDim 同值,按屏分键便于独立调表) */
     gcDim: string;
-    /** 标题「扭蛋机」—— Web skinHeader 的 color 实参,横幅档与缺图档共用同一色 */
+    /** 面板底的代码底板(Web `panel()` 缺图回退同值):theme.bgPanel 填充 + 金描边 */
+    gcPanelFallbackBg: string;
+    gcPanelFallbackStroke: string;
+    /** 标题「扭蛋机」:取主菜单标题同档的金(与 viewTable.menu.titleColor 同值),横幅档与缺图档共用同一色 */
     gcTitle: string;
     /** 券数文字(Web iconText 的 color #ffd76a)与缺图时的替代字形「✦」 */
     gcTicketText: string;
@@ -759,7 +762,10 @@ export const PHASE4_DEFAULTS: Phase4Params = {
 
     /* 扭蛋机屏(逐项对标 Web drawGacha / onGachaClick) */
     gcDim: "rgba(8,10,16,0.86)",
-    gcTitle: "#C06CFF",
+    gcPanelFallbackBg: "rgba(19,24,38,0.92)",
+    gcPanelFallbackStroke: "#FFD76A",
+    /** 像素暗黑批:本键对齐主菜单标题那一档(menu.titleColor),横幅上的字与标题同色同值 */
+    gcTitle: "#FFD76A",
     gcTicketText: "#FFD76A",
     gcTicketGlyph: "✦",
     gcBackBg: "#2A3D55",

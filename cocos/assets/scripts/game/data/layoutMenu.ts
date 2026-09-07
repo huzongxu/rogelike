@@ -15,55 +15,55 @@
 
 /** 可热调字段的取值域:超出即视为非法 → 回退默认(不做钳制,避免"改错数还生效") */
 export interface MenuLayoutOrigin {
-  /** 含义:全界面统一边距(行/入口/标题栏左右内缩)。单位:设计 px。依据:UI 设计规范 v1。出处:src/ui/theme.ts ui.pad */
+  /** 含义:全界面页边距(内容带 = 屏宽 − 2×本值 = 528)。单位:设计 px。依据:像素网格 module=2 的整数倍档,14 不落网格故弃用。出处:主菜单重排 */
   pad: number;
-  /** 含义:场外入口钮(扭蛋/天赋/…)高度。单位:设计 px。依据:触控最小高 44 的压缩档(图标+两字)。出处:UI-DESIGN v1 */
+  /** 含义:场外入口钮高度(热区下界 44 的落档)。单位:设计 px。依据:UI 触控最小高 UI.touchMin=44。出处:主菜单重排 */
   entryH: number;
-  /** 含义:入口行顶缘 Y。单位:设计 px(自上)。依据:紧贴标题横幅底缘不重叠。出处:主页截图对标 */
+  /** 含义:入口带顶缘 Y。单位:设计 px(自上)。依据:筹码带底缘 + 带间缝 8。出处:主菜单重排 */
   entryY: number;
-  /** 含义:武器套组卡高度。单位:设计 px。依据:底板 menu_set_plate 含上下凸饰,46 以下两行文字必压凸饰。出处:图4 反馈 */
+  /** 含义:尾块英雄带高度加数之一(展示带净高)。单位:设计 px。依据:带高 = heroRise + setH + setDescH = 88。出处:主菜单重排 */
   setH: number;
-  /** 含义:套组说明板高度。单位:设计 px。依据:底板 menu_note_plate 源图 45 行带,两行文字净空。出处:图5 反馈 */
+  /** 含义:尾块英雄带高度加数之二(说明文字带)。单位:设计 px。依据:三行 12/13 文字 + 16 内缩。出处:主菜单重排 */
   setDescH: number;
-  /** 含义:说明板与套组卡的竖向间隙(套组底缘 = 屏高 − 说明板高 − 套组高 − 本值)。单位:设计 px。依据:贴底通铺仅留一丝缝。出处:主页截图对标 */
+  /** 含义:尾块英雄带底缘到屏底的下留白。单位:设计 px。依据:与页边距同档,贴底但不压屏缘。出处:主菜单重排 */
   setGapY: number;
-  /** 含义:分区标题条就绪时高度(未就绪归零退回纯文字标签)。单位:设计 px。依据:整图 512×73 等比可辨的最小高度。出处:主界面翻新批次 */
+  /** 含义:分区条高度(未就绪归零退回纯文字标签)。单位:设计 px。依据:面板族边距 16 的 2 倍,条内可放一行 16 文字。出处:主菜单重排 */
   sectionH: number;
-  /** 含义:分区标题条源图宽。单位:源图 px。依据:menu_section_strip 实际尺寸。出处:assets 清单 */
+  /** 含义:分区条绘制宽 = sectionH ×(本值 / sectionSrcH)。单位:比例项。依据:528/32 → 通栏落在内容宽。出处:主菜单重排 */
   sectionSrcW: number;
-  /** 含义:分区标题条源图高。单位:源图 px。依据:同上,宽高比决定绘制宽。出处:assets 清单 */
+  /** 含义:分区条绘制高的分母。单位:比例项。出处:主菜单重排 */
   sectionSrcH: number;
-  /** 含义:有标题条时"主线关卡"标题带顶缘 Y。单位:设计 px。依据:入口行下方首块。出处:竖屏翻版 v2 */
+  /** 含义:"主线关卡"分区条顶缘 Y。单位:设计 px。依据:入口带底缘 + 带间缝 8。出处:主菜单重排 */
   stageHdrY: number;
-  /** 含义:无标题条时列表顶缘 Y。单位:设计 px。依据:文字标签基线让位。出处:竖屏翻版 v2 */
+  /** 含义:无分区条时列表顶缘 Y。单位:设计 px。依据:与有条口径同一条起列线,只差文字带。出处:主菜单重排 */
   listYNoSection: number;
-  /** 含义:标题条底缘到列表顶缘的呼吸缝。单位:设计 px。依据:与行距下界一致。出处:主菜单重设计 */
+  /** 含义:分区条底缘到列表顶缘的呼吸缝。单位:设计 px。依据:带间缝档 8。出处:主菜单重排 */
   hdrBand: number;
   /** 含义:套组标题带相对套组卡顶缘的上抬量(带高 = sectionH)。单位:设计 px。依据:标题条不压卡。出处:主界面翻新批次 */
   setHdrGap: number;
-  /** 含义:无限关钮底缘到套组标题带顶缘的间隙基值(有标题条时 = 本值 + sectionH + endlessGap2)。单位:设计 px。出处:主菜单重设计 */
+  /** 含义:英雄带顶缘到无限关钮底缘的间隙基值(有分区条时 = 本值 + endlessGapSet2)。单位:设计 px。出处:主菜单重排 */
   endlessGapSet: number;
-  /** 含义:有标题条时标题带自身占位(与 setHdrGap 同量,但两处原式分别写死 → 保持独立可调)。单位:设计 px。出处:主菜单重设计 */
+  /** 含义:有分区条口径下叠加的第二段缝(与 endlessGapSet 同档,保持独立可调)。单位:设计 px。出处:主菜单重排 */
   endlessGapSet2: number;
-  /** 含义:无标题条时无限关钮与套组区的间隙。单位:设计 px。依据:纯文字标签只需文字间距。出处:竖屏翻版 v2 */
+  /** 含义:无分区条时无限关钮与英雄带的间隙。单位:设计 px。出处:主菜单重排 */
   endlessGapFlat: number;
-  /** 含义:无限关主按钮宽。单位:设计 px。依据:主按钮通栏半宽手感。出处:UI-DESIGN v1 */
+  /** 含义:无限关主按钮宽。单位:设计 px。依据:主 CTA 通栏 = 内容宽 528。出处:主菜单重排 */
   endlessW: number;
-  /** 含义:无限关主按钮高。单位:设计 px。依据:主按钮标准高 44 的放大档。出处:UI-DESIGN v1 */
+  /** 含义:无限关主按钮高。单位:设计 px。依据:主按钮档 56(btn_primary 边距 20 的 2.8 倍)。出处:主菜单重排 */
   endlessH: number;
-  /** 含义:列表可用底界相对无限关钮顶缘的上提量(spreadRows 下界 = 钮顶 − 本值)。单位:设计 px。依据:末行不贴钮。出处:主菜单重设计 */
+  /** 含义:列表可用底界相对无限关钮顶缘的上提量(spreadRowsGrid 上界 = 钮顶 − 本值)。单位:设计 px。依据:末行不贴钮,带间缝档 8。出处:主菜单重排 */
   endlessListGap: number;
-  /** 含义:关卡行最小行高(spreadRows 下界)。单位:设计 px。依据:两行文字 + 42 徽章的最小可容。出处:theme.spreadRows */
+  /** 含义:关卡行最小行高(偶数网格下界)。单位:设计 px。依据:两行文字 + 40 序号牌 + 上下 16 内缩的最小可容。出处:主菜单重排 */
   rowMinH: number;
-  /** 含义:关卡行最大行高(spreadRows 上界)。单位:设计 px。依据:再高则列表稀疏失焦。出处:主菜单重设计 */
+  /** 含义:关卡行最大行高(富余优先加行高,加到本值才加行距)。单位:设计 px。依据:再高则一屏放不下七行。出处:主菜单重排 */
   rowMaxH: number;
-  /** 含义:关卡行最大行距(spreadRows 富余上限,超出落列表尾留白)。单位:设计 px。依据:小列表拉全屏大缝凌乱。出处:theme.spreadRows 注释 */
+  /** 含义:关卡行最大行距(超出部分落列表与主 CTA 之间的缝,不长成空洞)。单位:设计 px。出处:主菜单重排 */
   rowMaxGap: number;
-  /** 含义:幻影榜筹码右锚宽度(x = 屏宽 − 本值,w = 本值 − pad)。单位:设计 px。依据:热区宽于可见筹码(大触控目标)。出处:条目 39 */
+  /** 含义:幻影榜筹码右锚宽(x = 屏宽 − 本值,w = 本值 − pad → 右缘恒落内容右界)。单位:设计 px。出处:主菜单重排 */
   phantomAnchor: number;
-  /** 含义:幻影榜筹码顶缘 Y。单位:设计 px。依据:与货币行同基线。出处:主页截图对标 */
+  /** 含义:幻影榜筹码顶缘 Y。单位:设计 px。依据:与货币筹码带同基线。出处:主菜单重排 */
   phantomY: number;
-  /** 含义:幻影榜筹码高。单位:设计 px。依据:横幅内次要行。出处:主页截图对标 */
+  /** 含义:幻影榜筹码高。单位:设计 px。依据:与筹码带同档 44(热区下界)。出处:主菜单重排 */
   phantomH: number;
   /** 含义:入口钮横向间距。单位:设计 px。依据:同套组卡间距。出处:竖屏翻版 v2 */
   entryGap: number;
@@ -127,25 +127,25 @@ export interface MenuLayoutDeco {
   gemH: number;
   /** 含义:体力文字与钻石块的间隙。单位:设计 px。出处:主界面翻新批次 */
   energyGap: number;
-  /** 含义:货币底板顶缘 Y。单位:设计 px。依据:紧贴横幅底缘。出处:主页截图对标 */
+  /** 含义:能量筹码板顶缘 Y(与三枚货币筹码、幻影榜同一条 44 高带)。单位:设计 px。出处:主菜单重排 */
   stripY: number;
-  /** 含义:货币底板高。单位:设计 px。依据:筹码 22 + 上下各 2。出处:主页截图对标 */
+  /** 含义:能量筹码板高。单位:设计 px。依据:热区下界 44。出处:主菜单重排 */
   stripH: number;
-  /** 含义:筹码高(底板内垂直居中)。单位:设计 px。出处:筹码贴边修复 */
+  /** 含义:筹码高(stripY 带内垂直居中)。单位:设计 px。出处:主菜单重排 */
   chipH: number;
-  /** 含义:第一筹码内容左缘(相对 pad)。单位:设计 px。依据:底板角深内缩后再留缓冲。出处:筹码贴边修复 */
+  /** 含义:第一枚货币筹码板相对**推导位**的微调量(推导 = 由屏宽 − pad 右锚左挂;默认 0)。单位:设计 px。出处:主菜单重排 */
   chipX1: number;
-  /** 含义:第二筹码内容左缘(相对 pad)。单位:设计 px。出处:筹码贴边修复 */
+  /** 含义:第二枚货币筹码板相对推导位的微调量。单位:设计 px。出处:主菜单重排 */
   chipX2: number;
-  /** 含义:第三筹码内容左缘(相对 pad)。单位:设计 px。出处:筹码贴边修复 */
+  /** 含义:第三枚货币筹码板相对推导位的微调量。单位:设计 px。出处:主菜单重排 */
   chipX3: number;
-  /** 含义:筹码图标绘制宽(参与筹码最小宽估算)。单位:设计 px。出处:筹码贴边修复 */
+  /** 含义:筹码图标绘制宽(1 art px = 2 逻辑 px → 14 源图落 28)。单位:设计 px。出处:主菜单重排 */
   chipIconW: number;
-  /** 含义:筹码图标与数值间隙。单位:设计 px。出处:筹码贴边修复 */
+  /** 含义:筹码图标与像素数字条带的间隙。单位:设计 px。出处:主菜单重排 */
   chipIconGap: number;
   /** 含义:筹码角深探针的额外宽(取 nineMargin 时用)。单位:设计 px。出处:筹码贴边修复 */
   chipProbePad: number;
-  /** 含义:筹码底板左移量(内容左缘 → 底板左缘)。单位:设计 px。出处:筹码贴边修复 */
+  /** 含义:筹码板内左缩(图标左缘相对板左缘;数字条带紧随图标 + chipIconGap)。单位:设计 px。依据:面板族边距 16 内的半档。出处:主菜单重排 */
   chipSlide: number;
   /** 含义:筹码内文字左侧内缩。单位:设计 px。出处:筹码贴边修复 */
   chipInnerGap: number;
@@ -159,25 +159,25 @@ export interface MenuLayoutDeco {
   phChipPadMin: number;
   /** 含义:幻影筹码右缘相对屏宽 − pad 的间隙(与入口行右侧留空同源)。单位:设计 px。出处:图2 反馈 */
   phRightGap: number;
-  /** 含义:关卡行首行基线相对行中心的下移量(cy − 本值)。单位:设计 px。出处:行内两行居中 */
+  /** 含义:关卡行首行基线相对行中心的下移量(cy − 本值)。单位:设计 px。出处:主菜单重排(偶数档) */
   rowC1Off: number;
-  /** 含义:关卡行两行基线间距。单位:设计 px。依据:fs.section 行高节奏。出处:行内两行居中 */
+  /** 含义:关卡行两行基线间距。单位:设计 px。依据:14/12 两档文字的偶数节奏。出处:主菜单重排 */
   rowC2Gap: number;
-  /** 含义:关卡行文字列起点(相对行左缘 + 角深)。单位:设计 px。依据:避开 42 徽章区。出处:行底板内缩 */
+  /** 含义:关卡行文字列起点(相对行左缘 + 角深)。单位:设计 px。依据:让开 40 序号牌再留 12 缝。出处:主菜单重排 */
   rowTxOff: number;
-  /** 含义:关卡行右列再内缩(避开行底板右侧凸饰)。单位:设计 px。出处:图3 反馈 */
+  /** 含义:关卡行右列相对行右缘的内缩。单位:设计 px。依据:行板边距 16,尾列右缘即内容右界。出处:主菜单重排 */
   rowRightInset: number;
   /** 含义:有补星钮时右列额外避让(= 补星钮宽 + 间隙)。单位:设计 px。出处:§4.4 */
   rowMakeupReserve: number;
-  /** 含义:补星钮宽。单位:设计 px。出处:§4.4 */
+  /** 含义:补星钮宽。单位:设计 px。依据:像素价 + 两字的最小可读档。出处:主菜单重排 */
   makeupW: number;
-  /** 含义:补星钮高。单位:设计 px。出处:§4.4 */
+  /** 含义:补星钮高。单位:设计 px。依据:热区下界 44。出处:主菜单重排 */
   makeupH: number;
-  /** 含义:补星钮距行底板右缘内缩的附加量。单位:设计 px。出处:§4.4 */
+  /** 含义:补星钮距行底板右缘内缩的附加量。单位:设计 px。出处:主菜单重排 */
   makeupRightGap: number;
-  /** 含义:头像徽章圆心 x(相对行左缘 + 角深)。单位:设计 px。出处:行底板内缩 */
+  /** 含义:序号牌圆心 x(相对行左缘 + 角深)。单位:设计 px。依据:牌左缘正落内容内缩界。出处:主菜单重排 */
   badgeOffX: number;
-  /** 含义:头像徽章绘制尺寸。单位:设计 px。出处:品质框图集 */
+  /** 含义:序号牌绘制尺寸。单位:设计 px。依据:40 = module 2 的整档,chip 板角深 16 仍可拉。出处:主菜单重排 */
   badgeSize: number;
   /** 含义:缺图回退代码圆半径。单位:设计 px。出处:行底板内缩 */
   badgeR: number;
@@ -201,7 +201,7 @@ export interface MenuLayoutDeco {
   starOffX: number;
   /** 含义:星形相对首行基线上抬补偿。单位:设计 px。出处:星数绘制 */
   starLift: number;
-  /** 含义:关卡描述裁切余量(可用宽 = 右列 − 文字列 − 本值)。单位:设计 px。出处:行内两行居中 */
+  /** 含义:行右尾列(章节数 · Boss 标记)预留宽(文字列可用宽 = 右界 − 本值)。单位:设计 px。依据:"· 20 章 · Boss" @12 的最长串。出处:主菜单重排 */
   descClipPad: number;
   /** 含义:红点半径(委托/每日完成提示)。单位:设计 px。出处:委托红点 */
   dotR: number;
@@ -269,6 +269,12 @@ export interface MenuLayoutDeco {
   heroRow2Gap: number;
   /** 含义:称号行 → 赛季说明行基线间距。单位:设计 px。出处:英雄系统 M4 */
   heroRow3Gap: number;
+  /** 含义:一枚货币筹码板宽(整带右对齐,右缘收在屏宽 − pad)。单位:设计 px。依据:8 内缩 + 28 图标 + 4 缝 + 52(三位像素数字)+ 8 = 96。出处:主菜单重排 */
+  chipW: number;
+  /** 含义:能量筹码板宽(⚡ 体力 ◆ 钻石那一枚,走同一族筹码板)。单位:设计 px。出处:主菜单重排 */
+  energyW: number;
+  /** 含义:筹码带内相邻两枚的水平间隙。单位:设计 px。依据:列间距档 12。出处:主菜单重排 */
+  chipGap: number;
 }
 
 export interface MenuLayoutTable {
@@ -278,32 +284,32 @@ export interface MenuLayoutTable {
 
 export const MENU_LAYOUT_DEFAULTS: MenuLayoutTable = {
   origin: {
-    pad: 14,
-    entryH: 36,
-    entryY: 100,
-    setH: 50,
+    pad: 16,
+    entryH: 44,
+    entryY: 148,
+    setH: 34,
     setDescH: 46,
-    setGapY: 1,
+    setGapY: 16,
     sectionH: 32,
-    sectionSrcW: 512,
-    sectionSrcH: 73,
-    stageHdrY: 140,
-    listYNoSection: 152,
-    hdrBand: 4,
+    sectionSrcW: 528,
+    sectionSrcH: 32,
+    stageHdrY: 200,
+    listYNoSection: 240,
+    hdrBand: 8,
     setHdrGap: 13,
-    endlessGapSet: 29,
-    endlessGapSet2: 13,
-    endlessGapFlat: 34,
-    endlessW: 260,
-    endlessH: 48,
-    endlessListGap: 12,
+    endlessGapSet: 4,
+    endlessGapSet2: 4,
+    endlessGapFlat: 8,
+    endlessW: 528,
+    endlessH: 56,
+    endlessListGap: 8,
     rowMinH: 72,
-    rowMaxH: 84,
-    rowMaxGap: 30,
-    phantomAnchor: 180,
-    phantomY: 64,
-    phantomH: 24,
-    entryGap: 8,
+    rowMaxH: 96,
+    rowMaxGap: 28,
+    phantomAnchor: 124,
+    phantomY: 96,
+    phantomH: 44,
+    entryGap: 12,
     entryCount: 6,
     setGap: 8,
     rowPlateF: 0.35,
@@ -311,55 +317,55 @@ export const MENU_LAYOUT_DEFAULTS: MenuLayoutTable = {
     setBandDen: 124,
     noteBandNum: 8,
     noteBandDen: 45,
-    heroRise: 60,
+    heroRise: 8,
     heroClearance: 8,
-    heroBtnW: 88,
-    heroBtnH: 36,
+    heroBtnW: 96,
+    heroBtnH: 44,
   },
   deco: {
-    banInset: 6,
-    banY: 6,
-    banH: 58,
-    crestOffX: 2,
-    crestOffY: 16,
-    crestW: 26,
-    crestH: 26,
-    titleOffX: 34,
+    banInset: 0,
+    banY: 8,
+    banH: 56,
+    crestOffX: 16,
+    crestOffY: 8,
+    crestW: 40,
+    crestH: 40,
+    titleOffX: 64,
     titleOffY: 36,
-    seasonInset: 6,
-    seasonOffY: 24,
-    row2OffY: 47,
-    gemOffX: 18,
-    gemOffY: 13,
-    gemW: 14,
-    gemH: 16,
-    energyGap: 12,
-    stripY: 66,
-    stripH: 26,
-    chipH: 22,
-    chipX1: 6,
-    chipX2: 90,
-    chipX3: 188,
-    chipIconW: 15,
+    seasonInset: 8,
+    seasonOffY: 76,
+    row2OffY: 88,
+    gemOffX: 8,
+    gemOffY: 14,
+    gemW: 28,
+    gemH: 28,
+    energyGap: 8,
+    stripY: 96,
+    stripH: 44,
+    chipH: 44,
+    chipX1: 0,
+    chipX2: 0,
+    chipX3: 0,
+    chipIconW: 28,
     chipIconGap: 4,
     chipProbePad: 20,
-    chipSlide: 5,
+    chipSlide: 8,
     chipInnerGap: 4,
-    chipTailPad: 11,
+    chipTailPad: 8,
     phChipProbeW: 40,
     phChipPadAdd: 8,
     phChipPadMin: 14,
-    phRightGap: 8,
-    rowC1Off: 3,
-    rowC2Gap: 19,
-    rowTxOff: 54,
-    rowRightInset: 26,
-    rowMakeupReserve: 66,
-    makeupW: 56,
-    makeupH: 26,
-    makeupRightGap: 2,
-    badgeOffX: 26,
-    badgeSize: 42,
+    phRightGap: 0,
+    rowC1Off: 8,
+    rowC2Gap: 18,
+    rowTxOff: 52,
+    rowRightInset: 16,
+    rowMakeupReserve: 80,
+    makeupW: 72,
+    makeupH: 44,
+    makeupRightGap: 0,
+    badgeOffX: 20,
+    badgeSize: 40,
     badgeR: 18,
     badgeStroke: 2,
     badgeTextOffY: 6,
@@ -371,12 +377,12 @@ export const MENU_LAYOUT_DEFAULTS: MenuLayoutTable = {
     starGap: 2,
     starOffX: 4,
     starLift: 2,
-    descClipPad: 10,
+    descClipPad: 88,
     dotR: 5,
     dotInsetX: 8,
-    dotInsetY: 7,
+    dotInsetY: 8,
     sectionTextPad: 30,
-    listHintFallbackY: 144,
+    listHintFallbackY: 200,
     setIconOffX: 6,
     setIconOffY: 9,
     setIconW: 18,
@@ -392,19 +398,22 @@ export const MENU_LAYOUT_DEFAULTS: MenuLayoutTable = {
     tagPad: 4,
     noteCapNum: 20,
     noteCapDen: 45,
-    noteTopOff: 1,
-    noteInsetX: 12,
-    noteSlide: 6,
+    noteTopOff: 0,
+    noteInsetX: 0,
+    noteSlide: 0,
     noteRow1Off: 12,
     noteRow2Gap: 14,
-    heroPadX: 10,
-    heroPortW: 96,
-    heroPortH: 96,
+    heroPadX: 16,
+    heroPortW: 56,
+    heroPortH: 56,
     heroPortOffX: 0,
     heroPortOffY: 0,
-    heroNameOffY: 34,
+    heroNameOffY: 30,
     heroRow2Gap: 18,
     heroRow3Gap: 16,
+    chipW: 96,
+    energyW: 84,
+    chipGap: 12,
   },
 };
 
@@ -435,7 +444,7 @@ export const MENU_LAYOUT_RANGE: Record<keyof MenuLayoutOrigin, [number, number]>
   phantomAnchor: [60, 560],
   phantomY: [20, 160],
   phantomH: [14, 60],
-  entryGap: [0, 20],
+  entryGap: [0, 24],
   entryCount: [1, 12],
   setGap: [0, 20],
   rowPlateF: [0.05, 0.5],

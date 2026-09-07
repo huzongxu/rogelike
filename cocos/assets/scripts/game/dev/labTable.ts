@@ -136,17 +136,17 @@ export const MENU_PRESENTATION_DEFAULTS: MenuPresentationParams = {
   titleColor: "#FFD76A",
   subColor: "#8F9BB3",
   noteColor: "#C8C2B1",
-  titlePx: 22,
+  titlePx: 28,
   subPx: 13,
   bodyPx: 14,
   baselineLift: 0.82,
-  rightColumnW: 200,
-  chipIconH: 15,
+  rightColumnW: 528,
+  chipIconH: 28,
   fallbackPlate: "rgba(19,24,38,0.92)",
   fallbackStroke: "rgba(255,255,255,0.14)",
   highlightAlpha: 180,
   dotColor: "#FF5A6E",
-  currentRowPlate: "menu_row_plate_current",
+  currentRowPlate: "menu_set_plate_selected",
 };
 
 /** 布局台在 viewTable 通道里可编辑的状态(全部对齐默认值,只导 dirty) */
