@@ -44,7 +44,7 @@ const num = (v: unknown, min: number, max: number, fallback: number): number => 
 const chapterArr = (v: unknown, fallback: number[]): number[] => {
   if (!Array.isArray(v) || !v.length) return [...fallback];
   const arr = v.map((x) => num(x, 1, 500, 0)).filter((x) => x > 0);
-  return arr.length ? [...new Set(arr)].sort((a, b) => a - b) : [...fallback];
+  return arr.length ? Array.from(new Set(arr)).sort((a, b) => a - b) : [...fallback];
 };
 
 /** 应用配置表覆盖(balance.json → chapterTypes 段);非法字段回退默认 */

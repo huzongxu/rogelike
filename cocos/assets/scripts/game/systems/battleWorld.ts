@@ -1365,7 +1365,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       if (g) g.count += 1;
       else map.set(key, { name: eq.effect.def.name, quality: eq.quality, count: 1, sample: eq });
     }
-    return [...map.values()].filter((g) => g.count >= 2).slice(0, 4);
+    return Array.from(map.values()).filter((g) => g.count >= 2).slice(0, 4);
   }
 
   /** 新装备入图鉴 */
