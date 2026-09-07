@@ -1,30 +1,54 @@
 /**
- * 英雄选择屏 —— Web `src/game.ts:drawHeroes` 的节点化替换(12 名英雄 + 详情 + 技能四行)。
+ * 英雄选择屏 —— 像素暗黑翻新档:12 名英雄 + 详情 + 技能四行。
  *
- * 分工:几何全走共享层 `heroSelectLayout(w, h, heroes, seasonId, offset)`,
- * 滚动与热区全走 `heroes/HeroSelectModel.ts`(它又只调 `game/ui/scrollList.ts` 那四个函数),
- * 本文件只做三件事:把可视行落到 Mask 裁切容器里的行节点池、把详情区落到固定槽位、
- * 把指针事件换算成设计 px 喂给模型。
+ * 分工:几何全走共享层 `heroSelectLayout(w, h, heroes, seasonId, offset)`(单一出口,
+ * 绘制与命中判定共读同一份矩形),滚动与热区全走 `heroes/HeroSelectModel.ts`
+ * (它又只调 `game/ui/scrollList.ts` 那四个函数),本文件只做三件事:把可视行落到
+ * Mask 裁切容器里的行节点池、把详情区落到固定槽位、把指针事件换算成设计 px 喂给模型。
  *
- * 两处 Cocos 特有约定:
+ * 皮与主菜单 / 幻影榜 / 扭蛋同一族键,零新贴图:
+ *  - 屏底与详情板 `panel_dark_corners` 九宫格 + 全屏暗底;
+ *  - 标题走 `banner_large_purple` 整图拉伸(缺图退左起笔一档,文字位随之换档);
+ *  - 行板 `menu_row_plate`,预览行换 `menu_set_plate_selected`(与幻影榜玩家行同语义);
+ *  - 套组徽章 `menu_chip_plate`(缺图退硬边方框);徽章文案恒为「出战」/「S1」..「S4」的
+ *    混排,像素数字字形表表达不了,故仍走 Label —— 文案一字不改优先于字形通路;
+ *  - 技能行板 `menu_row_plate`,胶囊仍走代码硬边块(22 高撑不起九宫格的可拉伸带);
+ *  - 返回 / 不出战 `btn_minor`,确定 `btn_primary`。
+ *
+ * 三处 Cocos 特有约定:
  *  ① 列表用 `Mask(GRAPHICS_RECT)` 裁切(= Web 的 ctx.clip());行节点因此活在
- *     **列表局部坐标**里,行内文本一律把行尺寸作为 box 交给 `PanelKit.placeLine`,
- *     漏传或按整屏参照换算,文字就会整体偏移一档。
- *  ② 立绘资源(hero_*)尚未出图,行内与详情都退化成"主色方块 + 名字首字",缺图不空板。
+ *     **列表局部坐标**里,行内文本一律把行尺寸作为 box 交给 `PanelKit.placeLine`。
+ *     `Plate.show` 的落位参照恒为整屏,行内底板贴完还要按行盒重落一次(`rebaseInRow`)。
+ *  ② 2D 批处理每个节点只收一个 UIRenderer(`batcher-2d.walk` 取 `node._uiProps.uiComp`),
+ *     所以行板与徽章各自成子节点,兜底形状由 `Plate` 挂在自己的子节点上。
+ *  ③ 立绘资源(hero_*)尚未出图,行内与详情都退化成"硬边主色方块 + 名字首字",
+ *     缺图不空板;像素档不画圆,圆角一律收成直角。
  */
 
 import { Graphics, Label, Mask, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, Rect, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
-import { FS, HEX, UI, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
+import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
 import type { ViewTable } from "../core/ViewTable";
 import { Plate, fitLines, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
 import { hexA, theme } from "../game/ui/theme";
+import { HERO_SKILL_TEXT_X } from "../game/ui/heroSelectLayout";
 import type { HeroSelectLayout } from "../game/ui/heroSelectLayout";
 import type { Phase3Params } from "../core/ViewTable";
 import type { HeroAction, HeroRowView, HeroSelectModel } from "./HeroSelectModel";
 
-/** 行池容量:最大屏高下视口 642 / 步长 80 ≈ 9 行可见,缓冲行与甩动高速段留足余量 */
+/** 贴图键(全部来自主菜单 / 商店 / 三屏批的既有像素键,本屏不新增) */
+const KEY_PANEL = "panel_dark_corners";
+const KEY_BANNER = "banner_large_purple";
+const KEY_ROW = "menu_row_plate";
+const KEY_ROW_ACTIVE = "menu_set_plate_selected";
+const KEY_BADGE = "menu_chip_plate";
+const KEY_SKILL_ROW = "menu_row_plate";
+const KEY_BACK = "btn_minor";
+const KEY_PRIMARY = "btn_primary";
+const KEY_CLEAR = "btn_minor";
+
+/** 行池容量:最大屏高下视口 634 / 步长 80 ≈ 9 行可见,缓冲行与甩动高速段留足余量 */
 const ROW_POOL = 16;
 /** 技能行池(共享层恒 4 行) */
 const SKILL_POOL = 4;
@@ -32,22 +56,30 @@ const SKILL_POOL = 4;
 const LORE_LINES = 3;
 /** 详情立绘缺图时的名字字号 */
 const PORTRAIT_CHAR_PX = FS.display;
-/** 行内立绘缺图时的方块圆角(与 HUD 装备卡同档) */
-const ROW_PORTRAIT_RADIUS = 6;
+/** 缺图回退的硬边方框线宽(像素档不画圆,圆边在 2px 网格上会抖糊) */
+const RING_LINE_W = 2;
 
 interface RowSlot {
   node: Node;
-  gfx: Graphics;
+  /** 行板(子节点:贴图优先,缺图走 Plate 自带的硬边兜底) */
+  plate: Plate;
   portrait: { node: Node; show: (key: string) => boolean };
+  /** 立绘缺图时的硬边主色方块(独立子节点,不与行板抢 UIRenderer 槽位) */
+  portBox: Node;
   char: Txt;
   name: Txt;
   sub: Txt;
-  badge: Graphics;
+  /** 套组徽章底板 */
+  badge: Plate;
+  /** 徽章缺图回退的硬边方框 */
+  badgeRing: Node;
   badgeText: Txt;
 }
 
 interface SkillSlot {
-  row: ReturnType<typeof flatBox>;
+  /** 技能行板(九宫格贴图,缺图走 Plate 自带的硬边兜底) */
+  row: Plate;
+  /** 左端 tag 胶囊:22 高撑不起九宫格的可拉伸带,仍走代码硬边块 */
   chip: ReturnType<typeof flatBox>;
   tag: Txt;
   label: Txt;
@@ -124,13 +156,16 @@ export class HeroSelectView {
 
   private panel: Plate;
   private dim: ReturnType<typeof flatBox>;
+  private banner: Plate;
   private headerTitle: Txt;
   private headerSub: Txt;
   private listMask: Node;
   private rows: RowSlot[] = [];
   private track: ReturnType<typeof flatBox>;
   private thumb: ReturnType<typeof flatBox>;
-  private detail: ReturnType<typeof flatBox>;
+  private detail: Plate;
+  /** 详情立绘缺图时的硬边主色方块(独立子节点,不与详情板抢 UIRenderer 槽位) */
+  private detailPortBox: Node;
   private detailPort: ReturnType<typeof iconNode>;
   private detailChar: Txt;
   private detailName: Txt;
@@ -153,6 +188,7 @@ export class HeroSelectView {
 
     this.dim = flatBox("Dim", this.root);
     this.panel = new Plate("Panel", this.root, frames);
+    this.banner = new Plate("Banner", this.root, frames);
     this.headerTitle = new Txt("Title", this.root);
     this.headerSub = new Txt("Sub", this.root);
 
@@ -162,21 +198,26 @@ export class HeroSelectView {
     for (let i = 0; i < ROW_POOL; i++) {
       const node = makeNode("Row" + i, this.listMask);
       node.addComponent(UITransform);
-      this.rows.push({
-        node,
-        gfx: node.addComponent(Graphics),
-        portrait: iconNode("Portrait", node, frames, { x: 0, y: 0, w: 1, h: 1 }),
-        char: new Txt("PortraitChar", node),
-        name: new Txt("Name", node),
-        sub: new Txt("Sub", node),
-        badge: node.addComponent(Graphics),
-        badgeText: new Txt("BadgeText", node),
-      });
+      // 兄弟次序 = 渲染次序:行板 → 立绘兜底块 → 立绘贴图 → 首字 → 名字 → 副信息 → 徽章板 → 徽章兜底框 → 徽章字
+      const plate = new Plate("RowPlate", node, frames);
+      const portBox = makeNode("PortraitBox", node);
+      portBox.addComponent(Graphics);
+      const portrait = iconNode("Portrait", node, frames, { x: 0, y: 0, w: 1, h: 1 });
+      const char = new Txt("PortraitChar", node);
+      const name = new Txt("Name", node);
+      const sub = new Txt("Sub", node);
+      const badge = new Plate("BadgePlate", node, frames);
+      const badgeRing = makeNode("BadgeRing", node);
+      badgeRing.addComponent(Graphics);
+      const badgeText = new Txt("BadgeText", node);
+      this.rows.push({ node, plate, portrait, portBox, char, name, sub, badge, badgeRing, badgeText });
     }
     this.track = flatBox("Track", this.root);
     this.thumb = flatBox("Thumb", this.root);
 
-    this.detail = flatBox("Detail", this.root);
+    this.detail = new Plate("Detail", this.root, frames);
+    this.detailPortBox = makeNode("DetailPortraitBox", this.root);
+    this.detailPortBox.addComponent(Graphics);
     this.detailPort = iconNode("DetailPortrait", this.root, frames, { x: 0, y: 0, w: 1, h: 1 });
     this.detailChar = new Txt("DetailChar", this.root);
     this.detailName = new Txt("DetailName", this.root);
@@ -185,7 +226,7 @@ export class HeroSelectView {
     this.skillLabel = new Txt("SkillCaption", this.root);
     for (let i = 0; i < SKILL_POOL; i++) {
       this.skills.push({
-        row: flatBox("SkillRow" + i, this.root),
+        row: new Plate("SkillRow" + i, this.root, frames),
         chip: flatBox("SkillChip" + i, this.root),
         tag: new Txt("SkillTag" + i, this.root),
         label: new Txt("SkillName" + i, this.root),
@@ -261,11 +302,22 @@ export class HeroSelectView {
     const screen = { w: DESIGN_W, h: logicalH() };
 
     this.dim.draw(fullRect(), p3.panelDim);
-    this.panel.show("panel_dark_corners", fullRect(), "slice", p3.detailBg, p3.detailStroke);
+    // 屏底板:九宫格内缩落屏内页边距(整幅铺满会让角块没有可拉伸带)
+    this.panel.show(KEY_PANEL, L.panel, "slice", p3.detailBg, p3.detailStroke);
+
+    // 标题横幅:整图拉伸(源图 2 倍),缺图退左起笔一档
     const head = this.model.header();
+    const bannerOn = this.banner.show(KEY_BANNER, L.banner, "stretch", p3.detailBg, p3.detailStroke);
+    this.banner.setActive(bannerOn);
     this.headerTitle.bold(true);
-    this.headerTitle.set(UI.pad, 36, DESIGN_W - UI.pad * 2 - UI.backW, FS.title, head.title, "left", HEX.gold, screen);
-    this.headerSub.set(UI.pad, 56, DESIGN_W - UI.pad * 2, FS.muted, head.sub, "left", HEX.textSecondary, screen);
+    if (bannerOn) {
+      const t = L.titleBand;
+      this.headerTitle.set(t.x, t.baseY, t.maxW, t.px, head.title, "center", HEX.gold, screen);
+    } else {
+      const t = L.titleBare;
+      this.headerTitle.set(t.x, t.baseY, t.maxW, t.px, head.title, "left", HEX.gold, screen);
+    }
+    this.headerSub.set(L.subBand.x, L.subBand.baseY, L.subBand.maxW, FS.muted, head.sub, "left", HEX.textSecondary, screen);
 
     /* --- 列表:Mask 容器 + 行池(行节点在列表局部坐标里) --- */
     const list = L.list;
@@ -291,12 +343,26 @@ export class HeroSelectView {
 
     /* --- 详情面板 --- */
     const d = L.detail;
-    this.detail.draw(d, p3.detailBg, p3.detailStroke);
+    this.detail.show(KEY_PANEL, d, "slice", p3.detailBg, p3.detailStroke);
     const det = this.model.detail();
     const port = L.portrait;
     const portOn = !det.empty && this.detailPort.show(`hero_${this.model.preview ?? ""}`);
     this.detailPort.node.active = portOn;
     if (portOn) placeRect(this.detailPort.node, port);
+    // 立绘缺图:硬边主色方块垫底 + 名字首字(像素档不画圆角,圆边在 2px 网格上会抖糊)
+    this.detailPortBox.active = !portOn && !det.empty;
+    if (!portOn && !det.empty) {
+      const g = this.detailPortBox.getComponent(Graphics)!;
+      g.clear();
+      g.fillColor = hexToColor(hexA(det.color, 0.18));
+      g.rect(-port.w / 2, -port.h / 2, port.w, port.h);
+      g.fill();
+      g.lineWidth = RING_LINE_W;
+      g.strokeColor = hexToColor(hexA(det.color, 0.55));
+      g.rect(-port.w / 2, -port.h / 2, port.w, port.h);
+      g.stroke();
+      placeRect(this.detailPortBox, port);
+    }
     this.detailChar.active(!portOn);
     if (!portOn) {
       this.detailChar.bold(true);
@@ -311,8 +377,8 @@ export class HeroSelectView {
     if (emptyMode) {
       // 「不出战」:详情区只留居中两行(Web drawHeroes 的 !preview 分支)
       this.detailName.bold(true);
-      this.detailName.set(d.x + d.w / 2, d.y + 180, d.w - 28, FS.section, det.name, "center", HEX.textSecondary, screen);
-      this.detailTitle.set(d.x + d.w / 2, d.y + 206, d.w - 28, FS.muted, det.title, "center", HEX.textSecondary, screen);
+      this.detailName.set(d.x + d.w / 2, d.y + 180, d.w - 32, FS.section, det.name, "center", HEX.textSecondary, screen);
+      this.detailTitle.set(d.x + d.w / 2, d.y + 206, d.w - 32, FS.muted, det.title, "center", HEX.textSecondary, screen);
     } else {
       this.detailName.bold(true);
       this.detailName.set(L.textX, L.nameY, L.loreW, FS.title, det.name, "left", HEX.textPrimary, screen);
@@ -332,73 +398,85 @@ export class HeroSelectView {
       slot.label.active(on);
       slot.desc.active(on);
       if (!on || !sr || !line) return;
-      slot.row.draw(sr.rect, p3.detailBg);
-      slot.chip.draw(sr.chip, hexA(det.color, 0.16));
+      slot.row.show(KEY_SKILL_ROW, sr.rect, "slice", p3.detailBg, p3.detailStroke);
+      // 胶囊:22 高撑不起九宫格的可拉伸带 → 代码硬边块(主色 16% 底 + 主色 55% 描边)
+      slot.chip.draw(sr.chip, hexA(det.color, 0.16), hexA(det.color, 0.55), RING_LINE_W);
       slot.tag.bold(true);
       slot.tag.set(sr.chip.x + sr.chip.w / 2, sr.chip.y + sr.chip.h / 2 + FS.micro / 3, sr.chip.w, FS.micro, line.tag, "center", det.color, screen);
       slot.label.bold(true);
-      slot.label.set(sr.rect.x + 68, sr.labelY, sr.descW, FS.body, line.label, "left", HEX.textPrimary, screen);
-      slot.desc.set(sr.rect.x + 68, sr.descY, sr.descW, FS.micro, line.desc, "left", HEX.textMuted, screen);
+      slot.label.set(sr.rect.x + HERO_SKILL_TEXT_X, sr.labelY, sr.descW, FS.body, line.label, "left", HEX.textPrimary, screen);
+      slot.desc.set(sr.rect.x + HERO_SKILL_TEXT_X, sr.descY, sr.descW, FS.micro, line.desc, "left", HEX.textMuted, screen);
     });
 
     /* --- 右上返回 / 底部确定与不出战 --- */
     const B = L.backBtn;
-    this.back.plate.show("btn_minor", B, "slice");
+    this.back.plate.show(KEY_BACK, B, "slice", p3.detailBg, p3.detailStroke);
     this.back.text.set(B.x + B.w / 2, B.y + B.h / 2 + FS.muted / 3, B.w, FS.muted, "返回", "center", p3.buttonText, screen);
     const C = L.confirm;
-    this.confirm.plate.show("btn_primary", C, "slice");
+    this.confirm.plate.show(KEY_PRIMARY, C, "slice", p3.heroRowSel, theme.gold);
     this.confirm.text.bold(true);
     this.confirm.text.set(C.x + C.w / 2, C.y + C.h / 2 + FS.body / 3, C.w - 16, FS.body, this.model.confirmText(), "center", HEX.textPrimary, screen);
     const CL = L.clearBtn;
-    this.clear.plate.show("btn_minor", CL, "slice");
+    this.clear.plate.show(KEY_CLEAR, CL, "slice", p3.detailBg, p3.detailStroke);
     this.clear.text.set(CL.x + CL.w / 2, CL.y + CL.h / 2 + FS.muted / 3, CL.w - 8, FS.muted, "不出战", "center", HEX.textSecondary, screen);
   }
 
-  /** 一行的底色 / 描边 / 立绘位 / 双行文字 / 右缘徽标(矩形全部来自 layout) */
+  /** 一行的行板 / 立绘位 / 双行文字 / 右缘徽章(矩形全部来自 layout,行内一律走列表局部坐标) */
   private paintRow(slot: RowSlot, row: HeroRowGeometry, v: HeroRowView, box: { w: number; h: number }, p3: Phase3Params): void {
-    const g = slot.gfx;
-    g.clear();
-    g.fillColor = hexToColor(v.active ? p3.heroRowSel : p3.heroRowIdle);
-    g.rect(-box.w / 2, -box.h / 2, box.w, box.h);
-    g.fill();
-    g.lineWidth = 1;
-    g.strokeColor = hexToColor(v.active ? theme.select : p3.heroRowStroke);
-    g.rect(-box.w / 2, -box.h / 2, box.w, box.h);
-    g.stroke();
+    // 行板:预览行换「当前行」语义那张贴图。Plate 的落位参照恒为整屏,而行节点活在列表
+    // 局部坐标里 → 贴完按行盒重落一次(行板恰好铺满行节点自身,局部矩形就是 0,0,box)
+    const full: Rect = { x: 0, y: 0, w: box.w, h: box.h };
+    slot.plate.show(v.active ? KEY_ROW_ACTIVE : KEY_ROW, row.rect, "slice", v.active ? p3.heroRowSel : p3.heroRowIdle, v.active ? theme.select : p3.heroRowStroke);
+    placeRect(slot.plate.node, full, box.w, box.h);
 
-    const pb = row.portrait;
+    // 立绘:贴图优先,缺图退硬边主色方块 + 名字首字(未解锁行走灰色档)
+    const lp = local(row.portrait, row.rect);
     const iconOn = v.released && slot.portrait.show(`hero_${v.id}`);
     slot.portrait.node.active = iconOn;
-    if (iconOn) placeRect(slot.portrait.node, local(pb, row.rect), box.w, box.h);
+    if (iconOn) placeRect(slot.portrait.node, lp, box.w, box.h);
+    slot.portBox.active = !iconOn;
     slot.char.active(!iconOn);
     if (!iconOn) {
-      // 缺立绘:主色方块 + 名字首字(未解锁行走灰色档)
+      const g = slot.portBox.getComponent(Graphics)!;
+      g.clear();
       g.fillColor = hexToColor(hexA(v.color, 0.18));
-      g.roundRect(-box.w / 2 + pb.x - row.rect.x, box.h / 2 - (pb.y - row.rect.y) - pb.h, pb.w, pb.h, ROW_PORTRAIT_RADIUS);
+      g.rect(-lp.w / 2, -lp.h / 2, lp.w, lp.h);
       g.fill();
-      slot.char.set(pb.x - row.rect.x + pb.w / 2, pb.y - row.rect.y + pb.h / 2 + FS.title / 3, pb.w, FS.title, v.name.slice(0, 1), "center", v.color, box);
+      g.lineWidth = RING_LINE_W;
+      g.strokeColor = hexToColor(hexA(v.color, 0.55));
+      g.rect(-lp.w / 2, -lp.h / 2, lp.w, lp.h);
+      g.stroke();
+      placeRect(slot.portBox, lp, box.w, box.h);
+      slot.char.bold(true);
+      slot.char.set(lp.x + lp.w / 2, lp.y + lp.h / 2 + FS.title / 3, lp.w, FS.title, v.name.slice(0, 1), "center", v.color, box);
     }
-    const textW = row.badge.x - row.textX - 10;
-    slot.name.bold(true);
-    slot.name.set(row.textX - row.rect.x, row.nameY - row.rect.y, textW, FS.body, v.name, "left", v.released ? HEX.textPrimary : HEX.textMuted, box);
-    slot.sub.set(row.textX - row.rect.x, row.subY - row.rect.y, textW, FS.micro, v.sub, "left", v.released ? HEX.textSecondary : HEX.textMuted, box);
 
-    const b = row.badge;
-    const cx = b.x - row.rect.x + b.w / 2 - box.w / 2;
-    const cy = box.h / 2 - (b.y - row.rect.y + b.h / 2);
-    const bg = slot.badge;
-    bg.clear();
-    bg.fillColor = hexToColor(hexA(v.color, v.current ? 0.2 : 0.16));
-    bg.circle(cx, cy, b.w / 2);
-    bg.fill();
-    if (v.current) {
-      bg.lineWidth = 1;
-      bg.strokeColor = hexToColor(theme.gold);
-      bg.circle(cx, cy, b.w / 2);
-      bg.stroke();
+    // 双行文字:限宽由 layout 给到「徽章左缘前一道偶数缝」,视图不另算一份
+    slot.name.bold(true);
+    slot.name.set(row.textX - row.rect.x, row.nameY - row.rect.y, row.textW, FS.body, v.name, "left", v.released ? HEX.textPrimary : HEX.textMuted, box);
+    slot.sub.set(row.textX - row.rect.x, row.subY - row.rect.y, row.textW, FS.micro, v.sub, "left", v.released ? HEX.textSecondary : HEX.textMuted, box);
+
+    // 套组徽章:九宫格底板优先,缺图退硬边方框(当前出战 = 金描边,语义色不丢)
+    const lb = local(row.badge, row.rect);
+    const badgeFill = hexA(v.color, v.current ? 0.2 : 0.16);
+    const badgeStroke = v.current ? theme.gold : hexA(v.color, 0.55);
+    const textured = slot.badge.show(KEY_BADGE, row.badge, "slice", badgeFill, badgeStroke);
+    placeRect(slot.badge.node, lb, box.w, box.h);
+    slot.badgeRing.active = !textured;
+    if (!textured) {
+      const g = slot.badgeRing.getComponent(Graphics)!;
+      g.clear();
+      g.fillColor = hexToColor(badgeFill);
+      g.rect(-lb.w / 2, -lb.h / 2, lb.w, lb.h);
+      g.fill();
+      g.lineWidth = RING_LINE_W;
+      g.strokeColor = hexToColor(badgeStroke);
+      g.rect(-lb.w / 2, -lb.h / 2, lb.w, lb.h);
+      g.stroke();
+      placeRect(slot.badgeRing, lb, box.w, box.h);
     }
     slot.badgeText.bold(true);
-    slot.badgeText.set(b.x - row.rect.x + b.w / 2, b.y - row.rect.y + b.h / 2 + FS.micro / 3, b.w, FS.micro, v.badgeText, "center", v.color, box);
+    slot.badgeText.set(lb.x + lb.w / 2, lb.y + lb.h / 2 + FS.micro / 3, lb.w, FS.micro, v.badgeText, "center", v.color, box);
   }
 }
 

@@ -88,13 +88,13 @@ const HERO_N = 12;
 const STEP = HERO_ROW_H + HERO_ROW_GAP; // 80
 const CONTENT_H = HERO_N * HERO_ROW_H + (HERO_N - 1) * HERO_ROW_GAP; // 952
 
-/** 996 标定档:视口 392 / maxScroll 560(= game/ui/heroSelectLayout 文件头的逐像素标定) */
-const VIEW_996 = 392;
-const MAX_996 = CONTENT_H - VIEW_996; // 560
+/** 996 标定档:视口 384 / maxScroll 568(= game/ui/heroSelectLayout 文件头的逐像素标定) */
+const VIEW_996 = 384;
+const MAX_996 = CONTENT_H - VIEW_996; // 568
 /** 1246 伸展档:详情与按钮底锚不动,多余高度全部给列表 */
 const H_TALL = 1246;
-const VIEW_TALL = VIEW_996 + (H_TALL - 996); // 642
-const MAX_TALL = CONTENT_H - VIEW_TALL; // 310
+const VIEW_TALL = VIEW_996 + (H_TALL - 996); // 634
+const MAX_TALL = CONTENT_H - VIEW_TALL; // 318
 
 function heroLayoutAt(seasonId: number, h: number, offset = 0, selected: HeroId | null = null) {
   const m = new HeroSelectModel();
@@ -115,26 +115,29 @@ describe("英雄列表几何(赛季门控 + 两档屏高)", () => {
     }
   });
 
-  it("996 档 offset=0 出 6 行,1246 档出 10 行;maxScroll 560 / 310", () => {
+  it("996 档 offset=0 出 6 行,1246 档出 9 行;maxScroll 568 / 318", () => {
     const a = heroLayoutAt(1, 996).L;
-    expect(a.list).toEqual({ x: 14, y: HERO_LIST_TOP, w: 532, h: VIEW_996 });
+    expect(a.list).toEqual({ x: 16, y: HERO_LIST_TOP, w: 528, h: VIEW_996 });
     expect(a.maxScroll).toBe(MAX_996);
     expect(a.first).toBe(0);
     expect(a.last).toBe(5);
     expect(a.rows).toHaveLength(6);
     expect(a.rows.map((r) => r.id)).toEqual(allHeroes().slice(0, 6).map((hh) => hh.id));
-    expect(a.track).toEqual({ x: 550, y: HERO_LIST_TOP, w: 4, h: VIEW_996 });
+    expect(a.track).toEqual({ x: 540, y: HERO_LIST_TOP, w: 4, h: VIEW_996 });
     expect(a.thumb).not.toBe(null);
-    expect(a.thumb!.x).toBe(550);
+    expect(a.thumb!.x).toBe(540);
     expect(a.thumb!.y).toBe(HERO_LIST_TOP); // offset=0 → 滑块贴轨道顶
     expect(a.thumb!.h).toBeCloseTo((VIEW_996 * VIEW_996) / CONTENT_H, 6);
+    // 右缘恒落 544:内容列与滚动轨同一把尺
+    expect(a.list.x + a.list.w).toBe(544);
+    expect(a.track.x + a.track.w).toBe(544);
 
     const b = heroLayoutAt(1, H_TALL).L;
     expect(b.list.h).toBe(VIEW_TALL);
     expect(b.maxScroll).toBe(MAX_TALL);
     expect(b.first).toBe(0);
-    expect(b.last).toBe(9);
-    expect(b.rows).toHaveLength(10);
+    expect(b.last).toBe(8); // ceil(634/80) = 8 → 0..8 共 9 行(上界多带一行缓冲)
+    expect(b.rows).toHaveLength(9);
   });
 
   it("两档屏高 × offset 0…maxScroll 逐档:行矩形两两不重叠,缓冲行不越界且一律点不中", () => {
@@ -196,11 +199,11 @@ describe("英雄列表几何(赛季门控 + 两档屏高)", () => {
     expect(heroLayoutAt(1, 996).m.header().title).toMatch(/^出战英雄 · S1「.+」$/);
   });
 
-  it("进屏定位:open() 把当前出战那行滚到视口居中(996 档 index6 → offset 324)", () => {
+  it("进屏定位:open() 把当前出战那行滚到视口居中(996 档 index6 → offset 328)", () => {
     const m = new HeroSelectModel();
     const save: HeroSaveView = { selectedHero: "doran", selectedSet: heroDef("doran").setId, seasonId: 3 };
     m.open(save, W, 996);
-    expect(m.scroll.offset).toBe(324); // 6×80 − (392−80)/2
+    expect(m.scroll.offset).toBe(328); // 6×80 − (384−80)/2
     expect(m.scroll.vel).toBe(0);
     expect(m.preview).toBe("doran");
     const L = m.layout(save, W, 996);

@@ -8,14 +8,18 @@
 import { describe, it, expect } from "vitest";
 import {
   heroSelectLayout,
+  HERO_BACK_H,
+  HERO_BACK_Y,
   HERO_CONFIRM_H,
   HERO_CONFIRM_W,
   HERO_DETAIL_H,
   HERO_HEADER_H,
   HERO_LIST_TOP,
+  HERO_PAD,
   HERO_PORTRAIT,
   HERO_ROW_GAP,
   HERO_ROW_H,
+  HERO_SKILL_TEXT_X,
   type HeroSelectLayout,
   type Rect,
 } from "@game/ui/heroSelectLayout";
@@ -27,8 +31,8 @@ const W = 560;
 const H0 = 996; // 标定档
 const H1 = 1246; // 伸展上限
 const HEROES = allHeroes();
-const MAX_SWEEP = 560; // 996 档滚程
-const PAD = ui.pad; // 14
+const MAX_SWEEP = 568; // 996 档滚程(内容 952 − 视口 384)
+const PAD = HERO_PAD; // 屏内页边距 16(英雄屏走自己的网格,不是全局 ui.pad 的 14)
 
 const right = (r: Rect): number => r.x + r.w;
 const bottom = (r: Rect): number => r.y + r.h;
@@ -46,7 +50,7 @@ describe("英雄页常量", () => {
   it("顶栏高与全局面板头部同源;行/详情/按钮尺寸锁死", () => {
     expect(HERO_HEADER_H).toBe(ui.headerH);
     expect(HERO_HEADER_H).toBe(64);
-    expect(HERO_LIST_TOP).toBe(78);
+    expect(HERO_LIST_TOP).toBe(84);
     expect(HERO_ROW_H).toBe(72);
     expect(HERO_ROW_GAP).toBe(8);
     expect(HERO_DETAIL_H).toBe(440);
@@ -55,11 +59,13 @@ describe("英雄页常量", () => {
     expect(HERO_CONFIRM_H).toBe(52);
   });
 
-  it("返回钮在顶栏内且贴右缘留 ui.pad", () => {
+  it("返回钮贴右缘留屏内页边距 16,抬到热区下限 44 且不出顶栏", () => {
     const L = layoutAt(H0);
-    expect(L.backBtn).toEqual({ x: W - PAD - ui.backW, y: 15, w: ui.backW, h: ui.backH });
+    expect(L.backBtn).toEqual({ x: W - PAD - ui.backW, y: HERO_BACK_Y, w: ui.backW, h: HERO_BACK_H });
+    expect(L.backBtn.h).toBeGreaterThanOrEqual(44); // 热区下限
     expect(L.backBtn.y).toBeGreaterThanOrEqual(0);
     expect(bottom(L.backBtn)).toBeLessThanOrEqual(HERO_HEADER_H);
+    expect(L.backBtn.x + L.backBtn.w).toBeLessThanOrEqual(W - PAD);
   });
 });
 
@@ -68,69 +74,84 @@ describe("英雄页常量", () => {
 describe("996 标定档锚点", () => {
   const L = layoutAt(H0);
 
-  it("四带:顶栏 0..64 / 列表 78..470 / 详情 478..918 / 按钮 930..982", () => {
-    expect(L.list).toEqual({ x: 14, y: 78, w: 532, h: 392 });
-    expect(L.detail).toEqual({ x: 14, y: 478, w: 532, h: 440 });
-    expect(L.confirm).toEqual({ x: 150, y: 930, w: 260, h: 52 });
-    expect(L.clearBtn).toEqual({ x: 14, y: 938, w: 88, h: 36 });
-    expect(L.track).toEqual({ x: 550, y: 78, w: SCROLL_TRACK_W, h: 392 });
+  it("四带:顶栏 0..64 / 列表 84..468 / 详情 476..916 / 按钮 928..980", () => {
+    expect(L.list).toEqual({ x: 16, y: 84, w: 528, h: 384 });
+    expect(L.detail).toEqual({ x: 16, y: 476, w: 528, h: 440 });
+    expect(L.confirm).toEqual({ x: 150, y: 928, w: 260, h: 52 });
+    expect(L.clearBtn).toEqual({ x: 16, y: 932, w: 88, h: 44 });
+    expect(L.track).toEqual({ x: 540, y: 84, w: SCROLL_TRACK_W, h: 384 });
+    // 右缘恒落 544:内容列与滚动轨同一把尺
+    expect(L.list.x + L.list.w).toBe(544);
+    expect(L.detail.x + L.detail.w).toBe(544);
+    expect(L.track.x + L.track.w).toBe(544);
+    expect(L.clearBtn.h).toBeGreaterThanOrEqual(44); // 热区下限
   });
 
-  it("12 行内容 952 高 → 视口 392 → 滚程 560(全量平铺必须滚动)", () => {
+  it("12 行内容 952 高 → 视口 384 → 滚程 568(全量平铺必须滚动)", () => {
     expect(HEROES.length).toBe(12);
     expect(L.contentH).toBe(952);
-    expect(L.maxScroll).toBe(560);
+    expect(L.maxScroll).toBe(568);
   });
 
   it("详情区:立绘 168 见方,文案带右移不重叠,技能 4 行铺满剩余", () => {
-    expect(L.portrait).toEqual({ x: 28, y: 492, w: 168, h: 168 });
-    expect(L.textX).toBe(210);
+    expect(L.portrait).toEqual({ x: 32, y: 492, w: 168, h: 168 });
+    expect(L.textX).toBe(216);
     expect(L.nameY).toBe(526);
     expect(L.titleY).toBe(554);
     expect(L.loreY).toBe(588);
-    expect(L.loreW).toBe(322);
+    expect(L.loreW).toBe(312);
     expect(L.skillRows.length).toBe(4);
-    expect(L.skillRows[0].rect).toEqual({ x: 28, y: 694, w: 504, h: 48 });
-    expect(bottom(L.skillRows[3].rect)).toBe(904);
+    expect(L.skillRows[0].rect).toEqual({ x: 32, y: 694, w: 496, h: 46 });
+    expect(bottom(L.skillRows[3].rect)).toBe(896);
     expect(right(L.portrait)).toBeLessThan(L.textX);
     expect(L.textX + L.loreW).toBe(L.detail.x + L.detail.w - PAD);
   });
 
   it("行内几何:小立绘/文本起点/基线/徽章位逐像素", () => {
     const r = L.rows[0];
-    expect(r.rect).toEqual({ x: 14, y: 78, w: 532, h: HERO_ROW_H });
-    expect(r.portrait).toEqual({ x: 22, y: 86, w: 56, h: 56 });
-    expect(r.textX).toBe(88);
-    expect(r.nameY).toBe(108);
-    expect(r.subY).toBe(130);
-    expect(r.badge).toEqual({ x: 504, y: 97, w: 34, h: 34 });
+    expect(r.rect).toEqual({ x: 16, y: 84, w: 528, h: HERO_ROW_H });
+    expect(r.portrait).toEqual({ x: 32, y: 100, w: 40, h: 40 });
+    expect(r.textX).toBe(84);
+    expect(r.nameY).toBe(114);
+    expect(r.subY).toBe(136);
+    expect(r.badge).toEqual({ x: 464, y: 100, w: 64, h: 40 });
     expect(r.nameY).toBeGreaterThan(r.rect.y);
     expect(r.subY).toBeLessThan(bottom(r.rect));
     expect(r.badge.x).toBeGreaterThan(r.textX);
     expect(bottom(r.badge)).toBeLessThanOrEqual(bottom(r.rect));
+    // 行内四件全部落在行板 nineMargin 内缩 16 的区域里
+    expect(r.portrait.x).toBe(r.rect.x + 16);
+    expect(r.badge.x + r.badge.w).toBe(r.rect.x + r.rect.w - 16);
+    expect(r.portrait.y).toBeGreaterThanOrEqual(r.rect.y + 16);
+    expect(bottom(r.portrait)).toBeLessThanOrEqual(bottom(r.rect) - 16);
+    expect(bottom(r.badge)).toBeLessThanOrEqual(bottom(r.rect) - 16);
   });
 
   it("技能行基线与胶囊落在行内", () => {
     expect(L.skillRows.map((s) => s.index)).toEqual([0, 1, 2, 3]);
     for (const s of L.skillRows) {
+      expect(s.rect.h % 2).toBe(0); // 行高取偶
       expect(s.chip.y).toBeGreaterThanOrEqual(s.rect.y);
       expect(bottom(s.chip)).toBeLessThanOrEqual(bottom(s.rect));
       expect(s.labelY).toBeGreaterThan(s.rect.y);
       expect(s.descY).toBeGreaterThan(s.labelY);
       expect(s.descY).toBeLessThan(bottom(s.rect));
-      expect(s.descW).toBe(s.rect.w - 68);
+      expect(s.descW).toBe(s.rect.w - HERO_SKILL_TEXT_X - PAD);
     }
   });
 });
 
 /* ---------- 3. 屏高伸展:详情与按钮底锚,列表吸收全部余高 ---------- */
 
+/** 奇数视口先 evenDown(与 heroSelectLayout 出口同式):1155 档底锚跟 1154 比 */
+const hh = (v: number): number => Math.floor(v / 2) * 2;
+
 describe("屏高伸展规则", () => {
-  it("列表视口高 = 392 + (h − 996),其余带高恒定", () => {
+  it("列表视口高 = 384 + (evenDown(h) − 996),其余带高恒定", () => {
     for (const h of HEIGHTS) {
       const L = layoutAt(h);
       expect(L.list.y).toBe(HERO_LIST_TOP);
-      expect(L.list.h).toBe(392 + (h - H0));
+      expect(L.list.h).toBe(384 + (hh(h) - H0));
       expect(L.detail.h).toBe(HERO_DETAIL_H);
       expect(L.confirm.h).toBe(HERO_CONFIRM_H);
       expect(L.portrait.w).toBe(HERO_PORTRAIT);
@@ -138,10 +159,10 @@ describe("屏高伸展规则", () => {
     }
   });
 
-  it("底锚链条逐级相接:按钮底 = h−14,详情底接按钮顶,列表底接详情顶", () => {
+  it("底锚链条逐级相接:按钮底 = evenDown(h)−16,详情底接按钮顶,列表底接详情顶", () => {
     for (const h of HEIGHTS) {
       const L = layoutAt(h);
-      expect(bottom(L.confirm)).toBe(h - 14);
+      expect(bottom(L.confirm)).toBe(hh(h) - PAD);
       expect(L.detail.y).toBe(L.confirm.y - 12 - HERO_DETAIL_H);
       expect(L.list.y + L.list.h).toBe(L.detail.y - 8);
       expect(bottom(L.detail)).toBeLessThan(L.confirm.y);
@@ -149,7 +170,7 @@ describe("屏高伸展规则", () => {
   });
 
   it("视口越高滚程越短;1246 档 12 行仍超出 → 仍要滚", () => {
-    expect(layoutAt(H1).maxScroll).toBe(952 - 642);
+    expect(layoutAt(H1).maxScroll).toBe(952 - 634);
     expect(layoutAt(H1).maxScroll).toBeGreaterThan(0);
   });
 
@@ -161,7 +182,7 @@ describe("屏高伸展规则", () => {
     expect(L.rows.map((r) => r.index)).toEqual([0, 1, 2]);
   });
 
-  it("横向包含:内容矩形 ⊆ [14, 546];滚动条按轨道贴右缘(比内容边距更外)", () => {
+  it("横向包含:内容矩形 ⊆ [16, 544];滚动条按轨道贴右缘(比内容边距更外)", () => {
     for (const h of HEIGHTS) {
       const L = layoutAt(h);
       const boxes: { name: string; r: Rect }[] = [
@@ -178,7 +199,11 @@ describe("屏高伸展规则", () => {
       for (const { name, r } of boxes) {
         expect(r.x, `${name} 左缘`).toBeGreaterThanOrEqual(PAD);
         expect(right(r), `${name} 右缘`).toBeLessThanOrEqual(W - PAD + 1e-9);
+        expect(r.x % 2, `${name} 左缘取偶`).toBe(0);
+        expect(r.w % 2, `${name} 宽取偶`).toBe(0);
       }
+      expect(L.list.x + L.list.w).toBe(544);
+      expect(L.track.x + L.track.w).toBe(544);
       expect(L.track.x + L.track.w).toBeLessThanOrEqual(W);
       if (L.thumb) {
         expect(L.thumb.x).toBe(L.track.x);
@@ -242,8 +267,8 @@ describe("可视行窗口", () => {
       expect(L.maxScroll).toBe(MAX_SWEEP);
       expect(L.rows.length).toBeGreaterThan(0);
     }
-    expect(layoutAt(H0, -35).rows[0].rect.y).toBe(78 + 35);
-    expect(layoutAt(H0, MAX_SWEEP + 35).rows.find((r) => r.index === 11)!.rect.y).toBe(78 + 11 * 80 - MAX_SWEEP - 35);
+    expect(layoutAt(H0, -35).rows[0].rect.y).toBe(HERO_LIST_TOP + 35);
+    expect(layoutAt(H0, MAX_SWEEP + 35).rows.find((r) => r.index === 11)!.rect.y).toBe(HERO_LIST_TOP + 11 * 80 - MAX_SWEEP - 35);
   });
 });
 

@@ -21,7 +21,19 @@ import { seasonScore } from "@game/data/season";
 import { frameQualityForStage } from "@game/data/quality";
 import { fs as FS, ui as UI } from "@game/ui/theme";
 import * as sharedLb from "@game/data/leaderboard";
-import { leaderboardLayout, LB_BADGE_BOX, LB_ROWS_TOP, LB_ROW_MIN_H, LB_ROW_MAX_H } from "@game/ui/leaderboardLayout";
+import {
+  leaderboardLayout,
+  LB_BADGE_BOX,
+  LB_BADGE_DX,
+  LB_BACK_H,
+  LB_BACK_Y,
+  LB_PAD,
+  LB_ROWS_TOP,
+  LB_ROW_MAX_GAP,
+  LB_ROW_MAX_H,
+  LB_ROW_MIN_H,
+  LB_SCORE_INSET,
+} from "@game/ui/leaderboardLayout";
 
 /* ---------- Cocos 宿主侧(本文件的被测物;只吃 cc-free 模型,不碰视图) ---------- */
 import { buildLeaderboardContent, hitLeaderboard, leaderboardScreenLayout, type LeaderboardSaveView } from "../cocos/assets/scripts/leaderboard/LeaderboardModel";
@@ -31,7 +43,8 @@ import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
-const PAD = UI.pad;
+/** 屏内页边距:幻影榜走自己的 16 网格(LB_PAD),不是全局 ui.pad(14) */
+const PAD = LB_PAD;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
 const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
@@ -194,12 +207,17 @@ describe("行矩形几何(996 与 1246 两档屏高)", () => {
     });
   }
 
-  it("屏高变大只把富余摊进 gap(≤20),行高钳在 44..72 不被拉伸", () => {
+  it("屏高变大只把富余摊进 gap(≤ LB_ROW_MAX_GAP),行高钳在 44..72 不被拉伸", () => {
+    expect(LB_ROW_MAX_GAP).toBe(40);
     const a = leaderboardScreenLayout(W, H_STD);
     const b = leaderboardScreenLayout(W, H_TALL);
     expect(a.rowH).toBe(b.rowH); // 两档都够高 → 行高都取上限 72
     expect(b.gap).toBeGreaterThanOrEqual(a.gap); // 多出的高度进间距
-    expect(b.gap).toBeLessThanOrEqual(20);
+    expect(b.gap).toBeLessThanOrEqual(LB_ROW_MAX_GAP);
+    // 富余只进这道呼吸缝:两档 gap 都取偶,行高恒在上限
+    expect(a.gap % 2).toBe(0);
+    expect(b.gap % 2).toBe(0);
+    expect(a.rowH).toBe(LB_ROW_MAX_H);
   });
 });
 
@@ -238,7 +256,7 @@ function textBands(h: number): TextRequest[] {
     out.push(
       { at: `行${i}名次`, x: row.rank.x, baseY: row.rank.baseY, maxW: row.rank.maxW, px: row.rank.px, align: row.rank.align },
       { at: `行${i}名字`, x: row.name.x, baseY: row.name.baseY, maxW: row.name.maxW, px: row.name.px, align: row.name.align },
-      // 右对齐那段(上次翻车的地方):末笔锚点在 w − pad − 10
+      // 右对齐那段(上次翻车的地方):末笔锚点在 w − pad − LB_SCORE_INSET
       { at: `行${i}分数`, x: row.score.x, baseY: row.score.baseY, maxW: row.score.maxW, px: row.score.px, align: row.score.align },
       { at: `行${i}徽标数`, x: row.badge.x + row.badge.w / 2, baseY: row.badge.y + row.badge.h / 2 + 4, maxW: row.badge.w, px: FS.micro, align: "center" }
     );
@@ -264,12 +282,12 @@ describe("文本带右界(leaderboardLayout 全网格)", () => {
     }
   });
 
-  it("右对齐分数带末笔贴 w − pad − 10,不越右界(逐行)", () => {
+  it("右对齐分数带末笔贴 w − pad − LB_SCORE_INSET,不越右界(逐行)", () => {
     for (const h of [H_STD, H_TALL]) {
       const L = leaderboardScreenLayout(W, h);
       for (const row of L.rows) {
         const band = bandOf({ at: "分数", x: row.score.x, baseY: row.score.baseY, maxW: row.score.maxW, px: row.score.px, align: "right" });
-        expect(row.score.x).toBe(W - PAD - 10);
+        expect(row.score.x).toBe(W - PAD - LB_SCORE_INSET);
         expect(band.x + band.w).toBe(row.score.x); // 末笔 = 右界锚点
         expect(band.x + band.w).toBeLessThanOrEqual(W);
         expect(band.x).toBeGreaterThanOrEqual(0);
@@ -286,7 +304,7 @@ describe("关卡框徽标门控(对标 Web drawAvatarFrame)", () => {
     expect(c.rows.every((r) => r.badge === null)).toBe(true);
   });
 
-  it("frames 非空 → 仅玩家行有徽标,top = Math.max(...frames),贴图键 = avatar_<品质>", () => {
+  it("frames 非空 → 仅玩家行有徽标,top = Math.max(...frames),贴图键 = frame_<品质>", () => {
     const frames = [2, 5, 3];
     const top = Math.max(...frames);
     const c = buildLeaderboardContent(save({ frames, seasonBest: 99999 }));
@@ -295,7 +313,7 @@ describe("关卡框徽标门控(对标 Web drawAvatarFrame)", () => {
     const me = badges[0];
     expect(me.isPlayer).toBe(true);
     expect(me.badge!.text).toBe(String(top));
-    expect(me.badge!.textureKey).toBe(`avatar_${frameQualityForStage(top)}`);
+    expect(me.badge!.textureKey).toBe(`frame_${frameQualityForStage(top)}`);
   });
 
   it("徽标品质随 top 走(1→common,3→rare,5→epic,6→legendary,7→hidden)", () => {
@@ -308,19 +326,26 @@ describe("关卡框徽标门控(对标 Web drawAvatarFrame)", () => {
     ] as const) {
       const c = buildLeaderboardContent(save({ frames: [top], seasonBest: 99999 }));
       const me = c.rows.find((r) => r.isPlayer)!;
-      expect(me.badge!.textureKey, `top=${top}`).toBe(`avatar_${quality}`);
+      expect(me.badge!.textureKey, `top=${top}`).toBe(`frame_${quality}`);
       expect(me.badge!.text).toBe(String(top));
     }
   });
 
-  it("徽标盒几何恒定(圆心 pad+118 / 行中心,边长 24),与显示与否无关", () => {
+  it("徽标盒几何恒定(行左起 LB_BADGE_DX / 行内垂直居中,边长 LB_BADGE_BOX),与显示与否无关", () => {
     const L = leaderboardScreenLayout(W, H_STD);
+    expect(LB_BADGE_BOX).toBe(40);
+    expect(LB_BADGE_DX).toBe(16);
     for (const row of L.rows) {
       const r = row.rect;
       expect(row.badge.w).toBe(LB_BADGE_BOX);
       expect(row.badge.h).toBe(LB_BADGE_BOX);
-      expect(row.badge.x + row.badge.w / 2).toBe(r.x + 118);
+      expect(row.badge.x + row.badge.w / 2).toBe(r.x + LB_BADGE_DX + LB_BADGE_BOX / 2);
       expect(row.badge.y + row.badge.h / 2).toBe(r.y + r.h / 2);
+      // 盒整体落在行板 nineMargin 内缩区(四边都收在行矩形内缩 LB_BADGE_DX 之内)
+      expect(row.badge.x).toBe(r.x + LB_BADGE_DX);
+      expect(row.badge.x + row.badge.w).toBeLessThanOrEqual(r.x + r.w - LB_BADGE_DX);
+      expect(row.badge.y).toBeGreaterThanOrEqual(r.y);
+      expect(row.badge.y + row.badge.h).toBeLessThanOrEqual(r.y + r.h);
     }
   });
 });
@@ -335,16 +360,19 @@ describe("命中判定(对标 Web onLeaderboardClick → hitPanelBack)", () => {
     expect(hitLeaderboard(L, B.x + B.w / 2, B.y + B.h / 2)).toEqual({ kind: "back" });
     // 行、标题、屏中央都不产动作
     expect(hitLeaderboard(L, L.rows[0].rect.x + 40, L.rows[0].rect.y + 10)).toBe(null);
-    expect(hitLeaderboard(L, UI.pad + 4, L.title.baseY)).toBe(null);
+    expect(hitLeaderboard(L, PAD + 4, L.title.baseY)).toBe(null);
     expect(hitLeaderboard(L, W / 2, H_STD / 2)).toBe(null);
     // 返回钮右/下缘外一点
     expect(hitLeaderboard(L, B.x - 1, B.y + B.h / 2)).toBe(null);
     expect(hitLeaderboard(L, B.x + B.w / 2, B.y + B.h + 1)).toBe(null);
   });
 
-  it("返回钮矩形与 Web skinButtonBase 同几何(w − pad − backW, 22, backW, backH)", () => {
+  it("返回钮矩形贴右缘留 pad、抬到热区下限(w − pad − backW, LB_BACK_Y, backW, LB_BACK_H ≥ 44)", () => {
     const L = leaderboardScreenLayout(W, H_STD);
-    expect(L.backBtn).toEqual({ x: W - PAD - UI.backW, y: 22, w: UI.backW, h: UI.backH });
+    expect(L.backBtn).toEqual({ x: W - PAD - UI.backW, y: LB_BACK_Y, w: UI.backW, h: LB_BACK_H });
+    expect(L.backBtn.h).toBeGreaterThanOrEqual(44); // 热区下限
+    expect(L.backBtn.y).toBeGreaterThanOrEqual(0);
+    expect(L.backBtn.x + L.backBtn.w).toBeLessThanOrEqual(W - PAD);
   });
 });
 

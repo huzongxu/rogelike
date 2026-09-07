@@ -29,7 +29,7 @@ export interface LeaderboardSaveView {
 
 /** 玩家行的关卡框徽标(null = 不显示:Web 仅在 save.frames 非空时绘制) */
 export interface LeaderboardBadge {
-  /** 框贴图键(`avatar_<品质>`,与 Web drawAvatarFrame 同一映射);缺图时视图回退代码金圈 */
+  /** 框贴图键(`frame_<品质>`,像素批次的五档品质框,与 `frameQualityForStage` 同一映射);缺图时视图回退硬边方框 */
   textureKey: string;
   /** 框心数字 = 最高已获框关卡(Web:`Math.max(...save.frames)`) */
   text: string;
@@ -66,7 +66,7 @@ export function buildLeaderboardContent(save: LeaderboardSaveView): LeaderboardC
   const myScore = seasonScore(save.stageStars, save.seasonBest);
   const myRank = rankAmong(myScore, board);
   const top = save.frames.length > 0 ? Math.max(...save.frames) : null;
-  const badge: LeaderboardBadge | null = top === null ? null : { textureKey: `avatar_${frameQualityForStage(top)}`, text: String(top) };
+  const badge: LeaderboardBadge | null = top === null ? null : { textureKey: `frame_${frameQualityForStage(top)}`, text: String(top) };
   const rows: LeaderboardRowContent[] = [];
   // 10 幽灵 + 玩家行插入其名次位(第 11 名 = 未入榜,列末尾)—— 与 Web 循环逐项同式
   for (let i = 0; i <= board.length; i++) {
