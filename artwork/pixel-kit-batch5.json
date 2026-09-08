@@ -237,12 +237,6 @@
      316
     ],
     [
-     51,
-     328,
-     1484,
-     638
-    ],
-    [
      57,
      680,
      1480,
@@ -263,18 +257,6 @@
      "legacyErode": true
     },
     {
-     "key": "tabs_talent_three",
-     "art": [
-      264,
-      15
-     ],
-     "fit": "stretch",
-     "fillBox": true,
-     "cropBBox": false,
-     "insetPx": 2,
-     "wm": false
-    },
-    {
      "key": "panel_parchment",
      "art": [
       264,
@@ -285,6 +267,35 @@
      "cropBBox": false,
      "wm": false,
      "legacyErode": true
+    }
+   ]
+  },
+  {
+   "src": "vibe_images/px_sheet_tabs_d.png",
+   "grid": {
+    "cols": 1,
+    "rows": 1
+   },
+   "tolerance": 130,
+   "rects": [
+    [
+     43,
+     474,
+     1492,
+     673
+    ]
+   ],
+   "cells": [
+    {
+     "key": "tabs_talent_three",
+     "art": [
+      264,
+      15
+     ],
+     "fit": "stretch",
+     "fillBox": true,
+     "cropBBox": false,
+     "wm": false
     }
    ]
   }
