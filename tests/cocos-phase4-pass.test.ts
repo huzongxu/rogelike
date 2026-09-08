@@ -27,40 +27,55 @@ import { PASS_PREMIUM_MULT, PASS_STAR_WEIGHT, PASS_TIERS, calcPassProgress } fro
 import { fs as FS, rowTextY, ui as UI } from "@game/ui/theme";
 import * as sharedPass from "@game/data/pass";
 import {
+  evenDown,
+  passActRect,
+  passBackBtn,
+  passEchoBand,
+  passHeaderPlate,
   passLayout,
+  passPremBand,
+  passProgressBar,
   passProgressRects,
   passScreenLayout,
+  PS_ACT_GAP,
   PS_ACT_H,
-  PS_ACT_Y,
+  PS_ACT_PLATE,
+  PS_BACK_H,
+  PS_BACK_ICON_BOX,
+  PS_BACK_ICON_DX,
+  PS_BACK_W,
+  PS_BACK_Y,
   PS_CHECK_BOX,
-  PS_CHECK_DY,
-  PS_CHECK_INSET,
-  PS_ECHO_BASE_Y,
-  PS_FREE_DY,
+  PS_CHECK_GAP,
+  PS_CONTENT_W,
+  PS_ECHO_BAND_H,
   PS_HEADER_H,
-  PS_HEADER_INSET,
-  PS_HEADER_TITLE_DY,
   PS_HEADER_W,
+  PS_HEADER_X,
+  PS_HEADER_Y,
+  PS_LINE_SPACING,
   PS_LIST_GAP,
-  PS_LIST_BOTTOM_INSET,
   PS_NAME_DY,
-  PS_NODE_TRACK_DY,
+  PS_NODE_TRACK_GAP,
   PS_NODE_TRACK_H,
+  PS_PAD,
+  PS_PANEL_KEY,
   PS_PREM_BADGE_H,
   PS_PREM_BADGE_W,
-  PS_PREM_BADGE_Y,
-  PS_PREM_BASE_Y,
-  PS_PREMIUM_DY,
+  PS_PREM_BAND_H,
   PS_PREM_TEXT_GAP,
-  PS_PROGRESS_BOTTOM_INSET,
+  PS_PROGRESS_BOTTOM_GAP,
   PS_PROGRESS_H,
-  PS_PROGRESS_LABEL_DY,
+  PS_PROGRESS_LABEL_BAND,
+  PS_PROGRESS_LABEL_GAP,
   PS_ROW_MAX_GAP,
   PS_ROW_MAX_H,
   PS_ROW_MIN_H,
+  PS_ROW_TEXT_DX,
+  PS_STATUS_BAND_W,
   PS_STATUS_INSET,
-  PS_TEXT_DX,
-  PS_TITLE_BASE_Y,
+  PS_TEXT_SLACK,
+  PS_TOP_Y,
   type PsRect,
   type PsTextLine,
 } from "@game/ui/passLayout";
@@ -81,7 +96,7 @@ import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
-const PAD = UI.pad;
+const PAD = PS_PAD;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
 const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
@@ -136,37 +151,48 @@ describe("Cocos 宿主与共享层的模块同一性", () => {
 
 describe("档位行几何(996 与 1246 两档屏高)", () => {
   for (const h of [H_STD, H_TALL]) {
-    it(`h=${h}:行数 = PASS_TIERS.length、行区在 [listY0, h − ${PS_LIST_BOTTOM_INSET}] 内摊开且不越界`, () => {
+    it(`h=${h}:行数 = PASS_TIERS.length、行区在 [listY0, 进度文字带顶缘] 内摊开且不越界`, () => {
       const L = passLayout(W, h);
+      const hh = evenDown(h);
       expect(L.rowCount).toBe(PASS_TIERS.length);
       expect(L.rows).toHaveLength(PASS_TIERS.length);
-      expect(L.listY0).toBe(PS_ACT_Y + PS_ACT_H + PS_LIST_GAP);
-      // 第六实参 maxGap 与 minH/maxH 三档都来自 Web 的调用位,不是 daily 用的默认档
+      expect(L.listY0).toBe(L.actRect.y + L.actRect.h + PS_LIST_GAP);
+      expect(L.listBottom).toBe(L.progressLabel.baseY - PS_PROGRESS_LABEL_BAND);
+      // 第六实参 maxGap 与 minH/maxH 三档都是本屏特有的钳制档,不是 daily 用的默认档
       expect(L.rowH).toBeGreaterThanOrEqual(PS_ROW_MIN_H);
       expect(L.rowH).toBeLessThanOrEqual(PS_ROW_MAX_H);
       expect(L.gap).toBeGreaterThanOrEqual(0);
       expect(L.gap).toBeLessThanOrEqual(PS_ROW_MAX_GAP);
       const step = L.rowH + L.gap;
-      const bottomLimit = h - PS_LIST_BOTTOM_INSET;
       L.rows.forEach((row, i) => {
         expect(row.index).toBe(i);
         expect(row.rect.y, `行${i} 递推`).toBe(L.listY0 + i * step);
         expect(row.rect.x).toBe(PAD);
-        expect(row.rect.w).toBe(W - PAD * 2);
+        expect(row.rect.w).toBe(PS_CONTENT_W);
         expect(row.rect.h).toBe(L.rowH);
-        expect(row.rect.x).toBeGreaterThanOrEqual(0);
-        expect(row.rect.x + row.rect.w).toBeLessThanOrEqual(W);
-        expect(row.rect.y + row.rect.h, `行${i} 底边`).toBeLessThanOrEqual(bottomLimit);
+        expect(row.rect.x).toBeGreaterThanOrEqual(PAD);
+        expect(row.rect.x + row.rect.w).toBeLessThanOrEqual(W - PAD);
+        expect(row.rect.y + row.rect.h, `行${i} 底边`).toBeLessThanOrEqual(L.listBottom);
+        // module = 2:行矩形四个数全落在栅格上
+        for (const v of [row.rect.x, row.rect.y, row.rect.w, row.rect.h]) expect(evenDown(v), `${v} 应为偶数`).toBe(v);
       });
+      // 屏高富余只进末行与进度条文字带之间那条呼吸缝,缝恒非负且就是两者的差
+      const last = L.rows[L.rows.length - 1];
+      expect(L.seamAboveProgress).toBe(L.listBottom - (last.rect.y + L.rowH));
+      expect(L.seamAboveProgress).toBeGreaterThanOrEqual(0);
       // 行区首行在激活行之下,末行底边在总进度条之上(三处纵向热区互不重叠)
       expect(L.rows[0].rect.y).toBeGreaterThanOrEqual(L.actRect.y + L.actRect.h + PS_LIST_GAP);
-      expect(L.rows[L.rows.length - 1].rect.y + L.rowH).toBeLessThanOrEqual(L.progressBar.y);
+      expect(last.rect.y + L.rowH).toBeLessThanOrEqual(L.progressBar.y);
+      // 屏底板内缩页边距 16:右缘恒落 544、底缘恒落 evenDown(h) − pad
+      expect(L.panel).toEqual({ x: PAD, y: PAD, w: PS_CONTENT_W, h: hh - PAD * 2 });
+      expect(L.panel.x + L.panel.w).toBe(W - PAD);
+      expect(L.panelKey).toBe(PS_PANEL_KEY);
     });
   }
 
-  it("行距上限就是第六实参的 60(Web 传 60,daily 用默认 20 —— 两屏不同,不许统一)", () => {
+  it("行距上限就是第六实参的 60(本屏传 60,daily 用默认 20 —— 两屏不同,不许统一)", () => {
     expect(PS_ROW_MAX_GAP).toBe(60);
-    for (const h of [H_STD, H_TALL]) expect(passLayout(W, h).gap).toBe(PS_ROW_MAX_GAP);
+    for (const h of [H_STD, H_TALL]) expect(passLayout(W, h).gap).toBe(evenDown(PS_ROW_MAX_GAP));
   });
 
   it("屏高变高只把行区留白挪到列表尾,行高与行距按同一钳制档走", () => {
@@ -175,60 +201,93 @@ describe("档位行几何(996 与 1246 两档屏高)", () => {
     expect(b.rowH).toBe(a.rowH);
     expect(b.gap).toBe(a.gap);
     expect(b.listY0).toBe(a.listY0);
+    expect(b.rows.map((r) => r.rect.y)).toEqual(a.rows.map((r) => r.rect.y));
     // 进度条与返回钮才是跟着屏高走的两个贴底/贴顶件
     expect(b.progressBar.y - a.progressBar.y).toBe(H_TALL - H_STD);
     expect(b.backBtn.y).toBe(a.backBtn.y);
+    // 多出来的屏高一分不落全进呼吸缝
+    expect(b.seamAboveProgress - a.seamAboveProgress).toBe(H_TALL - H_STD);
   });
 });
 
 /* ==================== 2. 屏级矩形:激活行 / 节点轨道 / 总进度条 / 返回钮 / 横幅 ==================== */
 
-describe("屏级矩形与 Web 的实参逐位对应", () => {
-  it("激活行 = passActRect(pad, 92, w − pad×2, 40),绘制与命中同一矩形来源", () => {
+describe("屏级矩形(激活行 / 节点轨道 / 总进度条 / 返回钮 / 横幅)", () => {
+  it("激活行是 D 带的整宽矩形(高 ≥ ui.touchMin),绘制与命中同一矩形来源", () => {
     const L = passLayout(W, H_STD);
-    expect(L.actRect).toEqual({ x: PAD, y: PS_ACT_Y, w: W - PAD * 2, h: PS_ACT_H });
+    expect(L.actRect).toEqual(passActRect());
+    expect(L.actRect).toEqual({ x: PAD, y: PS_TOP_Y + PS_HEADER_H + PS_ECHO_BAND_H + PS_PREM_BAND_H + PS_ACT_GAP, w: PS_CONTENT_W, h: PS_ACT_H });
+    expect(L.actRect.h).toBeGreaterThanOrEqual(UI.touchMin);
+    expect(L.actRect.x + L.actRect.w).toBe(W - PAD);
+    expect(L.actPlate).toEqual(PS_ACT_PLATE);
   });
 
-  it("节点轨道贴在 listY0 之上 10px(Web 的 `listY0 - 10`,缺图就是不画)", () => {
+  it("节点轨道取 bar_pass_nodes 的 art 整倍档 528×10,贴在列表顶缘之上一条缝", () => {
     const L = passLayout(W, H_STD);
-    expect(L.nodeTrack).toEqual({ x: PAD, y: L.listY0 + PS_NODE_TRACK_DY, w: W - PAD * 2, h: PS_NODE_TRACK_H });
+    expect(PS_NODE_TRACK_H).toBe(10);
+    expect(L.nodeTrack).toEqual({ x: PAD, y: L.listY0 - PS_NODE_TRACK_H - PS_NODE_TRACK_GAP, w: PS_CONTENT_W, h: PS_NODE_TRACK_H });
+    // 264 art px × module 2 = 528,恰好等于内容宽 → 不需要横向拉伸
+    expect(L.nodeTrack.w).toBe(PS_CONTENT_W);
     expect(L.nodeTrack.y + L.nodeTrack.h).toBeLessThanOrEqual(L.rows[0].rect.y);
+    expect(L.nodeTrack.y).toBeGreaterThan(L.actRect.y + L.actRect.h);
   });
 
-  it("总进度条贴底 pbY = h − 44,文字基线在条顶之上 6", () => {
+  it("总进度条底缘落 evenDown(h) − pad − 16,文字基线在条顶之上 8", () => {
     for (const h of [H_STD, H_TALL]) {
       const L = passLayout(W, h);
-      expect(L.progressBar).toEqual({ x: PAD, y: h - PS_PROGRESS_BOTTOM_INSET, w: W - PAD * 2, h: PS_PROGRESS_H });
-      expect(L.progressLabel.baseY).toBe(L.progressBar.y + PS_PROGRESS_LABEL_DY);
+      expect(L.progressBar).toEqual(passProgressBar(h));
+      expect(L.progressBar).toEqual({ x: PAD, y: evenDown(h) - PAD - PS_PROGRESS_H - PS_PROGRESS_BOTTOM_GAP, w: PS_CONTENT_W, h: PS_PROGRESS_H });
+      expect(L.progressLabel.baseY).toBe(evenDown(L.progressBar.y - PS_PROGRESS_LABEL_GAP));
       expect(L.progressLabel.px).toBe(FS.micro);
+      expect(L.progressBar.y + L.progressBar.h).toBeLessThanOrEqual(evenDown(h) - PAD);
+      expect(L.progressLabel.baseY).toBeGreaterThan(L.listBottom);
     }
   });
 
-  it("标题横幅用 skinHeader 的默认宽 220(daily 显式传 244,两屏不同)", () => {
+  it("标题横幅取 banner_title_gold_b 的 art 整倍档 220×42、左缘落页边距(daily 是 244,两屏不同)", () => {
     const L = passLayout(W, H_STD);
-    expect(L.headerPlate).toEqual({ x: PAD - PS_HEADER_INSET, y: PS_TITLE_BASE_Y - PS_HEADER_H + PS_HEADER_INSET, w: PS_HEADER_W, h: PS_HEADER_H });
-    expect(L.headerPlate.y + L.headerPlate.h).toBeLessThan(PS_ECHO_BASE_Y);
+    expect(L.headerPlate).toEqual(passHeaderPlate());
+    expect(L.headerPlate).toEqual({ x: PS_HEADER_X, y: PS_HEADER_Y, w: PS_HEADER_W, h: PS_HEADER_H });
+    // 旧档是 pad − 8,左缘出到页边距之外;重排后收回页边距内
+    expect(PS_HEADER_X).toBe(PAD);
+    expect(PS_HEADER_Y).toBe(PS_TOP_Y);
     expect(PS_HEADER_W).toBe(220);
-    expect(L.titleOnBanner.x).toBe(L.headerPlate.x + PS_HEADER_W / 2);
-    expect(L.titleOnBanner.baseY).toBe(PS_TITLE_BASE_Y - PS_HEADER_TITLE_DY);
+    expect(L.headerPlate.y + L.headerPlate.h).toBe(passEchoBand().y);
+    expect(L.titleOnBanner.x).toBe(evenDown(L.headerPlate.x + PS_HEADER_W / 2));
+    expect(L.titleOnBanner.baseY).toBe(evenDown(rowTextY(L.headerPlate.y, L.headerPlate.h, FS.title)));
     expect(L.titleOnBanner.align).toBe("center");
+    // 压带标题:基线落在横幅带内(上不出带顶、下不出带底)
+    expect(L.titleOnBanner.baseY).toBeGreaterThan(L.headerPlate.y);
+    expect(L.titleOnBanner.baseY).toBeLessThan(L.headerPlate.y + L.headerPlate.h);
     expect(L.titleBare.x).toBe(PAD);
-    expect(L.titleBare.baseY).toBe(PS_TITLE_BASE_Y);
+    expect(L.titleBare.baseY).toBe(L.titleOnBanner.baseY);
     expect(L.titleBare.align).toBe("left");
+    expect(L.titleBare.maxW).toBe(evenDown(L.backBtn.x - PS_TEXT_SLACK - PAD));
     // 横幅在屏幕上不越过返回钮左界
     expect(L.headerPlate.x + L.headerPlate.w).toBeLessThan(L.backBtn.x);
   });
 
-  it("返回钮:贴图盒 + 两档文字位(Web skinIconButton 的 hasIcon 分支)", () => {
+  it("返回钮:热区 ≥ ui.touchMin、右缘落 w − pad、图标取 art 整倍档并纵向居中", () => {
     const L = passLayout(W, H_STD);
-    expect(L.backBtn).toEqual({ x: W - PAD - UI.backW, y: L.backBtn.y, w: UI.backW, h: UI.backH });
-    const ih = UI.backH - 12;
-    expect(L.backIcon).toEqual({ x: L.backBtn.x + 4, y: L.backBtn.y + (UI.backH - ih) / 2, w: ih, h: ih });
-    expect(L.backTextBare.x).toBe(L.backBtn.x + UI.backW / 2);
-    expect(L.backTextWithIcon.x).toBe(L.backBtn.x + 4 + ih + (UI.backW - 4 - ih) / 2);
-    expect(L.backTextWithIcon.maxW).toBe(UI.backW - 4 - ih);
+    expect(PS_BACK_Y).toBe(PS_TOP_Y);
+    expect(PS_BACK_H).toBeGreaterThanOrEqual(UI.touchMin);
+    expect(evenDown(PS_BACK_H)).toBe(PS_BACK_H);
+    expect(L.backBtn).toEqual(passBackBtn(W));
+    expect(L.backBtn).toEqual({ x: W - PAD - PS_BACK_W, y: PS_BACK_Y, w: PS_BACK_W, h: PS_BACK_H });
+    expect(L.backBtn.x + L.backBtn.w).toBe(W - PAD);
+    // 图标边长 = btn_back 固有 11×11 art px × module 2(不做非整倍缩放)
+    expect(PS_BACK_ICON_BOX).toBe(22);
+    expect(L.backIcon).toEqual({
+      x: L.backBtn.x + PS_BACK_ICON_DX,
+      y: evenDown(L.backBtn.y + (PS_BACK_H - PS_BACK_ICON_BOX) / 2),
+      w: PS_BACK_ICON_BOX,
+      h: PS_BACK_ICON_BOX,
+    });
+    expect(L.backTextBare.x).toBe(evenDown(L.backBtn.x + PS_BACK_W / 2));
+    expect(L.backTextWithIcon.x).toBe(evenDown(L.backIcon.x + PS_BACK_ICON_BOX + (PS_BACK_W - PS_BACK_ICON_DX - PS_BACK_ICON_BOX) / 2));
+    expect(L.backTextWithIcon.maxW).toBe(PS_BACK_W - PS_BACK_ICON_DX - PS_BACK_ICON_BOX);
     for (const t of [L.backTextBare, L.backTextWithIcon]) {
-      expect(t.baseY).toBe(L.backBtn.y + UI.backH / 2 + 5);
+      expect(t.baseY).toBe(evenDown(rowTextY(L.backBtn.y, L.backBtn.h, FS.body)));
       expect(t.px).toBe(FS.body);
       expect(t.align).toBe("center");
     }
@@ -237,26 +296,32 @@ describe("屏级矩形与 Web 的实参逐位对应", () => {
 
 /* ==================== 3. 行内四段文本:三段左 + 一段右(两档基线) ==================== */
 
-describe("行内文本锚点(与 drawPass 的 fillText 实参逐位对应)", () => {
+describe("行内文本锚点(三段左 + 一段右,两档基线)", () => {
   for (const h of [H_STD, H_TALL]) {
-    it(`h=${h}:左三段起笔都是 pad+8,基线是 y + rowH/2 ${PS_NAME_DY} / +${PS_FREE_DY} / +${PS_PREMIUM_DY}`, () => {
+    it(`h=${h}:左三段起笔都是 rect.x + ${PS_ROW_TEXT_DX},基线 l1 = evenDown(mid ${PS_NAME_DY}) 再各加 ${PS_LINE_SPACING}`, () => {
       const L = passLayout(W, h);
       for (const row of L.rows) {
         const mid = row.rect.y + row.rect.h / 2;
-        for (const line of [row.name, row.free, row.premium]) expect(line.x).toBe(PAD + PS_TEXT_DX);
-        expect(row.name.baseY).toBe(mid + PS_NAME_DY);
-        expect(row.free.baseY).toBe(mid + PS_FREE_DY);
-        expect(row.premium.baseY).toBe(mid + PS_PREMIUM_DY);
+        const l1 = evenDown(mid + PS_NAME_DY);
+        for (const line of [row.name, row.free, row.premium]) expect(line.x).toBe(row.rect.x + PS_ROW_TEXT_DX);
+        expect(row.name.baseY).toBe(l1);
+        expect(row.free.baseY).toBe(l1 + PS_LINE_SPACING);
+        expect(row.premium.baseY).toBe(l1 + PS_LINE_SPACING * 2);
         expect(row.name.px).toBe(FS.body);
         expect(row.free.px).toBe(FS.muted);
         expect(row.premium.px).toBe(FS.muted);
-        // 三段都在行内
+        // 三段都在行内、基线全落在栅格上
         expect(row.name.baseY).toBeGreaterThanOrEqual(row.rect.y);
         expect(row.premium.baseY).toBeLessThanOrEqual(row.rect.y + row.rect.h);
+        for (const line of [row.name, row.free, row.premium]) {
+          expect(evenDown(line.baseY), `${line.baseY} 应为偶数`).toBe(line.baseY);
+          // 限宽只有一个事实源:对勾左缘 − 余量 − 起笔位
+          expect(line.maxW).toBe(evenDown(row.check.x - PS_TEXT_SLACK - line.x));
+        }
       }
     });
 
-    it(`h=${h}:右列末笔锚点 w − pad − 8,基线按字号分两档(可领取用 body)`, () => {
+    it(`h=${h}:右列末笔锚点 w − pad − ${PS_STATUS_INSET},基线按字号分两档(可领取用 body);对勾取 art 整倍档 14`, () => {
       const L = passLayout(W, h);
       for (const row of L.rows) {
         const statusX = W - PAD - PS_STATUS_INSET;
@@ -264,34 +329,61 @@ describe("行内文本锚点(与 drawPass 的 fillText 实参逐位对应)", () 
         expect(row.statusBody.x).toBe(statusX);
         expect(row.statusMuted.align).toBe("right");
         expect(row.statusBody.align).toBe("right");
-        expect(row.statusMuted.baseY).toBe(rowTextY(row.rect.y, row.rect.h, FS.muted));
-        expect(row.statusBody.baseY).toBe(rowTextY(row.rect.y, row.rect.h, FS.body));
+        expect(row.statusMuted.baseY).toBe(evenDown(rowTextY(row.rect.y, row.rect.h, FS.muted)));
+        expect(row.statusBody.baseY).toBe(evenDown(rowTextY(row.rect.y, row.rect.h, FS.body)));
         expect(row.statusBody.baseY).toBeGreaterThanOrEqual(row.statusMuted.baseY);
         expect(row.statusMuted.px).toBe(FS.muted);
         expect(row.statusBody.px).toBe(FS.body);
-        // 对勾贴图位(Web 只在已领分支画)
-        expect(row.check).toEqual({ x: W - PAD - PS_CHECK_INSET, y: row.rect.y + row.rect.h / 2 + PS_CHECK_DY, w: PS_CHECK_BOX, h: PS_CHECK_BOX });
+        // 右列限宽收到对勾右缘之后,两档同宽
+        expect(row.statusMuted.maxW).toBe(evenDown(statusX - row.check.x - row.check.w - PS_TEXT_SLACK));
+        expect(row.statusBody.maxW).toBe(row.statusMuted.maxW);
+        // 对勾贴图位:mark_check_green 固有 7×7 art px × module 2,纵向居中于行
+        expect(PS_CHECK_BOX).toBe(14);
+        expect(row.check).toEqual({
+          x: evenDown(statusX - PS_STATUS_BAND_W - PS_CHECK_GAP - PS_CHECK_BOX),
+          y: evenDown(row.rect.y + (row.rect.h - PS_CHECK_BOX) / 2),
+          w: PS_CHECK_BOX,
+          h: PS_CHECK_BOX,
+        });
         expect(row.check.x + row.check.w).toBeLessThan(statusX);
+        expect(row.check.y).toBeGreaterThanOrEqual(row.rect.y);
+        expect(row.check.y + row.check.h).toBeLessThanOrEqual(row.rect.y + row.rect.h);
       }
     });
   }
 
-  it("回响统计行与高级轨状态行的基线就是 Web 的两个字面量位", () => {
+  it("回响统计行(B 带)与高级轨状态行(C 带)各居中于自己那一带;徽标取 art 整倍档 12×14", () => {
     const L = passLayout(W, H_STD);
-    expect(L.echo).toMatchObject({ x: PAD, baseY: PS_ECHO_BASE_Y, px: FS.body, align: "left" });
-    expect(L.premBadge).toEqual({ x: PAD, y: PS_PREM_BADGE_Y, w: PS_PREM_BADGE_W, h: PS_PREM_BADGE_H });
-    expect(L.premTextWithBadge.x).toBe(PAD + PS_PREM_TEXT_GAP);
+    const b = passEchoBand();
+    const c = passPremBand();
+    expect(b).toEqual({ x: PAD, y: PS_TOP_Y + PS_HEADER_H, w: PS_CONTENT_W, h: PS_ECHO_BAND_H });
+    expect(c).toEqual({ x: PAD, y: b.y + b.h, w: PS_CONTENT_W, h: PS_PREM_BAND_H });
+    expect(L.echo).toMatchObject({ x: PAD, baseY: evenDown(rowTextY(b.y, b.h, FS.body)), px: FS.body, align: "left" });
+    expect(L.premBadge).toEqual({ x: PAD, y: evenDown(c.y + (c.h - PS_PREM_BADGE_H) / 2), w: PS_PREM_BADGE_W, h: PS_PREM_BADGE_H });
+    // badge_pennant_purple 固有 6×7 art px × module 2(旧档宽 11 是奇数)
+    expect(PS_PREM_BADGE_W).toBe(12);
+    expect(PS_PREM_BADGE_H).toBe(14);
+    expect(L.premTextWithBadge.x).toBe(PAD + PS_PREM_BADGE_W + PS_PREM_TEXT_GAP);
     expect(L.premTextBare.x).toBe(PAD);
-    expect(L.premTextWithBadge.baseY).toBe(PS_PREM_BASE_Y);
-    expect(L.premTextBare.baseY).toBe(PS_PREM_BASE_Y);
+    expect(L.premTextWithBadge.baseY).toBe(evenDown(rowTextY(c.y, c.h, FS.muted)));
+    expect(L.premTextBare.baseY).toBe(L.premTextWithBadge.baseY);
     expect(L.premTextBare.px).toBe(FS.muted);
+    // 两带纵向不叠、且都在激活行之上
+    expect(L.echo.baseY).toBeLessThan(c.y);
+    expect(c.y + c.h).toBeLessThanOrEqual(L.actRect.y);
+    expect(L.premBadge.y).toBeGreaterThanOrEqual(c.y);
+    expect(L.premBadge.y + L.premBadge.h).toBeLessThanOrEqual(c.y + c.h);
   });
 
   it("激活行两档文字:已激活左起笔于 pad(muted 基线),未激活整屏居中(body 基线)", () => {
     const L = passLayout(W, H_STD);
-    expect(L.actDoneText).toMatchObject({ x: PAD, baseY: rowTextY(PS_ACT_Y, PS_ACT_H, FS.muted), px: FS.muted, align: "left" });
-    expect(L.actBtnText).toMatchObject({ x: W / 2, baseY: rowTextY(PS_ACT_Y, PS_ACT_H, FS.body), px: FS.body, align: "center" });
+    expect(L.actDoneText).toMatchObject({ x: PAD, baseY: evenDown(rowTextY(L.actRect.y, L.actRect.h, FS.muted)), px: FS.muted, align: "left" });
+    expect(L.actBtnText).toMatchObject({ x: evenDown(W / 2), baseY: evenDown(rowTextY(L.actRect.y, L.actRect.h, FS.body)), px: FS.body, align: "center" });
     expect(L.actPlate).toEqual({ key: "btn_primary", radius: 10 });
+    for (const t of [L.actDoneText, L.actBtnText]) {
+      expect(t.baseY).toBeGreaterThan(L.actRect.y);
+      expect(t.baseY).toBeLessThan(L.actRect.y + L.actRect.h);
+    }
   });
 });
 
@@ -359,19 +451,21 @@ describe("文本带右界(passLayout 全网格)", () => {
     }
   });
 
-  it("右对齐状态带末笔贴 w − pad − 8,不越右界(Phase 3 的翻车点)", () => {
+  it(`右对齐状态带末笔贴 w − pad − ${PS_STATUS_INSET},不越右界(Phase 3 的翻车点)`, () => {
     for (const h of [H_STD, H_TALL]) {
       const L = passLayout(W, h);
       for (const row of L.rows) {
         for (const line of [row.statusMuted, row.statusBody]) {
           const b = bandOf(lineReq("状态", line));
           expect(b.x + b.w, "末笔 = 右界锚点").toBe(W - PAD - PS_STATUS_INSET);
-          expect(b.x + b.w).toBeLessThanOrEqual(W);
+          expect(b.x + b.w).toBeLessThanOrEqual(W - PAD);
           expect(b.x).toBeGreaterThanOrEqual(0);
         }
-        // 左三段限宽收到状态起笔前 10px,带子不压到右列
+        // 左三段限宽收到状态带左缘之前,带子既不压右列也不压对勾
         for (const line of [row.name, row.free, row.premium]) {
-          expect(bandOf(lineReq("左段", line)).x + bandOf(lineReq("左段", line)).w).toBeLessThanOrEqual(row.statusMuted.x);
+          const b = bandOf(lineReq("左段", line));
+          expect(b.x + b.w).toBeLessThanOrEqual(row.statusMuted.x - PS_STATUS_BAND_W);
+          expect(b.x + b.w).toBeLessThanOrEqual(row.check.x);
         }
       }
     }
@@ -710,11 +804,36 @@ describe("总进度条矩形", () => {
   it("frac = 0.5:填充与遮罩正好接上,合起来等于轨道宽", () => {
     const { fill, cover } = passProgressRects(L, 0.5);
     expect(fill.x).toBe(t.x);
-    expect(fill.w).toBeCloseTo(t.w / 2, 10);
+    expect(fill.w).toBe(t.w / 2);
     expect(cover).not.toBe(null);
-    expect(cover!.x).toBeCloseTo(t.x + t.w / 2, 10);
-    expect(cover!.x + cover!.w).toBeCloseTo(t.x + t.w, 10);
+    expect(cover!.x).toBe(t.x + t.w / 2);
+    expect(cover!.x + cover!.w).toBe(t.x + t.w);
     expect(cover!.h).toBe(t.h);
+  });
+
+  it("任意 frac:两块矩形按栅格取偶后首尾相接、正好铺满轨道(接缝不留半格亮线)", () => {
+    for (let i = 0; i <= 20; i++) {
+      const frac = i / 20;
+      const { fill, cover } = passProgressRects(L, frac);
+      const f = Math.min(1, Math.max(0, frac));
+      expect(fill.x, `frac=${frac}`).toBe(t.x);
+      expect(fill.y, `frac=${frac}`).toBe(t.y);
+      expect(fill.h, `frac=${frac}`).toBe(t.h);
+      expect(evenDown(fill.w), `frac=${frac} 填充宽应为偶数`).toBe(fill.w);
+      expect(fill.w, `frac=${frac} 填充不越轨道`).toBeLessThanOrEqual(t.w);
+      if (f < 1) {
+        expect(cover, `frac=${frac}`).not.toBe(null);
+        // 填充末缘就是遮罩左缘:两块无缝拼接
+        expect(cover!.x, `frac=${frac} 接缝`).toBe(fill.x + fill.w);
+        expect(cover!.x + cover!.w, `frac=${frac} 铺满`).toBe(t.x + t.w);
+        expect(cover!.y).toBe(t.y);
+        expect(cover!.h).toBe(t.h);
+        expect(cover!.w).toBeGreaterThan(0);
+      } else {
+        expect(cover, `frac=${frac}`).toBe(null);
+        expect(fill.w, `frac=${frac} 满档`).toBe(t.w);
+      }
+    }
   });
 });
 
@@ -800,10 +919,15 @@ describe("PassView 的落位纪律(R5)", () => {
     expect((src.match(/placeLine\(/g) ?? []).length).toBe(1);
   });
 
-  it("视图不产几何:行矩形与文本锚点都从 layout 取", () => {
+  it("视图不产几何:屏底板矩形与贴图键、行矩形与文本锚点都从 layout 取", () => {
     expect(src.includes("spreadRows")).toBe(false);
     expect(src.includes("rowTextY")).toBe(false);
-    expect(src.includes("ui.pad")).toBe(true); // 只有面板内缩这一处按既有同屏口径读主题 pad
+    // 页边距只在共享层出现一次:视图既不读 ui.pad 也不内联底板矩形与键
+    expect(src.includes("ui.pad")).toBe(false);
+    expect(src.includes("pad * 2")).toBe(false);
+    expect(src.includes("panel_dark_corners")).toBe(false);
+    expect(src.includes("this.panel.show(L.panelKey, L.panel")).toBe(true);
+    expect((src.match(/this\.panel\.show\(/g) ?? []).length).toBe(1);
   });
 });
 

@@ -1,51 +1,41 @@
 /**
- * 装备升级屏纯几何 —— Web `src/game.ts:drawGearUp`(3887-3977)与 `onGearUpClick`(3979-4000)
- * 的 cc-free 抽取。
+ * 装备升级屏纯几何 —— 按像素栅格(module = 2)重排后的单一出口。
  *
- * 单一出口:绘制与命中判定共读这一份矩形,宿主视图不产任何几何。口径与 Web 逐项同数:
- *  - **Web 的 `private gearRows` 是 draw 时写下的侧信道**(每行存 `{rect, btn, idx}`,click 只读
- *    它)。这里不留那条通道:行矩形由本函数按 `gearCount` 现算,绘制与命中同源同一份 rows;
- *  - 面板贴图键是 `panel_gearup`(daily / pass 走默认面板),内缩与 `panelPad` 同档:
- *    `(pad, pad, w − pad×2, h − pad×2)`,九宫格切深 32,缺图回落 `panel_dark_corners`;
- *  - 标题是**纯文字**,没有横幅贴图(daily 是 `banner_title_gold_c`、pass 是 `banner_title_gold_b`),
- *    起笔 `(pad, 36)`、`fs.title` 加粗;副标题在 `(pad, 56)`、`fs.muted`;
- *  - 右上星尘是**右对齐**,末笔锚点 `w − pad`、基线 36、`fs.body` 加粗 —— 与返回钮
- *    `(w − pad − backW, 22, backW, backH)` 的矩形纵向重叠,Web 的绘制顺序是先文字后按钮,
- *    于是这一串会被返回钮盖住。本层照抄该顺序与坐标,**不在几何层修**;
- *  - 列表顶缘 `y0 = 78`,行区底缘 `h − pad − 8`,行高 `spreadRows(n, y0, h − pad − 8, 40, 56)`
- *    —— **五个实参**(pass 是六个),第六个 `maxGap` 走默认 20,而 Web 把返回的 `gap` **丢弃**,
- *    行距用的是硬编码 4,所以这里给出的是 `rowStep = rowH + 4` 而不是 `rowH + gap`;
- *  - 行底板是**品质框**(`drawQualityFrame(rect.x, rect.y, rect.w, rect.h, qualityDef(q).color)`,
- *    圆角 4、无顶栏),不是 `skinButtonBase`;描边参数(圆角 / 线宽 / 内缩)在 Web 侧是
- *    `src/ui/skin.ts:215` 的函数体内联值,Cocos 侧的同款实现在 `ui/PanelKit.ts:qualityBox`,
- *    两处线宽与内缩已按那个实参对齐,本层只给矩形;
- *  - 行内左列两行文本起笔都是 `rect.x + 10`,限宽 230 / 320 就是 Web `fitOne` 的第二个实参;
- *    基线分别是 `rowTextY(rect.y, rect.h, fs.body)` 与 `rowTextY(rect.y, rect.h, fs.micro) + 14`
- *    (那个 14 是 Web 的裸加数,不是行距口径);
- *  - 升级钮 `{ x: rect.x + rect.w − 100, y: rect.y + (rect.h − min(rowH − 8, 30)) / 2, w: 90,
- *    h: min(rowH − 8, 30) }` —— 高在 `rect.h` 与 `rowH` 同值的当下写成 `min(rowH − 8, 30)`,
- *    原样保留(行高被钳到 40 时钮高 30,行高 56 时也是 30);
- *  - 星级徽记在按钮**左侧**:`GU_STAR_BOX = 12`、`GU_STAR_GAP = 3`、
- *    `sx0 = btn.x − (GEAR_UPGRADE_MAX × 12 + (GEAR_UPGRADE_MAX − 1) × 3) − 10`、
- *    `sy0 = rect.y + (rect.h − 12) / 2`,第 s 颗落在 `sx0 + s × 15`;颗数就是 `GEAR_UPGRADE_MAX`;
- *    缺图回退的文字星基线 `sy0 + starS − 2`,左对齐于该颗左沿;
- *  - 截断提示 `(pad, h − pad − 10)`、`fs.micro`,**仅 `gearCount > GU_ROWS_MAX` 时存在**;
- *  - 空态(`gearCount === 0`)只有一行 `(pad, h / 2)` 的 `fs.body` 文字,此时**没有行、
- *    没有品质框、也没有截断提示**,`rows` 为空数组;
- *  - 返回钮 `(w − pad − backW, 22, backW, backH)` 叠 `btn_back` 图标,文字 x 随图标在否改变
- *    (Web `skinIconButton` 的 `hasIcon` 分支),于是两档文字线都摆在几何里。
+ * 绘制与命中判定共读这一份矩形,宿主视图不产任何几何。栅格口径:
+ *  - 宽恒 560、页边距 `GU_PAD = 16`、内容宽 `GU_CONTENT_W = 528`,所有矩形右缘恒落 544;
+ *    纵向锚线一律先 `evenDown(h)` 再算,行高与行距出 `spreadRows` 后各再过一次 `evenDown`,
+ *    于是 996 与 1246 两档屏高的每一个坐标与尺寸都是偶数;
+ *  - **头部拆两带**:A 带是「标题(左) + 返回钮(右)」,B 带是「副标题(左) + 星尘(右)」。
+ *    星尘因此不再与返回钮矩形重叠(冻结的 Web 基准里两者纵向叠在一起、读数被钮盖住),
+ *    两带各给一个具名带高,文字基线走 `rowTextY` 居中于带;
+ *  - 屏底板是 `panel_dark_corners` 的九宫格档(与已重排各屏同一张),切深由
+ *    `core/ViewTable.ts:borderOf` 按 `nineSlice` 表推导,本层不再给切深常量、也不留回落键;
+ *  - 行底板是**品质框**(`ui/PanelKit.qualityBox` 的 Cocos 实现),行矩形只用于绘制:
+ *    命中口径是「返回钮 → 逐行升级钮」,行 `rect` 不参与命中,点行内非按钮区不产动作;
+ *  - 升级钮高 `GU_BTN_H` 由 `ui.touchMin` 推出(= 44),钮宽取 `btn_minor` 固有 30×20 art px
+ *    的 2 倍档 120,右缘从行右缘内缩 `GU_BTN_INSET = 16`;
+ *  - 徽记带在按钮左侧:颗数 = `GEAR_UPGRADE_MAX`,边长 `GU_STAR_BOX = 12`(= `badge_gear_lv`
+ *    固有 6×6 art px 的 2 倍),颗间缝 `GU_STAR_GAP = 4` 让每颗的 x 都落在栅格上,
+ *    整条带与钮之间留 `GU_STAR_BTN_GAP = 16`;
+ *  - 行内两行文本的限宽**由徽记带左缘推导**(`starsX − GU_TEXT_SLACK − textX`),不留第二个
+ *    事实源;基线走每日屏同款两行式 `l1 = evenDown(y + h/2 − GU_LINE1_DY)`、`l2 = l1 + 18`;
+ *  - 截断提示占**恒定的一条贴底带**(不论 `showHint` 在不在都让出这段预算),于是行数变化
+ *    不会让行高跳动;末行底缘到该带顶缘之间那条 `seamAboveHint` 是本屏**唯一无硬上限的
+ *    呼吸缝**,屏高富余只进它;
+ *  - 空态(`gearCount === 0`)只有一行提示,基线居中于行区,此时 `rows` 为空数组、无截断提示。
  *
- * 命中口径(几何侧的事实):`rows[i].btn` 是本屏唯一的行内热区,**行 `rect` 不参与命中** ——
- * 与 pass 的"点任意非热区都领下一档"正相反。点行内非按钮区域什么都不发生。
- *
- * 文本行(`GuTextLine`)沿用 Web `ctx.textAlign + fillText(t, x, baseY)` 的锚点语义:
+ * 文本行(`GuTextLine`)沿用 `ctx.textAlign + fillText(t, x, baseY)` 的锚点语义:
  * x 随 align 表示起笔 / 中心 / 末笔,折成盒的那一步只在宿主 `ui/TextBand.ts:anchorBand`。
  * 颜色与替代字形这类纯表现项在 `core/ViewTable.ts` 的 `phase4` 段(键前缀 `gu`);
  * 本文件只留几何 —— 共享层读不到 import 了 `cc` 的 ViewTable,同一个数放两边就是两个事实源。
+ *
+ * 与冻结的 Web 基准(`src/game.ts:drawGearUp`)的有意分歧:页边距 14→16、头部两带化、
+ * 行距改用 `spreadRows` 的 `gap`(Web 硬编码 4)、升级钮高抬到热区下限、星尘不再被返回钮盖住、
+ * 底板换 `panel_dark_corners`。判据见 `docs/UI-PIXEL-REFRESH.md` §8(不再做逐项视觉对标)。
  */
 
 import { GEAR_UPGRADE_MAX } from "../data/daily";
-import { fs, rowTextY, spreadRows, ui } from "./theme";
+import { evenDown, fs, rowTextY, spreadRows, ui } from "./theme";
 
 /** 左上原点设计像素矩形(与 core/DesignMetrics.Rect 同形;共享层不引宿主类型) */
 export interface GuRect {
@@ -58,7 +48,7 @@ export interface GuRect {
 /** 文本对齐,取值与 `ctx.textAlign` 一致 */
 export type GuAlign = "left" | "center" | "right";
 
-/** 一行文本的落位请求:x/baseY 就是 Web fillText 的锚点与基线,maxW 为限宽 */
+/** 一行文本的落位请求:x/baseY 就是 fillText 的锚点与基线,maxW 为限宽 */
 export interface GuTextLine {
   x: number;
   baseY: number;
@@ -69,23 +59,23 @@ export interface GuTextLine {
 
 /** 一个装备行的几何:品质框矩形 + 两行左对齐文本 + 升级钮与钮文 + 五颗徽记 */
 export interface GearUpRowLayout {
-  /** 对应 `ownedGear` 的下标(Web `gearRows[i].idx`,即 `list` 的原序下标) */
+  /** 对应 `ownedGear` 的下标(即 `list` 的原序下标) */
   index: number;
-  /** 品质框矩形(Web 侧只用于绘制;命中不看它 —— 见文件头的命中口径) */
+  /** 品质框矩形(只用于绘制;命中不看它 —— 见文件头的命中口径) */
   rect: GuRect;
-  /** 本屏唯一的行内热区(Web `onGearUpClick` 只遍历这个矩形) */
+  /** 本屏唯一的行内热区(`hitGearUp` 只遍历这个矩形) */
   btn: GuRect;
   /** 徽记槽(长度 = GEAR_UPGRADE_MAX,逐颗左→右;点亮颗数由内容层的 lv 门控) */
   stars: GuRect[];
-  /** 名字(Web:rect.x + 10,rowTextY(rect.y, rect.h, fs.body),body 加粗,限宽 230) */
+  /** 名字(左对齐于 `rect.x + GU_ROW_TEXT_DX`,基线 l1) */
   name: GuTextLine;
-  /** 描述(Web:rect.x + 10,rowTextY(...micro) + 14,micro,限宽 320;文字内容由模型给) */
+  /** 描述(与名字同一起笔位,基线 l2 = l1 + GU_LINE_SPACING;文字内容由模型给) */
   desc: GuTextLine;
-  /** 钮文(Web:textAlign center、x = btn.x + btn.w / 2、rowTextY(btn.y, btn.h, fs.micro)、micro 加粗) */
+  /** 钮文(居中于钮,基线走 `rowTextY`) */
   btnText: GuTextLine;
-  /** 徽记缺图回退的文字星基线(`sy0 + GU_STAR_BOX − 2`,逐颗同 x,与 stars 一一对应) */
+  /** 徽记缺图回退的文字星基线(逐颗同 x,与 stars 一一对应) */
   starGlyphBaseY: number;
-  /** 文字星的字号(Web `F(fs.micro)`) */
+  /** 文字星的字号 */
   starGlyphPx: number;
 }
 
@@ -93,37 +83,42 @@ export interface GearUpRowLayout {
 export interface GearUpLayout {
   /** 行数 = `min(gearCount, GU_ROWS_MAX)`;0 即空态 */
   rowCount: number;
-  /** `gearCount === 0`(Web 的 `ownedGear.length === 0` 分支:只有一行提示,无行无截断提示) */
+  /** `gearCount === 0`(只有一行提示,无行无截断提示) */
   empty: boolean;
   /** `gearCount > GU_ROWS_MAX`(硬截断,故有"仅显示前 14 件"一行) */
   showHint: boolean;
   /** 收藏总件数(截断提示的分母;绘制与命中都不参与) */
   gearCount: number;
-  /** 行高(spreadRows 的第一返回值;空态为 0) */
+  /** 行高(spreadRows 的第一返回值过一次 evenDown;空态为 0) */
   rowH: number;
-  /** 行距步进 = rowH + GU_ROW_STEP_GAP(Web 丢弃 spreadRows 的 gap,硬编码 4) */
+  /** 行距步进 = rowH + rowGap */
   rowStep: number;
-  /** spreadRows 的 gap(Web 未使用,给出来是为了让"行距 4 ≠ gap 20"这条口径可断言) */
+  /** 行距(spreadRows 的第二返回值过一次 evenDown;富余摊在这里,上限默认 20) */
   rowGap: number;
   rows: GearUpRowLayout[];
-  /** 面板底矩形(panelPad 的九宫格实参矩形) */
+  /** 屏底板矩形(`[pad, evenDown(h) − pad]` 的九宫格内缩区) */
   panel: GuRect;
-  /** 面板贴图键与回落键(Web panelPad 的 `key` 命中失败后回落 panel_dark_corners) */
+  /** 屏底板贴图键(九宫格;切深由宿主 `ViewTable.borderOf` 按表推导) */
   panelKey: string;
-  panelKeyFallback: string;
-  /** 标题(Web 没有横幅,只有一档线位) */
+  /** 标题(A 带左起笔,与返回钮同一带) */
   title: GuTextLine;
-  /** 副标题 */
+  /** 副标题(B 带左起笔) */
   subtitle: GuTextLine;
-  /** 右上星尘(右对齐,末笔 = w − pad;与返回钮矩形重叠是 Web 原样) */
+  /** 星尘读数(B 带右对齐,末笔落 `w − GU_PAD`;与副标题同带不再被返回钮盖住) */
   stardust: GuTextLine;
-  /** 空态提示(仅 empty 为真时存在) */
+  /** 空态提示(仅 empty 为真时存在;基线居中于行区) */
   emptyText: GuTextLine;
-  /** 截断提示(仅 showHint 为真时存在) */
+  /** 截断提示(仅 showHint 为真时存在;落在恒定的贴底带里) */
   hint: GuTextLine;
+  /** 末行底缘到截断提示带顶缘的呼吸缝(本屏唯一的留白吸收体;空态时是整条行区) */
+  seamAboveHint: number;
+  /** 行区顶缘(所有行的 y 从它起算) */
+  listY0: number;
+  /** 行区底缘预算(= 贴底提示带的顶缘) */
+  listBottom: number;
   /** 右上返回钮矩形与两档文字位 */
   backBtn: GuRect;
-  /** 返回钮图标位(Web skinIconButton 的 `x+4, y+(h−ih)/2, ih, ih`,`ih = h − 12`) */
+  /** 返回钮图标位(边长 = `btn_back` 固有 11×11 art px 的 2 倍档,纵向居中于钮) */
   backIcon: GuRect;
   /** 返回钮文字:有图标时居中于图标右侧剩余空间 */
   backTextWithIcon: GuTextLine;
@@ -131,77 +126,134 @@ export interface GearUpLayout {
   backTextBare: GuTextLine;
 }
 
-/* Web drawGearUp 的内联几何常量(屏专属常量在本文件顶部具名一处) */
-/** 列表硬截断件数(Web `gear.slice(0, 14)` 与提示文案里的同一个 14) */
-export const GU_ROWS_MAX = 14;
-/** 列表顶缘(Web `const y0 = 78`) */
-export const GU_LIST_Y0 = 78;
-/** 行区底缘的额外让位(Web spreadRows 的第三实参 `h - pad - 8`) */
-export const GU_LIST_BOTTOM_EXTRA = 8;
-/** 行高钳制两档(Web spreadRows 的第四/第五实参;第六实参不传 → 默认 maxGap 20) */
-export const GU_ROW_MIN_H = 40;
-export const GU_ROW_MAX_H = 56;
-/** 行距步进里的硬编码间距(Web `y0 + idx * (rowH + 4)`,与 spreadRows 的 gap 无关) */
-export const GU_ROW_STEP_GAP = 4;
-/** 标题 / 副标题 / 星尘三条线的基线(Web 的 36 / 56 / 36) */
-export const GU_TITLE_BASE_Y = 36;
-export const GU_SUB_BASE_Y = 56;
-export const GU_DUST_BASE_Y = 36;
-/** 行内两行文本的起笔偏移与两处限宽(Web fitOne 的第二实参) */
-export const GU_TEXT_DX = 10;
-export const GU_NAME_MAXW = 230;
-export const GU_DESC_MAXW = 320;
-/** 描述相对 micro 字号居中基线的裸加数(Web `rowTextY(..., fs.micro) + 14`) */
-export const GU_DESC_DY = 14;
-/** 升级钮:右缘内缩(= 钮宽 + 10 的留白)/ 钮宽 / 高相对行高的上下让位 / 高上限 */
-export const GU_BTN_INSET = 100;
-export const GU_BTN_W = 90;
-export const GU_BTN_V_INSET = 8;
-export const GU_BTN_MAX_H = 30;
-/** 徽记:边长 / 颗间距 / 整条徽记带与按钮之间的间隙 */
-export const GU_STAR_BOX = 12;
-export const GU_STAR_GAP = 3;
-export const GU_STAR_BTN_GAP = 10;
-/** 徽记缺图回退的文字星基线相对徽记底缘的上抬(Web `sy0 + starS - 2`) */
-export const GU_STAR_GLYPH_DY = 2;
-/** 空态提示的基线就是屏高一半(Web `h / 2`) */
-export const GU_EMPTY_HALF = 2;
-/** 截断提示贴底让位(Web `h - pad - 10`) */
-export const GU_HINT_BOTTOM_EXTRA = 10;
-/** 返回钮顶缘 / 图标内缩 / 图标高相对钮高的收缩 / 文字基线相对钮中的下沉 */
-export const GU_BACK_Y = 22;
-export const GU_BACK_ICON_DX = 4;
-export const GU_BACK_ICON_SHRINK = 12;
-export const GU_BACK_TEXT_DY = 5;
-/** 面板九宫格切深(Web panelPad 的 drawNine 第六实参) */
-export const GU_PANEL_NINE = 32;
+/* ---------- 屏专属几何常量(具名一处,不散在函数体里;一律偶数) ---------- */
 
-/** 升级钮高度(Web 的 `Math.min(rowH - 8, 30)`,行高与钮高同处一个表达式) */
-export function gearBtnHeight(rowH: number): number {
-  return Math.min(rowH - GU_BTN_V_INSET, GU_BTN_MAX_H);
+/** 页边距 16 / 内容宽 528:右缘恒落 544(`ui.pad` 是 Web 冻结档 14,本屏不再用) */
+export const GU_PAD = 16;
+export const GU_CONTENT_W = 528;
+export { evenDown };
+
+/** 列表硬截断件数(提示文案里的同一个 14 由它插值) */
+export const GU_ROWS_MAX = 14;
+
+/** 头部 A 带:顶缘 / 带高(= 返回钮高)/ 返回钮宽高与图标边长 */
+export const GU_TOP_Y = 16;
+export const GU_BACK_W = ui.backW;
+/** 返回钮图标边长:`btn_back` 固有 11×11 art px × module 2 */
+export const GU_BACK_ICON_BOX = 22;
+/** 图标上下各留 12 → 钮高 46(≥ `ui.touchMin`,且让图标纵向居中后 y 仍为偶数) */
+export const GU_BACK_ICON_PAD = 12;
+export const GU_BACK_H = Math.max(ui.touchMin, GU_BACK_ICON_BOX + GU_BACK_ICON_PAD * 2);
+export const GU_BACK_Y = GU_TOP_Y;
+export const GU_BACK_ICON_DX = 4;
+/** A 带带高就是返回钮高(标题基线居中于它) */
+export const GU_HEAD_A_H = GU_BACK_H;
+
+/** 头部 B 带:A→B 缝 / 带高 / 星尘读数预留宽 */
+export const GU_SUB_GAP = 12;
+export const GU_SUB_BAND_H = 24;
+export const GU_DUST_RESERVE_W = 140;
+
+/** 行区顶缘 = B 带底缘 + 一条带缝 */
+export const GU_LIST_GAP = 16;
+export const GU_LIST_Y0 = GU_TOP_Y + GU_HEAD_A_H + GU_SUB_GAP + GU_SUB_BAND_H + GU_LIST_GAP;
+/** 贴底截断提示带:恒定让出这一段预算(不论提示在不在),带高 28 */
+export const GU_HINT_BAND_H = 28;
+/** 行高钳制两档(spreadRows 的第四/第五实参;第六实参不传 → 默认 maxGap 20) */
+export const GU_ROW_MIN_H = 56;
+export const GU_ROW_MAX_H = 72;
+
+/** 行内文本起笔偏移 / 两行基线式 / 文本带与徽记带之间的余量 */
+export const GU_ROW_TEXT_DX = 16;
+export const GU_LINE1_DY = 4;
+export const GU_LINE_SPACING = 18;
+export const GU_TEXT_SLACK = 10;
+
+/** 升级钮:右缘内缩 / 钮宽(`btn_minor` 固有 30 art px 宽 × 2 的整倍档)/ 高相对行高的上下让位 / 钮高上限 */
+export const GU_BTN_INSET = 16;
+export const GU_BTN_W = 120;
+export const GU_BTN_V_INSET = 8;
+/** 钮高上限就是热区下限(行高 ≥ GU_ROW_MIN_H 时 `gearBtnHeight` 恒返回这一档) */
+export const GU_BTN_H = Math.max(ui.touchMin, 44);
+
+/** 徽记:边长(`badge_gear_lv` 固有 6×6 art px × 2)/ 颗间距 / 整条徽记带与按钮之间的间隙 */
+export const GU_STAR_BOX = 12;
+export const GU_STAR_GAP = 4;
+export const GU_STAR_BTN_GAP = 16;
+/** 徽记缺图回退的文字星基线相对徽记底缘的上抬 */
+export const GU_STAR_GLYPH_DY = 2;
+
+/** 字号档(文本行的 px 是几何签名的一部分) */
+export const GU_TITLE_PX = fs.title;
+export const GU_SUB_PX = fs.muted;
+export const GU_DUST_PX = fs.body;
+export const GU_NAME_PX = fs.body;
+export const GU_DESC_PX = fs.micro;
+export const GU_BTN_PX = fs.micro;
+export const GU_HINT_PX = fs.micro;
+export const GU_EMPTY_PX = fs.body;
+export const GU_BACK_PX = fs.body;
+
+/** 屏底板贴图键(与已重排各屏同一张九宫格) */
+export const GU_PANEL_KEY = "panel_dark_corners";
+
+/** 返回钮矩形(右缘恒落 `w − GU_PAD`;热区 ≥ `ui.touchMin`) */
+export function gearUpBackBtn(w: number): GuRect {
+  return { x: w - GU_PAD - GU_BACK_W, y: GU_BACK_Y, w: GU_BACK_W, h: GU_BACK_H };
 }
 
-/** 徽记带总宽(`GEAR_UPGRADE_MAX` 颗 + 之间的 `GU_STAR_BOX − 1` 条缝) */
+/** 头部 A 带矩形(标题基线居中于它) */
+export function gearUpHeadBandA(): GuRect {
+  return { x: GU_PAD, y: GU_TOP_Y, w: GU_CONTENT_W, h: GU_HEAD_A_H };
+}
+
+/** 头部 B 带矩形(副标题与星尘共带) */
+export function gearUpHeadBandB(): GuRect {
+  const a = gearUpHeadBandA();
+  return { x: GU_PAD, y: a.y + a.h + GU_SUB_GAP, w: GU_CONTENT_W, h: GU_SUB_BAND_H };
+}
+
+/** 贴底截断提示带矩形(恒定让位,与 `showHint` 无关) */
+export function gearUpHintBand(h: number): GuRect {
+  const hh = evenDown(h);
+  return { x: GU_PAD, y: hh - GU_PAD - GU_HINT_BAND_H, w: GU_CONTENT_W, h: GU_HINT_BAND_H };
+}
+
+/** 升级钮高度(行高 ≥ GU_ROW_MIN_H 时恒为 GU_BTN_H = 热区下限) */
+export function gearBtnHeight(rowH: number): number {
+  return Math.min(rowH - GU_BTN_V_INSET, GU_BTN_H);
+}
+
+/** 徽记带总宽(`GEAR_UPGRADE_MAX` 颗 + 之间的 `GU_STAR_GAP` 条缝) */
 export function gearStarStripW(): number {
   return GEAR_UPGRADE_MAX * GU_STAR_BOX + (GEAR_UPGRADE_MAX - 1) * GU_STAR_GAP;
 }
 
 function rowLayout(index: number, rect: GuRect, rowH: number): GearUpRowLayout {
   const btnH = gearBtnHeight(rowH);
-  const btn: GuRect = { x: rect.x + rect.w - GU_BTN_INSET, y: rect.y + (rect.h - btnH) / 2, w: GU_BTN_W, h: btnH };
+  const btn: GuRect = {
+    x: rect.x + rect.w - GU_BTN_INSET - GU_BTN_W,
+    y: evenDown(rect.y + (rect.h - btnH) / 2),
+    w: GU_BTN_W,
+    h: btnH,
+  };
   const sx0 = btn.x - gearStarStripW() - GU_STAR_BTN_GAP;
-  const sy0 = rect.y + (rect.h - GU_STAR_BOX) / 2;
+  const sy0 = evenDown(rect.y + (rect.h - GU_STAR_BOX) / 2);
   const stars: GuRect[] = [];
   for (let s = 0; s < GEAR_UPGRADE_MAX; s++) stars.push({ x: sx0 + s * (GU_STAR_BOX + GU_STAR_GAP), y: sy0, w: GU_STAR_BOX, h: GU_STAR_BOX });
-  const nameX = rect.x + GU_TEXT_DX;
+  const nameX = rect.x + GU_ROW_TEXT_DX;
+  // 限宽由徽记带左缘推导:文本带与徽记带之间恒留 GU_TEXT_SLACK,不留第二个宽度事实源
+  const textW = evenDown(sx0 - GU_TEXT_SLACK - nameX);
+  const l1 = evenDown(rect.y + rect.h / 2 - GU_LINE1_DY);
+  const l2 = l1 + GU_LINE_SPACING;
   return {
     index,
     rect,
     btn,
     stars,
-    name: { x: nameX, baseY: rowTextY(rect.y, rect.h, fs.body), maxW: GU_NAME_MAXW, px: fs.body, align: "left" },
-    desc: { x: nameX, baseY: rowTextY(rect.y, rect.h, fs.micro) + GU_DESC_DY, maxW: GU_DESC_MAXW, px: fs.micro, align: "left" },
-    btnText: { x: btn.x + btn.w / 2, baseY: rowTextY(btn.y, btn.h, fs.micro), maxW: btn.w, px: fs.micro, align: "center" },
+    name: { x: nameX, baseY: l1, maxW: textW, px: GU_NAME_PX, align: "left" },
+    desc: { x: nameX, baseY: l2, maxW: textW, px: GU_DESC_PX, align: "left" },
+    btnText: { x: evenDown(btn.x + btn.w / 2), baseY: evenDown(rowTextY(btn.y, btn.h, GU_BTN_PX)), maxW: btn.w, px: GU_BTN_PX, align: "center" },
     starGlyphBaseY: sy0 + GU_STAR_BOX - GU_STAR_GLYPH_DY,
     starGlyphPx: fs.micro,
   };
@@ -210,24 +262,40 @@ function rowLayout(index: number, rect: GuRect, rowH: number): GearUpRowLayout {
 /**
  * 整屏几何。行数与截断提示都由 `gearCount`(= `ownedGear.length`)推出:
  * 0 → 空态(无行、无提示),1..GU_ROWS_MAX → 列表无提示,> GU_ROWS_MAX → 列表 + 提示。
- * 屏高收 `h`(行区在 `[78, h − pad − 8]` 内按 rowH 摊开,996 与 1246 两档都成立 ——
- * `rowH` 被钳到 `GU_ROW_MAX_H` 后行区底缘不再随屏高移动,富余落在列表尾留白)。
+ *
+ * 屏高收 `h`:行区在 `[GU_LIST_Y0, evenDown(h) − GU_PAD − GU_HINT_BAND_H]` 内摊开,
+ * 996 与 1246 两档都不越界;`rowH` 顶到 `GU_ROW_MAX_H` 之后富余只进 `seamAboveHint`。
  */
 export function gearUpLayout(w: number, h: number, gearCount: number): GearUpLayout {
-  const pad = ui.pad;
+  const hh = evenDown(h);
+  const pad = GU_PAD;
   const rowW = w - pad * 2;
-  const rowCount = Math.max(0, Math.min(gearCount, GU_ROWS_MAX));
-  // Web 只在非空分支调 spreadRows;n = 0 时它返回 rowH 0,与"不调"同值,故这里共用一次调用
-  const { rowH, gap } = spreadRows(rowCount, GU_LIST_Y0, h - pad - GU_LIST_BOTTOM_EXTRA, GU_ROW_MIN_H, GU_ROW_MAX_H);
-  const rowStep = rowH + GU_ROW_STEP_GAP;
-  const rows: GearUpRowLayout[] = [];
-  for (let i = 0; i < rowCount; i++) rows.push(rowLayout(i, { x: pad, y: GU_LIST_Y0 + i * rowStep, w: rowW, h: rowH }, rowH));
+  const bandA = gearUpHeadBandA();
+  const bandB = gearUpHeadBandB();
+  const hintBand = gearUpHintBand(hh);
+  const listY0 = GU_LIST_Y0;
+  const listBottom = hintBand.y;
 
-  const backBtn: GuRect = { x: w - pad - ui.backW, y: GU_BACK_Y, w: ui.backW, h: ui.backH };
-  const iconH = backBtn.h - GU_BACK_ICON_SHRINK;
-  const backIcon: GuRect = { x: backBtn.x + GU_BACK_ICON_DX, y: backBtn.y + (backBtn.h - iconH) / 2, w: iconH, h: iconH };
-  const backBaseY = backBtn.y + backBtn.h / 2 + GU_BACK_TEXT_DY;
-  const backRemainW = backBtn.w - GU_BACK_ICON_DX - iconH;
+  const rowCount = Math.max(0, Math.min(gearCount, GU_ROWS_MAX));
+  // n = 0 时 spreadRows 返回 rowH 0,与"不调"同值,故空态与列表共用一次调用
+  const spread = spreadRows(rowCount, listY0, listBottom, GU_ROW_MIN_H, GU_ROW_MAX_H);
+  const rowH = evenDown(spread.rowH);
+  const gap = evenDown(spread.gap);
+  const rowStep = rowH + gap;
+  const rows: GearUpRowLayout[] = [];
+  for (let i = 0; i < rowCount; i++) rows.push(rowLayout(i, { x: pad, y: listY0 + i * rowStep, w: rowW, h: rowH }, rowH));
+
+  const lastBottom = rowCount > 0 ? rows[rows.length - 1].rect.y + rowH : listY0;
+  const seamAboveHint = hintBand.y - lastBottom;
+
+  const backBtn = gearUpBackBtn(w);
+  const iconY = evenDown(backBtn.y + (backBtn.h - GU_BACK_ICON_BOX) / 2);
+  const backIcon: GuRect = { x: backBtn.x + GU_BACK_ICON_DX, y: iconY, w: GU_BACK_ICON_BOX, h: GU_BACK_ICON_BOX };
+  const backBaseY = evenDown(rowTextY(backBtn.y, backBtn.h, GU_BACK_PX));
+  const backRemainW = backBtn.w - GU_BACK_ICON_DX - GU_BACK_ICON_BOX;
+  const dustX = w - pad;
+  const subMaxW = evenDown(rowW - GU_DUST_RESERVE_W - GU_TEXT_SLACK);
+
   return {
     rowCount,
     empty: rowCount === 0,
@@ -237,18 +305,20 @@ export function gearUpLayout(w: number, h: number, gearCount: number): GearUpLay
     rowStep,
     rowGap: gap,
     rows,
-    panel: { x: pad, y: pad, w: rowW, h: h - pad * 2 },
-    panelKey: "panel_gearup",
-    panelKeyFallback: "panel_dark_corners",
-    title: { x: pad, baseY: GU_TITLE_BASE_Y, maxW: rowW, px: fs.title, align: "left" },
-    subtitle: { x: pad, baseY: GU_SUB_BASE_Y, maxW: rowW, px: fs.muted, align: "left" },
-    stardust: { x: w - pad, baseY: GU_DUST_BASE_Y, maxW: rowW, px: fs.body, align: "right" },
-    emptyText: { x: pad, baseY: h / GU_EMPTY_HALF, maxW: rowW, px: fs.body, align: "left" },
-    hint: { x: pad, baseY: h - pad - GU_HINT_BOTTOM_EXTRA, maxW: rowW, px: fs.micro, align: "left" },
+    panel: { x: pad, y: pad, w: rowW, h: hh - pad * 2 },
+    panelKey: GU_PANEL_KEY,
+    title: { x: pad, baseY: evenDown(rowTextY(bandA.y, bandA.h, GU_TITLE_PX)), maxW: evenDown(backBtn.x - GU_TEXT_SLACK - pad), px: GU_TITLE_PX, align: "left" },
+    subtitle: { x: pad, baseY: evenDown(rowTextY(bandB.y, bandB.h, GU_SUB_PX)), maxW: subMaxW, px: GU_SUB_PX, align: "left" },
+    stardust: { x: dustX, baseY: evenDown(rowTextY(bandB.y, bandB.h, GU_DUST_PX)), maxW: GU_DUST_RESERVE_W, px: GU_DUST_PX, align: "right" },
+    emptyText: { x: pad, baseY: evenDown(rowTextY(listY0, listBottom - listY0, GU_EMPTY_PX)), maxW: rowW, px: GU_EMPTY_PX, align: "left" },
+    hint: { x: pad, baseY: evenDown(rowTextY(hintBand.y, hintBand.h, GU_HINT_PX)), maxW: rowW, px: GU_HINT_PX, align: "left" },
+    seamAboveHint,
+    listY0,
+    listBottom,
     backBtn,
     backIcon,
-    backTextWithIcon: { x: backBtn.x + GU_BACK_ICON_DX + iconH + backRemainW / 2, baseY: backBaseY, maxW: backRemainW, px: fs.body, align: "center" },
-    backTextBare: { x: backBtn.x + backBtn.w / 2, baseY: backBaseY, maxW: backBtn.w, px: fs.body, align: "center" },
+    backTextWithIcon: { x: evenDown(backIcon.x + GU_BACK_ICON_BOX + backRemainW / 2), baseY: backBaseY, maxW: backRemainW, px: GU_BACK_PX, align: "center" },
+    backTextBare: { x: evenDown(backBtn.x + backBtn.w / 2), baseY: backBaseY, maxW: backBtn.w, px: GU_BACK_PX, align: "center" },
   };
 }
 

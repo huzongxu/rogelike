@@ -31,35 +31,46 @@ import { ASSET_MANIFEST } from "@game/data/assets";
 import { fs as FS, rowTextY, spreadRows, theme, ui as UI } from "@game/ui/theme";
 import * as sharedDaily from "@game/data/daily";
 import {
+  evenDown,
   gearBtnHeight,
   gearStarStripW,
+  gearUpBackBtn,
+  gearUpHeadBandA,
+  gearUpHeadBandB,
+  gearUpHintBand,
   gearUpLayout,
   gearUpScreenLayout,
+  GU_BACK_H,
+  GU_BACK_ICON_BOX,
+  GU_BACK_ICON_DX,
+  GU_BACK_W,
   GU_BACK_Y,
+  GU_BTN_H,
   GU_BTN_INSET,
-  GU_BTN_MAX_H,
   GU_BTN_V_INSET,
   GU_BTN_W,
-  GU_DESC_DY,
-  GU_DESC_MAXW,
-  GU_DUST_BASE_Y,
-  GU_EMPTY_HALF,
-  GU_HINT_BOTTOM_EXTRA,
-  GU_LIST_BOTTOM_EXTRA,
+  GU_CONTENT_W,
+  GU_DUST_RESERVE_W,
+  GU_HEAD_A_H,
+  GU_HINT_BAND_H,
+  GU_LINE1_DY,
+  GU_LINE_SPACING,
+  GU_LIST_GAP,
   GU_LIST_Y0,
-  GU_NAME_MAXW,
-  GU_PANEL_NINE,
+  GU_PAD,
+  GU_PANEL_KEY,
   GU_ROW_MAX_H,
   GU_ROW_MIN_H,
-  GU_ROW_STEP_GAP,
+  GU_ROW_TEXT_DX,
   GU_ROWS_MAX,
-  GU_STAR_BTN_GAP,
   GU_STAR_BOX,
+  GU_STAR_BTN_GAP,
   GU_STAR_GAP,
   GU_STAR_GLYPH_DY,
-  GU_SUB_BASE_Y,
-  GU_TEXT_DX,
-  GU_TITLE_BASE_Y,
+  GU_SUB_BAND_H,
+  GU_SUB_GAP,
+  GU_TEXT_SLACK,
+  GU_TOP_Y,
   type GuRect,
   type GuTextLine,
 } from "@game/ui/gearUpLayout";
@@ -73,7 +84,7 @@ import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
-const PAD = UI.pad;
+const PAD = GU_PAD;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
 const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
@@ -168,16 +179,17 @@ describe("整屏三形态(由 ownedGear.length 门控)", () => {
     });
   }
 
-  it("行距步进是硬编码的 4,不是 spreadRows 返回的 gap(Web 只取 rowH)", () => {
-    expect(GU_ROW_STEP_GAP).toBe(4);
+  it("行距步进 = rowH + spreadRows 的 gap;两者都过 evenDown、gap 落在 4..20(富余摊进行距)", () => {
     for (const n of [1, 5, GU_ROWS_MAX]) {
       const L = gearUpLayout(W, H_STD, n);
-      expect(L.rowStep).toBe(L.rowH + GU_ROW_STEP_GAP);
+      expect(L.rowStep).toBe(L.rowH + L.rowGap);
+      expect(evenDown(L.rowH), "行高应为偶数").toBe(L.rowH);
+      expect(evenDown(L.rowGap), "行距应为偶数").toBe(L.rowGap);
+      expect(L.rowGap).toBeLessThanOrEqual(20);
     }
-    // 铺满 14 件时两者确实不同值(gap 由富余摊出来,Web 把它丢弃)
-    const L = gearUpLayout(W, H_STD, GU_ROWS_MAX);
-    expect(L.rowGap).not.toBe(GU_ROW_STEP_GAP);
-    expect(L.rowStep).not.toBe(L.rowH + L.rowGap);
+    // 单行没有"行距"可言:gap 归零、步进等于行高;多行时 gap 有 4 的下限
+    expect(gearUpLayout(W, H_STD, 1).rowGap).toBe(0);
+    for (const n of [2, GU_ROWS_MAX]) expect(gearUpLayout(W, H_STD, n).rowGap).toBeGreaterThanOrEqual(4);
   });
 
   it("spreadRows 用五个实参(第六个 maxGap 走默认 20;pass 是六个的 60 —— 两屏不同,不许统一)", () => {
@@ -186,21 +198,23 @@ describe("整屏三形态(由 ownedGear.length 门控)", () => {
     expect(call, "本屏应有一处 spreadRows 调用").not.toBe(null);
     const args = call![1].split(",").map((s) => s.trim());
     expect(args).toHaveLength(5);
-    // 五个实参全部由本文件的具名常量给出(不留裸数字),行区底缘按 h − pad − 8 让位
-    expect(args).toEqual(["rowCount", "GU_LIST_Y0", "h - pad - GU_LIST_BOTTOM_EXTRA", "GU_ROW_MIN_H", "GU_ROW_MAX_H"]);
-    expect(GU_LIST_Y0).toBe(78);
-    expect(GU_LIST_BOTTOM_EXTRA).toBe(8);
-    expect(GU_ROW_MIN_H).toBe(40);
-    expect(GU_ROW_MAX_H).toBe(56);
-    for (const n of [1, 3, GU_ROWS_MAX]) {
-      const L = gearUpLayout(W, H_STD, n);
-      expect(L.rowH).toBeGreaterThanOrEqual(GU_ROW_MIN_H);
-      expect(L.rowH).toBeLessThanOrEqual(GU_ROW_MAX_H);
-      // 默认 maxGap = 20(pass 那一屏是 60)
-      expect(L.rowGap).toBeLessThanOrEqual(20);
-      const direct = spreadRows(n, GU_LIST_Y0, H_STD - PAD - GU_LIST_BOTTOM_EXTRA, GU_ROW_MIN_H, GU_ROW_MAX_H);
-      expect(L.rowH).toBe(direct.rowH);
-      expect(L.rowGap).toBe(direct.gap);
+    // 五个实参全部由具名常量/派生量给出(不留裸数字),行区底缘就是贴底提示带的顶缘
+    expect(args).toEqual(["rowCount", "listY0", "listBottom", "GU_ROW_MIN_H", "GU_ROW_MAX_H"]);
+    expect(GU_ROW_MIN_H).toBe(56);
+    expect(GU_ROW_MAX_H).toBe(72);
+    // 行高下限必须容得下抬到热区下限的升级钮(上下各留 GU_BTN_V_INSET)
+    expect(GU_ROW_MIN_H - GU_BTN_V_INSET).toBeGreaterThanOrEqual(GU_BTN_H);
+    expect(GU_BTN_H).toBeGreaterThanOrEqual(UI.touchMin);
+    for (const h of [H_STD, H_TALL]) {
+      for (const n of [1, 3, GU_ROWS_MAX]) {
+        const L = gearUpLayout(W, h, n);
+        expect(L.rowH).toBeGreaterThanOrEqual(GU_ROW_MIN_H);
+        expect(L.rowH).toBeLessThanOrEqual(GU_ROW_MAX_H);
+        expect(L.rowGap).toBeLessThanOrEqual(20);
+        const direct = spreadRows(n, L.listY0, L.listBottom, GU_ROW_MIN_H, GU_ROW_MAX_H);
+        expect(L.rowH).toBe(evenDown(direct.rowH));
+        expect(L.rowGap).toBe(evenDown(direct.gap));
+      }
     }
   });
 });
@@ -210,60 +224,74 @@ describe("整屏三形态(由 ownedGear.length 门控)", () => {
 describe("行区纵向边界(996 与 1246 两档屏高 × 三种形态)", () => {
   for (const h of [H_STD, H_TALL]) {
     for (const n of [0, 1, 7, GU_ROWS_MAX, GU_ROWS_MAX + 6]) {
-      it(`h=${h}、gearCount=${n}:行顶缘 ≥ ${GU_LIST_Y0}、行底缘 ≤ h − pad、截断提示带顶缘在末行之下`, () => {
+      it(`h=${h}、gearCount=${n}:行顶缘 ≥ ${GU_LIST_Y0}、行底缘 ≤ 行区底缘、截断提示带顶缘在末行之下`, () => {
         const L = gearUpLayout(W, h, n);
+        const hh = evenDown(h);
+        expect(L.listY0).toBe(GU_LIST_Y0);
+        expect(L.listBottom).toBe(gearUpHintBand(hh).y);
         for (const row of L.rows) {
           expect(row.rect.x).toBe(PAD);
-          expect(row.rect.w).toBe(W - PAD * 2);
+          expect(row.rect.w).toBe(GU_CONTENT_W);
           expect(row.rect.h).toBe(L.rowH);
           expect(row.rect.y).toBeGreaterThanOrEqual(GU_LIST_Y0);
-          expect(row.rect.x).toBeGreaterThanOrEqual(0);
-          expect(row.rect.x + row.rect.w).toBeLessThanOrEqual(W);
-          expect(row.rect.y + row.rect.h, `行${row.index} 底边`).toBeLessThanOrEqual(h - PAD);
+          expect(row.rect.x).toBeGreaterThanOrEqual(PAD);
+          expect(row.rect.x + row.rect.w).toBeLessThanOrEqual(W - PAD);
+          expect(row.rect.y + row.rect.h, `行${row.index} 底边`).toBeLessThanOrEqual(L.listBottom);
           expect(row.rect.y).toBe(GU_LIST_Y0 + row.index * L.rowStep);
-        }
-        // 面板内缩:与 Web panelPad 的 drawNine 实参矩形同数
-        expect(L.panel).toEqual({ x: PAD, y: PAD, w: W - PAD * 2, h: h - PAD * 2 });
-        expect(L.rows.length > 0).toBe(!L.empty);
-        if (L.rows.length) {
-          const last = L.rows[L.rows.length - 1];
-          expect(last.rect.y + last.rect.h).toBeLessThanOrEqual(L.panel.y + L.panel.h);
-          if (L.showHint) {
-            // 截断提示的文本带顶缘在末行底边之下(Web 那里两者都会画,不能相碰)
-            const band = anchorBand(L.hint.x, L.hint.baseY, L.hint.maxW, L.hint.px, "left", LIFT);
-            expect(band.y).toBeGreaterThan(last.rect.y + last.rect.h);
+          // module = 2:行矩形与两行基线、钮矩形全落在栅格上
+          for (const v of [row.rect.x, row.rect.y, row.rect.w, row.rect.h, row.name.baseY, row.desc.baseY, row.btn.x, row.btn.y, row.btn.w, row.btn.h]) {
+            expect(evenDown(v), `${v} 应为偶数`).toBe(v);
           }
+        }
+        // 屏底板内缩页边距 16:右缘恒落 544、底缘恒落 evenDown(h) − pad
+        expect(L.panel).toEqual({ x: PAD, y: PAD, w: GU_CONTENT_W, h: hh - PAD * 2 });
+        expect(L.panel.x + L.panel.w).toBe(W - PAD);
+        expect(L.rows.length > 0).toBe(!L.empty);
+        // 屏高富余只进末行与贴底提示带之间那条呼吸缝,缝恒非负且就是两者的差
+        const lastBottom = L.rows.length ? L.rows[L.rows.length - 1].rect.y + L.rowH : L.listY0;
+        expect(L.seamAboveHint).toBe(L.listBottom - lastBottom);
+        expect(L.seamAboveHint).toBeGreaterThanOrEqual(0);
+        if (L.rows.length) expect(lastBottom).toBeLessThanOrEqual(L.panel.y + L.panel.h);
+        if (L.showHint) {
+          // 截断提示的文本带顶缘在末行底边之下(两者都会画,不能相碰)
+          const band = anchorBand(L.hint.x, L.hint.baseY, L.hint.maxW, L.hint.px, "left", LIFT);
+          expect(band.y).toBeGreaterThan(lastBottom);
         }
       });
     }
   }
 
-  it("行高与各行 y 不随屏高变化(996 与 1246 的 rowH 同为上限档);只有贴底件跟着走", () => {
+  it("屏高从 996 抬到 1246:首行 y 不动、行高单调不降,富余全进呼吸缝与贴底件", () => {
     const a = gearUpLayout(W, H_STD, GU_ROWS_MAX);
     const b = gearUpLayout(W, H_TALL, GU_ROWS_MAX);
-    expect(b.rowH).toBe(a.rowH);
-    expect(b.rows.map((r) => r.rect.y)).toEqual(a.rows.map((r) => r.rect.y));
+    expect(b.rows[0].rect.y).toBe(a.rows[0].rect.y);
+    expect(b.rowH).toBeGreaterThanOrEqual(a.rowH);
+    expect(b.listBottom - a.listBottom).toBe(H_TALL - H_STD);
+    expect(b.seamAboveHint).toBeGreaterThanOrEqual(a.seamAboveHint);
     expect(b.hint.baseY - a.hint.baseY).toBe(H_TALL - H_STD);
-    expect(b.emptyText.baseY).toBe(H_TALL / GU_EMPTY_HALF);
-    expect(a.emptyText.baseY).toBe(H_STD / GU_EMPTY_HALF);
+    expect(b.emptyText.baseY).toBeGreaterThan(a.emptyText.baseY);
     expect(b.backBtn.y).toBe(a.backBtn.y);
     expect(b.panel.h - a.panel.h).toBe(H_TALL - H_STD);
+    // 两档都不越界:末行底边 ≤ 行区底缘
+    for (const L of [a, b]) expect(L.rows[L.rows.length - 1].rect.y + L.rowH).toBeLessThanOrEqual(L.listBottom);
   });
 });
 
 /* ==================== 3. 行内几何:品质框 / 两行文本 / 升级钮 / 徽记带 ==================== */
 
-describe("行内几何(与 drawGearUp 的实参逐位对应)", () => {
+describe("行内几何(品质框 / 两行文本 / 升级钮 / 徽记带)", () => {
   for (const h of [H_STD, H_TALL]) {
-    it(`h=${h}:左两行起笔 rect.x + ${GU_TEXT_DX},基线 rowTextY(body) 与 rowTextY(micro) + ${GU_DESC_DY},限宽 ${GU_NAME_MAXW}/${GU_DESC_MAXW}`, () => {
+    it(`h=${h}:左两行起笔 rect.x + ${GU_ROW_TEXT_DX},基线 l1 = evenDown(mid − ${GU_LINE1_DY}) 与 l1 + ${GU_LINE_SPACING},限宽由徽记带左缘推导`, () => {
       const L = gearUpLayout(W, h, 6);
       for (const row of L.rows) {
-        expect(row.name.x).toBe(row.rect.x + GU_TEXT_DX);
-        expect(row.desc.x).toBe(row.rect.x + GU_TEXT_DX);
-        expect(row.name.baseY).toBe(rowTextY(row.rect.y, row.rect.h, FS.body));
-        expect(row.desc.baseY).toBe(rowTextY(row.rect.y, row.rect.h, FS.micro) + GU_DESC_DY);
-        expect(row.name.maxW).toBe(GU_NAME_MAXW);
-        expect(row.desc.maxW).toBe(GU_DESC_MAXW);
+        const l1 = evenDown(row.rect.y + row.rect.h / 2 - GU_LINE1_DY);
+        expect(row.name.x).toBe(row.rect.x + GU_ROW_TEXT_DX);
+        expect(row.desc.x).toBe(row.rect.x + GU_ROW_TEXT_DX);
+        expect(row.name.baseY).toBe(l1);
+        expect(row.desc.baseY).toBe(l1 + GU_LINE_SPACING);
+        // 限宽只有一个事实源:徽记带左缘 − 余量 − 起笔位(不留第二份宽度常量)
+        expect(row.name.maxW).toBe(evenDown(row.stars[0].x - GU_TEXT_SLACK - row.name.x));
+        expect(row.desc.maxW).toBe(row.name.maxW);
         expect(row.name.px).toBe(FS.body);
         expect(row.desc.px).toBe(FS.micro);
         expect(row.name.align).toBe("left");
@@ -274,23 +302,27 @@ describe("行内几何(与 drawGearUp 的实参逐位对应)", () => {
       }
     });
 
-    it(`h=${h}:升级钮 = { x: rect.x + rect.w − ${GU_BTN_INSET}, w: ${GU_BTN_W}, h: min(rowH − ${GU_BTN_V_INSET}, ${GU_BTN_MAX_H}) } 且纵向居中于行`, () => {
+    it(`h=${h}:升级钮 = { x: 行右缘 − ${GU_BTN_INSET} − ${GU_BTN_W}, w: ${GU_BTN_W}, h: min(rowH − ${GU_BTN_V_INSET}, ${GU_BTN_H}) } 纵向居中且高 ≥ 热区下限`, () => {
       const L = gearUpLayout(W, h, 6);
       for (const row of L.rows) {
         const btnH = gearBtnHeight(L.rowH);
         expect(row.btn).toEqual({
-          x: row.rect.x + row.rect.w - GU_BTN_INSET,
-          y: row.rect.y + (row.rect.h - btnH) / 2,
+          x: row.rect.x + row.rect.w - GU_BTN_INSET - GU_BTN_W,
+          y: evenDown(row.rect.y + (row.rect.h - btnH) / 2),
           w: GU_BTN_W,
           h: btnH,
         });
-        // 钮右缘距行右缘 10(INSET 100 = 钮宽 90 + 留白 10)
-        expect(row.rect.x + row.rect.w - (row.btn.x + row.btn.w)).toBe(GU_BTN_INSET - GU_BTN_W);
+        // 热区:钮高恒 ≥ ui.touchMin(旧档 30 低于下限),钮宽不小于钮高
+        expect(row.btn.h).toBeGreaterThanOrEqual(UI.touchMin);
+        expect(row.btn.w).toBeGreaterThanOrEqual(row.btn.h);
+        // 钮右缘距行右缘就是 GU_BTN_INSET,且不出内容宽
+        expect(row.rect.x + row.rect.w - (row.btn.x + row.btn.w)).toBe(GU_BTN_INSET);
+        expect(row.btn.x + row.btn.w).toBeLessThanOrEqual(W - PAD);
         expect(row.btn.y).toBeGreaterThanOrEqual(row.rect.y);
         expect(row.btn.y + row.btn.h).toBeLessThanOrEqual(row.rect.y + row.rect.h);
         // 钮文居中于钮、基线按 micro 字号垂直居中于钮
-        expect(row.btnText.x).toBe(row.btn.x + GU_BTN_W / 2);
-        expect(row.btnText.baseY).toBe(rowTextY(row.btn.y, row.btn.h, FS.micro));
+        expect(row.btnText.x).toBe(evenDown(row.btn.x + GU_BTN_W / 2));
+        expect(row.btnText.baseY).toBe(evenDown(rowTextY(row.btn.y, row.btn.h, FS.micro)));
         expect(row.btnText.px).toBe(FS.micro);
         expect(row.btnText.align).toBe("center");
         expect(row.btnText.maxW).toBe(GU_BTN_W);
@@ -304,15 +336,18 @@ describe("行内几何(与 drawGearUp 的实参逐位对应)", () => {
         const strip = gearStarStripW();
         expect(strip).toBe(GEAR_UPGRADE_MAX * GU_STAR_BOX + (GEAR_UPGRADE_MAX - 1) * GU_STAR_GAP);
         const sx0 = row.btn.x - strip - GU_STAR_BTN_GAP;
-        const sy0 = row.rect.y + (row.rect.h - GU_STAR_BOX) / 2;
+        const sy0 = evenDown(row.rect.y + (row.rect.h - GU_STAR_BOX) / 2);
         row.stars.forEach((star, s) => {
           expect(star).toEqual({ x: sx0 + s * (GU_STAR_BOX + GU_STAR_GAP), y: sy0, w: GU_STAR_BOX, h: GU_STAR_BOX });
           expect(star.x + star.w).toBeLessThanOrEqual(row.btn.x - GU_STAR_BTN_GAP);
+          // module = 2:每颗徽记的 x/y 都在栅格上(旧的 3px 颗间缝会算出奇数)
+          expect(evenDown(star.x), `徽记 x ${star.x}`).toBe(star.x);
+          expect(evenDown(star.y), `徽记 y ${star.y}`).toBe(star.y);
         });
         // 缺图回退的文字星:基线 = sy0 + starS − 2,字号 micro,左对齐于该颗左沿
         expect(row.starGlyphBaseY).toBe(sy0 + GU_STAR_BOX - GU_STAR_GLYPH_DY);
         expect(row.starGlyphPx).toBe(FS.micro);
-        // 徽记带与描述行文本带互不相碰(320 限宽的右界在首颗徽记之前)
+        // 徽记带与描述行文本带互不相碰(限宽的右界在首颗徽记之前)
         expect(row.desc.x + row.desc.maxW).toBeLessThan(row.stars[0].x);
         // 徽记带与行左沿相切不出行
         expect(sx0).toBeGreaterThan(row.rect.x);
@@ -320,7 +355,7 @@ describe("行内几何(与 drawGearUp 的实参逐位对应)", () => {
     });
   }
 
-  it("品质框矩形就是行矩形(Web 把 rect.x/y/w/h 四值直接交给 drawQualityFrame)", () => {
+  it("品质框矩形就是行矩形(四个值直接交给 qualityBox)", () => {
     const L = gearUpLayout(W, H_STD, 3);
     L.rows.forEach((row) => {
       expect(row.rect.h).toBe(L.rowH);
@@ -334,28 +369,51 @@ describe("行内几何(与 drawGearUp 的实参逐位对应)", () => {
 /* ==================== 4. 屏级矩形与三处头部文本 ==================== */
 
 describe("屏级几何(面板 / 标题 / 副标题 / 星尘 / 空态 / 截断提示 / 返回钮)", () => {
-  it("面板键是 panel_gearup、回落 panel_dark_corners、九宫格切深 32(daily / pass 用默认面板,本屏不同)", () => {
+  it("屏底板键是 panel_dark_corners(与已重排各屏同一张九宫格):没有回落键、没有切深常量、视图只调一次 show", () => {
     const L = gearUpLayout(W, H_STD, 0);
-    expect(L.panelKey).toBe("panel_gearup");
-    expect(L.panelKeyFallback).toBe("panel_dark_corners");
-    expect(GU_PANEL_NINE).toBe(32);
-    expect(ASSET_MANIFEST.panel_gearup).toBe("panel_gearup.png");
+    expect(L.panelKey).toBe("panel_dark_corners");
+    expect(GU_PANEL_KEY).toBe("panel_dark_corners");
+    expect(Object.keys(L)).not.toContain("panelKeyFallback");
     expect(ASSET_MANIFEST.panel_dark_corners).toBe("panel_dark_corners.png");
+    // 旧世代未像素化的专属底板退役:几何层与视图层都不再出现它的键与切深常量
+    const lay = codeOf(readFileSync(new URL("../cocos/assets/scripts/game/ui/gearUpLayout.ts", import.meta.url), "utf8"));
+    expect(lay.includes("panel_gearup")).toBe(false);
+    expect(lay.includes("GU_PANEL_NINE")).toBe(false);
+    const view = codeOf(readFileSync(new URL("../cocos/assets/scripts/gearup/GearUpView.ts", import.meta.url), "utf8"));
+    expect(view.includes("panel_gearup")).toBe(false);
+    expect(view.includes("panelKeyFallback")).toBe(false);
+    expect(view.match(/this\.panel\.show\(/g)).toHaveLength(1);
+    // 贴图文件本身不删(退役清单里记账),只是不再被消费
+    expect(ASSET_MANIFEST.panel_gearup).toBe("panel_gearup.png");
   });
 
-  it("标题与星尘共用基线 36、副标题在 56;星尘右末笔落在 w − pad", () => {
+  it("头部两带:A 带标题与返回钮同带、B 带副标题与星尘同带;星尘右末笔落 w − pad", () => {
     const L = gearUpLayout(W, H_STD, 1);
-    expect(L.title).toMatchObject({ x: PAD, baseY: GU_TITLE_BASE_Y, px: FS.title, align: "left" });
-    expect(L.subtitle).toMatchObject({ x: PAD, baseY: GU_SUB_BASE_Y, px: FS.muted, align: "left" });
-    expect(L.stardust).toMatchObject({ x: W - PAD, baseY: GU_DUST_BASE_Y, px: FS.body, align: "right" });
-    expect(GU_TITLE_BASE_Y).toBe(36);
-    expect(GU_SUB_BASE_Y).toBe(56);
-    expect(GU_DUST_BASE_Y).toBe(36);
-    // 列表顶缘在副标题之下(Web 的 y0 = 78)
-    expect(GU_LIST_Y0).toBeGreaterThan(GU_SUB_BASE_Y);
+    const bandA = gearUpHeadBandA();
+    const bandB = gearUpHeadBandB();
+    expect(bandA).toEqual({ x: PAD, y: GU_TOP_Y, w: GU_CONTENT_W, h: GU_HEAD_A_H });
+    expect(bandB).toEqual({ x: PAD, y: bandA.y + bandA.h + GU_SUB_GAP, w: GU_CONTENT_W, h: GU_SUB_BAND_H });
+    expect(L.title).toMatchObject({ x: PAD, baseY: evenDown(rowTextY(bandA.y, bandA.h, FS.title)), px: FS.title, align: "left" });
+    expect(L.subtitle).toMatchObject({ x: PAD, baseY: evenDown(rowTextY(bandB.y, bandB.h, FS.muted)), px: FS.muted, align: "left" });
+    expect(L.stardust).toMatchObject({ x: W - PAD, baseY: evenDown(rowTextY(bandB.y, bandB.h, FS.body)), px: FS.body, align: "right" });
+    // 三条基线都在栅格上、且各落在自己那一带之内
+    for (const t of [L.title, L.subtitle, L.stardust]) expect(evenDown(t.baseY), `${t.baseY} 应为偶数`).toBe(t.baseY);
+    expect(L.title.baseY).toBeGreaterThan(bandA.y);
+    expect(L.title.baseY).toBeLessThan(bandA.y + bandA.h);
+    for (const t of [L.subtitle, L.stardust]) {
+      expect(t.baseY).toBeGreaterThan(bandB.y);
+      expect(t.baseY).toBeLessThan(bandB.y + bandB.h);
+    }
+    // 限宽各自收到邻居之前:标题→返回钮左缘,副标题→星尘预留宽
+    expect(L.title.maxW).toBe(evenDown(L.backBtn.x - GU_TEXT_SLACK - PAD));
+    expect(L.subtitle.maxW).toBe(evenDown(GU_CONTENT_W - GU_DUST_RESERVE_W - GU_TEXT_SLACK));
+    expect(L.stardust.maxW).toBe(GU_DUST_RESERVE_W);
+    // 列表顶缘在 B 带之下,且副标题基线在列表顶缘之上
+    expect(L.listY0).toBe(bandB.y + bandB.h + GU_LIST_GAP);
+    expect(GU_LIST_Y0).toBeGreaterThan(L.subtitle.baseY);
   });
 
-  it("本屏没有标题横幅:几何里不产出横幅矩形(与 daily / pass 的 skinHeader 档不同)", () => {
+  it("本屏没有标题横幅:几何里不产出横幅矩形(与 daily / pass 的横幅档不同)", () => {
     const src = codeOf(readFileSync(new URL("../cocos/assets/scripts/game/ui/gearUpLayout.ts", import.meta.url), "utf8"));
     expect(src.includes("headerPlate")).toBe(false);
     expect(src.includes("banner_title")).toBe(false);
@@ -365,36 +423,58 @@ describe("屏级几何(面板 / 标题 / 副标题 / 星尘 / 空态 / 截断提
     expect(Object.keys(L).some((k) => k.toLowerCase().includes("banner"))).toBe(false);
   });
 
-  it("空态基线在屏高一半、截断提示贴底 h − pad − 10", () => {
+  it("空态基线居中于行区、截断提示落在恒定让位的贴底带里", () => {
     for (const h of [H_STD, H_TALL]) {
+      const hh = evenDown(h);
       const L = gearUpLayout(W, h, GU_ROWS_MAX + 3);
-      expect(L.emptyText).toMatchObject({ x: PAD, baseY: h / GU_EMPTY_HALF, px: FS.body, align: "left" });
-      expect(L.hint).toMatchObject({ x: PAD, baseY: h - PAD - GU_HINT_BOTTOM_EXTRA, px: FS.micro, align: "left" });
+      const band = gearUpHintBand(hh);
+      // 提示带恒定让出:底缘落 evenDown(h) − pad,与 showHint 在不在无关
+      expect(band).toEqual({ x: PAD, y: hh - PAD - GU_HINT_BAND_H, w: GU_CONTENT_W, h: GU_HINT_BAND_H });
+      expect(L.listBottom).toBe(band.y);
+      expect(L.emptyText).toMatchObject({ x: PAD, baseY: evenDown(rowTextY(L.listY0, L.listBottom - L.listY0, FS.body)), px: FS.body, align: "left" });
+      expect(L.hint).toMatchObject({ x: PAD, baseY: evenDown(rowTextY(band.y, band.h, FS.micro)), px: FS.micro, align: "left" });
+      expect(L.hint.baseY).toBeGreaterThan(band.y);
+      expect(L.hint.baseY).toBeLessThan(band.y + band.h);
+      expect(L.emptyText.baseY).toBeGreaterThan(L.listY0);
+      expect(L.emptyText.baseY).toBeLessThan(L.listBottom);
     }
   });
 
-  it("返回钮:贴图盒 + 两档文字位(Web skinIconButton 的 hasIcon 分支)", () => {
+  it("返回钮:热区 ≥ ui.touchMin、右缘落 w − pad、图标取 art 整倍档并纵向居中", () => {
     const L = gearUpLayout(W, H_STD, 1);
-    expect(GU_BACK_Y).toBe(22);
-    expect(L.backBtn).toEqual({ x: W - PAD - UI.backW, y: GU_BACK_Y, w: UI.backW, h: UI.backH });
-    const ih = UI.backH - 12;
-    expect(L.backIcon).toEqual({ x: L.backBtn.x + 4, y: L.backBtn.y + (UI.backH - ih) / 2, w: ih, h: ih });
-    expect(L.backTextBare.x).toBe(L.backBtn.x + UI.backW / 2);
-    expect(L.backTextWithIcon.x).toBe(L.backBtn.x + 4 + ih + (UI.backW - 4 - ih) / 2);
-    expect(L.backTextWithIcon.maxW).toBe(UI.backW - 4 - ih);
+    expect(GU_BACK_Y).toBe(GU_TOP_Y);
+    expect(GU_BACK_H).toBeGreaterThanOrEqual(UI.touchMin);
+    expect(evenDown(GU_BACK_H)).toBe(GU_BACK_H);
+    expect(L.backBtn).toEqual(gearUpBackBtn(W));
+    expect(L.backBtn).toEqual({ x: W - PAD - GU_BACK_W, y: GU_BACK_Y, w: GU_BACK_W, h: GU_BACK_H });
+    expect(L.backBtn.x + L.backBtn.w).toBe(W - PAD);
+    // 图标边长 = btn_back 固有 11×11 art px × module 2(不做非整倍缩放)
+    expect(GU_BACK_ICON_BOX).toBe(22);
+    expect(L.backIcon).toEqual({
+      x: L.backBtn.x + GU_BACK_ICON_DX,
+      y: evenDown(L.backBtn.y + (GU_BACK_H - GU_BACK_ICON_BOX) / 2),
+      w: GU_BACK_ICON_BOX,
+      h: GU_BACK_ICON_BOX,
+    });
+    expect(L.backTextBare.x).toBe(evenDown(L.backBtn.x + GU_BACK_W / 2));
+    expect(L.backTextWithIcon.x).toBe(evenDown(L.backIcon.x + GU_BACK_ICON_BOX + (GU_BACK_W - GU_BACK_ICON_DX - GU_BACK_ICON_BOX) / 2));
+    expect(L.backTextWithIcon.maxW).toBe(GU_BACK_W - GU_BACK_ICON_DX - GU_BACK_ICON_BOX);
     for (const t of [L.backTextBare, L.backTextWithIcon]) {
-      expect(t.baseY).toBe(L.backBtn.y + UI.backH / 2 + 5);
+      expect(t.baseY).toBe(evenDown(rowTextY(L.backBtn.y, L.backBtn.h, FS.body)));
       expect(t.px).toBe(FS.body);
       expect(t.align).toBe("center");
     }
   });
 
-  it("Web 原样重叠:星尘那条线落在返回钮矩形之内(先画星尘后画按钮 → 被盖住)", () => {
-    const L = gearUpLayout(W, H_STD, 0);
-    const band = anchorBand(L.stardust.x, L.stardust.baseY, 60, L.stardust.px, "right", LIFT);
-    expect(band.x + band.w).toBe(L.backBtn.x + L.backBtn.w);
-    expect(band.y).toBeLessThan(L.backBtn.y + L.backBtn.h);
-    expect(band.y + band.h).toBeGreaterThan(L.backBtn.y);
+  it("星尘读数不再被返回钮盖住:文本带顶缘在钮底缘之下,标题带右界在钮左缘之前", () => {
+    for (const h of [H_STD, H_TALL]) {
+      const L = gearUpLayout(W, h, 0);
+      const band = anchorBand(L.stardust.x, L.stardust.baseY, L.stardust.maxW, L.stardust.px, "right", LIFT);
+      expect(band.x + band.w).toBe(W - PAD);
+      expect(band.y).toBeGreaterThanOrEqual(L.backBtn.y + L.backBtn.h);
+      const tb = anchorBand(L.title.x, L.title.baseY, L.title.maxW, L.title.px, "left", LIFT);
+      expect(tb.x + tb.w).toBeLessThanOrEqual(L.backBtn.x);
+    }
   });
 });
 
@@ -639,8 +719,8 @@ describe("命中判定(Web onGearUpClick 的两段顺序)", () => {
     const r0 = L.rows[0];
     const probes: [string, number, number][] = [
       ["行左半(名字与描述那列)", r0.rect.x + 40, center(r0.rect).y],
-      ["行右上空隙(钮右那 10px 留白)", r0.rect.x + r0.rect.w - 5, r0.rect.y + 2],
-      ["行间空隙", center(r0.rect).x, r0.rect.y + r0.rect.h + GU_ROW_STEP_GAP / 2],
+      ["行右上空隙(钮右那 16px 内缩留白)", r0.rect.x + r0.rect.w - 5, r0.rect.y + 2],
+      ["行间空隙", center(r0.rect).x, r0.rect.y + r0.rect.h + L.rowGap / 2],
       ["徽记带(第 3 颗正中)", r0.stars[2].x + r0.stars[2].w / 2, r0.stars[2].y + r0.stars[2].h / 2],
       ["行框左下内缩留白", r0.rect.x + 2, r0.rect.y + r0.rect.h - 3],
     ];
@@ -654,7 +734,7 @@ describe("命中判定(Web onGearUpClick 的两段顺序)", () => {
       ["左留白(面板外)", 2, H_STD / 2],
       ["面板底缘之下", W / 2, H_STD - 2],
       ["截断提示那一行", PAD + 30, Lt.hint.baseY],
-      ["副标题那一行", PAD + 30, GU_SUB_BASE_Y],
+      ["副标题那一行", PAD + 30, Lt.subtitle.baseY],
       ["末行之下直到屏底的行区留白", W / 2, last.rect.y + last.rect.h + 30],
     ];
     for (const [at, x, y] of probes) expect(hitGearUp(Lt, x, y), at).toBe(null);
@@ -1011,12 +1091,15 @@ describe("GameShell 的装备升级屏接线", () => {
 describe("Web 基准的三条反直觉口径已原样带上", () => {
   const web = webGearSource();
 
-  it("Web 的行步进是 `rowH + 4`(硬编码),不是 spreadRows 的 gap", () => {
+  it("Web 的行步进是 `rowH + 4`(硬编码);Cocos 侧改用 spreadRows 的 gap 并让位给贴底提示带", () => {
     expect(web.includes("const y = y0 + idx * (rowH + 4);")).toBe(true);
     expect(web.includes("const { rowH } = spreadRows(list.length, y0, h - pad - 8, 40, 56);")).toBe(true);
-    expect(GU_ROW_STEP_GAP).toBe(4);
-    expect(GU_LIST_Y0).toBe(78);
-    expect(GU_LIST_BOTTOM_EXTRA).toBe(8);
+    // 有意分歧:Cocos 侧行距取 spreadRows 的 gap(富余摊进行距),行区底缘是提示带顶缘
+    const L = gearUpLayout(W, H_STD, GU_ROWS_MAX);
+    expect(L.rowStep).toBe(L.rowH + L.rowGap);
+    expect(L.listY0).toBe(GU_LIST_Y0);
+    expect(L.listBottom).toBe(evenDown(H_STD) - GU_PAD - GU_HINT_BAND_H);
+    expect(GU_LIST_Y0).not.toBe(78);
   });
 
   it("Web 的命中只比 row.btn,不比 row.rect", () => {

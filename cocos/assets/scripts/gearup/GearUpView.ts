@@ -1,17 +1,17 @@
 /**
  * 装备升级屏 —— Web `src/game.ts:drawGearUp`(3887-3977)的节点化替换(Phase 4 第四屏)。
  *
- * 分工:几何全部来自共享层 `game/ui/gearUpLayout.ts`(单一出口,面板矩形与贴图键 / 标题与
- * 副标题与星尘三线 / 空态与截断提示两线 / 每行的品质框矩形 + 升级钮矩形 + 徽记槽 +
- * 三段文本锚点 / 返回钮与两档文字位与 Web 逐项同数),内容与命中来自 `gearup/GearUpModel.ts`,
- * 本文件只把矩形落到节点上:
+ * 分工:几何全部来自共享层 `game/ui/gearUpLayout.ts`(单一出口,按像素栅格 module = 2 重排:
+ * 屏底板矩形与贴图键 / 头部两带的标题、副标题与星尘三线 / 空态与截断提示两线 / 每行的品质框
+ * 矩形 + 升级钮矩形 + 徽记槽 + 两段文本锚点 / 返回钮与两档文字位),内容与命中来自
+ * `gearup/GearUpModel.ts`,本文件只把矩形落到节点上:
  * 全屏暗底 + 面板底 + 标题 + 副标题 + 星尘 + 空态提示 + 恒 `GU_ROWS_MAX` 个行槽 +
  * 截断提示 + 右上返回钮 + 整屏 Capture 热区。
  *
- * 贴图分支与 Web 一一对应(五件都在 `ASSET_MANIFEST` 里,"贴图优先、缺图回退代码形状"):
- *  - 面板底走 `panel_gearup`(daily / pass 用默认面板),缺图先回落 `panel_dark_corners`
- *    那一张(= Web `panelPad` 的两步 drawNine 链);两张都没有时 `Plate` 给一层代码底,
- *    这一档是 Cocos 侧的保险,与已落地三屏同处置;
+ * 贴图分支("贴图优先、缺图回退代码形状"):
+ *  - 屏底板走 `panel_dark_corners` 的九宫格档(与已重排各屏同一张,键由共享层 `GU_PANEL_KEY`
+ *    给出,切深由 `core/ViewTable.ts:borderOf` 按 `nineSlice` 表推导);两张都没有时 `Plate`
+ *    给一层代码底,这一档是 Cocos 侧的保险,与已落地各屏同处置;
  *  - **本屏标题没有横幅贴图**,只有一档左起笔文字(= Web 的直接 fillText);
  *  - 行底板是**品质框**(Web `src/ui/skin.ts:drawQualityFrame` 的 Cocos 等价物
  *    `ui/PanelKit.qualityBox`:圆角 4、暗底 rgba(0,0,0,0.5)、品质色描边 1.5、
@@ -30,9 +30,8 @@
  * 以整屏为 box,layout 给的 x 就是 Web fillText 的锚点(左起笔 / 中中心 / 右末笔),
  * 视图不产任何二次平移。右上星尘是**右对齐**(末笔 = w − pad),尤其不能把锚点当盒左沿。
  *
- * 一处 Web 原样重叠照抄:右上星尘(基线 36、右末笔 w − pad)落在返回钮矩形
- * `(w − pad − backW, 22, backW, backH)` 之内,而 Web 的绘制顺序是先星尘后返回钮,于是那串
- * 数字被返回钮盖住。本文件按同一顺序建节点(星尘在前、返回钮在后)复现该覆盖,不做平移。
+ * 头部是两带:A 带「标题(左) + 返回钮(右)」、B 带「副标题(左) + 星尘(右)」,
+ * 星尘读数因此与返回钮纵向错开、完整可见;建节点顺序仍是星尘在前、返回钮在后。
  */
 
 import { Graphics, Label, Node, SpriteFrame, UIOpacity, UITransform } from "cc";
@@ -146,7 +145,7 @@ export class GearUpView {
     this.dim = makeNode("Dim", this.root);
     this.dim.addComponent(Graphics);
     this.panel = new Plate("Panel", this.root, frames);
-    // 三条头部文本的创建顺序 = Web 的 fillText 顺序(星尘在返回钮之前,于是被返回钮盖住)
+    // 头部两带的三条文本按 A 带→B 带顺序建节点(星尘在返回钮之前,两带纵向错开故互不遮挡)
     this.title = new Txt("Title", this.root);
     this.subtitle = new Txt("Subtitle", this.root);
     this.stardust = new Txt("Stardust", this.root);
@@ -198,11 +197,9 @@ export class GearUpView {
     const L = this.hooks.layout();
     const c = this.hooks.content();
 
-    // 覆盖底 + 面板底(Web panelPad 的两步 drawNine:panel_gearup 优先,缺图回落 panel_dark_corners)
+    // 覆盖底 + 屏底板(panel_dark_corners 的九宫格档,键与矩形都来自共享层)
     this.paintDim(p4.guDim);
-    if (!this.panel.show(L.panelKey, L.panel, "slice", p3.detailBg, p3.detailStroke)) {
-      this.panel.show(L.panelKeyFallback, L.panel, "slice", p3.detailBg, p3.detailStroke);
-    }
+    this.panel.show(L.panelKey, L.panel, "slice", p3.detailBg, p3.detailStroke);
 
     // 头部三线:标题加粗 gold / 副标题 muted / 星尘右对齐 stardust(本屏没有横幅贴图)
     this.title.bold(true);

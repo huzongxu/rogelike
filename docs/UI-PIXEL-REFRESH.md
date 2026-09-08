@@ -113,9 +113,9 @@ node scripts/pixel-kit.mjs [--config=artwork/pixel-kit.json] [--out=dir] [--cont
 | 2 | battle 战斗 | ✅ | ✅ |
 | 3 | shop 商店 | ✅ | ✅ |
 | 4 | heroes 英雄 | ✅ | ✅ |
-| 5 | gearup 装备 | ✅ | ☐ |
+| 5 | gearup 装备 | ✅ | ✅ |
 | 6 | gacha 扭蛋 | ✅ | ✅ |
-| 7 | pass 通行证 | ✅ | ☐ |
+| 7 | pass 通行证 | ✅ | ✅ |
 | 8 | daily 每日 | ✅ | ☐ |
 | 9 | commission 委托 | ✅ | ☐ |
 | 10 | fusion 合成 | ✅ | ✅ |
@@ -127,7 +127,7 @@ node scripts/pixel-kit.mjs [--config=artwork/pixel-kit.json] [--out=dir] [--cont
 | 16 | gameover 失败 | ✅ | ✅ |
 | — | confirm 常驻弹层 | ✅ | ✅ |
 
-「重排」列以各屏 `*Layout.ts` 的最后触及提交为准：`gearupLayout` 尚不存在，`passLayout` / `dailyLayout` / `commissionLayout` 自工程目录改名以来未动，故这三屏只到换皮。
+「重排」列以各屏 `*Layout.ts` 的最后触及提交为准：gearup 与 pass 的几何现已收进共享层 `game/ui/gearUpLayout.ts` 与 `game/ui/passLayout.ts`，按 art 网格（module=2、pad 16、内容宽 528、热区 ≥44）重排并重基线几何测试；`dailyLayout` / `commissionLayout` 不在本轮触及范围内。
 
 ## 8. 验收判据
 

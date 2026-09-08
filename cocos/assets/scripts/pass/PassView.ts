@@ -34,18 +34,16 @@ import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
 import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
-import { ui } from "../game/ui/theme";
 import { PASS_TIERS } from "../game/data/pass";
 import { passProgressRects, type PassLayout, type PsRect, type PsTextLine } from "../game/ui/passLayout";
 import { hitPass, type PassAction, type PassContent, type PassRowContent } from "./PassModel";
 
-/** 贴图键(与 Web drawPass 的实参逐字对应) */
+/** 贴图键(屏底板那一枚由共享层 `PS_PANEL_KEY` 给出,不在视图里重复一份) */
 const KEY_HEADER = "banner_title_gold_b";
 const KEY_NODE_TRACK = "bar_pass_nodes";
 const KEY_CHECK = "mark_check_green";
 const KEY_PROGRESS_BAR = "bar_progress_purple";
 const KEY_BACK = "btn_back";
-const KEY_PANEL = "panel_dark_corners";
 
 /** 贴图收起时的零位盒(与 DailyView 的 deco/header 同款处置:缺图就不占位) */
 const ZERO: PsRect = { x: 0, y: 0, w: 0, h: 0 };
@@ -196,13 +194,12 @@ export class PassView {
     const p4 = viewTable().phase4;
     const L = this.hooks.layout();
     const c = this.hooks.content();
-    const pad = ui.pad;
     /** 高级轨是否生效的唯一门控(内容层的 actButton 就是它的反面) */
     const prem = !c.actButton;
 
-    // 覆盖底:全屏暗底(Web rgba(8,10,16,0.86))+ 面板底(对标 panelPad 的九宫格内缩 pad)
+    // 覆盖底:全屏暗底 + 屏底板(九宫格档,贴图键与矩形都来自共享层)
     this.paintDim(p4.psDim);
-    this.panel.show(KEY_PANEL, { x: pad, y: pad, w: DESIGN_W - pad * 2, h: logicalH() - pad * 2 }, "slice", p3.detailBg, p3.detailStroke);
+    this.panel.show(L.panelKey, L.panel, "slice", p3.detailBg, p3.detailStroke);
 
     // 标题横幅:贴图优先,缺图不画底板、标题切到左起笔那一档(Web skinHeader 的两支)
     const banner = this.header.show(KEY_HEADER);
