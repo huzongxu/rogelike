@@ -32,7 +32,7 @@
 import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
-import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
+import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
 import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
 import { ui } from "../game/ui/theme";
 import { PASS_TIERS } from "../game/data/pass";
@@ -210,6 +210,7 @@ export class PassView {
     this.title.bold(true);
     if (banner) this.title.set(L.titleOnBanner.x, L.titleOnBanner.baseY, L.titleOnBanner.maxW, L.titleOnBanner.px, c.title, "center", p4.psTitle);
     else this.title.set(L.titleBare.x, L.titleBare.baseY, L.titleBare.maxW, L.titleBare.px, c.title, "left", p4.psTitle);
+    setTextOutline(this.title.lb, banner ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
 
     // 回响统计行(Web 单行 body 左对齐)
     this.echo.set(L.echo.x, L.echo.baseY, L.echo.maxW, L.echo.px, c.echoText, "left", p4.psEcho);

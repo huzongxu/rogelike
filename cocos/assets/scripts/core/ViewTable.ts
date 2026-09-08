@@ -952,7 +952,7 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     seBtnStroke: "#FFD76A",
     seBtnText: "#FFFFFF",
     goDim: "rgba(0,0,0,0.8)",
-    goTitle: "#FF5A5A",
+    goTitle: "#E8ECF4",
     goStat: "#E8E8E8",
     goEcho: "#FFD76A",
     goBest: "#8F9BB3",

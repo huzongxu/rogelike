@@ -39,7 +39,7 @@
 import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
-import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
+import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
 import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
 import { GC_RES_MAX, gachaBarRects, type GachaLayout, type GachaRowLayout, type GcRect } from "../game/ui/gachaLayout";
 import { hitGacha, type GachaAction, type GachaContent } from "./GachaModel";
@@ -236,6 +236,7 @@ export class GachaView {
     this.title.bold(true);
     const tt = banner ? L.titleWithBanner : L.titleBare;
     this.title.set(tt.x, tt.baseY, tt.maxW, tt.px, c.title, tt.align, p4.gcTitle);
+    setTextOutline(this.title.lb, banner ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
 
     // 券数:图标优先(文字起笔右移一枚图标宽),缺图时前置替代字形「✦」
     const ticketIcon = this.ticketIcon.show(KEY_TICKET_ICON);

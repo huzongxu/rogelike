@@ -17,7 +17,7 @@
 import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
-import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
+import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
 import { Plate, fitOne, placeLine } from "../ui/PanelKit";
 import { pixelNumber } from "../ui/PixelNumber";
 import { theme } from "../game/ui/theme";
@@ -185,6 +185,7 @@ export class LeaderboardView {
     this.title.bold(true);
     const tt = bannerOn ? L.title : L.titleBare;
     this.title.set(tt.x, tt.baseY, tt.maxW, tt.px, c.title, tt.align, HEX.gold);
+    setTextOutline(this.title.lb, bannerOn ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
     this.sub.set(L.sub.x, L.sub.baseY, L.sub.maxW, L.sub.px, c.sub, "left", HEX.textSecondary);
 
     L.rows.forEach((row, i) => {

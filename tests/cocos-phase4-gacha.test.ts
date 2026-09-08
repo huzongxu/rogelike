@@ -1763,3 +1763,15 @@ describe("gachaBarRects:贴图暗罩与缺图填充两档", () => {
     expect(gachaBarRects(L.pityLegendBar, 25 / 50).fill.w).toBe(L.pityLegendBar.w * 0.5);
   });
 });
+
+/* ==================== 压带标题描边闸 ==================== */
+
+describe("GachaView 的压带标题必须走描边出口，且宽度取自表", () => {
+  const code = readFileSync(new URL("../cocos/assets/scripts/gacha/GachaView.ts", import.meta.url), "utf8");
+
+  it("横幅在位时开描边、缺图档关掉，宽度不内联字面量", () => {
+    expect(code.includes("setTextOutline(this.title.lb")).toBe(true);
+    expect(code.includes("bannerTitleOutlineW")).toBe(true);
+    expect(code.includes("outlineWidth =")).toBe(false);
+  });
+});

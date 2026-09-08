@@ -806,3 +806,15 @@ describe("PassView 的落位纪律(R5)", () => {
     expect(src.includes("ui.pad")).toBe(true); // 只有面板内缩这一处按既有同屏口径读主题 pad
   });
 });
+
+/* ==================== 压带标题描边闸 ==================== */
+
+describe("PassView 的压带标题必须走描边出口，且宽度取自表", () => {
+  const code = readFileSync(new URL("../cocos/assets/scripts/pass/PassView.ts", import.meta.url), "utf8");
+
+  it("横幅在位时开描边、缺图档关掉，宽度不内联字面量", () => {
+    expect(code.includes("setTextOutline(this.title.lb")).toBe(true);
+    expect(code.includes("bannerTitleOutlineW")).toBe(true);
+    expect(code.includes("outlineWidth =")).toBe(false);
+  });
+});

@@ -644,7 +644,6 @@ describe("phase4 表的死亡结算屏配色档（键前缀 go）", () => {
   it("每一档都与 Web 那一笔字面量同值（大小写按表侧 6 位档，字面量按 Web 小写档逐字比对）", () => {
     const PAIRS: Array<[string, string]> = [
       ["goDim", "rgba(0,0,0,0.8)"],
-      ["goTitle", "#ff5a5a"],
       ["goStat", "#e8e8e8"],
       ["goEcho", "#ffd76a"],
       ["goBest", "#8f9bb3"],
@@ -665,6 +664,15 @@ describe("phase4 表的死亡结算屏配色档（键前缀 go）", () => {
       expect(web.includes(`"${lit}"`), key + " 的 Web 字面量").toBe(true);
       expect(t[key]?.toLowerCase(), key).toBe(lit.toLowerCase());
     }
+  });
+
+  it("goTitle 端间已分档：Web 仍是红，Cocos 侧按 §11.1 换近白（基准字面量仍在位）", () => {
+    // Web 那一笔没动，冻结基准照旧断言
+    expect(web.includes('"#ff5a5a"'), 'Web 的 goTitle 字面量').toBe(true);
+    // 分档依据：banner_large_red 带心只有 #3a1218→#7a1f2a 两档暗红，红字直接对比仅 3.34，
+    // 而深色描边在同为暗色的带面上不起作用（见 docs/UI-PIXEL-REFRESH.md §11.1）→ 直接选亮字
+    expect(t.goTitle).toBe("#E8ECF4");
+    expect(t.goTitle.toLowerCase()).toBe(theme.textPrimary.toLowerCase());
   });
 
   it("白色与 theme.* 三档：Web 写的是 `#fff` 与 theme.gold，表侧一律 6 位档", () => {
