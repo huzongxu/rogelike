@@ -140,6 +140,12 @@ const BATCH5_STRETCH_KEYS: readonly string[] = [
 ];
 
 /** 本批全部像素 key(去重后的稳定顺序) */
+/** 英雄立绘批（pixel-kit-heroes.json）：12 名半身像，行缩略与详情共用同一键 */
+const HERO_KEYS: readonly string[] = [
+  "hero_vera", "hero_kyle", "hero_bran", "hero_sia", "hero_nora", "hero_loka",
+  "hero_doran", "hero_rayne", "hero_sally", "hero_willow", "hero_oden", "hero_mu",
+];
+
 export const PIXEL_ART_KEYS: readonly string[] = [
   ...NINE_SLICE_KEYS,
   ...ENTRY_KEYS,
@@ -150,6 +156,7 @@ export const PIXEL_ART_KEYS: readonly string[] = [
   ...HUD_KEYS,
   ...BATCH3_STRETCH_KEYS,
   ...BATCH5_STRETCH_KEYS,
+  ...HERO_KEYS,
 ];
 
 const PIXEL_ART_SET = new Set<string>(PIXEL_ART_KEYS);

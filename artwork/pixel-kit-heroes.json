@@ -1,0 +1,56 @@
+{
+ "$comment": "英雄立绘批：12 名半身像，两张 3x2 表（中列留空品红沟）。heroes_a 六格为品红底半身像（抠底后透明背景）；heroes_c 六格为格内深蓝灰底方板（保留方板当头像底）。art 84x84 对应详情 168 逻辑 px（module=2），行缩略 40 逻辑 px 由 Sprite 缩放同一键。",
+ "module": 2,
+ "export": 1,
+ "keyout": { "color": "#ff00ff", "tolerance": 130, "erode": 2 },
+ "palette": [
+  "#05070c", "#0b0e14", "#121826", "#1a2233", "#232e44", "#2a3548", "#38465e", "#4a5a76", "#62738f", "#8f9bb3", "#c8d2e0",
+  "#2b1f47", "#4b3a7a", "#8a6fd1", "#c8b6ff",
+  "#17624f", "#2e9e7f", "#4dffc8",
+  "#4a3410", "#8a6220", "#d9a63c", "#ffd76a",
+  "#3a1218", "#7a1f2a", "#c0374a", "#ff5a6e",
+  "#10294a", "#1f4e8a", "#2f7fd1", "#4aa3ff"
+ ],
+ "sheets": [
+  {
+   "src": "vibe_images/px_sheet_heroes_a.png",
+   "grid": { "cols": 3, "rows": 3 },
+   "rects": [
+    [8, 8, 470, 333],
+    [1032, 8, 1528, 333],
+    [8, 349, 470, 674],
+    [1032, 349, 1528, 674],
+    [8, 690, 470, 1016],
+    [1032, 690, 1528, 1016]
+   ],
+   "cells": [
+    { "key": "hero_vera", "art": [84, 84], "fit": "stretch", "fillBox": true, "cropBBox": false, "wm": false },
+    { "key": "hero_kyle", "art": [84, 84], "fit": "stretch", "fillBox": true, "cropBBox": false, "wm": false },
+    { "key": "hero_bran", "art": [84, 84], "fit": "stretch", "fillBox": true, "cropBBox": false, "wm": false },
+    { "key": "hero_sia", "art": [84, 84], "fit": "stretch", "fillBox": true, "cropBBox": false, "wm": false },
+    { "key": "hero_nora", "art": [84, 84], "fit": "stretch", "fillBox": true, "cropBBox": false, "wm": false },
+    { "key": "hero_loka", "art": [84, 84], "fit": "stretch", "fillBox": true, "cropBBox": false, "wm": false }
+   ]
+  },
+  {
+   "src": "vibe_images/px_sheet_heroes_c.png",
+   "grid": { "cols": 3, "rows": 3 },
+   "rects": [
+    [0, 0, 478, 341],
+    [1024, 0, 1536, 341],
+    [0, 341, 478, 682],
+    [1024, 341, 1536, 682],
+    [0, 682, 478, 1024],
+    [1024, 682, 1536, 1024]
+   ],
+   "cells": [
+    { "key": "hero_doran", "art": [84, 84], "fit": "stretch", "fillBox": true, "cropBBox": false, "wm": false },
+    { "key": "hero_rayne", "art": [84, 84], "fit": "stretch", "fillBox": true, "cropBBox": false, "wm": false },
+    { "key": "hero_sally", "art": [84, 84], "fit": "stretch", "fillBox": true, "cropBBox": false, "wm": false },
+    { "key": "hero_willow", "art": [84, 84], "fit": "stretch", "fillBox": true, "cropBBox": false, "wm": false },
+    { "key": "hero_oden", "art": [84, 84], "fit": "stretch", "fillBox": true, "cropBBox": false, "wm": false },
+    { "key": "hero_mu", "art": [84, 84], "fit": "stretch", "fillBox": true, "cropBBox": false, "wm": false }
+   ]
+  }
+ ]
+}
