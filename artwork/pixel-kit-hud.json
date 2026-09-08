@@ -78,12 +78,12 @@
     },
     {
      "key": "bar_capsule",
-     "frozen": true,
      "artH": 10,
      "slice": 4,
      "fit": "stretch",
      "export": 2,
-     "flatCenter": true
+     "flatCenter": false,
+     "legacyErode": true
     }
    ]
   },

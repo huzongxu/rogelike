@@ -128,7 +128,7 @@
      "cropBBox": false,
      "wm": false,
      "legacyErode": true,
-     "frozen": true
+     "flatCenter": false
     },
     {
      "key": "bar_progress_purple",
@@ -141,7 +141,7 @@
      "cropBBox": false,
      "wm": false,
      "legacyErode": true,
-     "frozen": true
+     "flatCenter": false
     },
     {
      "key": "bar_pass_nodes",
@@ -159,7 +159,7 @@
       0.21
      ],
      "legacyErode": true,
-     "frozen": true
+     "flatCenter": false
     }
    ]
   },
