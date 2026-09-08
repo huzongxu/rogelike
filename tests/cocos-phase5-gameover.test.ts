@@ -105,7 +105,7 @@ import * as cocosDailyData from "../cocos/assets/scripts/game/data/daily";
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
-const PAD = THEME_UI.pad;
+const PAD = cocosGameOverLayout.GO_PAD;
 const BAND = W - PAD * 2;
 
 /** 一份「打过几局、有最佳纪录」的档（本屏只读这三项） */
@@ -222,49 +222,49 @@ describe("屏级矩形（与 Web drawGameOver 的内联字面量逐位对应）"
     { name: "复活已尽 + 双倍已领", forms: { canRevive: false, canDouble: false } },
   ];
 
-  it("996 档逐项同 Web：a = 298.8，横幅 {160,264.8,240,48}，立绘 {84,254.8,58,92}", () => {
+  it("996 档逐项同 Web：a = 298，横幅 {160,264,240,48}，立绘 {84,254,58,92}", () => {
     const L = laid(H_STD);
-    expect(L.anchorY).toBeCloseTo(298.8, 6);
-    expect(L.banner).toEqual({ x: 160, y: 264.8, w: 240, h: 48 });
-    expect(L.pose).toEqual({ x: 84, y: 254.8, w: 58, h: 92 });
-    expect(Math.abs(L.banner.y - (H_STD * 0.3 - 34))).toBeLessThan(1e-9);
-    expect(Math.abs(L.pose.y - (H_STD * 0.3 - 44))).toBeLessThan(1e-9);
+    expect(L.anchorY).toBe(298);
+    expect(L.banner).toEqual({ x: 160, y: 264, w: 240, h: 48 });
+    expect(L.pose).toEqual({ x: 84, y: 254, w: 58, h: 92 });
+    expect(L.banner.y).toBe(L.anchorY - GO_BANNER_DY);
+    expect(L.pose.y).toBe(L.anchorY - GO_POSE_DY);
   });
 
-  it("996 档三处钮位：复活 {170,422.8,220,32}、三钮行 {95,468.8,118,44} 步进 126、双倍 {185,880,190,34}", () => {
+  it("996 档三处钮位：复活 {170,422,220,44}、三钮行 {16,478,168,44} 步进 180、双倍 {170,880,220,44}", () => {
     const L = laid(H_STD);
-    expect(L.reviveBtn).toEqual({ x: 170, y: 422.8, w: 220, h: 32 });
-    expect(L.restartBtn).toEqual({ x: 95, y: 468.8, w: 118, h: 44 });
-    expect(L.prestigeBtn).toEqual({ x: 221, y: 468.8, w: 118, h: 44 });
-    expect(L.menuBtn).toEqual({ x: 347, y: 468.8, w: 118, h: 44 });
-    expect(L.doubleBtn).toEqual({ x: 185, y: 880, w: 190, h: 34 });
+    expect(L.reviveBtn).toEqual({ x: 170, y: 422, w: 220, h: 44 });
+    expect(L.restartBtn).toEqual({ x: 16, y: 478, w: 168, h: 44 });
+    expect(L.prestigeBtn).toEqual({ x: 196, y: 478, w: 168, h: 44 });
+    expect(L.menuBtn).toEqual({ x: 376, y: 478, w: 168, h: 44 });
+    expect(L.doubleBtn).toEqual({ x: 170, y: 880, w: 220, h: 44 });
     expect(L.btnStep).toBe(GO_BTN_W + GO_BTN_GAP);
-    expect(L.btnRowW).toBe(370);
+    expect(L.btnRowW).toBe(528);
     // 三钮行整体居中且左右都留得下 pad
-    expect(gameOverRowX(W)).toBe(95);
+    expect(gameOverRowX(W)).toBe(cocosGameOverLayout.GO_PAD);
     expect(L.menuBtn.x + L.menuBtn.w).toBeLessThanOrEqual(W - PAD);
     expect(L.restartBtn.x).toBeGreaterThanOrEqual(PAD);
   });
 
-  it("文字基线是三处裸偏移（+21 / +28 / +22），三钮行那一档与 rowTextY 不同源属 Web 原样", () => {
+  it("文字基线是三处裸偏移（+28 / +28 / +28），三钮行那一档与 rowTextY 不同源属 Web 原样", () => {
     const L = laid(H_STD);
-    expect(L.reviveText.baseY).toBeCloseTo(422.8 + 21, 6);
-    expect(L.restartText.baseY).toBeCloseTo(468.8 + 28, 6);
-    expect(L.doubleText.baseY).toBeCloseTo(880 + 22, 6);
+    expect(L.reviveText.baseY).toBe(422 + 28);
+    expect(L.restartText.baseY).toBe(478 + 28);
+    expect(L.doubleText.baseY).toBe(880 + 28);
     // Web 这里没走 rowTextY：同档实参下它给 496（= by + 27.2 取整），Web 的裸 +28 落在 496.8
-    expect(rowTextY(L.restartBtn.y, GO_BTN_H, GO_BTN_PX)).toBe(496);
-    expect(L.restartText.baseY).toBeCloseTo(468.8 + 28, 6);
+    expect(rowTextY(L.restartBtn.y, GO_BTN_H, GO_BTN_PX)).toBe(505);
+    expect(L.restartText.baseY).toBe(478 + 28);
     // 钮内文字的 x 是三枚各自的水平中心，不是屏心
-    expect([L.restartText.x, L.prestigeText.x, L.menuText.x]).toEqual([154, 280, 406]);
+    expect([L.restartText.x, L.prestigeText.x, L.menuText.x]).toEqual([100, 280, 460]);
     expect([L.reviveText.x, L.doubleText.x, L.title.x]).toEqual([280, 280, 280]);
   });
 
-  it("五行读数的基线 = a + 34/56/80/100 与 a + 232（名次提示落在三钮行之下 18px）", () => {
+  it("五行读数的基线 = a + 34/56/80/100 与 a + 240（名次提示落在三钮行之下 16px）", () => {
     const L = laid(H_STD);
-    const a = H_STD * GO_ANCHOR_RATIO;
+    const a = Math.floor((H_STD * GO_ANCHOR_RATIO) / 2) * 2;
     expect([L.timeLine.baseY, L.waveLine.baseY, L.echoLine.baseY, L.bestLine.baseY]).toEqual([a + 34, a + 56, a + 80, a + 100]);
-    expect(L.rankLine.baseY).toBeCloseTo(a + 232, 6);
-    expect(L.rankLine.baseY - bottom(L.restartBtn)).toBeCloseTo(18, 6);
+    expect(L.rankLine.baseY).toBe(a + GO_RANK_DY);
+    expect(L.rankLine.baseY - bottom(L.restartBtn)).toBe(16);
     // 名次提示与贴底双倍钮之间在两档屏高下都留得开
     expect(L.rankLine.baseY).toBeLessThan(L.doubleBtn.y);
   });
@@ -302,29 +302,30 @@ describe("屏级矩形（与 Web drawGameOver 的内联字面量逐位对应）"
     }
   });
 
-  it("两档之间：锚线族整体平移 Δh × 0.3 = 75px，贴底族整体平移 Δh = 250px", () => {
+  it("两档之间：锚线族整体平移 Δh × 0.3 = 74px（取偶档），贴底族整体平移 Δh = 250px", () => {
     const A = laid(H_STD);
     const B = laid(H_TALL);
     const dh = H_TALL - H_STD;
+    const dAnchor = Math.floor((H_TALL * GO_ANCHOR_RATIO) / 2) * 2 - Math.floor((H_STD * GO_ANCHOR_RATIO) / 2) * 2;
     for (const key of ["banner", "pose", "reviveBtn", "restartBtn", "prestigeBtn", "menuBtn", "doubleBtn"] as const) {
       const dy = B[key].y - A[key].y;
-      expect(dy, key + " Δy").toBeCloseTo(key === "doubleBtn" ? dh : dh * GO_ANCHOR_RATIO, 6);
+      expect(dy, key + " Δy").toBe(key === "doubleBtn" ? dh : dAnchor);
       expect(B[key].x).toBe(A[key].x);
       expect(B[key].w).toBe(A[key].w);
       expect(B[key].h).toBe(A[key].h);
     }
-    expect(B.anchorY - A.anchorY).toBeCloseTo(dh * GO_ANCHOR_RATIO, 6);
+    expect(B.anchorY - A.anchorY).toBe(dAnchor);
     expect(B.doubleBtn.y - A.doubleBtn.y).toBe(dh);
     // 两族之间的空档一起伸缩：三钮行底到双倍钮顶
     expect(bottom(B.restartBtn)).toBeLessThan(B.doubleBtn.y);
-    expect(B.doubleBtn.y - bottom(B.restartBtn) - (A.doubleBtn.y - bottom(A.restartBtn))).toBeCloseTo(dh * (1 - GO_ANCHOR_RATIO), 6);
+    expect(B.doubleBtn.y - bottom(B.restartBtn) - (A.doubleBtn.y - bottom(A.restartBtn))).toBe(dh - dAnchor);
   });
 
-  it("1246 档双倍钮底边落在 h − 82（不是 h − pad），屏内不越界", () => {
+  it("1246 档双倍钮底边落在 h − 72（贴底族让位给呼吸缝），屏内不越界", () => {
     for (const h of [H_STD, H_TALL]) {
       const L = laid(h);
       expect(L.doubleBottomGap).toBe(GO_DOUBLE_UP - GO_DOUBLE_H);
-      expect(bottom(L.doubleBtn)).toBe(h - 82);
+      expect(bottom(L.doubleBtn)).toBe(h - 72);
       expect(bottom(L.doubleBtn)).toBeLessThan(h);
       // 屏心族的两端极值都在横向 560 之内
       for (const r of [L.banner, L.pose, L.reviveBtn, L.restartBtn, L.prestigeBtn, L.menuBtn, L.doubleBtn]) {
@@ -334,14 +335,14 @@ describe("屏级矩形（与 Web drawGameOver 的内联字面量逐位对应）"
       // 横向全部与屏高无关
       expect(L.pose.x).toBe(84);
       expect(L.banner.x).toBe(160);
-      expect(L.menuBtn.x + L.menuBtn.w).toBe(465);
+      expect(L.menuBtn.x + L.menuBtn.w).toBe(W - PAD);
     }
-    expect(gameOverReviveBtn(W, H_TALL)).toEqual({ x: 170, y: 497.8, w: 220, h: 32 });
-    expect(gameOverDoubleBtn(W, H_TALL)).toEqual({ x: 185, y: 1130, w: 190, h: 34 });
-    expect(laid(H_TALL).restartBtn.y).toBeCloseTo(543.8, 6);
+    expect(gameOverReviveBtn(W, H_TALL)).toEqual({ x: 170, y: 496, w: 220, h: 44 });
+    expect(gameOverDoubleBtn(W, H_TALL)).toEqual({ x: 170, y: 1130, w: 220, h: 44 });
+    expect(laid(H_TALL).restartBtn.y).toBe(552);
   });
 
-  it("五枚热区两两不重叠（复活钮与三钮行之间留 14px，三钮行与双倍钮之间留一整段空白）", () => {
+  it("五枚热区两两不重叠（复活钮与三钮行之间留 12px，三钮行与双倍钮之间留一整段空白）", () => {
     const L = laid(H_STD);
     const rects = [L.reviveBtn, L.doubleBtn, L.restartBtn, L.prestigeBtn, L.menuBtn];
     for (let i = 0; i < rects.length; i++) {
@@ -352,7 +353,7 @@ describe("屏级矩形（与 Web drawGameOver 的内联字面量逐位对应）"
         expect(overlap, a.x + "," + b.x + " 重叠").toBe(false);
       }
     }
-    expect(L.restartBtn.y - bottom(L.reviveBtn)).toBeCloseTo(14, 6);
+    expect(L.restartBtn.y - bottom(L.reviveBtn)).toBe(12);
   });
 
   it("单一出口：screenLayout 与 layout 同数；描边宽与立绘透明度留在共享层", () => {
@@ -370,7 +371,7 @@ describe("屏级矩形（与 Web drawGameOver 的内联字面量逐位对应）"
     expect(src.includes('from "cc"')).toBe(false);
     expect(src.includes("save.")).toBe(false);
     expect(src.includes("localStorage")).toBe(false);
-    expect((src.match(/^import .+$/gm) ?? []).length).toBe(1);
+    expect((src.match(/^import .+$/gm) ?? []).length).toBe(0);
   });
 });
 
@@ -381,10 +382,10 @@ describe("共享层几何常量逐项", () => {
     expect([GO_ANCHOR_RATIO, GO_BANNER_DX, GO_BANNER_W, GO_BANNER_H, GO_BANNER_DY]).toEqual([0.3, 120, 240, 48, 34]);
     expect([GO_POSE_DX, GO_POSE_W, GO_POSE_H, GO_POSE_DY]).toEqual([196, 58, 92, 44]);
     expect([GO_TIME_DY, GO_WAVE_DY, GO_ECHO_DY, GO_BEST_DY]).toEqual([34, 56, 80, 100]);
-    expect([GO_REVIVE_DX, GO_REVIVE_W, GO_REVIVE_H, GO_REVIVE_DY, GO_REVIVE_TEXT_DY]).toEqual([110, 220, 32, 124, 21]);
-    expect([GO_BTN_W, GO_BTN_H, GO_BTN_GAP, GO_BTN_DY, GO_BTN_TEXT_DY, GO_BTN_PX]).toEqual([118, 44, 8, 170, 28, 15]);
-    expect([GO_RANK_DY, GO_RANK_PX]).toEqual([232, 15]);
-    expect([GO_DOUBLE_DX, GO_DOUBLE_W, GO_DOUBLE_H, GO_DOUBLE_UP, GO_DOUBLE_TEXT_DY, GO_DOUBLE_PX]).toEqual([95, 190, 34, 116, 22, 15]);
+    expect([GO_REVIVE_DX, GO_REVIVE_W, GO_REVIVE_H, GO_REVIVE_DY, GO_REVIVE_TEXT_DY]).toEqual([110, 220, 44, 124, 28]);
+    expect([GO_BTN_W, GO_BTN_H, GO_BTN_GAP, GO_BTN_DY, GO_BTN_TEXT_DY, GO_BTN_PX]).toEqual([168, 44, 12, 180, 28, 15]);
+    expect([GO_RANK_DY, GO_RANK_PX]).toEqual([240, 15]);
+    expect([GO_DOUBLE_DX, GO_DOUBLE_W, GO_DOUBLE_H, GO_DOUBLE_UP, GO_DOUBLE_TEXT_DY, GO_DOUBLE_PX]).toEqual([110, 220, 44, 116, 28, 15]);
     expect([GO_TITLE_PX, GO_TIME_PX, GO_WAVE_PX, GO_ECHO_PX, GO_BEST_PX, GO_REVIVE_PX]).toEqual([26, 16, 16, 16, 16, 15]);
     const web = webDrawGameOver();
     for (const lit of ["h * 0.3", "w / 2 - 120", "240, 48", "w / 2 - 196", "58, 92", "h * 0.3 + 34", "h * 0.3 + 56", "h * 0.3 + 80", "h * 0.3 + 100", "{ x: w / 2 - 110, y: h * 0.3 + 124, w: 220, h: 32 }", "const bw = 118;", "const bh = 44;", "const gap = 8;", "const by = h * 0.3 + 170;", "h * 0.3 + 232", "{ x: w / 2 - 95, y: h - 116, w: 190, h: 34 }", "rb.y + 21", "by + 28", "dbl.y + 22"]) {
@@ -439,16 +440,16 @@ describe("命中判定（对标 Web handleTap 的 gameover 五支与先后）", 
 
   it("区外一律吞掉：横幅 / 立绘 / 五行读数 / 钮缝 / 屏角 / 屏外", () => {
     const outside: Array<[number, number]> = [
-      [280, 298.8], // 标题基线（阵亡）
-      [84, 260], // 立绘左上角
-      [280, 332.8], // 生存行
-      [280, 398.8], // 最佳纪录行
-      [280, 460], // 复活钮与三钮行之间那 14px 缝
-      [280, 520], // 三钮行下方
-      [280, 530.8], // 名次提示那一行
+      [280, 298], // 标题基线（阵亡）
+      [84, 254], // 立绘左上角
+      [280, 332], // 生存行
+      [280, 398], // 最佳纪录行
+      [280, 472], // 复活钮与三钮行之间那 12px 缝
+      [280, 525], // 三钮行下方
+      [280, 538], // 名次提示那一行
       [280, 700], // 屏中大空白
       [280, 879], // 双倍钮上缘外 1px
-      [184, 897], // 双倍钮左缘外 1px
+      [169, 897], // 双倍钮左缘外 1px
       [5, 5], // 左上角
       [W - 1, H_STD - 1], // 右下角
       [W / 2, H_STD + 40], // 屏外
@@ -525,7 +526,7 @@ describe("屏级文案逐字", () => {
     const { L, c } = screen(run(), save({ bestRun: null }));
     expect(c.hasBest).toBe(false);
     expect(c.bestLine).toBe("");
-    expect(L.bestLine.baseY).toBeCloseTo(H_STD * 0.3 + 100, 6);
+    expect(L.bestLine.baseY).toBe(L.anchorY + GO_BEST_DY);
   });
 
   it("名次提示只在 rankImprovedTo 非 null 时有；0 也要出（Web 判的是 != null，不是真值）", () => {
@@ -857,5 +858,101 @@ describe("Web 基准的六条反直觉口径已原样带上", () => {
     expect(startRun.includes("this.pointsEarnedThisRun = 0;")).toBe(true);
     expect(startRun.includes("this.stardustEarnedThisRun = 0;")).toBe(true);
     expect(startRun.includes("this.rankImprovedTo = null;")).toBe(true);
+  });
+});
+/* ==================== 批 7 像素栅格闸:死亡结算屏 ==================== */
+
+describe("死亡屏的像素栅格重排闸(module=2 / pad 16 / 热区 ≥44 / 呼吸缝)", () => {
+  const L996 = gameOverScreenLayout(W, H_STD, FORMS_ON);
+  const L1246 = gameOverScreenLayout(W, H_TALL, FORMS_ON);
+  const evenDownOf = (v: number) => Math.floor(v / 2) * 2;
+  /** 四格形态(本块自带一份,不跨 describe 取几何块里的 FORM_CELLS) */
+  const FORM_QUAD = [
+    { name: "双开", forms: { canRevive: true, canDouble: true } },
+    { name: "复活已尽", forms: { canRevive: false, canDouble: true } },
+    { name: "双倍已领", forms: { canRevive: true, canDouble: false } },
+    { name: "复活已尽 + 双倍已领", forms: { canRevive: false, canDouble: false } },
+  ] as const;
+  /** 锚线族的推导式(屏高先取偶,再对 hh×0.3 取偶) */
+  const anchorOf = (h: number) => evenDownOf(evenDownOf(h) * GO_ANCHOR_RATIO);
+
+  it("页边距与内容宽是具名常量,共享层不再引 theme.ui.pad", () => {
+    expect([cocosGameOverLayout.GO_PAD, cocosGameOverLayout.GO_CONTENT_W]).toEqual([16, 528]);
+    expect(W - cocosGameOverLayout.GO_PAD * 2).toBe(cocosGameOverLayout.GO_CONTENT_W);
+    expect(BAND).toBe(cocosGameOverLayout.GO_CONTENT_W);
+    const src = codeOf(fileSource("../cocos/assets/scripts/game/ui/gameOverLayout.ts"));
+    expect(src.includes("ui.pad")).toBe(false);
+    expect(src.includes('from "./theme"')).toBe(false);
+  });
+
+  it("横幅与复活 / 双倍钮的半宽都由宽度推导;三钮行铺满内容带,行首就是页边距", () => {
+    expect(cocosGameOverLayout.GO_BANNER_DX).toBe(evenDownOf(GO_BANNER_W / 2));
+    expect(cocosGameOverLayout.GO_REVIVE_DX).toBe(evenDownOf(GO_REVIVE_W / 2));
+    expect(cocosGameOverLayout.GO_DOUBLE_DX).toBe(evenDownOf(GO_DOUBLE_W / 2));
+    expect(cocosGameOverLayout.GO_BANNER_DX * 2).toBe(GO_BANNER_W);
+    // 绘制盒就是 art 的精确 2 倍(banner_large_red art 120×24)
+    expect([GO_BANNER_W / 2, GO_BANNER_H / 2]).toEqual([120, 24]);
+    // 三钮行:bw×3 + gap×2 恒等于内容宽 → bx 落 pad、右缘落 544,半宽不会再推出奇数
+    expect(GO_BTN_W * 3 + GO_BTN_GAP * 2).toBe(cocosGameOverLayout.GO_CONTENT_W);
+    expect((GO_BTN_W * 3 + GO_BTN_GAP * 2) % 4).toBe(0);
+    expect(gameOverRowX(W)).toBe(cocosGameOverLayout.GO_PAD);
+    expect(L996.btnRowW).toBe(528);
+  });
+
+  it("坐标与尺寸全落 2px 栅格:两档屏高 + 两档奇数屏高 × 四形态逐位为偶", () => {
+    const odd: string[] = [];
+    for (const h of [H_STD, H_TALL, 997, 1245]) {
+      for (const cell of FORM_QUAD) {
+        const L = gameOverScreenLayout(W, h, cell.forms);
+        const rects = [L.panel, L.banner, L.pose, L.reviveBtn, L.restartBtn, L.prestigeBtn, L.menuBtn, L.doubleBtn];
+        for (const r of rects) for (const v of [r.x, r.y, r.w, r.h]) if (v % 2 !== 0) odd.push(h + "/" + cell.name + "/rect " + v);
+        const texts = [L.title, L.timeLine, L.waveLine, L.echoLine, L.bestLine, L.reviveText, L.restartText, L.prestigeText, L.menuText, L.rankLine, L.doubleText];
+        for (const t of texts) if (t.x % 2 !== 0 || t.baseY % 2 !== 0) odd.push(h + "/" + cell.name + "/text " + t.x + "," + t.baseY);
+        if (L.anchorY % 2 !== 0) odd.push(h + "/anchor " + L.anchorY);
+      }
+    }
+    expect(odd).toEqual([]);
+  });
+
+  it("五枚热区都在 44 下限之上,且恒落在屏底板内", () => {
+    for (const rect of [L996.reviveBtn, L996.restartBtn, L996.prestigeBtn, L996.menuBtn, L996.doubleBtn]) {
+      expect(rect.w >= 44 && rect.h >= 44, JSON.stringify(rect)).toBe(true);
+    }
+    expect(L996.panel).toEqual({ x: 16, y: 16, w: 528, h: 964 });
+    expect(L1246.panel).toEqual({ x: 16, y: 16, w: 528, h: 1214 });
+    expect(L996.panelKey).toBe(cocosGameOverLayout.GO_PANEL_KEY);
+    expect(L996.panelKey).toBe("panel_dark_corners");
+    for (const L of [L996, L1246]) {
+      for (const rect of [L.banner, L.pose, L.reviveBtn, L.restartBtn, L.prestigeBtn, L.menuBtn, L.doubleBtn]) {
+        expect(rect.x).toBeGreaterThanOrEqual(L.panel.x);
+        expect(rect.x + rect.w).toBeLessThanOrEqual(L.panel.x + L.panel.w);
+        expect(rect.y).toBeGreaterThanOrEqual(L.panel.y);
+        expect(bottom(rect)).toBeLessThanOrEqual(bottom(L.panel));
+      }
+    }
+  });
+
+  it("留白只落在呼吸缝:缝长随屏高走,其余偏移恒为常量", () => {
+    expect(L996.seamAboveButtons).toBe(L996.doubleBtn.y - (L996.restartBtn.y + GO_BTN_H));
+    expect(L996.seamAboveButtons).toBe(358);
+    expect(L1246.seamAboveButtons).toBe(534);
+    expect(L1246.seamAboveButtons - L996.seamAboveButtons).toBe(H_TALL - H_STD - (anchorOf(H_TALL) - anchorOf(H_STD)));
+    expect(L996.doubleBottomGap).toBe(L1246.doubleBottomGap);
+    expect(L996.restartBtn.y - bottom(L996.reviveBtn)).toBe(12);
+    expect(L1246.restartBtn.y - bottom(L1246.reviveBtn)).toBe(12);
+    // 屏高再涨也只加缝:钮高与行距这一族全都有上限,一律不跟着长
+    const L1500 = gameOverScreenLayout(W, 1500, FORMS_ON);
+    expect(L1500.doubleBtn.h).toBe(L996.doubleBtn.h);
+    expect(L1500.restartBtn.w).toBe(L996.restartBtn.w);
+    expect(L1500.seamAboveButtons).toBeGreaterThan(L1246.seamAboveButtons);
+  });
+
+  it("压带标题描边闸:视图必须走共享出口、宽度读表、屏底板走 Plate", () => {
+    const view = codeOf(fileSource("../cocos/assets/scripts/gameover/GameOverView.ts"));
+    expect(view.includes("setTextOutline(this.title.lb")).toBe(true);
+    expect(view.includes("bannerTitleOutlineW")).toBe(true);
+    expect(view.includes("outlineWidth =")).toBe(false);
+    expect(view.includes('new Plate("Panel", this.root, frames)')).toBe(true);
+    expect(view.includes("this.panel.show(L.panelKey, L.panel")).toBe(true);
   });
 });

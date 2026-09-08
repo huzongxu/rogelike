@@ -111,8 +111,8 @@ node scripts/pixel-kit.mjs [--config=artwork/pixel-kit.json] [--out=dir] [--cont
 | 12 | season 赛季 | ✅ | ✅ |
 | 13 | leaderboard 排行 | ✅ | ✅ |
 | 14 | energy 体力 | ☐ | ☐ |
-| 15 | victory 通关 | ☐ | ☐ |
-| 16 | gameover 失败 | ☐ | ☐ |
+| 15 | victory 通关 | ✅ | ✅ |
+| 16 | gameover 失败 | ✅ | ✅ |
 | — | confirm 常驻弹层 | ☐ | ☐ |
 
 「重排」列以各屏 `*Layout.ts` 的最后触及提交为准：`gearupLayout` 尚不存在，`passLayout` / `dailyLayout` / `commissionLayout` 自工程目录改名以来未动，故这三屏只到换皮。
@@ -255,3 +255,75 @@ node scripts/pixel-kit.mjs [--config=artwork/pixel-kit.json] [--out=dir] [--cont
 
 四屏各有一条源码闸盯住这件事（`tests/cocos-phase4-<屏>.test.ts` 末节的「压带标题描边闸」）：
 视图必须调 `setTextOutline(this.title.lb…)`、必须读 `bannerTitleOutlineW`、不得自己写 `outlineWidth =`。
+
+## 12. 结算两屏（通关 / 死亡）
+
+两屏的几何在 `game/ui/victoryLayout.ts` 与 `game/ui/gameOverLayout.ts`，绘制在 `victory/VictoryView.ts`
+与 `gameover/GameOverView.ts`，命中读同一份矩形（`hitVictory` / `hitGameOver`）。
+
+### 12.1 键名映射
+
+| 件 | 贴图 key | art / PNG | 绘制盒（逻辑 px） | 通路 |
+| --- | --- | --- | --- | --- |
+| 通关标题横幅 | `banner_large_navy_a` | 120×24 | 240×48（精确 2 倍） | SIMPLE 整幅拉伸，无缺图回退档 |
+| 死亡标题横幅 | `banner_large_red` | 120×24 | 240×48（精确 2 倍） | 同上 |
+| 屏底板（两屏） | `panel_dark_corners` | 128×96 | `[16,16,528,evenDown(h)−16]` | SLICED，边距 32 |
+| 主 CTA（双倍 / 复活） | `btn_primary` | 84×56 | 220×44 | SLICED，边距 20；缺图退 `Plate` 代码底板 |
+| 次级钮（返回 / 重开） | `btn_minor` | 60×40 | 通关 220×44、死亡 168×44 | SLICED，边距 16；缺图同上 |
+| 奖励行前置图标 | `icon_ticket` `icon_echo` `icon_stardust` | 14×14 | 16×16 | SIMPLE，缺图收成零位盒 |
+
+两屏的立绘与星数星形维持旧世代档（见 12.4 挂账），不进 NEAREST 表、不做像素化。
+
+### 12.2 栅格口径
+
+- **页边距 16 / 内容宽 528**（`VI_PAD` / `GO_PAD`、`VI_CONTENT_W` / `GO_CONTENT_W`），居中文字限宽
+  就是这个内容宽；`ui.pad`（Web 冻结档 14）在两屏的共享层已不再 import，两条源码闸锁住这件事。
+- **一律偶数**：屏高先 `evenDown`，锚线 `a = evenDown(hh × 0.3)`、屏心 `cx = evenDown(w / 2)`；
+  跟随字宽的前置贴图位（`victoryIconRect` / `victoryBadgeRect`）把量出来的任意实数再 `evenDown` 一次。
+- **半宽由宽度推导**：`VI_BANNER_DX = evenDown(VI_BANNER_W / 2)`，`VI_DOUBLE_DX` / `VI_MENU_DX` /
+  `GO_REVIVE_DX` / `GO_DOUBLE_DX` 同一写法。钮宽 190 → 220、星数行 `22+6` → `24+8`、
+  死亡屏三钮行 `118×3+8×2` → `168×3+12×2 = 528`，都是为了让 `cx − W/2` 与 `total/2` 落在偶数上；
+  三钮行因此正好铺满内容带（左起 16、右缘 544）。
+- **热区 ≥ 44**：双倍钮 34 → 44、复活钮 32 → 44，钮内文字基线统一走 28 档。
+- **屏底板**：`Plate`（兜底 `Graphics` 挂在子节点，避开「每节点只收一个 UIRenderer」）；
+  通关屏的返回钮底边就落在板的下缘 `hh − 16`。
+- **呼吸缝**：两屏各有一条无上限的缝（`seamAboveButtons`），标定档 996 下通关 372、死亡 358；
+  屏高涨到 1246 时分别涨到 548 / 534，涨的正是贴底族与锚线族之差 `Δh − (a₂ − a₁)`。
+  行距、钮高、字号这一族全是常量，不吃富余。
+
+### 12.3 实机取证（`.probe/px/victory-px560.png`、`.probe/px/gameover-px560.png`）
+
+`.probe/p-px-b7-settle.sh`（两档各一套 serve 端口 / 调试端口 / user-data-dir / URL 标记，
+每条 eval 与 shot 自带 `CDP_GOTO` + `CDP_MATCH`）。两屏在正常游玩里都进不去，探针先 `requestEndless()`
+起一局，再用战斗层的 `sim.victory()` / `sim.onDeath()` 弹屏。
+
+| 检查 | 口径 | victory | gameover |
+| --- | --- | --- | --- |
+| 贴图落位 | `EXPECT` 表逐节点比对键与盒 | 8/9 命中（`StardustIcon` 该局 `stardust = 0`，整棵按分支不起） | 6/6 |
+| 节点越界 | 自身盒对照 Canvas 设计盒 | 仅 `Fallback` 子节点计 1 条（`Graphics` 已被 `clear()`，不绘任何像素） | 0 |
+| 偶数对齐 | 贴图盒与热区 x/y/w/h | 违例 0 | 违例 0 |
+| 右缘 / 左缘基准 | 非文字内容件 ≤544、≥16 | 违例 0 | 违例 0 |
+| 热区下限 | 每枚 ≥44 | 2/2（220×44） | 5/5（220×44 与 168×44） |
+| 同节点双 UIRenderer | 贴图已上仍挂 Graphics | 0 | 0 |
+| 目视 | 横幅 / 标题描边 / 屏底板 / 兜底残块 / 像素边缘 / 品红 | 绸带完整未拉满、金标题带深描边清晰、底板四角在位、无蓝块、边缘硬、无品红 | 红绸带在位、标题描边可辨、三钮行对齐 16→544、无蓝块、无品红 |
+
+### 12.4 本屏挂账
+
+1. `icon_star_gold`（2048 源、未像素化）与两枚立绘 `player_pose_1` / `player_pose_4` 仍是旧世代档，
+   与新皮并置时清晰度落差明显；按用户要求人物暂不出图，星形也未进 NEAREST 表。
+2. 死亡屏的「天赋」「菜单」两枚在 Web 那里就没有贴图档（`fillRect` + `strokeRect`），本单维持原样，
+   因此三钮行里出现「贴图钮 + 纯色代码钮」混排；统一成 `btn_minor` 需要一次口径拍板。
+3. 两屏中段是那条无上限呼吸缝，高屏档（1246）空白带更长，读起来偏「上内容 + 底钮」两段。
+4. `Plate` 的 `Fallback` 子节点UITransform 恒为 100×100，探针按节点盒计量会在贴底小钮上记一条越界
+   （绘制内容已 `clear()`，不落像素）。要收的是 `ui/PanelKit.ts` 这一处共享出口，不在本单范围。
+
+### 11.1 描边只在带面偏亮时成立
+
+描边路径的成立条件是「字色 vs 描边」与「描边 vs 带面」**两段都有对比**。带面本身偏暗时，
+`theme.bgDeep` 描边与带面同档，那一段归零，整条路径失效，可读性回落到「字色 vs 带面」的直接对比。
+
+实测：`banner_large_red` 带心只有 `#3a1218`→`#7a1f2a`（暗红两档），红字 `#FF5A5A` 的开描边后
+最差可辨识仅 3.37；对照 `banner_large_navy_a` 带心 `#05070c`→`#c8cdd6`（跨 7 档），金字达 12.10。
+
+所以选档顺序是：**先看带心亮度跨度**——跨度大（≥4 档）才需要描边；带面整体偏暗时应直接选亮字
+（`theme.textPrimary` 或 `HEX.gold`），描边只是补充而非替代。暗字 + 暗带 + 暗描边是三输组合。

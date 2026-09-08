@@ -1,27 +1,40 @@
 /**
  * 通关结算屏的纯几何 —— Web `src/game.ts:drawVictory`(3746-3849) 与 `handleTap` 的 victory
- * 分支(582-596) 的几何部分抽取。
+ * 分支(582-596) 的几何部分抽取，并按 `docs/UI-PIXEL-REFRESH.md` §1/§9 的像素栅格重排。
  *
- * 单一出口：绘制与命中判定共读这一份矩形，宿主视图不产任何几何。口径与 Web 逐项同数：
- *  - **整屏只有一条纵向锚线 `a = h × 0.3`**（与死亡屏同一条），横幅 / 标题 / 关卡行 / 星数行 /
- *    首通行 / 券·回响·星尘三行 / 掉落行 / 名次提示 / 关卡框行十一处都从它加减；另有**两枚贴底钮**
- *    按 `h` 平移：双倍钮顶缘 `h − 116`（底边 `h − 82`）、返回钮顶缘 `h − 62`（底边 `h − 18`）；
- *  - **本屏没有面板**：Web 只画一笔全屏暗底 `rgba(8,10,16,0.86)` 就起内容，既不调 `panelPad`
- *    也不画九宫格，所以这里没有 `panel` / `panelKey` 两项；
- *  - 横幅 `banner_large_navy_a` 与立绘 `player_pose_1` 都是 `assets.draw` 的**整幅拉伸且没有
- *    回退分支**（Web 两处都不接返回值）。**立绘挂在屏心右侧**（`w/2 + 132`），与死亡屏那枚
- *    挂在左侧（`w/2 − 196`）方向相反 —— 本层的 `VI_POSE_DX` 因此是**正值表示右挂**，
- *    盒区间 `[412, 470]` 与横幅 `[160, 400]` 在两档屏高下都不相交；本屏没有半透明贴图件
- *    （Web 这里一次都不动 `globalAlpha`）；
- *  - 星数行是三枚 22×22 的横排，步进 `22 + 6 = 28`、总宽 `stars × 28 − 6`、**整行居中**，
- *    顶缘落在 `a + 58 − 22 + 4`（Web 写的是 `h*0.3 + 58 - size + 4`，那个 `+4` 是 Web 的
- *    裸微调，本层原样保留）；这一族的盒数随 `stars` 变，是**本层唯一一个随内容变的几何**，
- *    所以 `stars` 是布局入参而不是形态位；
- *  - 三行奖励文字各带一枚前置图标（`icon_ticket` / `icon_echo` / `icon_stardust`，14×14），
+ * 单一出口：绘制与命中判定共读这一份矩形，宿主视图不产任何几何。
+ *
+ * **像素栅格档（本屏重排的口径，与 `seasonLayout` 同源）**：
+ *  - 页边距 `VI_PAD = 16`、内容宽 `VI_CONTENT_W = 528`、右缘基准 544；Web 的 `ui.pad = 14`
+ *    在本屏不再使用，居中文字限宽就是 `VI_CONTENT_W`；
+ *  - module = 2（1 art px = 2 逻辑 px）：**坐标与尺寸一律偶数**。屏高先 `evenDown`，锚线
+ *    `a = evenDown(hh × 0.3)`，屏心 `cx = evenDown(w / 2)`，于是任何一档屏高都不掉出栅格；
+ *  - 半宽一律**由宽度推导**（`VI_BANNER_DX = evenDown(VI_BANNER_W / 2)`、两枚钮的 `DX = W / 2`），
+ *    不写第二份事实源；钮宽 190 → 220 就是为了让 `cx − DX` 落在偶数上；
+ *  - 热区下限 44：双倍钮 34 → 44、钮内文字基线随之从裸 22 走到与其它钮同档的 28；
+ *  - **本屏有屏底板**：`panel_dark_corners` 九宫格铺 `[16,16,528,hh−16]`（缺图时由 `Plate`
+ *    自己的代码底板兜底，视图不另写形状），返回钮底边就落在这块板的下边 `hh − VI_PAD`；
+ *  - **留白只落在一条呼吸缝**：两枚贴底钮是贴底族（随 `hh` 平移）、十一处文字与贴图是锚线族
+ *    （随 `a` 平移），两族之间那条缝 `seamAboveButtons` 就是唯一的吸余体，它没有硬上限；
+ *    屏内其余偏移全是常量，任何一档屏高都不会把富余挤进行距或钮高。
+ *
+ * 与 Web 同数的部分（几何族结构）：
+ *  - **整屏两条锚线族**：横幅 / 标题 / 关卡行 / 星数行 / 首通行 / 券·回响·星尘三行 / 掉落行 /
+ *    名次提示 / 关卡框行十一处从 `a` 加减；双倍钮顶缘 `hh − 116`、返回钮顶缘 `hh − 60`
+ *    两枚贴底钮从 `hh` 加减，两钮之间 12 的缝就是列间距档；
+ *  - 横幅 `banner_large_navy_a`（art 120×24）绘制盒 **240×48 = 精确 2 倍**，整幅拉伸、
+ *    没有回退分支；立绘 `player_pose_1` 挂在屏心**右**侧（`cx + 132`），与死亡屏那枚
+ *    挂在左侧方向相反 —— 本层的 `VI_POSE_DX` 因此是**正值表示右挂**，盒区间 `[412, 470]`
+ *    与横幅 `[160, 400]` 在两档屏高下都不相交；本屏没有半透明贴图件；
+ *  - 星数行是三枚 24×24 的横排（Web 的 22 + 6 步进在偶数栅格上会把整行推成奇数，这里改成
+ *    24 + 8 → 步进 32，`totalW ∈ {24,56,88}` 的半宽都是偶数），顶缘 `a + 58 − size + 4`
+ *    的公式与 Web 逐字同式（Web 那个 `+4` 是裸微调，原样保留）；这一族的盒数随 `stars` 变，
+ *    是**本层唯一一个随内容变的几何**，所以 `stars` 是布局入参而不是形态位；
+ *  - 三行奖励文字各带一枚前置图标（`icon_ticket` / `icon_echo` / `icon_stardust`，16×16），
  *    图标的横向位置是 **`屏心 − 量字宽/2 − 20`**：Web 用的是 `g.measureText(该行文案).width`。
  *    量字发生在宿主视图（`ui/PanelKit.approxW`，系数走 `viewTable().hud`），本层只给
- *    「行锚点 + 图标边长 + 间距」，由 `victoryIconRect(row, textW)` 折成矩形；
- *  - 关卡框行同理，但 `drawAvatarFrame` 的锚点是**框心**而不是左上角，且边长 22、间距 18，
+ *    「行锚点 + 图标边长 + 间距」，由 `victoryIconRect(row, textW)` 折成矩形，折出来再 `evenDown`；
+ *  - 关卡框行同理，但 `drawAvatarFrame` 的锚点是**框心**而不是左上角，且边长 24、间距 18，
  *    折成矩形走 `victoryBadgeRect(row, textW)`；框心数字的基线是框心 `+4`（Web `y + 4`）。
  *
  * **一处 Web 原样的画布状态泄漏（照抄，不在本层「修好」）**：Web 的 `drawAvatarFrame`
@@ -40,8 +53,8 @@
  *  - Web 的两枚钮都不设 `lineWidth`（取全项目「描边后复位 1」的约定档），返回钮走
  *    `skinButtonBase(..., radius 10)`，双倍钮同一档，故 `VI_BTN_STROKE_W = 1`。
  *
- * 文本带限宽（`maxW`）是 Cocos 侧的口径：Web 的 `fillText` 不限宽。本屏居中文字一律取整屏带宽
- * `w − pad×2`，**包括两枚钮内的文字**（Web 那里「广告 ×2 回响」按 15px 比 190 的钮窄，
+ * 文本带限宽（`maxW`）是 Cocos 侧的口径：Web 的 `fillText` 不限宽。本屏居中文字一律取内容带宽
+ * `VI_CONTENT_W`，**包括两枚钮内的文字**（Web 那里「广告 ×2 回响」按 15px 比 190 的钮窄，
  * 但限宽口径与死亡屏保持同源，避免 `fitOne` 造出 Web 没有的「…」）。
  * 唯一例外是 `frameLineLeaked`：它的起笔在屏心，带宽只能给到 `w − 屏心`。
  *
@@ -55,7 +68,11 @@
  * 本文件只留几何。
  */
 
-import { ui } from "./theme";
+/** 页边距 16 / 内容宽 528：右缘恒落 544（`ui.pad` 是 Web 冻结档 14，本屏不再用） */
+export const VI_PAD = 16;
+export const VI_CONTENT_W = 528;
+/** 取偶下界：像素栅格 module = 2，奇数坐标会让贴图错半格 */
+export const evenDown = (v: number): number => Math.floor(v / 2) * 2;
 
 /** 左上原点设计像素矩形（与 core/DesignMetrics.Rect 同形；共享层不引宿主类型） */
 export interface ViRect {
@@ -98,9 +115,13 @@ export interface VictoryForms {
 
 /** 整屏几何 */
 export interface VictoryLayout extends VictoryForms {
-  /** 全屏唯一的纵向锚线（Web 的 `h * 0.3`，十一处实参都从它加减） */
+  /** 屏底板（像素九宫格 panel_dark_corners 的落位矩形） */
+  panel: ViRect;
+  /** 屏底板贴图键 */
+  panelKey: string;
+  /** 全屏唯一的纵向锚线（`evenDown(hh × 0.3)`，十一处实参都从它加减） */
   anchorY: number;
-  /** 标题横幅盒（`a` 上方 34，240×48；整幅拉伸，没有缺图回退档） */
+  /** 标题横幅盒（`a` 上方 34，240×48 = `banner_large_navy_a` 固有 120×24 的精确 2 倍；整幅拉伸，没有缺图回退档） */
   banner: ViRect;
   /** 通关立绘盒（`a` 上方 44，58×92；挂在屏心**右**侧，本屏没有半透明贴图件） */
   pose: ViRect;
@@ -110,7 +131,7 @@ export interface VictoryLayout extends VictoryForms {
   stageLine: ViTextLine;
   /** 星数行：每枚一格，长度 = `stars`（Web 的 `if (victoryStars > 0)` 那一支） */
   starSlots: ViRect[];
-  /** 星数行的总宽（`stars × step − (step − size)`，Web 写的是 `stars*step - 6`） */
+  /** 星数行的总宽（`stars × step − gap`） */
   starRowW: number;
   /** 星数行步进（`size + gap`） */
   starStep: number;
@@ -129,7 +150,7 @@ export interface VictoryLayout extends VictoryForms {
   dropLine: ViTextLine;
   /** `已超越幻影第 N 名` */
   rankLine: ViTextLine;
-  /** 关卡框行的前置框（框心锚，22 见方，间距 18） */
+  /** 关卡框行的前置框（框心锚，24 见方，间距 18） */
   frameBadge: ViLeadRow;
   /** `解锁关卡框 · 第 N 关` —— 缺图档：#c8b6ff 16px 屏心居中 */
   frameLineFlat: ViTextLine;
@@ -140,22 +161,26 @@ export interface VictoryLayout extends VictoryForms {
   /** 贴底的广告双倍钮（热区恒在，`canDouble` 只改配色与文字） */
   doubleBtn: ViRect;
   doubleText: ViTextLine;
-  /** 贴底的返回菜单钮（本屏唯一的非广告出口） */
+  /** 贴底的返回菜单钮（本屏唯一的非广告出口，底边落 `hh − VI_PAD`） */
   menuBtn: ViRect;
   menuText: ViTextLine;
-  /** 双倍钮底边相对屏底的下沉（Web 的裸 116 顶缘 → 底边 `h − 82`） */
+  /** 双倍钮底边相对屏底的下沉（顶缘 `hh − 116` + 高 44 → 底边 `hh − 72`） */
   doubleBottomGap: number;
-  /** 返回钮底边相对屏底的下沉（Web 的裸 62 顶缘 + 44 高 → 底边 `h − 18`，就是命中区的下界） */
+  /** 返回钮底边相对屏底的下沉（顶缘 `hh − 60` + 高 44 → 底边 `hh − 16` = 屏底板下缘） */
   menuBottomGap: number;
+  /** 两枚贴底钮之间的缝（`menuBtn.y − 双倍钮底缘`，就是列间距档 12） */
+  btnStackGap: number;
+  /** 呼吸缝：末行文字基线（`a + VI_FRAME_DY`）到双倍钮顶缘的留白，**本屏唯一的吸余体，无硬上限** */
+  seamAboveButtons: number;
 }
 
-/* Web drawVictory 的内联几何常量 */
+/* 内联几何常量（一律偶数；偏移列出处见文件头） */
 /** 全屏纵向锚线相对屏高的比例 */
 export const VI_ANCHOR_RATIO = 0.3;
-/** 横幅：半宽 / 宽 / 高 / 相对锚线的上抬 */
-export const VI_BANNER_DX = 120;
+/** 横幅：宽 / 高 / 半宽（**由宽推导**）/ 相对锚线的上抬 */
 export const VI_BANNER_W = 240;
 export const VI_BANNER_H = 48;
+export const VI_BANNER_DX = evenDown(VI_BANNER_W / 2);
 export const VI_BANNER_DY = 34;
 /** 立绘：**正值表示挂在屏心右侧**（Web 的 `w / 2 + 132` 左上角）/ 宽 / 高 / 相对锚线的上抬 */
 export const VI_POSE_DX = 132;
@@ -164,9 +189,10 @@ export const VI_POSE_H = 92;
 export const VI_POSE_DY = 44;
 /** 关卡行相对锚线的基线偏移 */
 export const VI_STAGE_DY = 34;
-/** 星数行：边长 / 间距 / 步进 / 行的基线锚 / 贴图盒顶缘的裸微调 / 最多三枚 */
-export const VI_STAR_SIZE = 22;
-export const VI_STAR_GAP = 6;
+/** 星数行：边长 / 间距 / 步进用的行锚 / 贴图盒顶缘的裸微调 / 最多三枚
+ *  （24 + 8 而非 Web 的 22 + 6：`totalW` 的半宽必须是偶数，否则整行居中会推出奇数 `x`） */
+export const VI_STAR_SIZE = 24;
+export const VI_STAR_GAP = 8;
 export const VI_STAR_DY = 58;
 export const VI_STAR_TOP_NUDGE = 4;
 export const VI_STAR_MAX = 3;
@@ -182,7 +208,7 @@ export const VI_ECHO_DY = 126;
 export const VI_STARDUST_ICON_DY = 136;
 export const VI_STARDUST_DY = 148;
 /** 奖励行前置图标：边长 / 与文字左缘的间距（Web 的 `- 20`） */
-export const VI_LEAD_ICON_SIZE = 14;
+export const VI_LEAD_ICON_SIZE = 16;
 export const VI_LEAD_ICON_GAP = 20;
 /** 掉落行相对锚线的基线偏移 */
 export const VI_DROP_DY = 170;
@@ -191,20 +217,20 @@ export const VI_RANK_DY = 192;
 /** 关卡框行：文字基线偏移 / 框心偏移 / 框边长 / 与文字左缘的间距（Web 的 `- 18`）/ 框心数字下沉 */
 export const VI_FRAME_DY = 210;
 export const VI_FRAME_BADGE_DY = 204;
-export const VI_FRAME_BADGE_SIZE = 22;
+export const VI_FRAME_BADGE_SIZE = 24;
 export const VI_FRAME_BADGE_GAP = 18;
 export const VI_FRAME_BADGE_TEXT_DY = 4;
-/** 双倍钮：半宽 / 宽 / 高 / 顶缘相对屏底的上抬 / 钮内文字相对钮顶的基线 */
-export const VI_DOUBLE_DX = 95;
-export const VI_DOUBLE_W = 190;
-export const VI_DOUBLE_H = 34;
+/** 双倍钮：宽 / 高（= 热区下限 44）/ 半宽（**由宽推导**）/ 顶缘相对屏底的上抬 / 钮内文字相对钮顶的基线 */
+export const VI_DOUBLE_W = 220;
+export const VI_DOUBLE_H = 44;
+export const VI_DOUBLE_DX = evenDown(VI_DOUBLE_W / 2);
 export const VI_DOUBLE_UP = 116;
-export const VI_DOUBLE_TEXT_DY = 22;
-/** 返回钮：半宽 / 宽 / 高 / 顶缘相对屏底的上抬 / 钮内文字相对钮顶的基线（Web 写的是裸 `h − 34`） */
-export const VI_MENU_DX = 95;
-export const VI_MENU_W = 190;
+export const VI_DOUBLE_TEXT_DY = 28;
+/** 返回钮：宽 / 高 / 半宽（**由宽推导**）/ 顶缘相对屏底的上抬（底边落 `hh − VI_PAD`）/ 钮内文字基线 */
+export const VI_MENU_W = 220;
 export const VI_MENU_H = 44;
-export const VI_MENU_UP = 62;
+export const VI_MENU_DX = evenDown(VI_MENU_W / 2);
+export const VI_MENU_UP = 60;
 export const VI_MENU_TEXT_DY = 28;
 /** 钮底板描边宽度（Web 本屏一处都不设 lineWidth，取全项目「描边后复位 1」的约定档） */
 export const VI_BTN_STROKE_W = 1;
@@ -222,6 +248,8 @@ export const VI_FRAME_LEAK_PX = 12;
 export const VI_BADGE_PX = 12;
 export const VI_DOUBLE_PX = 15;
 export const VI_MENU_PX = 15;
+/** 屏底板贴图键（与已落地各屏同一张九宫格） */
+export const VI_PANEL_KEY = "panel_dark_corners";
 
 /** 星数行的顶缘（Web 的 `h * 0.3 + 58 - size + 4`，那个 `+4` 是裸微调） */
 export function victoryStarTop(h: number): number {
@@ -231,41 +259,46 @@ export function victoryStarTop(h: number): number {
 /**
  * 星数行矩形表（Web 的 `for (let i = 0; i < victoryStars; i++) draw(w/2 - totalW/2 + i*step, ...)`）。
  * 枚数就是 `stars`，整行居中；`stars <= 0` 时给出空表（Web 那一支整个 `if` 不进）。
+ * 屏心先 `evenDown`，`totalW` 的半宽在 `VI_STAR_SIZE / VI_STAR_GAP` 这一档下恒为偶数，
+ * 所以每一枚的 `x` 都落在 2px 栅格上。
  */
 export function victoryStarSlots(w: number, h: number, stars: number): ViRect[] {
   const n = Math.max(0, Math.floor(stars));
   const step = VI_STAR_SIZE + VI_STAR_GAP;
   const totalW = n * step - VI_STAR_GAP;
-  const top = victoryStarTop(h);
+  const top = evenDown(victoryStarTop(evenDown(h)));
+  const cx = evenDown(w / 2);
   const out: ViRect[] = [];
-  for (let i = 0; i < n; i++) out.push({ x: w / 2 - totalW / 2 + i * step, y: top, w: VI_STAR_SIZE, h: VI_STAR_SIZE });
+  for (let i = 0; i < n; i++) out.push({ x: cx - totalW / 2 + i * step, y: top, w: VI_STAR_SIZE, h: VI_STAR_SIZE });
   return out;
 }
 
-/** 广告双倍钮矩形（Web 的 `{ x: w/2 − 95, y: h − 116, w: 190, h: 34 }`） */
+/** 广告双倍钮矩形（`{ x: evenDown(w/2) − 110, y: evenDown(h) − 116, w: 220, h: 44 }`） */
 export function victoryDoubleBtn(w: number, h: number): ViRect {
-  return { x: w / 2 - VI_DOUBLE_DX, y: h - VI_DOUBLE_UP, w: VI_DOUBLE_W, h: VI_DOUBLE_H };
+  return { x: evenDown(w / 2) - VI_DOUBLE_DX, y: evenDown(h) - VI_DOUBLE_UP, w: VI_DOUBLE_W, h: VI_DOUBLE_H };
 }
 
-/** 返回菜单钮矩形（Web 的 `w/2 − 95, h − 62, 190, 44`；命中区与绘制框逐位同一） */
+/** 返回菜单钮矩形（顶缘 `evenDown(h) − 60`、高 44 → 底边落 `evenDown(h) − 16`；命中区与绘制框逐位同一） */
 export function victoryMenuBtn(w: number, h: number): ViRect {
-  return { x: w / 2 - VI_MENU_DX, y: h - VI_MENU_UP, w: VI_MENU_W, h: VI_MENU_H };
+  return { x: evenDown(w / 2) - VI_MENU_DX, y: evenDown(h) - VI_MENU_UP, w: VI_MENU_W, h: VI_MENU_H };
 }
 
 /**
  * 跟随文字宽度的前置图标（左上角锚）：Web 的
- * `w/2 - g.measureText(tTxt).width/2 - 20`，14×14。`textW` 由视图按**该行文案**量出。
+ * `w/2 - g.measureText(tTxt).width/2 - 20`，16×16。`textW` 由视图按**该行文案**量出，
+ * 量出来的是任意实数，故折出的 `x` 再 `evenDown` 收一次（贴图不能错半格）。
  */
 export function victoryIconRect(row: ViLeadRow, textW: number): ViRect {
-  return { x: row.x - textW / 2 - row.gap, y: row.y, w: row.size, h: row.size };
+  return { x: evenDown(row.x - textW / 2 - row.gap), y: row.y, w: row.size, h: row.size };
 }
 
 /**
  * 跟随文字宽度的关卡框（**框心锚**）：Web 的 `drawAvatarFrame(g, assets, id, w/2 - tw/2 - 18, a + 204, 22)`，
  * 那个函数的 `(x, y)` 是框心、`box` 是边长，所以左上角要再减半个边长。
+ * 框心先 `evenDown`，边长为偶数 → 左上角与框心数字的落位都仍在栅格上。
  */
 export function victoryBadgeRect(row: ViLeadRow, textW: number): ViRect {
-  const cx = row.x - textW / 2 - row.gap;
+  const cx = evenDown(row.x - textW / 2 - row.gap);
   return { x: cx - row.size / 2, y: row.y - row.size / 2, w: row.size, h: row.size };
 }
 
@@ -286,23 +319,30 @@ function line(x: number, baseY: number, maxW: number, px: number, bold: boolean)
 /**
  * 整屏几何。`forms` 是星数与双倍态两个入参（= Web 的 `victoryStars` 与 `!doubleClaimed`），
  * 本层不读存档、不查世界、不查关卡表。
+ *
+ * 纵向全靠三条线：`a = evenDown(hh × 0.3)` 的锚线族、`hh − 116` / `hh − 60` 的贴底族，
+ * 以及屏底板 `[16, hh − 16]`。两族之间那条 `seamAboveButtons` 是唯一的吸余体，
+ * 于是 996 与 1246 两档之间所有矩形尺寸恒定、位置按族平移，不会掉出 2px 栅格。
  */
 export function victoryLayout(w: number, h: number, forms: VictoryForms): VictoryLayout {
-  const pad = ui.pad;
-  const maxW = w - pad * 2;
-  const a = h * VI_ANCHOR_RATIO;
-  const cx = w / 2;
-  const dbl = victoryDoubleBtn(w, h);
-  const mb = victoryMenuBtn(w, h);
+  const hh = evenDown(h);
+  const pad = VI_PAD;
+  const maxW = VI_CONTENT_W;
+  const a = evenDown(hh * VI_ANCHOR_RATIO);
+  const cx = evenDown(w / 2);
+  const dbl = victoryDoubleBtn(w, hh);
+  const mb = victoryMenuBtn(w, hh);
   const stars = Math.max(0, Math.floor(forms.stars));
   const step = VI_STAR_SIZE + VI_STAR_GAP;
   return {
+    panel: { x: pad, y: pad, w: VI_CONTENT_W, h: hh - pad * 2 },
+    panelKey: VI_PANEL_KEY,
     anchorY: a,
     banner: { x: cx - VI_BANNER_DX, y: a - VI_BANNER_DY, w: VI_BANNER_W, h: VI_BANNER_H },
     pose: { x: cx + VI_POSE_DX, y: a - VI_POSE_DY, w: VI_POSE_W, h: VI_POSE_H },
     title: line(cx, a, maxW, VI_TITLE_PX, true),
     stageLine: line(cx, a + VI_STAGE_DY, maxW, VI_STAGE_PX, false),
-    starSlots: victoryStarSlots(w, h, stars),
+    starSlots: victoryStarSlots(w, hh, stars),
     starRowW: stars > 0 ? stars * step - VI_STAR_GAP : 0,
     starStep: step,
     starText: line(cx, a + VI_STAR_DY, maxW, VI_STAR_TEXT_PX, true),
@@ -324,8 +364,10 @@ export function victoryLayout(w: number, h: number, forms: VictoryForms): Victor
     doubleText: line(cx, dbl.y + VI_DOUBLE_TEXT_DY, maxW, VI_DOUBLE_PX, true),
     menuBtn: mb,
     menuText: line(cx, mb.y + VI_MENU_TEXT_DY, maxW, VI_MENU_PX, true),
-    doubleBottomGap: h - (dbl.y + dbl.h),
-    menuBottomGap: h - (mb.y + mb.h),
+    doubleBottomGap: hh - (dbl.y + dbl.h),
+    menuBottomGap: hh - (mb.y + mb.h),
+    btnStackGap: mb.y - (dbl.y + dbl.h),
+    seamAboveButtons: dbl.y - (a + VI_FRAME_DY),
     stars,
     canDouble: forms.canDouble,
   };

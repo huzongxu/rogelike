@@ -19,7 +19,10 @@
  * 所以这里给它挂一枚 `UIOpacity`（整屏唯一的半透明贴图件）。三枚钮档按 Web 的贴图/代码分派：
  * 复活与双倍走 `btn_primary` 九宫格优先 + 缺图退代码形状，重开走 `btn_minor` 九宫格优先，
  * 而**天赋与菜单两枚在 Web 那里根本没有贴图**（就是 `fillRect` + `strokeRect`），故走 `flatBox`。
- * **本屏没有面板底** —— Web 只画一笔全屏暗底就起内容。
+ * **屏底板**是 `panel_dark_corners` 九宫格铺满 `[16,16,528,evenDown(h)−16]`，压在暗底之上、
+ * 所有内容之下；缺图那一档由 `Plate` 自己的子节点兜底（Cocos 每节点只收一个 UIRenderer）。
+ * 标题「阵亡」压在红绸带带心上，开 `setTextOutline`（宽度读 `viewTable.phase4.bannerTitleOutlineW`、
+ * 色 `HEX.bgDeep`、缺图那一档传 0 关掉）。
  *
  * 文字落位只有 `ui/PanelKit.placeLine` 一个入口（R5 纪律）：文本节点一律挂在铺满原点的屏根
  * 或各分支容器上，以整屏为 box。
@@ -28,7 +31,7 @@
 import { Graphics, Label, Node, SpriteFrame, UIOpacity, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
-import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
+import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
 import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
 import { GO_BTN_STROKE_W, GO_POSE_ALPHA, type GoRect, type GameOverLayout, type GoTextLine } from "../game/ui/gameOverLayout";
 import { hitGameOver, type GameOverAction, type GameOverContent } from "./GameOverModel";
@@ -100,6 +103,8 @@ export class GameOverView {
   private frames: Map<string, SpriteFrame>;
 
   private dim: Node;
+  /** 屏底板：`panel_dark_corners` 九宫格，缺图退代码底板（`ui/PanelKit.Plate` 自带兜底子节点） */
+  private panel: Plate;
   private pose: ReturnType<typeof iconNode>;
   private poseOpacity: UIOpacity;
   private banner: ReturnType<typeof iconNode>;
@@ -127,6 +132,8 @@ export class GameOverView {
 
     this.dim = makeNode("Dim", this.root);
     this.dim.addComponent(Graphics);
+    // 屏底板压在暗底之上、一切内容之下（节点创建顺序就是 z 序）
+    this.panel = new Plate("Panel", this.root, frames);
     // 节点创建顺序 = Web drawGameOver 的绘制顺序（立绘在横幅之前：Web 先画 banner 再画 pose，
     // 但 pose 的横向锚点在屏心左 196、与 banner 的 x 区间 [160,400] 在 996 档重叠 0px，
     // 两档互不遮挡，故这里保持 Web 的笔序：banner → pose）
@@ -188,6 +195,7 @@ export class GameOverView {
     const c = this.hooks.content(L);
 
     this.paintDim(p4.goDim);
+    this.panel.show(L.panelKey, L.panel, "slice", HEX.bgPanel, HEX.bgPanelLight);
 
     // 横幅与立绘：整幅拉伸、没有缺图回退档（缺图收成零位盒，文字照落位）
     const banner = this.banner.show(KEY_BANNER);
@@ -195,7 +203,9 @@ export class GameOverView {
     const pose = this.pose.show(KEY_POSE);
     placeRect(this.pose.node, pose ? L.pose : ZERO);
 
+    // 标题压在绸带带心：带心亮度跨 5~6 档，单色字到不了对比 → 走共享描边出口，缺图那一档关掉
     this.title.set(L.title, c.title, p4.goTitle);
+    setTextOutline(this.title.lb, banner ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
     this.time.set(L.timeLine, c.timeLine, p4.goStat);
     this.wave.set(L.waveLine, c.waveLine, p4.goStat);
     // 回响与星尘两档在 Web 共用同一笔 fillStyle（金），只差文案

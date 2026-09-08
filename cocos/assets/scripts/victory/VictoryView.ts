@@ -4,8 +4,9 @@
  * 分工与前十屏同构：几何全部来自共享层 `game/ui/victoryLayout.ts`（单一出口，横幅盒 / 立绘盒 /
  * 标题与九行文字与星数行的基线与限宽 / 三枚跟随字宽的前置贴图位 / 双倍钮与返回钮及其文字位，
  * 与 Web 逐项同数），内容与命中来自 `victory/VictoryModel.ts`，本文件只把矩形落到节点上：
- * 全屏暗底 + 立绘 + 横幅 + 标题 + 关卡行 + 星数行（三枚 22 见方 + 缺图替代字形） + 首通行 +
- * 奖励三行（各带一枚 14 见方前置图标） + 掉落行 + 名次提示 + 关卡框行（前置框 + 框心数字） +
+ * 全屏暗底 + 屏底板（`panel_dark_corners` 九宫格，缺图退 `Plate` 自己的代码底板）+ 立绘 + 横幅 +
+ * 标题（压在绸带带心上 → 走 `setTextOutline` 共享出口）+ 关卡行 + 星数行（三枚 24 见方 + 缺图替代字形） + 首通行 +
+ * 奖励三行（各带一枚 16 见方前置图标） + 掉落行 + 名次提示 + 关卡框行（前置框 + 框心数字） +
  * 贴底双倍钮 + 贴底返回钮 + 整屏 Capture。
  *
  * **六处条件分支都走容器 `active` 整棵起落**（不用透明度也不用位移藏），于是
@@ -37,7 +38,7 @@
 import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
-import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
+import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
 import { Plate, approxW, fitOne, iconNode, placeLine } from "../ui/PanelKit";
 import {
   VI_BADGE_PX,
@@ -129,6 +130,8 @@ export class VictoryView {
   private frames: Map<string, SpriteFrame>;
 
   private dim: Node;
+  /** 屏底板：`panel_dark_corners` 九宫格，缺图退代码底板（`ui/PanelKit.Plate` 自带兜底子节点） */
+  private panel: Plate;
   private pose: ReturnType<typeof iconNode>;
   private banner: ReturnType<typeof iconNode>;
   private title: Txt;
@@ -167,6 +170,8 @@ export class VictoryView {
 
     this.dim = makeNode("Dim", this.root);
     this.dim.addComponent(Graphics);
+    // 屏底板压在暗底之上、一切内容之下（节点创建顺序就是 z 序）
+    this.panel = new Plate("Panel", this.root, frames);
     // 节点创建顺序 = Web drawVictory 的绘制顺序（先 banner 再 pose，与死亡屏同笔序；
     // 本屏立绘挂在屏心右侧 [412,470]，与横幅 [160,400] 两档屏高下都不相交）
     this.banner = iconNode("HeaderBanner", this.root, frames, ZERO);
@@ -260,6 +265,7 @@ export class VictoryView {
     const c = this.hooks.content(L);
 
     this.paintDim(p4.viDim);
+    this.panel.show(L.panelKey, L.panel, "slice", HEX.bgPanel, HEX.bgPanelLight);
 
     // 横幅与立绘：整幅拉伸、没有缺图回退档（缺图收成零位盒，文字照落位）
     const banner = this.banner.show(KEY_BANNER);
@@ -267,11 +273,13 @@ export class VictoryView {
     const pose = this.pose.show(KEY_POSE);
     placeRect(this.pose.node, pose ? L.pose : ZERO);
 
+    // 标题压在绸带带心上：带心亮度跨 5~6 档，单色字到不了对比 → 走共享描边出口，缺图那一档关掉
     this.title.set(L.title, c.title, p4.viTitle);
+    setTextOutline(this.title.lb, banner ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
     this.stage.active(c.hasStage);
     if (c.hasStage) this.stage.set(L.stageLine, c.stageLine, p4.viStage);
 
-    // 星数行：三枚 22 见方居中横排；整幅缺图时改落 ★/☆ 文本档（Web 的 drawn === 0 分支）
+    // 星数行：三枚 24 见方居中横排；整幅缺图时改落 ★/☆ 文本档（Web 的 drawn === 0 分支）
     this.starRow.active = c.hasStars;
     let starTextured = false;
     for (let i = 0; i < this.starSlots.length; i++) {
