@@ -166,7 +166,13 @@ function erodeAlpha(im, r, n) {
         if (get(im, x, y)[3] === 0) continue;
         const solid = (dx, dy) => {
           const nx = x + dx, ny = y + dy;
-          if (nx < r.x0 || ny < r.y0 || nx >= r.x1 || ny >= r.y1) return false;
+          /**
+           * 区域外按实心处理：r 是内容紧框（手钉 rects 或 alphaBBox 的结果），贴边像素本就是
+           * 有效内容。若把越界判成非实心，腐蚀会无条件吃掉紧框最外一圈，而 resample 用 floor
+           * 采样、取样点整体偏左上，于是只有输出的首行/首列落进那圈透明里 —— 表现为贴图
+           * 恒定缺上边与左边。腐蚀的用途只是吃抗锯齿软边，只该在贴着真透明处生效。
+           */
+          if (nx < r.x0 || ny < r.y0 || nx >= r.x1 || ny >= r.y1) return true;
           return get(im, nx, ny)[3] > 0;
         };
         if (!(solid(1, 0) && solid(-1, 0) && solid(0, 1) && solid(0, -1))) kill.push([x, y]);
@@ -463,7 +469,13 @@ for (const sheet of cfg.sheets || []) {
     const inherit = {};
     for (const k of ["keyGlobal", "tolerance", "wm"]) if (sheet[k] !== undefined) inherit[k] = sheet[k];
     const spec = { ...inherit, ...cell };
-    jobs.push({ key: cell.key, src, spec, rect });
+    /**
+     * `insetPx`：手钉 rects 常把生成器的品红抗锯齿晕一并框进来。晕色（如 #5a0647）离约定品红
+     * 太远，洪水抠底抓不到，量化后落成品红族假色贴在贴图边上。四边各内缩 insetPx 源像素把它甩在框外。
+     */
+    const ip = spec.insetPx ?? 0;
+    const rect2 = ip ? { x0: rect.x0 + ip, y0: rect.y0 + ip, x1: rect.x1 - ip, y1: rect.y1 - ip } : rect;
+    jobs.push({ key: cell.key, src, spec, rect: rect2 });
   });
 }
 for (const one of cfg.singles || []) {

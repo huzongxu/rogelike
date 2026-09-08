@@ -80,6 +80,7 @@
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
+     "insetPx": 2,
      "wm": false
     },
     {
@@ -88,6 +89,7 @@
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
+     "insetPx": 2,
      "wm": false
     },
     {
@@ -96,6 +98,7 @@
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
+     "insetPx": 2,
      "wm": false
     }
    ]
@@ -175,6 +178,7 @@
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
+     "insetPx": 2,
      "wm": false
     },
     {

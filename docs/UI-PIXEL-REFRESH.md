@@ -61,17 +61,20 @@
 一张雪碧图对应一批 key，改 `artwork/pixel-kit.json` 即可整批重跑：
 
 ```
-node scripts/pixel-kit.mjs [--out=dir] [--contact] [--only=k1,k2] [--dry]
+node scripts/pixel-kit.mjs [--config=artwork/pixel-kit.json] [--out=dir] [--contact] [--only=k1,k2] [--dry]
 ```
+
+配置只能用 `--config=` 指定（缺省 `artwork/pixel-kit.json`）；位置参数会被忽略，写错会静默按默认配置跑出一批不相干的键。`--out` 缺省直写 `cocos/assets/resources/textures/`，验证阶段请指到暂存目录。
 
 源图要求：
 
-1. 背景一律**平涂 `#FF00FF`**（管线按格边众数色自动抠底，不依赖这个字面值，但平涂底是最稳的）。
-2. 按 `grid.cols × grid.rows` 均分，每格一枚内容；`inset` 是每格向内收缩的比例，用来躲开格线。
+1. 背景一律**平涂 `#FF00FF`**。抠底色恒为这个约定值（`pickKeyColor()` 无条件返回它）：贴边格的格边本身没有品红，按格边取众数色会把整板判成背景吃掉。
+2. 按 `grid.cols × grid.rows` 均分，每格一枚内容；`inset` 是每格向内收缩的比例，用来躲开格线。生成器格距不等宽、相邻格共用外描边时，改用表级 `rects` 逐格钉死坐标框。
 3. 每格内容两种模式之一：**贴边**（面板/底板类，内容铺满整格，靠洪水填充保不住 → 用 `fit: "stretch"` + `slice`）或**留空**（图标/字形类，四周留透明边距，`cropBBox` 会裁到内容包围盒）。
 4. 目标 art 尺寸写在格子的 `art` / `artH` 上；生成图内容长宽比与 art 盒差 >45% 时管线会警告（重采样会失真）。
+5. 手钉 `rects` 的框线压在品红隔条上时，框的最外 1~2 圈会带进**品红抗锯齿晕**（实测如 `#5a0647`、`#9f1387`、`#2b001f`）。这类晕色离约定品红太远，洪水抠底抓不到，量化后落成品红族假色贴在贴图边缘。给该格加 `"insetPx": 2` 把晕甩在框外。
 
-管线步骤（确定性，同配置重跑逐字节一致）：切格 → 洪水填充抠底 → alpha bbox 裁剪 → 最近邻重采样到 art 网格 → 量化到 33 色（Bayer 抖动）→ alpha 硬化 → 九宫格可拉伸带平整 → 导出 PNG。
+管线步骤（确定性，同配置重跑逐字节一致）：切格 → 洪水填充抠底 → alpha 腐蚀 → 最近邻重采样到 art 网格 → 量化到 33 色（Bayer 抖动）→ alpha 硬化 → 九宫格可拉伸带平整 → 导出 PNG。腐蚀只吃**贴着真透明**的抗锯齿软边，区域外一律按实心处理；否则紧框最外一圈会被无条件删掉，叠加 `resample` 的 `Math.floor` 取样偏左上，贴图会恒定缺上边与左边。
 
 源图前缀在 `vibe_images/`，文件名带时间戳后缀；`resolveSrc()` 自动取同前缀最新一张。
 
@@ -90,27 +93,29 @@ node scripts/pixel-kit.mjs [--out=dir] [--contact] [--only=k1,k2] [--dry]
 
 ## 7. 逐屏翻新进度
 
-「换皮」= 新贴图接进现有布局并跑通通路；「重排」= 按 art 网格调整几何（独立单，尚未开工）。
+「换皮」= 本批新贴图已接进该屏并跑通 NEAREST 通路；「重排」= 该屏的 layout 模块已按 art 网格（module=2、pad 16、热区 ≥44、越界 0）重排并重新基线几何测试。两列各自独立，换皮未必重排。
 
 | # | 屏 | 换皮 | 重排 |
 | --- | --- | --- | --- |
-| 1 | menu 主菜单 | ✅ | ☐ |
-| 2 | battle 战斗 | ✅ | ☐ |
-| 3 | shop 商店 | ✅ | ☐ |
-| 4 | heroes 英雄 | ☐ | ☐ |
-| 5 | gearup 装备 | ☐ | ☐ |
-| 6 | gacha 扭蛋 | ☐ | ☐ |
-| 7 | pass 通行证 | ☐ | ☐ |
-| 8 | daily 每日 | ☐ | ☐ |
-| 9 | commission 委托 | ☐ | ☐ |
-| 10 | fusion 合成 | ☐ | ☐ |
-| 11 | prestige 轮回 | ☐ | ☐ |
-| 12 | season 赛季 | ☐ | ☐ |
-| 13 | leaderboard 排行 | ☐ | ☐ |
+| 1 | menu 主菜单 | ✅ | ✅ |
+| 2 | battle 战斗 | ✅ | ✅ |
+| 3 | shop 商店 | ✅ | ✅ |
+| 4 | heroes 英雄 | ✅ | ✅ |
+| 5 | gearup 装备 | ✅ | ☐ |
+| 6 | gacha 扭蛋 | ✅ | ✅ |
+| 7 | pass 通行证 | ✅ | ☐ |
+| 8 | daily 每日 | ✅ | ☐ |
+| 9 | commission 委托 | ✅ | ☐ |
+| 10 | fusion 合成 | ✅ | ✅ |
+| 11 | prestige 轮回 | ✅ | ✅ |
+| 12 | season 赛季 | ✅ | ✅ |
+| 13 | leaderboard 排行 | ✅ | ✅ |
 | 14 | energy 体力 | ☐ | ☐ |
 | 15 | victory 通关 | ☐ | ☐ |
 | 16 | gameover 失败 | ☐ | ☐ |
 | — | confirm 常驻弹层 | ☐ | ☐ |
+
+「重排」列以各屏 `*Layout.ts` 的最后触及提交为准：`gearupLayout` 尚不存在，`passLayout` / `dailyLayout` / `commissionLayout` 自工程目录改名以来未动，故这三屏只到换皮。
 
 ## 8. 验收判据
 
