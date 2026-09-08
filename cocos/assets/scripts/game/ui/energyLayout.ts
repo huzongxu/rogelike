@@ -40,7 +40,13 @@
  * 颜色、贴图键这类纯表现项在 `core/ViewTable.ts` 的 `phase4` 段（键前缀 `en`）；本文件只留几何。
  */
 
-import { fs, rowTextY, ui } from "./theme";
+import { evenDown, fs, rowTextY, ui } from "./theme";
+
+/** 页边距 16 / 内容宽 528：右缘恒落 544（`ui.pad` 是 Web 冻结档 14，本屏不再用） */
+export const EN_PAD = 16;
+export const EN_CONTENT_W = 528;
+/** 取偶下界住在共享层 `theme.ts`，这里原样再导出，免得每个屏各写一份 */
+export { evenDown };
 
 /** 左上原点设计像素矩形（与 core/DesignMetrics.Rect 同形；共享层不引宿主类型） */
 export interface EnRect {
@@ -112,20 +118,20 @@ export interface EnergyLayout {
 export const EN_ANCHOR_RATIO = 0.3;
 /** 按钮族纵向锚线相对屏高的比例（就是广告钮顶缘） */
 export const EN_BTN_ANCHOR_RATIO = 0.42;
-/** 横幅：半宽 / 宽 / 高 / 相对文字锚线的上抬 */
-export const EN_BANNER_DX = 110;
+/** 横幅：宽 / 高 / 半宽 / 相对文字锚线的上抬（半宽由宽度推导，不留第二个事实源） */
 export const EN_BANNER_W = 220;
 export const EN_BANNER_H = 40;
+export const EN_BANNER_DX = evenDown(EN_BANNER_W / 2);
 export const EN_BANNER_DY = 30;
 /** 读数行与提示行相对文字锚线的基线偏移 */
 export const EN_STAT_DY = 34;
 export const EN_HINT_DY = 58;
-/** 钮列：半宽 / 宽 / 三枚各自的高 */
-export const EN_BTN_DX = 160;
+/** 钮列：半宽 / 宽 / 三枚各自的高（关闭钮原档 40 低于热区下限，抬到 `ui.touchMin`） */
 export const EN_BTN_W = 320;
+export const EN_BTN_DX = evenDown(EN_BTN_W / 2);
 export const EN_AD_H = 52;
 export const EN_DIA_H = 46;
-export const EN_CLOSE_H = 40;
+export const EN_CLOSE_H = Math.max(ui.touchMin, 40);
 /** 钻石钮与关闭钮顶缘相对广告钮顶缘的下沉（Web 写的是裸 `+ 62` 与 `+ 118`） */
 export const EN_DIA_DY = 62;
 export const EN_CLOSE_DY = 118;
@@ -144,9 +150,9 @@ export const EN_BACK_PX = fs.muted;
 /** 钮底板描边宽度（Web 本屏四处都不设 lineWidth，取全项目「描边后复位 1」的约定档） */
 export const EN_BTN_STROKE_W = 1;
 
-/** 按钮族顶缘（广告钮顶缘 = Web 的 `h * 0.42`） */
+/** 按钮族顶缘（广告钮顶缘 = `evenDown(h × 0.42)`；比例档沿用 Web，取偶是像素栅格要求） */
 export function energyBtnTop(h: number): number {
-  return h * EN_BTN_ANCHOR_RATIO;
+  return evenDown(h * EN_BTN_ANCHOR_RATIO);
 }
 
 /** 广告钮矩形（Web 的 `{ x: cx − 160, y: h * 0.42, w: 320, h: 52 }`） */
@@ -164,9 +170,9 @@ export function energyCloseBtn(w: number, h: number): EnRect {
   return { x: w / 2 - EN_BTN_DX, y: energyBtnTop(h) + EN_CLOSE_DY, w: EN_BTN_W, h: EN_CLOSE_H };
 }
 
-/** 返回钮矩形（Web 的 `{ x: w − pad − backW, y: 22, w: backW, h: backH }`，命中区与绘制框逐位同一） */
+/** 返回钮矩形（页边距走本屏 `EN_PAD`，热区抬到 `ui.touchMin`；命中区与绘制框逐位同一） */
 export function energyBackBtn(w: number): EnRect {
-  return { x: w - ui.pad - ui.backW, y: EN_BACK_Y, w: ui.backW, h: ui.backH };
+  return { x: w - EN_PAD - ui.backW, y: EN_BACK_Y, w: ui.backW, h: Math.max(ui.touchMin, ui.backH) };
 }
 
 function line(x: number, baseY: number, maxW: number, px: number, bold: boolean): EnTextLine {
@@ -178,9 +184,9 @@ function line(x: number, baseY: number, maxW: number, px: number, bold: boolean)
  * 只改配色与文案，由 `energy/EnergyModel.ts` 按同一份存档算，不改这里任何一枚矩形。
  */
 export function energyLayout(w: number, h: number): EnergyLayout {
-  const pad = ui.pad;
+  const pad = EN_PAD;
   const maxW = w - pad * 2;
-  const a = h * EN_ANCHOR_RATIO;
+  const a = evenDown(h * EN_ANCHOR_RATIO);
   const cx = w / 2;
   const ad = energyAdBtn(w, h);
   const dia = energyDiamondBtn(w, h);

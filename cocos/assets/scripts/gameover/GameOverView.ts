@@ -118,8 +118,8 @@ export class GameOverView {
   private reviveNode: Node;
   private revive: { plate: Plate; text: Txt };
   private restart: { plate: Plate; text: Txt };
-  private prestige: { base: ReturnType<typeof flatBox>; text: Txt };
-  private menu: { base: ReturnType<typeof flatBox>; text: Txt };
+  private prestige: { plate: Plate; text: Txt };
+  private menu: { plate: Plate; text: Txt };
   /** 名次提示（Web 的 `if (this.rankImprovedTo != null)`） */
   private rank: Txt;
   private double: { plate: Plate; text: Txt };
@@ -151,8 +151,8 @@ export class GameOverView {
     this.revive = { plate: new Plate("ReviveBtn", this.reviveNode, frames), text: new Txt("ReviveText", this.reviveNode) };
 
     this.restart = { plate: new Plate("RestartBtn", this.root, frames), text: new Txt("RestartText", this.root) };
-    this.prestige = { base: flatBox("PrestigeBtn", this.root), text: new Txt("PrestigeText", this.root) };
-    this.menu = { base: flatBox("MenuBtn", this.root), text: new Txt("MenuText", this.root) };
+    this.prestige = { plate: new Plate("PrestigeBtn", this.root, frames), text: new Txt("PrestigeText", this.root) };
+    this.menu = { plate: new Plate("MenuBtn", this.root, frames), text: new Txt("MenuText", this.root) };
 
     this.rank = new Txt("RankLine", this.root);
     this.double = { plate: new Plate("DoubleBtn", this.root, frames), text: new Txt("DoubleText", this.root) };
@@ -220,12 +220,13 @@ export class GameOverView {
       this.revive.text.set(L.reviveText, c.reviveText, p4.goReviveText);
     }
 
-    // 三钮行：重开有贴图档（btn_minor），天赋与菜单两枚 Web 那里就是纯代码矩形
+    // 三钮行：三枚同族，都是 btn_minor 九宫格优先 + 缺图退各自的代码底
+    // （Web 那里只有重开有贴图档，天赋与菜单是纯代码矩形；这里为「同一行视觉同族」有意分档）
     this.restart.plate.show(KEY_MINOR, L.restartBtn, "slice", p4.goRestartFallbackBg, p4.goRestartFallbackStroke);
     this.restart.text.set(L.restartText, c.restartText, p4.goBtnText);
-    this.prestige.base.draw(L.prestigeBtn, p4.goPrestigeBg, p4.goPrestigeStroke, GO_BTN_STROKE_W);
+    this.prestige.plate.show(KEY_MINOR, L.prestigeBtn, "slice", p4.goPrestigeBg, p4.goPrestigeStroke);
     this.prestige.text.set(L.prestigeText, c.prestigeText, p4.goBtnText);
-    this.menu.base.draw(L.menuBtn, p4.goMenuBg, p4.goMenuStroke, GO_BTN_STROKE_W);
+    this.menu.plate.show(KEY_MINOR, L.menuBtn, "slice", p4.goMenuBg, p4.goMenuStroke);
     this.menu.text.set(L.menuText, c.menuText, p4.goBtnText);
 
     this.rank.active(c.hasRank);

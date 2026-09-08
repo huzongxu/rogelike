@@ -63,6 +63,7 @@ import {
   CF_CANCEL_PX,
   CF_CANCEL_TEXT_DY,
   CF_BTN_GAP,
+  CF_BTN_BOTTOM_INSET,
   CF_BTN_H,
   CF_BTN_STROKE_W,
   CF_BTN_W,
@@ -208,29 +209,44 @@ describe("端间共读同一份共享层", () => {
     expect(cocosTheme.fs).toBe(FS);
   });
 
-  it("模型层的五个转出口就是共享层那五枚常量(转手即同一份,不是抄本)", () => {
+  it("模型层的五个转出口：前四枚仍与共享层同值，钮间距已在 Cocos 侧分档", () => {
     expect(CF_BOX_W).toBe(CONFIRM_W);
     expect(CF_BOX_H).toBe(CONFIRM_H);
     expect(CF_BTN_W).toBe(CONFIRM_BTN_W);
     expect(CF_BTN_H).toBe(CONFIRM_BTN_H);
-    expect(CF_BTN_GAP).toBe(CONFIRM_BTN_GAP);
-    expect([CONFIRM_W, CONFIRM_H, CONFIRM_BTN_W, CONFIRM_BTN_H, CONFIRM_BTN_GAP]).toEqual([360, 170, 150, 44, 14]);
+    expect([CONFIRM_W, CONFIRM_H, CONFIRM_BTN_W, CONFIRM_BTN_H]).toEqual([360, 170, 150, 44]);
+    // 端间分档：共享层（Web 共读）仍是 14，Cocos 侧改 16 让双钮列的居中半余量落偶数
+    expect(CONFIRM_BTN_GAP).toBe(14);
+    expect(CF_BTN_GAP).toBe(16);
+    expect(CF_BTN_GAP).not.toBe(CONFIRM_BTN_GAP);
   });
 
-  it("盒与两枚钮的矩形整体来自 confirmRects:模型层不重算其中任何一个数", () => {
+  it("盒的水平居中与宽高整体取自 confirmRects；模型层只多做「取偶 + 按本层间距重排钮列」这一步", () => {
     for (const h of [H_STD, H_TALL]) {
       const L = laid(h);
       const R = confirmRects(W, h);
-      expect(L.box).toEqual(R.box);
-      expect(L.ok).toEqual(R.ok);
-      expect(L.cancel).toEqual(R.cancel);
+      // 盒：水平居中、宽、高三项原样照搬；纵坐标是唯一的例外（共享层给的是奇数档）
+      expect([L.box.x, L.box.w, L.box.h]).toEqual([R.box.x, R.box.w, R.box.h]);
+      expect(L.box.y).toBe(Math.floor(R.box.y / 2) * 2);
+      expect(L.box.y % 2).toBe(0);
+      // 钮行：底边留具名下抬、关于盒中轴对称、四值全偶
+      for (const r of [L.ok, L.cancel]) {
+        expect(r.y).toBe(L.box.y + CONFIRM_H - CF_BTN_BOTTOM_INSET - CONFIRM_BTN_H);
+        for (const v of [r.x, r.y, r.w, r.h]) expect(v % 2).toBe(0);
+      }
+      expect(L.ok.x - L.box.x).toBe(L.box.x + L.box.w - right(L.cancel));
+      expect(right(L.ok) + CF_BTN_GAP).toBe(L.cancel.x);
     }
     const model = codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmModel.ts"));
     expect(model.includes("confirmRects(w, h)")).toBe(true);
-    // 共享层的五个数在模型层只以「转出口」形式出现一次,不参与任何算式
+    // 盒的水平居中算式仍只住在共享层，模型层不许重算
     expect(model.includes("(w - CONFIRM_W) / 2")).toBe(false);
+    // 下抬走具名常量，不许退回内联 16
     expect(model.includes("CONFIRM_H - 16")).toBe(false);
-    expect(model.includes("CONFIRM_BTN_W * 2")).toBe(false);
+    expect(model.includes("CF_BTN_BOTTOM_INSET")).toBe(true);
+    // 钮列算式只允许用 Cocos 档间距，不许把共享层的 14 拖回来
+    expect(model.includes("CONFIRM_BTN_W * 2 + CF_BTN_GAP")).toBe(true);
+    expect(model.includes("CONFIRM_BTN_W * 2 + CONFIRM_BTN_GAP")).toBe(false);
   });
 
   it("模型层不碰存档、不碰节点、不看时间与随机源", () => {
@@ -257,23 +273,23 @@ describe("端间共读同一份共享层", () => {
 describe("996 档几何(逐项对标 Web drawConfirm 的内联数)", () => {
   const L = laid(H_STD);
 
-  it("盒 360×170 屏幕居中 {100,413},两枚钮 150×44 在 {123,523} 与 {287,523}", () => {
-    expect(L.box).toEqual({ x: 100, y: 413, w: 360, h: 170 });
-    expect(L.ok).toEqual({ x: 123, y: 523, w: 150, h: 44 });
-    expect(L.cancel).toEqual({ x: 287, y: 523, w: 150, h: 44 });
-    // 钮行底边距盒底 16、钮行关于盒中轴对称(左右留白各 23)
-    expect(bottom(L.ok)).toBe(bottom(L.box) - 16);
-    expect(L.ok.x - L.box.x).toBe(23);
-    expect(L.box.x + L.box.w - right(L.cancel)).toBe(23);
-    expect(right(L.ok) + CONFIRM_BTN_GAP).toBe(L.cancel.x);
+  it("盒 360×170 屏幕居中 {100,412},两枚钮 150×44 在 {122,522} 与 {288,522}", () => {
+    expect(L.box).toEqual({ x: 100, y: 412, w: 360, h: 170 });
+    expect(L.ok).toEqual({ x: 122, y: 522, w: 150, h: 44 });
+    expect(L.cancel).toEqual({ x: 288, y: 522, w: 150, h: 44 });
+    // 钮行底边距盒底 16、钮行关于盒中轴对称(左右留白各 22，取 16 间距才落得下偶数)
+    expect(bottom(L.ok)).toBe(bottom(L.box) - CF_BTN_BOTTOM_INSET);
+    expect(L.ok.x - L.box.x).toBe(22);
+    expect(L.box.x + L.box.w - right(L.cancel)).toBe(22);
+    expect(right(L.ok) + CF_BTN_GAP).toBe(L.cancel.x);
   });
 
-  it("标题横幅盒 {114,423,332,30}(b.x+14, b.y+10, b.w−28, 30),九宫切深 13", () => {
+  it("标题横幅盒 {114,422,332,30}(b.x+14, b.y+10, b.w−28, 30),九宫切深 13", () => {
     expect(CF_BANNER_INSET).toBe(14);
     expect(CF_BANNER_TOP).toBe(10);
     expect(CF_BANNER_H).toBe(30);
     expect(CF_BANNER_NINE).toBe(13);
-    expect(L.banner).toEqual({ x: 114, y: 423, w: 332, h: 30 });
+    expect(L.banner).toEqual({ x: 114, y: 422, w: 332, h: 30 });
     // 横幅在盒内、左右各留 14
     expect(L.banner.x - L.box.x).toBe(CF_BANNER_INSET);
     expect(L.box.x + L.box.w - right(L.banner)).toBe(CF_BANNER_INSET);
@@ -289,45 +305,45 @@ describe("996 档几何(逐项对标 Web drawConfirm 的内联数)", () => {
     expect(L.cancelKey).toBe("btn_minor");
   });
 
-  it("标题「确认操作」基线 b.y+30 = 443,粗体 fs.body,限宽收到横幅宽 332", () => {
+  it("标题「确认操作」基线 b.y+30 = 442,粗体 fs.body,限宽收到横幅宽 332", () => {
     expect(CF_TITLE_DY).toBe(30);
-    expect(L.title).toEqual({ x: 280, baseY: 443, maxW: 332, px: FS.body, align: "center", bold: true });
+    expect(L.title).toEqual({ x: 280, baseY: 442, maxW: 332, px: FS.body, align: "center", bold: true });
     expect(L.title.maxW).toBe(L.banner.w);
     expect(CF_TITLE_PX).toBe(FS.body);
   });
 
-  it("正文一行档基线 b.y+80 = 493,限宽 b.w−40 = 320,不粗", () => {
+  it("正文一行档基线 b.y+80 = 492,限宽 b.w−40 = 320,不粗", () => {
     expect(CF_BODY_DY_ONE).toBe(80);
     expect(CF_BODY_INSET).toBe(20);
     expect(L.body.length).toBe(1);
-    expect(L.body[0]).toEqual({ x: 280, baseY: 493, maxW: 320, px: FS.body, align: "center", bold: false });
+    expect(L.body[0]).toEqual({ x: 280, baseY: 492, maxW: 320, px: FS.body, align: "center", bold: false });
     expect(L.bodyMaxW).toBe(320);
     expect(confirmBodyMaxW(L.box.w)).toBe(320);
     expect(CF_BODY_PX).toBe(FS.body);
   });
 
-  it("正文两行档基线 b.y+67 = 480 与 b.y+89 = 502(行距 22,不是「首行 + 行距」那一套)", () => {
+  it("正文两行档基线 b.y+67 = 479 与 b.y+89 = 501(行距 22,不是「首行 + 行距」那一套)", () => {
     const T = laid(H_STD, TWO);
     expect(CF_BODY_DY_L1).toBe(67);
     expect(CF_BODY_DY_L2).toBe(89);
     expect(T.body.length).toBe(2);
-    expect(T.body.map((t) => t.baseY)).toEqual([480, 502]);
+    expect(T.body.map((t) => t.baseY)).toEqual([479, 501]);
     expect(T.body[1].baseY - T.body[0].baseY).toBe(22);
-    // 一行档那一条正好落在两行档的中缝上(493 = (480+502)/2 + 2,Web 就是写了两个分支)
-    expect(L.body[0].baseY).toBe(493);
-    expect((T.body[0].baseY + T.body[1].baseY) / 2).toBe(491);
+    // 一行档那一条正好落在两行档的中缝上(492 = (479+501)/2 + 2,Web 就是写了两个分支)
+    expect(L.body[0].baseY).toBe(492);
+    expect((T.body[0].baseY + T.body[1].baseY) / 2).toBe(490);
     // 两档的限宽与字号逐位相同,只有基线不同
     expect(T.body.map((t) => t.maxW)).toEqual([320, 320]);
     expect(T.body.map((t) => t.px)).toEqual([FS.body, FS.body]);
   });
 
-  it("确认钮文字基线 y+h/2+4 = 549(13px 不粗),取消钮 y+h/2+5 = 550(14px 粗体)", () => {
+  it("确认钮文字基线 y+h/2+4 = 548(13px 不粗),取消钮 y+h/2+5 = 549(14px 粗体)", () => {
     expect(CF_OK_TEXT_DY).toBe(4);
     expect(CF_CANCEL_TEXT_DY).toBe(5);
     expect(CF_OK_PX).toBe(FS.muted);
     expect(CF_CANCEL_PX).toBe(FS.body);
-    expect(L.okText).toEqual({ x: 198, baseY: 549, maxW: 150, px: 13, align: "center", bold: false });
-    expect(L.cancelText).toEqual({ x: 362, baseY: 550, maxW: 150, px: 14, align: "center", bold: true });
+    expect(L.okText).toEqual({ x: 197, baseY: 548, maxW: 150, px: 13, align: "center", bold: false });
+    expect(L.cancelText).toEqual({ x: 363, baseY: 549, maxW: 150, px: 14, align: "center", bold: true });
     // 两枚钮的文字锚点就是各自的钮心
     expect(L.okText.x).toBe(mid(L.ok)[0]);
     expect(L.cancelText.x).toBe(mid(L.cancel)[0]);
@@ -363,8 +379,8 @@ describe("1246 档几何与跨档性质", () => {
   it("1246 档逐项目标值:盒 {100,538}、横幅 {114,548}、两枚钮 y 648、标题基线 568、正文一行档 618", () => {
     expect(B.box).toEqual({ x: 100, y: 538, w: 360, h: 170 });
     expect(B.banner).toEqual({ x: 114, y: 548, w: 332, h: 30 });
-    expect(B.ok).toEqual({ x: 123, y: 648, w: 150, h: 44 });
-    expect(B.cancel).toEqual({ x: 287, y: 648, w: 150, h: 44 });
+    expect(B.ok).toEqual({ x: 122, y: 648, w: 150, h: 44 });
+    expect(B.cancel).toEqual({ x: 288, y: 648, w: 150, h: 44 });
     expect(B.title.baseY).toBe(568);
     expect(B.body[0].baseY).toBe(618);
     expect(B.okText.baseY).toBe(674);
@@ -377,7 +393,7 @@ describe("1246 档几何与跨档性质", () => {
     expect(T.body[1].baseY - T.body[0].baseY).toBe(22);
   });
 
-  it("两档之间每个矩形与每处基线都整体平移 Δh/2 = 125,横向与宽高逐位相同", () => {
+  it("两档之间每个矩形与每处基线都整体平移 126（Δh/2 = 125 再加 996 档取偶下移的 1），横向与宽高逐位相同", () => {
     expect(DY).toBe(125);
     const pairs: Array<[CfRect, CfRect]> = [
       [A.box, B.box],
@@ -385,14 +401,15 @@ describe("1246 档几何与跨档性质", () => {
       [A.ok, B.ok],
       [A.cancel, B.cancel],
     ];
+    // 实测平移比 Δh/2 多 1：996 档盒顶被取偶下移到 412，1246 档本就是偶数不动
     for (const [a, b] of pairs) {
-      expect(b.y - a.y).toBe(DY);
+      expect(b.y - a.y).toBe(DY + 1);
       expect(b.x).toBe(a.x);
       expect(b.w).toBe(a.w);
       expect(b.h).toBe(a.h);
     }
     for (const [a, b] of [[A.title, B.title], [A.body[0], B.body[0]], [A.okText, B.okText], [A.cancelText, B.cancelText]]) {
-      expect(b.baseY - a.baseY).toBe(DY);
+      expect(b.baseY - a.baseY).toBe(DY + 1);
       expect(b.x).toBe(a.x);
       expect(b.maxW).toBe(a.maxW);
       expect(b.px).toBe(a.px);
@@ -405,11 +422,12 @@ describe("1246 档几何与跨档性质", () => {
       [A, confirmRects(W, H_STD)],
       [B, confirmRects(W, H_TALL)],
     ] as Array<[ConfirmLayout, ReturnType<typeof confirmRects>]>) {
-      expect(L.box).toEqual(R.box);
+      expect([L.box.x, L.box.w, L.box.h]).toEqual([R.box.x, R.box.w, R.box.h]);
+      expect(L.box.y).toBe(Math.floor(R.box.y / 2) * 2);
       expect(L.banner.y - L.box.y).toBe(CF_BANNER_TOP);
       expect(L.title.baseY - L.box.y).toBe(CF_TITLE_DY);
       expect(L.body[0].baseY - L.box.y).toBe(CF_BODY_DY_ONE);
-      expect(L.ok.y - L.box.y).toBe(CONFIRM_H - 16 - CONFIRM_BTN_H);
+      expect(L.ok.y - L.box.y).toBe(CONFIRM_H - CF_BTN_BOTTOM_INSET - CONFIRM_BTN_H);
     }
     const layoutSrc = codeOf(fileSource("../cocos/assets/scripts/confirm/ConfirmModel.ts"));
     expect(layoutSrc.includes("spreadRows")).toBe(false);
@@ -502,7 +520,8 @@ describe("confirmScreenLayout:几何与文案一次算完", () => {
 
   it("空串也出一帧完整几何(盒与两枚钮恒在,只是没有正文)", () => {
     const f = confirmScreenLayout(W, H_STD, "", () => 0);
-    expect(f.layout.box).toEqual(confirmRects(W, H_STD).box);
+    expect([f.layout.box.x, f.layout.box.w, f.layout.box.h]).toEqual([confirmRects(W, H_STD).box.x, CONFIRM_W, CONFIRM_H]);
+    expect(f.layout.box.y).toBe(Math.floor(confirmRects(W, H_STD).box.y / 2) * 2);
     expect(f.layout.body).toEqual([]);
     expect(f.content.body).toEqual([]);
     expect(f.content.title).toBe("确认操作");
@@ -567,9 +586,9 @@ describe("两片热区(顺序与 Web handleTap 的确认优先分支逐条对应
 
   it("钮缝、盒内空白、横幅、标题与正文一律 null(= 吞掉,不是「交给下一层」)", () => {
     expect(hitConfirm(L, 280, 545)).toBeNull(); // 两枚钮之间那 14px 缝
-    expect(hitConfirm(L, 280, 443)).toBeNull(); // 标题基线
-    expect(hitConfirm(L, 280, 493)).toBeNull(); // 正文基线
-    expect(hitConfirm(L, 280, 423)).toBeNull(); // 横幅顶缘
+    expect(hitConfirm(L, 280, 442)).toBeNull(); // 标题基线
+    expect(hitConfirm(L, 280, 492)).toBeNull(); // 正文基线
+    expect(hitConfirm(L, 280, 422)).toBeNull(); // 横幅顶缘
     expect(hitConfirm(L, 101, 414)).toBeNull(); // 盒内左上角
     expect(hitConfirm(L, 280, bottom(L.box) - 8)).toBeNull(); // 钮行下方那 16px
     expect(hitConfirm(L, 0, 0)).toBeNull(); // 屏角(暗底之上、盒之外)
@@ -577,18 +596,23 @@ describe("两片热区(顺序与 Web handleTap 的确认优先分支逐条对应
   });
 
   it("盒外一整圈都 null:暗底铺满全屏但不是一片热区", () => {
-    for (const [x, y] of [
-      [99, 545],
-      [461, 545],
-      [280, 412],
-      [280, 584],
-      [122, 522],
-      [438, 568],
-    ]) {
-      expect(hitConfirm(L, x, y)).toBeNull();
-    }
-    expect(L.ok.x - 1).toBe(122);
-    expect(right(L.cancel) + 1).toBe(438);
+    const outside: Array<[number, number]> = [
+      [L.box.x - 1, mid(L.ok)[1]],
+      [right(L.box) + 1, mid(L.ok)[1]],
+      [mid(L.box)[0], L.box.y - 1],
+      [mid(L.box)[0], bottom(L.box) + 1],
+      [L.ok.x - 1, L.ok.y - 1],
+      [right(L.ok) + 1, bottom(L.ok) + 1],
+      [L.cancel.x - 1, L.cancel.y - 1],
+      [right(L.cancel) + 1, bottom(L.cancel) + 1],
+      [0, 0],
+      [0, 995],
+    ];
+    for (const [x, y] of outside) expect(hitConfirm(L, x, y), `缘外 ${x},${y}`).toBeNull();
+    // 钮缝仍在两枚钮之间、不属于任何一枚
+    expect(hitConfirm(L, mid(L.box)[0], mid(L.ok)[1])).toBeNull();
+    expect(L.ok.x - 1).toBe(121);
+    expect(right(L.cancel) + 1).toBe(439);
   });
 
   it("命中顺序与 Web 一致:确认 → 取消(两片互不相交故顺序不产生差别)", () => {
@@ -734,7 +758,9 @@ describe("三层分工的源码纪律", () => {
     expect(model.includes('from "cc"')).toBe(false);
     expect(model.includes("ViewTable")).toBe(false);
     expect(model.includes('from "../game/ui/theme"')).toBe(true);
-    for (const banned of ["(w - CONFIRM_W)", "(h - CONFIRM_H)", "CONFIRM_H - 16", "CONFIRM_BTN_W * 2", "CONFIRM_BTN_W + CONFIRM_BTN_GAP"]) {
+    // 注：模型层现在会自己排布钮列（用 Cocos 档间距 CF_BTN_GAP），因此"不许出现 CONFIRM_BTN_W * 2"
+    // 这条一刀切禁令已撤销，改由上一条用例正向把关：只许用 CF_BTN_GAP、不许把共享层的 14 拖回来。
+    for (const banned of ["(w - CONFIRM_W)", "(h - CONFIRM_H)", "CONFIRM_H - 16", "CONFIRM_BTN_W + CONFIRM_BTN_GAP"]) {
       expect(model.includes(banned), banned).toBe(false);
     }
   });

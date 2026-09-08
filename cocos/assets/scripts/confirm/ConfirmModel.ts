@@ -46,7 +46,7 @@
  * 本文件不复制那份系数、也不另写一套量字。
  */
 
-import { CONFIRM_BTN_GAP, CONFIRM_BTN_H, CONFIRM_BTN_W, CONFIRM_H, CONFIRM_W, confirmRects, fs } from "../game/ui/theme";
+import { CONFIRM_BTN_GAP, CONFIRM_BTN_H, CONFIRM_BTN_W, CONFIRM_H, CONFIRM_W, confirmRects, evenDown, fs } from "../game/ui/theme";
 
 /** 左上原点设计像素矩形（与 core/DesignMetrics.Rect 同形；共享层不引宿主类型） */
 export interface CfRect {
@@ -134,6 +134,8 @@ export type ConfirmMeasure = (text: string, px: number) => number;
 
 /** 盒底垫九宫切深（`src/game.ts:1214` 的实参 32） */
 export const CF_PANEL_NINE = 32;
+/** 钮底缘到盒底缘的下抬（共享层 `confirmRects` 里是同一个 16 的内联实参） */
+export const CF_BTN_BOTTOM_INSET = 16;
 /** 标题横幅：左右内缩 / 顶缘下沉 / 高 / 九宫切深（`src/game.ts:1217` 的 `b.x+14, b.y+10, b.w−28, 30, 13`） */
 export const CF_BANNER_INSET = 14;
 export const CF_BANNER_TOP = 10;
@@ -207,7 +209,12 @@ export function confirmFitLines(text: string, maxW: number, px: number, measure:
  */
 export function buildConfirmLayout(w: number, h: number, lines: string[]): ConfirmLayout {
   const R = confirmRects(w, h);
-  const b = R.box;
+  // 共享层的盒顶是原始居中除法（996 档算出 413 的奇数），九宫格底板会错半格 → Cocos 侧取偶
+  const b = { x: R.box.x, y: evenDown(R.box.y), w: R.box.w, h: R.box.h };
+  const btnY = b.y + CONFIRM_H - CF_BTN_BOTTOM_INSET - CONFIRM_BTN_H;
+  const left = b.x + evenDown((CONFIRM_W - (CONFIRM_BTN_W * 2 + CF_BTN_GAP)) / 2);
+  const ok = { x: left, y: btnY, w: CONFIRM_BTN_W, h: CONFIRM_BTN_H };
+  const cancel = { x: left + CONFIRM_BTN_W + CF_BTN_GAP, y: btnY, w: CONFIRM_BTN_W, h: CONFIRM_BTN_H };
   const cx = b.x + b.w / 2;
   const body = lines.slice(0, CF_BODY_MAX_LINES);
   const two = body.length >= CF_BODY_MAX_LINES;
@@ -215,8 +222,8 @@ export function buildConfirmLayout(w: number, h: number, lines: string[]): Confi
   const btnTextMaxW = CONFIRM_BTN_W;
   return {
     box: b,
-    ok: R.ok,
-    cancel: R.cancel,
+    ok,
+    cancel,
     panelKey: "panel_dark_corners",
     panelNine: CF_PANEL_NINE,
     banner: { x: b.x + CF_BANNER_INSET, y: b.y + CF_BANNER_TOP, w: b.w - CF_BANNER_INSET * 2, h: CF_BANNER_H },
@@ -226,9 +233,9 @@ export function buildConfirmLayout(w: number, h: number, lines: string[]): Confi
     body: body.map((_, i) => center(cx, b.y + (two ? (i === 0 ? CF_BODY_DY_L1 : CF_BODY_DY_L2) : CF_BODY_DY_ONE), bodyMaxW, CF_BODY_PX, false)),
     bodyMaxW,
     okKey: "btn_danger",
-    okText: center(R.ok.x + R.ok.w / 2, R.ok.y + R.ok.h / 2 + CF_OK_TEXT_DY, btnTextMaxW, CF_OK_PX, false),
+    okText: center(ok.x + ok.w / 2, ok.y + ok.h / 2 + CF_OK_TEXT_DY, btnTextMaxW, CF_OK_PX, false),
     cancelKey: "btn_minor",
-    cancelText: center(R.cancel.x + R.cancel.w / 2, R.cancel.y + R.cancel.h / 2 + CF_CANCEL_TEXT_DY, btnTextMaxW, CF_CANCEL_PX, true),
+    cancelText: center(cancel.x + cancel.w / 2, cancel.y + cancel.h / 2 + CF_CANCEL_TEXT_DY, btnTextMaxW, CF_CANCEL_PX, true),
     btnTextMaxW,
     btnStrokeW: CF_BTN_STROKE_W,
   };
@@ -276,4 +283,8 @@ export const CF_BOX_W = CONFIRM_W;
 export const CF_BOX_H = CONFIRM_H;
 export const CF_BTN_W = CONFIRM_BTN_W;
 export const CF_BTN_H = CONFIRM_BTN_H;
-export const CF_BTN_GAP = CONFIRM_BTN_GAP;
+/**
+ * 钮间距：Cocos 侧分档为 16。共享层 `CONFIRM_BTN_GAP` 是 14 且被 Web 共读，不能动；
+ * 而 14 会让「双钮列在盒内居中」的半余量算出奇数 23，整行错半格，故在 Cocos 层另立一档。
+ */
+export const CF_BTN_GAP = 16;

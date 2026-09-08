@@ -80,7 +80,14 @@ export function hexA(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+/* ---------- 像素栅格取偶(module = 2；居中除法与比例锚线都会算出奇数或半格) ---------- */
+
+/** 取偶下界：1 美术 px = 2 逻辑 px，奇数坐标会让贴图错半格 */
+export const evenDown = (v: number): number => Math.floor(v / 2) * 2;
+
 /* ---------- 二次确认弹窗几何(条目 39):框居中,两钮横排居中,绘制与命中共用 ---------- */
+/* 本块与 confirmRects 由 Web 与 Cocos 共读（`src/game.ts:10` 直接 import），属冻结基准：
+   像素栅格的取偶与钮间距调整一律放在 Cocos 独有层 `confirm/ConfirmModel.ts`，不动这里。 */
 
 export const CONFIRM_W = 360;
 export const CONFIRM_H = 170;

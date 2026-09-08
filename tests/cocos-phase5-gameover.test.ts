@@ -964,3 +964,19 @@ describe("死亡屏的像素栅格重排闸(module=2 / pad 16 / 热区 ≥44 / �
     expect(view.includes("this.panel.show(L.panelKey, L.panel")).toBe(true);
   });
 });
+
+/* ==================== 三钮行同族闸 ==================== */
+
+describe("死亡屏三钮行必须同族（都是 btn_minor 九宫格优先 + 缺图退代码底）", () => {
+  const view = codeOf(fileSource("../cocos/assets/scripts/gameover/GameOverView.ts"));
+
+  it("重开 / 天赋 / 菜单三枚都走 plate.show(KEY_MINOR…)，不得退回纯代码矩形", () => {
+    for (const name of ["restart", "prestige", "menu"]) {
+      expect(view.includes(`this.${name}.plate.show(KEY_MINOR, L.${name}Btn`), name).toBe(true);
+      expect(view.includes(`this.${name}.base.draw(`), `${name} 不得退回 base.draw`).toBe(false);
+    }
+    // 复活与双倍仍走 btn_primary（它们是可行动作钮，与三钮行不是一族）
+    expect(view.includes("this.revive.plate.show(KEY_PRIMARY")).toBe(true);
+    expect(view.includes("this.double.plate.show(c.canDouble ? KEY_PRIMARY")).toBe(true);
+  });
+});

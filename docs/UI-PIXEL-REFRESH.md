@@ -110,10 +110,10 @@ node scripts/pixel-kit.mjs [--config=artwork/pixel-kit.json] [--out=dir] [--cont
 | 11 | prestige 轮回 | ✅ | ✅ |
 | 12 | season 赛季 | ✅ | ✅ |
 | 13 | leaderboard 排行 | ✅ | ✅ |
-| 14 | energy 体力 | ☐ | ☐ |
+| 14 | energy 体力 | ✅ | ✅ |
 | 15 | victory 通关 | ✅ | ✅ |
 | 16 | gameover 失败 | ✅ | ✅ |
-| — | confirm 常驻弹层 | ☐ | ☐ |
+| — | confirm 常驻弹层 | ✅ | ✅ |
 
 「重排」列以各屏 `*Layout.ts` 的最后触及提交为准：`gearupLayout` 尚不存在，`passLayout` / `dailyLayout` / `commissionLayout` 自工程目录改名以来未动，故这三屏只到换皮。
 

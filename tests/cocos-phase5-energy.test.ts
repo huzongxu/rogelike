@@ -58,9 +58,11 @@ import {
   EN_BTN_W,
   EN_CLOSE_DY,
   EN_CLOSE_H,
+  EN_CONTENT_W,
   EN_DIA_DY,
   EN_DIA_H,
   EN_HINT_DY,
+  EN_PAD,
   EN_PANEL_NINE,
   EN_STAT_DY,
   energyAdBtn,
@@ -70,6 +72,7 @@ import {
   energyDiamondBtn,
   energyLayout,
   energyScreenLayout,
+  evenDown,
   type EnergyLayout,
   type EnRect,
 } from "@game/ui/energyLayout";
@@ -93,7 +96,7 @@ import * as cocosVictoryModel from "../cocos/assets/scripts/victory/VictoryModel
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
-const PAD = ui.pad;
+const PAD = EN_PAD;
 const BAND = W - PAD * 2;
 
 /** 一份「体力 3 / 今日已看 1 次广告 / 持有 12◆」的存档切片 */
@@ -228,35 +231,41 @@ describe("端间共读同一份共享层", () => {
 describe("996 档几何(逐项对标 Web energyLayout / drawEnergy)", () => {
   const L = laid(H_STD);
 
-  it("两条纵向锚线:a = 298.8 与 bt = 418.32(比例常量就是 Web 的两个 0.3 / 0.42)", () => {
+  it("两条纵向锚线:比例档 298.8 / 418.32 经 evenDown 落偶数 298 / 418", () => {
     expect(EN_ANCHOR_RATIO).toBe(0.3);
     expect(EN_BTN_ANCHOR_RATIO).toBe(0.42);
-    expect(L.anchorY).toBeCloseTo(298.8, 6);
-    expect(L.btnAnchorY).toBeCloseTo(418.32, 6);
-    expect(L.btnAnchorY).toBeCloseTo(energyBtnTop(H_STD), 12);
+    expect(L.anchorY).toBe(298);
+    expect(L.btnAnchorY).toBe(418);
+    expect(L.btnAnchorY).toBe(energyBtnTop(H_STD));
+    // 取偶前的原始档仍是 Web 的两个比例
+    expect(H_STD * EN_ANCHOR_RATIO).toBeCloseTo(298.8, 6);
+    expect(H_STD * EN_BTN_ANCHOR_RATIO).toBeCloseTo(418.32, 6);
+    expect(evenDown(H_STD * EN_ANCHOR_RATIO)).toBe(298);
+    expect(evenDown(H_STD * EN_BTN_ANCHOR_RATIO)).toBe(418);
   });
 
   it("面板盒 = [pad, w−pad] × [pad, h−pad] 且键恒为 panel_dark_corners(Web panelPad 不传专属键)", () => {
-    expect(L.panel).toEqual({ x: 14, y: 14, w: 532, h: 968 });
+    expect(L.panel).toEqual({ x: 16, y: 16, w: 528, h: 964 });
     expect(L.panelKey).toBe("panel_dark_corners");
     expect(L.panelNine).toBe(EN_PANEL_NINE);
     expect(EN_PANEL_NINE).toBe(32);
   });
 
-  it("横幅盒 {170, 268.8, 220, 40}(a 上方 30,整幅拉伸)", () => {
-    expect(L.banner.x).toBeCloseTo(W / 2 - EN_BANNER_DX, 12);
-    expect(EN_BANNER_DX).toBe(110);
+  it("横幅盒 {170, 268, 220, 40}(a 上方 30,整幅拉伸)", () => {
+    expect(L.banner.x).toBe(W / 2 - EN_BANNER_DX);
+    expect(EN_BANNER_DX).toBe(evenDown(EN_BANNER_W / 2));
+    expect(EN_BANNER_DX * 2).toBe(EN_BANNER_W);
     expect(EN_BANNER_W).toBe(220);
     expect(EN_BANNER_H).toBe(40);
     expect(EN_BANNER_DY).toBe(30);
-    expect(L.banner.y).toBeCloseTo(268.8, 6);
+    expect(L.banner.y).toBe(268);
     expect(L.banner.w).toBe(220);
     expect(L.banner.h).toBe(40);
     expect(L.banner.x).toBe(170);
   });
 
   it("三行文字基线 a / a+34 / a+58,字号 22 / 14 / 13,只有标题粗体", () => {
-    expect([L.title.baseY, L.statLine.baseY, L.hint.baseY].map((v) => Math.round(v))).toEqual([299, 333, 357]);
+    expect([L.title.baseY, L.statLine.baseY, L.hint.baseY]).toEqual([298, 332, 356]);
     expect(EN_STAT_DY).toBe(34);
     expect(EN_HINT_DY).toBe(58);
     expect([L.title.px, L.statLine.px, L.hint.px]).toEqual([22, 14, 13]);
@@ -264,17 +273,18 @@ describe("996 档几何(逐项对标 Web energyLayout / drawEnergy)", () => {
     expect([L.title.x, L.statLine.x, L.hint.x]).toEqual([280, 280, 280]);
   });
 
-  it("三枚钮 {120,418.32|480.32|536.32, 320} 高 52/46/40,步进 62 与 56", () => {
-    expect(EN_BTN_DX).toBe(160);
+  it("三枚钮 {120, 418|480|536, 320} 高 52/46/44,步进 62 与 56", () => {
+    expect(EN_BTN_DX).toBe(evenDown(EN_BTN_W / 2));
+    expect(EN_BTN_DX * 2).toBe(EN_BTN_W);
     expect(EN_BTN_W).toBe(320);
     expect(EN_AD_H).toBe(52);
     expect(EN_DIA_H).toBe(46);
-    expect(EN_CLOSE_H).toBe(40);
+    expect(EN_CLOSE_H).toBe(ui.touchMin);
     expect(EN_DIA_DY).toBe(62);
     expect(EN_CLOSE_DY).toBe(118);
     expect([L.adBtn.x, L.diamondBtn.x, L.closeBtn.x]).toEqual([120, 120, 120]);
-    expect([L.adBtn.y, L.diamondBtn.y, L.closeBtn.y].map((v) => Math.round(v * 100) / 100)).toEqual([418.32, 480.32, 536.32]);
-    expect([L.adBtn.h, L.diamondBtn.h, L.closeBtn.h]).toEqual([52, 46, 40]);
+    expect([L.adBtn.y, L.diamondBtn.y, L.closeBtn.y]).toEqual([418, 480, 536]);
+    expect([L.adBtn.h, L.diamondBtn.h, L.closeBtn.h]).toEqual([52, 46, 44]);
     expect(L.adToDiamondStep).toBe(62);
     expect(L.diamondToCloseStep).toBe(56);
     expect(L.btnX).toBe(120);
@@ -287,21 +297,22 @@ describe("996 档几何(逐项对标 Web energyLayout / drawEnergy)", () => {
     expect(L.closeBtn.y - bottom(L.diamondBtn)).toBe(10);
   });
 
-  it("钮内三处基线全走 rowTextY:449 / 508 / 561(Web 四处实参都是 rowTextY)", () => {
+  it("钮内三处基线全走 rowTextY:449 / 507 / 563(Web 四处实参都是 rowTextY)", () => {
     expect(L.adText.baseY).toBe(rowTextY(L.adBtn.y, L.adBtn.h, 14));
     expect(L.diamondText.baseY).toBe(rowTextY(L.diamondBtn.y, L.diamondBtn.h, 13));
     expect(L.closeText.baseY).toBe(rowTextY(L.closeBtn.y, L.closeBtn.h, 14));
-    expect([L.adText.baseY, L.diamondText.baseY, L.closeText.baseY]).toEqual([449, 508, 561]);
+    expect([L.adText.baseY, L.diamondText.baseY, L.closeText.baseY]).toEqual([449, 507, 563]);
     expect([L.adText.px, L.diamondText.px, L.closeText.px]).toEqual([14, 13, 14]);
     expect([L.adText.bold, L.diamondText.bold, L.closeText.bold]).toEqual([true, true, false]);
   });
 
-  it("返回钮 {474,22,72,34} 在右上角、与屏高无关,基线 43", () => {
+  it("返回钮 {472,22,72,44} 在右上角、与屏高无关,基线 48", () => {
     expect(EN_BACK_Y).toBe(22);
-    expect(L.backBtn).toEqual({ x: W - PAD - ui.backW, y: 22, w: ui.backW, h: ui.backH });
-    expect([L.backBtn.x, L.backBtn.y, L.backBtn.w, L.backBtn.h]).toEqual([474, 22, 72, 34]);
-    expect(L.backText.baseY).toBe(43);
-    expect(L.backText.x).toBe(510);
+    expect(L.backBtn).toEqual({ x: W - PAD - ui.backW, y: 22, w: ui.backW, h: Math.max(ui.touchMin, ui.backH) });
+    expect([L.backBtn.x, L.backBtn.y, L.backBtn.w, L.backBtn.h]).toEqual([472, 22, 72, 44]);
+    expect(L.backBtn.h).toBeGreaterThanOrEqual(ui.touchMin);
+    expect(L.backText.baseY).toBe(48);
+    expect(L.backText.x).toBe(508);
     expect(L.backText.px).toBe(13);
     expect(L.backText.bold).toBe(false);
     // 贴右上角的那一行只能按钮宽限宽,否则折出来的文本盒会探出画布
@@ -317,9 +328,9 @@ describe("996 档几何(逐项对标 Web energyLayout / drawEnergy)", () => {
     }
   });
 
-  it("居中文字一律整屏带宽 532;描边宽度取全项目约定档 1", () => {
+  it("居中文字一律整屏带宽 528;描边宽度取全项目约定档 1", () => {
     for (const t of [L.title, L.statLine, L.hint, L.adText, L.diamondText, L.closeText]) expect(t.maxW).toBe(BAND);
-    expect(BAND).toBe(532);
+    expect(BAND).toBe(EN_CONTENT_W);
     expect(EN_BTN_STROKE_W).toBe(1);
   });
 
@@ -334,51 +345,72 @@ describe("996 档几何(逐项对标 Web energyLayout / drawEnergy)", () => {
 
 /* ==================== 2. 两档几何:1246 与跨档性质 ==================== */
 
+describe("像素栅格闸(两档共用)", () => {
+  it("两档六枚矩形四值全偶、文字起笔与限宽全偶,页边距 16 / 内容宽 528", () => {
+    expect(PAD).toBe(16);
+    expect(BAND).toBe(528);
+    for (const h of [H_STD, H_TALL]) {
+      const G = laid(h);
+      const rects: Array<[string, EnRect]> = [["panel", G.panel], ["banner", G.banner], ["ad", G.adBtn], ["diamond", G.diamondBtn], ["close", G.closeBtn], ["back", G.backBtn]];
+      for (const [name, r] of rects) {
+        for (const v of [r.x, r.y, r.w, r.h]) expect(v % 2, `${h} ${name} ${JSON.stringify(r)}`).toBe(0);
+        expect(r.x + r.w, `${h} ${name} 右缘`).toBeLessThanOrEqual(544);
+      }
+      for (const t of [G.title, G.statLine, G.hint, G.adText, G.diamondText, G.closeText, G.backText]) {
+        expect(t.x % 2, JSON.stringify(t)).toBe(0);
+        expect(t.maxW % 2).toBe(0);
+      }
+      expect(G.anchorY % 2).toBe(0);
+      expect(G.btnAnchorY % 2).toBe(0);
+    }
+  });
+});
+
 describe("1246 档几何与跨档性质", () => {
   const A = laid(H_STD);
   const B = laid(H_TALL);
 
-  it("1246 档逐项目标值:锚线 373.8 / 按钮族顶 523.32 / 三处基线 554·613·666", () => {
-    expect(B.anchorY).toBeCloseTo(373.8, 6);
-    expect(B.banner.y).toBeCloseTo(343.8, 6);
-    expect([B.title.baseY, B.statLine.baseY, B.hint.baseY].map((v) => Math.round(v))).toEqual([374, 408, 432]);
-    expect([B.adBtn.y, B.diamondBtn.y, B.closeBtn.y].map((v) => Math.round(v * 100) / 100)).toEqual([523.32, 585.32, 641.32]);
-    expect([B.adText.baseY, B.diamondText.baseY, B.closeText.baseY]).toEqual([554, 613, 666]);
-    expect(B.panel.h).toBe(1218);
+  it("1246 档逐项目标值:锚线 372 / 按钮族顶 522 / 三处基线 553·611·667", () => {
+    expect(B.anchorY).toBe(372);
+    expect(B.banner.y).toBe(342);
+    expect([B.title.baseY, B.statLine.baseY, B.hint.baseY]).toEqual([372, 406, 430]);
+    expect([B.adBtn.y, B.diamondBtn.y, B.closeBtn.y]).toEqual([522, 584, 640]);
+    expect([B.adText.baseY, B.diamondText.baseY, B.closeText.baseY]).toEqual([553, 611, 667]);
+    expect(B.panel.h).toBe(1214);
   });
 
-  it("两档之间文字族整体下沉 75、按钮族下沉 105、返回钮纹丝不动(两条锚线的比例不同)", () => {
-    expect(Math.round((B.title.baseY - A.title.baseY) * 100) / 100).toBe(75);
-    expect(Math.round((B.hint.baseY - A.hint.baseY) * 100) / 100).toBe(75);
-    expect(Math.round((B.banner.y - A.banner.y) * 100) / 100).toBe(75);
-    expect(Math.round((B.adBtn.y - A.adBtn.y) * 100) / 100).toBe(105);
-    expect(B.closeBtn.y - A.closeBtn.y).toBeCloseTo(105, 6);
+  it("两档之间文字族整体下沉 74、按钮族下沉 104、返回钮纹丝不动(两条锚线的比例不同)", () => {
+    expect(B.title.baseY - A.title.baseY).toBe(74);
+    expect(B.hint.baseY - A.hint.baseY).toBe(74);
+    expect(B.banner.y - A.banner.y).toBe(74);
+    expect(B.adBtn.y - A.adBtn.y).toBe(104);
+    expect(B.closeBtn.y - A.closeBtn.y).toBe(104);
     expect(B.backBtn).toEqual(A.backBtn);
   });
 
   it("三枚钮的形状与横向在两档完全相同(只有纵向走)", () => {
     expect([B.adBtn.x, B.adBtn.w, B.diamondBtn.w, B.closeBtn.w]).toEqual([A.adBtn.x, A.adBtn.w, A.diamondBtn.w, A.closeBtn.w]);
-    expect([B.adBtn.h, B.diamondBtn.h, B.closeBtn.h]).toEqual([52, 46, 40]);
+    expect([B.adBtn.h, B.diamondBtn.h, B.closeBtn.h]).toEqual([52, 46, 44]);
     expect(B.diamondBtn.y - bottom(B.adBtn)).toBe(10);
     expect(B.closeBtn.y - bottom(B.diamondBtn)).toBe(10);
   });
 
-  it("钮列底缘到屏底的下沉随屏高变大(419.68 → 564.68),本屏没有贴底锚", () => {
-    expect(Math.round(A.btnColumnBottomGap * 100) / 100).toBe(419.68);
-    expect(Math.round(B.btnColumnBottomGap * 100) / 100).toBe(564.68);
-    expect(B.btnColumnBottomGap - A.btnColumnBottomGap).toBeCloseTo(145, 6);
+  it("钮列底缘到屏底的下沉随屏高变大(416 → 562),本屏没有贴底锚", () => {
+    expect(A.btnColumnBottomGap).toBe(416);
+    expect(B.btnColumnBottomGap).toBe(562);
+    expect(B.btnColumnBottomGap - A.btnColumnBottomGap).toBe(146);
     expect(bottom(B.closeBtn)).toBeLessThan(B.panel.y + B.panel.h);
     expect(bottom(A.closeBtn)).toBeLessThan(A.panel.y + A.panel.h);
   });
 
   it("族内间距两档恒定、族间空档随屏高线性放大(比例差 0.12 × Δh = 30)", () => {
-    // 提示行(a+58) 到广告钮顶(bt) 的空档:996 档 61.52、1246 档 91.52
-    expect(Math.round((A.adBtn.y - A.hint.baseY) * 100) / 100).toBe(61.52);
-    expect(Math.round((B.adBtn.y - B.hint.baseY) * 100) / 100).toBe(91.52);
-    expect(Math.round((B.adBtn.y - B.hint.baseY - (A.adBtn.y - A.hint.baseY)) * 100) / 100).toBe(30);
+    // 提示行(a+58) 到广告钮顶(bt) 的空档:996 档 62、1246 档 92
+    expect(A.adBtn.y - A.hint.baseY).toBe(62);
+    expect(B.adBtn.y - B.hint.baseY).toBe(92);
+    expect(B.adBtn.y - B.hint.baseY - (A.adBtn.y - A.hint.baseY)).toBe(30);
     // 族内:三枚钮的顶缘差与钮宽在两档逐位相同
-    expect(Math.round((B.diamondBtn.y - B.adBtn.y) * 100) / 100).toBe(62);
-    expect(Math.round((A.diamondBtn.y - A.adBtn.y) * 100) / 100).toBe(62);
+    expect(B.diamondBtn.y - B.adBtn.y).toBe(62);
+    expect(A.diamondBtn.y - A.adBtn.y).toBe(62);
     expect(B.adBtn.w).toBe(A.adBtn.w);
     const layout = fileSource("../cocos/assets/scripts/game/ui/energyLayout.ts");
     expect(layout.includes("spreadRows")).toBe(false);
@@ -545,10 +577,14 @@ describe("四片热区(顺序与 Web onEnergyClick 逐条对应)", () => {
     expect(hitEnergy(L, 441, mid(L.adBtn)[1])).toBeNull();
   });
 
-  it("返回钮在按钮列之外:同一 y 上左右两片互不越界", () => {
-    expect(hitEnergy(L, 473, 39)).toBeNull();
-    expect(hitEnergy(L, 547, 39)).toBeNull();
+  it("返回钮在按钮列之外:缘外 1px 不命中、钮心命中,同一 y 上左右两片互不越界", () => {
+    expect(L.backBtn.x).toBe(472);
+    expect(hitEnergy(L, L.backBtn.x - 1, 39)).toBeNull();
+    expect(hitEnergy(L, right(L.backBtn) + 1, 39)).toBeNull();
+    expect(hitEnergy(L, mid(L.backBtn)[0], 39)?.kind).toBe("back");
     expect(right(L.backBtn)).toBeLessThanOrEqual(W - PAD);
+    expect(L.backBtn.x).toBeGreaterThanOrEqual(bottom(L.adBtn) - L.adBtn.h);
+    expect(L.backBtn.x > right(L.adBtn)).toBe(true);
   });
 
   it("用尽与不足都照样返回动作:静默在写入意图的守卫里(Web 命中之后再 return)", () => {
