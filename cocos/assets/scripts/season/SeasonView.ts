@@ -25,7 +25,7 @@ import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
-import { fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
+import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
 import { SE_BTN_STROKE_W, type SeRect, type SeasonLayout } from "../game/ui/seasonLayout";
 import { hitSeason, type SeasonAction, type SeasonContent } from "./SeasonModel";
 
@@ -89,6 +89,7 @@ export class SeasonView {
   private frames: Map<string, SpriteFrame>;
 
   private dim: Node;
+  private panel: Plate;
   private emblem: ReturnType<typeof iconNode>;
   private banner: ReturnType<typeof iconNode>;
   private title: Txt;
@@ -105,6 +106,7 @@ export class SeasonView {
 
     this.dim = makeNode("Dim", this.root);
     this.dim.addComponent(Graphics);
+    this.panel = new Plate("Panel", this.root, frames);
     // 节点创建顺序 = Web drawSeason 的绘制顺序(徽标 → 横幅 → 标题 → 摘要四行 → 贴底钮)
     this.emblem = iconNode("Emblem", this.root, frames, ZERO);
     this.banner = iconNode("HeaderBanner", this.root, frames, ZERO);
@@ -145,6 +147,7 @@ export class SeasonView {
     const c = this.hooks.content(L);
 
     this.paintDim(p4.seDim);
+    this.panel.show(L.panelKey, L.panel, "slice", HEX.bgPanel, HEX.bgPanelLight);
 
     // 徽标与横幅:整幅拉伸、没有缺图回退档(缺图收成零位盒,文字照落位)
     const emblem = this.emblem.show(KEY_EMBLEM);
@@ -152,7 +155,9 @@ export class SeasonView {
     const banner = this.banner.show(KEY_BANNER);
     placeRect(this.banner.node, banner ? L.banner : ZERO);
 
-    this.title.set(L.title.x, L.title.baseY, L.title.maxW, L.title.px, c.title, true, p4.seTitle);
+    // 标题两档:有横幅落在绸带上居中,缺图切左起笔(与其它已翻新屏同一口径)
+    const tl = banner ? L.title : L.titleBare;
+    this.title.set(tl.x, tl.baseY, tl.maxW, tl.px, c.title, true, banner ? HEX.bgDeep : p4.seTitle);
 
     this.summaryNode.active = c.hasSummary;
     if (c.hasSummary) {

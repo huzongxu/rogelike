@@ -94,6 +94,7 @@ import {
   FU_PAIR_READOUT_DY,
   FU_PANEL_DY,
   FU_PANEL_NINE,
+  FU_ROW_MIN_GAP,
   FU_RES_BASE_Y,
   FU_ROW_MAX_H,
   FU_ROW_MIN_H,
@@ -146,7 +147,8 @@ import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
-const PAD = PAD_.pad;
+/** 第六批翻新:本屏走自己的 FU_PAD = 16(偶数栅格、内容宽 528),不再跟 Web 冻结的 ui.pad = 14 */
+const PAD = 16;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
 const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
@@ -221,7 +223,14 @@ function phase4Defaults(): Record<string, string> {
 }
 
 /** spreadRows 直算一遍(矩阵里的数不是从布局函数里抄回来的) */
-const direct = (n: number, rowsBottom: number) => spreadRows(n, FU_ROWS_Y0, rowsBottom, FU_ROW_MIN_H, FU_ROW_MAX_H);
+/** 取偶下界:module = 2 的栅格上奇数 rowH / gap 会让贴图错半格 */
+const evenDown = (v: number): number => Math.floor(v / 2) * 2;
+
+const direct = (n: number, rowsBottom: number) => {
+  const s = spreadRows(n, FU_ROWS_Y0, rowsBottom, FU_ROW_MIN_H, FU_ROW_MAX_H);
+  const rowH = Math.max(FU_ROW_MIN_H, evenDown(s.rowH));
+  return { rowH, gap: n > 1 ? Math.max(FU_ROW_MIN_GAP, evenDown(s.gap)) : s.gap };
+};
 
 /** 钉死 roll 的两种:恒 0(逐轮取池首)与恒 0.99(逐轮取池尾) */
 const ROLL_HEAD = () => 0;
@@ -304,21 +313,21 @@ describe("分区纵线(与 Web fusionLayout 同一批裸加数)", () => {
     }
   });
 
-  it("面板区顶缘 = 融合钮顶缘 − 180,行区预算底缘再让 12", () => {
-    expect([FU_PANEL_DY, FU_ROWS_BOTTOM_DY]).toEqual([180, 12]);
+  it("面板区顶缘 = 融合钮顶缘 − 196,行区预算底缘再让 12", () => {
+    expect([FU_PANEL_DY, FU_ROWS_BOTTOM_DY]).toEqual([196, 12]);
     for (const h of [H_STD, H_TALL]) {
-      expect(fusionPanelY(W, h)).toBe(fusionFuseBtn(W, h).y - 180);
+      expect(fusionPanelY(W, h)).toBe(fusionFuseBtn(W, h).y - 196);
       expect(fusionRowsBottom(W, h)).toBe(fusionPanelY(W, h) - 12);
       const L = fusionLayout(W, h, [], NO_FORMS);
       expect(L.bottom.panelY).toBe(fusionPanelY(W, h));
       expect(L.rowsBottom).toBe(fusionRowsBottom(W, h));
     }
-    expect(fusionPanelY(W, H_STD)).toBe(754);
-    expect(fusionPanelY(W, H_TALL)).toBe(1004);
+    expect(fusionPanelY(W, H_STD)).toBe(736);
+    expect(fusionPanelY(W, H_TALL)).toBe(986);
   });
 
-  it("行区顶缘恒 92,行高钳在 44..76、行距上限走 spreadRows 的默认 maxGap 20", () => {
-    expect([FU_ROWS_Y0, FU_ROW_MIN_H, FU_ROW_MAX_H]).toEqual([92, 44, 76]);
+  it("行区顶缘恒 100,行高钳在 44..76、行距上限走 spreadRows 的默认 maxGap 20", () => {
+    expect([FU_ROWS_Y0, FU_ROW_MIN_H, FU_ROW_MAX_H]).toEqual([100, 44, 76]);
     const L = fusionLayout(W, H_STD, gear(3).map((e) => e.id), NO_FORMS);
     expect(L.rowsTop).toBe(FU_ROWS_Y0);
     // 只传五个实参:第六个 maxGap 走默认 20,显式传 40 会得到另一个 gap
@@ -328,10 +337,10 @@ describe("分区纵线(与 Web fusionLayout 同一批裸加数)", () => {
   });
 
   it("返回钮 / 标题横幅 / 面板底:三处固定矩形(横幅是 assets.draw 的整幅拉伸实参)", () => {
-    expect([FU_BACK_Y, FU_BANNER_DX, FU_BANNER_Y, FU_BANNER_W, FU_BANNER_H]).toEqual([22, 6, 8, 190, 40]);
+    expect([FU_BACK_Y, FU_BANNER_DX, FU_BANNER_Y, FU_BANNER_W, FU_BANNER_H]).toEqual([18, 6, 18, 190, 40]);
     const L = fusionLayout(W, H_STD, [], NO_FORMS);
-    expect(L.backBtn).toEqual({ x: W - PAD - PAD_.backW, y: 22, w: PAD_.backW, h: PAD_.backH });
-    expect(L.headerBanner).toEqual({ x: PAD - 6, y: 8, w: 190, h: 40 });
+    expect(L.backBtn).toEqual({ x: W - PAD - PAD_.backW, y: 18, w: PAD_.backW, h: 44 });
+    expect(L.headerBanner).toEqual({ x: PAD - 6, y: 18, w: 190, h: 40 });
     expect(right(L.backBtn)).toBe(W - PAD);
     expect(FU_PANEL_NINE).toBe(32);
     for (const h of [H_STD, H_TALL]) {
@@ -341,17 +350,17 @@ describe("分区纵线(与 Web fusionLayout 同一批裸加数)", () => {
     }
   });
 
-  it("三选一卡片一行三张:150×128、间距 16、cx 39、cy = h/2 − 64 + 10(纵向随屏高走)", () => {
+  it("三选一卡片一行三张:150×128、间距 16、cx 取偶 38、cy = evenDown(h)/2 − 64 + 10(纵向随屏高走)", () => {
     expect([FU_CARD_W, FU_CARD_H, FU_CARD_GAP, FU_CARD_CY_DY]).toEqual([150, 128, 16, 10]);
     const a = fusionLayout(W, H_STD, [], { hidden: true, triple: false });
     expect(a.hiddenCards.map((c) => c.rect)).toEqual([
-      { x: 39, y: 444, w: 150, h: 128 },
-      { x: 205, y: 444, w: 150, h: 128 },
-      { x: 371, y: 444, w: 150, h: 128 },
+      { x: 38, y: 444, w: 150, h: 128 },
+      { x: 204, y: 444, w: 150, h: 128 },
+      { x: 370, y: 444, w: 150, h: 128 },
     ]);
     const b = fusionLayout(W, H_TALL, [], { hidden: true, triple: false });
-    expect(b.hiddenCards.map((c) => c.rect.y)).toEqual([569, 569, 569]);
-    expect(right(b.hiddenCards[2].rect)).toBe(521);
+    expect(b.hiddenCards.map((c) => c.rect.y)).toEqual([568, 568, 568]);
+    expect(right(b.hiddenCards[2].rect)).toBe(520);
   });
 });
 
@@ -360,14 +369,14 @@ describe("分区纵线(与 Web fusionLayout 同一批裸加数)", () => {
 describe("八格矩阵:h ∈ {996,1246} × 装备件数 ∈ {2,6,7,8}", () => {
   /** 每格的期望值:`[rowsBottom, rowH, gap, rowsEnd, rowsToPanel, fuseBtn.y, panelY]`(布局函数实算后写死) */
   const CELL: Record<string, [number, number, number, number, number, number, number]> = {
-    "996|2": [742, 76, 20, 264, 490, 934, 754],
-    "996|6": [742, 76, 20, 648, 106, 934, 754],
-    "996|7": [742, 76, 19, 738, 16, 934, 754],
-    "996|8": [742, 75, 7, 741, 13, 934, 754],
-    "1246|2": [992, 76, 20, 264, 740, 1184, 1004],
-    "1246|6": [992, 76, 20, 648, 356, 1184, 1004],
-    "1246|7": [992, 76, 20, 744, 260, 1184, 1004],
-    "1246|8": [992, 76, 20, 840, 164, 1184, 1004],
+    "996|2": [724, 76, 20, 272, 464, 932, 736],
+    "996|6": [724, 76, 20, 656, 80, 932, 736],
+    "996|7": [724, 76, 14, 716, 20, 932, 736],
+    "996|8": [724, 72, 6, 718, 18, 932, 736],
+    "1246|2": [974, 76, 20, 272, 714, 1182, 986],
+    "1246|6": [974, 76, 20, 656, 330, 1182, 986],
+    "1246|7": [974, 76, 20, 752, 234, 1182, 986],
+    "1246|8": [974, 76, 20, 848, 138, 1182, 986],
   };
 
   for (const h of [H_STD, H_TALL]) {
@@ -417,14 +426,14 @@ describe("八格矩阵:h ∈ {996,1246} × 装备件数 ∈ {2,6,7,8}", () => {
     const ids7 = gear(7).map((e) => e.id);
     const a7 = fusionLayout(W, H_STD, ids7, NO_FORMS);
     const b7 = fusionLayout(W, H_TALL, ids7, NO_FORMS);
-    expect([a7.rowH, a7.rowGap]).toEqual([76, 19]);
+    expect([a7.rowH, a7.rowGap]).toEqual([76, 14]);
     expect([b7.rowH, b7.rowGap]).toEqual([76, 20]);
-    expect(a7.rowsEnd).toBe(738);
-    expect(b7.rowsEnd).toBe(744);
+    expect(a7.rowsEnd).toBe(716);
+    expect(b7.rowsEnd).toBe(752);
     const ids8 = gear(8).map((e) => e.id);
     const a8 = fusionLayout(W, H_STD, ids8, NO_FORMS);
     const b8 = fusionLayout(W, H_TALL, ids8, NO_FORMS);
-    expect([a8.rowH, a8.rowGap]).toEqual([75, 7]);
+    expect([a8.rowH, a8.rowGap]).toEqual([72, 6]);
     expect([b8.rowH, b8.rowGap]).toEqual([76, 20]);
     expect(a8.rowsEnd).toBeLessThanOrEqual(a8.rowsBottom);
     expect(b8.rowsEnd).toBeLessThanOrEqual(b8.rowsBottom);
@@ -482,11 +491,11 @@ describe("八格矩阵:h ∈ {996,1246} × 装备件数 ∈ {2,6,7,8}", () => {
 /* ==================== 3. 装备行的两行布局 ==================== */
 
 describe("装备行(两行布局 + 名字两档起笔)", () => {
-  it("两行基线 l1 = round(y + h/2 − 6)、l2 = l1 + 19", () => {
-    expect([FU_L1_DY, FU_L2_DY]).toEqual([6, 19]);
+  it("两行基线 l1 = evenDown(y + h/2 − 6)、l2 = l1 + 20", () => {
+    expect([FU_L1_DY, FU_L2_DY]).toEqual([6, 20]);
     const L = fusionLayout(W, H_STD, gear(3).map((e) => e.id), NO_FORMS);
     for (const r of L.rows) {
-      expect(r.l1).toBe(Math.round(r.rect.y + r.rect.h / 2 - FU_L1_DY));
+      expect(r.l1).toBe(evenDown(r.rect.y + r.rect.h / 2 - FU_L1_DY));
       expect(r.l2).toBe(r.l1 + FU_L2_DY);
       expect(r.selTag.baseY).toBe(r.l1);
       expect(r.nameWithTag.baseY).toBe(r.l1);
@@ -496,16 +505,16 @@ describe("装备行(两行布局 + 名字两档起笔)", () => {
       expect(r.l1).toBeGreaterThan(r.rect.y);
       expect(r.l2).toBeLessThan(bottom(r.rect));
     }
-    expect(L.rows[0].l1).toBe(124);
-    expect(L.rows[0].l2).toBe(143);
+    expect(L.rows[0].l1).toBe(132);
+    expect(L.rows[0].l2).toBe(152);
   });
 
-  it("三处起笔:标记与摘要在 r.x + 6,名字选中档右移固定 24(不是量字)", () => {
-    expect([FU_ROW_TEXT_DX, FU_SEL_TAG_DX]).toEqual([6, 24]);
+  it("三处起笔:标记与摘要在 r.x + 16,名字选中档右移固定 24(不是量字)", () => {
+    expect([FU_ROW_TEXT_DX, FU_SEL_TAG_DX]).toEqual([16, 24]);
     const L = fusionLayout(W, H_STD, gear(3).map((e) => e.id), NO_FORMS);
     for (const r of L.rows) {
-      expect([r.selTag.x, r.sub.x, r.nameBare.x]).toEqual([r.rect.x + 6, r.rect.x + 6, r.rect.x + 6]);
-      expect(r.nameWithTag.x).toBe(r.rect.x + 6 + 24);
+      expect([r.selTag.x, r.sub.x, r.nameBare.x]).toEqual([r.rect.x + 16, r.rect.x + 16, r.rect.x + 16]);
+      expect(r.nameWithTag.x).toBe(r.rect.x + 16 + 24);
       expect([r.selTag.px, r.nameWithTag.px, r.nameBare.px, r.sub.px]).toEqual([FS.body, FS.body, FS.body, FS.micro]);
       expect([r.selTag.align, r.nameWithTag.align, r.nameBare.align, r.sub.align]).toEqual(["left", "left", "left", "left"]);
     }
@@ -523,39 +532,39 @@ describe("底部三形态(提示 / 双选 / 三重)与融合钮的几何", () =>
       expect([L.bottom.pairReadout.baseY, L.bottom.pairPreview.baseY, L.bottom.pairNote.baseY]).toEqual([py + 20, py + 42, py + 62]);
       expect([L.bottom.pairReadout.px, L.bottom.pairPreview.px, L.bottom.pairNote.px]).toEqual([FS.muted, FS.body, FS.micro]);
       for (const t of [L.bottom.pairReadout, L.bottom.pairPreview, L.bottom.pairNote]) {
-        expect([t.x, t.maxW, t.align]).toEqual([PAD, W - PAD * 2, "left"]);
+        expect([t.x, t.maxW, t.align]).toEqual([PAD, W - PAD * 2 - 10, "left"]);
       }
       // 996 档的绝对基线
-      if (h === H_STD) expect([L.bottom.pairReadout.baseY, L.bottom.pairPreview.baseY, L.bottom.pairNote.baseY]).toEqual([774, 796, 816]);
+      if (h === H_STD) expect([L.bottom.pairReadout.baseY, L.bottom.pairPreview.baseY, L.bottom.pairNote.baseY]).toEqual([756, 778, 798]);
     }
   });
 
   it("三重态三行基线 panelY + 54 / +76 / +96(与双选态错开,两态互斥不共用)", () => {
-    expect([FU_TRIPLE_READOUT_DY, FU_TRIPLE_PREVIEW_DY, FU_TRIPLE_NOTE_DY]).toEqual([54, 76, 96]);
+    expect([FU_TRIPLE_READOUT_DY, FU_TRIPLE_PREVIEW_DY, FU_TRIPLE_NOTE_DY]).toEqual([56, 80, 104]);
     const L = fusionLayout(W, H_STD, gear(3).map((e) => e.id), { hidden: false, triple: true });
-    expect([L.bottom.tripleReadout.baseY, L.bottom.triplePreview.baseY, L.bottom.tripleNote.baseY]).toEqual([808, 830, 850]);
+    expect([L.bottom.tripleReadout.baseY, L.bottom.triplePreview.baseY, L.bottom.tripleNote.baseY]).toEqual([792, 816, 840]);
     const T = fusionLayout(W, H_TALL, gear(3).map((e) => e.id), { hidden: false, triple: true });
-    expect([T.bottom.tripleReadout.baseY, T.bottom.triplePreview.baseY, T.bottom.tripleNote.baseY]).toEqual([1058, 1080, 1100]);
+    expect([T.bottom.tripleReadout.baseY, T.bottom.triplePreview.baseY, T.bottom.tripleNote.baseY]).toEqual([1042, 1066, 1090]);
   });
 
-  it("模式钮两枚:(pad, panelY, 124, 36) 与 (pad + 132, …);文字居中走 rowTextY(fs.muted)", () => {
-    expect([FU_MODE_W, FU_MODE_H, FU_MODE2_DX]).toEqual([124, 36, 132]);
+  it("模式钮两枚:(pad, panelY, 128, 44) 与 (pad + 136, …);文字居中走 rowTextY(fs.muted)", () => {
+    expect([FU_MODE_W, FU_MODE_H, FU_MODE2_DX]).toEqual([128, 44, 136]);
     const L = fusionLayout(W, H_STD, gear(3).map((e) => e.id), { hidden: false, triple: true });
     expect(L.bottom.modeBtns.map((m) => m.rect)).toEqual([
-      { x: PAD, y: 754, w: 124, h: 36 },
-      { x: PAD + 132, y: 754, w: 124, h: 36 },
+      { x: PAD, y: 736, w: 128, h: 44 },
+      { x: PAD + 136, y: 736, w: 128, h: 44 },
     ]);
     for (const m of L.bottom.modeBtns) {
-      expect([m.text.x, m.text.baseY, m.text.maxW, m.text.px, m.text.align]).toEqual([m.rect.x + 62, rowTextY(m.rect.y, m.rect.h, FS.muted), 124, FS.muted, "center"]);
+      expect([m.text.x, m.text.baseY, m.text.maxW, m.text.px, m.text.align]).toEqual([m.rect.x + 64, rowTextY(m.rect.y, m.rect.h, FS.muted), 128, FS.muted, "center"]);
     }
-    expect(L.bottom.modeBtns[0].text.baseY).toBe(776);
+    expect(L.bottom.modeBtns[0].text.baseY).toBe(762);
   });
 
   it("未选齐提示居中于 w/2、基线 panelY + 20;空态提示左对齐锚在 w/2(Web 的 textAlign 停在 left)", () => {
     const L = fusionLayout(W, H_STD, gear(2).map((e) => e.id), NO_FORMS);
-    expect([L.bottom.hint.x, L.bottom.hint.baseY, L.bottom.hint.px, L.bottom.hint.align]).toEqual([W / 2, 774, FS.muted, "center"]);
-    expect([L.emptyText.x, L.emptyText.baseY, L.emptyText.px, L.emptyText.align]).toEqual([W / 2, H_STD / 2, FS.body, "left"]);
-    expect(fusionLayout(W, H_TALL, [], NO_FORMS).emptyText.baseY).toBe(H_TALL / 2);
+    expect([L.bottom.hint.x, L.bottom.hint.baseY, L.bottom.hint.px, L.bottom.hint.align]).toEqual([W / 2, 756, FS.muted, "center"]);
+    expect([L.emptyText.x, L.emptyText.baseY, L.emptyText.px, L.emptyText.align]).toEqual([W / 2, evenDown(H_STD / 2), FS.body, "left"]);
+    expect(fusionLayout(W, H_TALL, [], NO_FORMS).emptyText.baseY).toBe(evenDown(H_TALL / 2));
   });
 
   it("融合钮文字居中走 rowTextY(fs.section),描边宽度取共享层的 2", () => {
@@ -566,8 +575,8 @@ describe("底部三形态(提示 / 双选 / 三重)与融合钮的几何", () =>
       expect([L.bottom.fuseText.x, L.bottom.fuseText.maxW, L.bottom.fuseText.px, L.bottom.fuseText.align]).toEqual([W / 2, FU_FUSE_W, FS.section, "center"]);
       expect(L.bottom.fuseText.baseY).toBe(rowTextY(L.bottom.fuseBtn.y, FU_FUSE_H, FS.section));
     }
-    expect(fusionLayout(W, H_STD, [], NO_FORMS).bottom.fuseText.baseY).toBe(963);
-    expect(fusionLayout(W, H_TALL, [], NO_FORMS).bottom.fuseText.baseY).toBe(1213);
+    expect(fusionLayout(W, H_STD, [], NO_FORMS).bottom.fuseText.baseY).toBe(961);
+    expect(fusionLayout(W, H_TALL, [], NO_FORMS).bottom.fuseText.baseY).toBe(1211);
   });
 });
 
@@ -598,7 +607,7 @@ describe("三选一弹层(卡片内四件与两行标题)", () => {
     expect([L.hiddenTitle.x, L.hiddenTitle.baseY, L.hiddenTitle.px, L.hiddenTitle.align]).toEqual([W / 2, 388, FS.title, "center"]);
     expect([L.hiddenSub.x, L.hiddenSub.baseY, L.hiddenSub.px, L.hiddenSub.align]).toEqual([W / 2, 420, FS.body, "center"]);
     const T = fusionLayout(W, H_TALL, [], { hidden: true, triple: false });
-    expect([T.hiddenTitle.baseY, T.hiddenSub.baseY]).toEqual([513, 545]);
+    expect([T.hiddenTitle.baseY, T.hiddenSub.baseY]).toEqual([512, 544]);
     // 标题两行都压在卡片顶缘之上
     expect(L.hiddenSub.baseY).toBeLessThan(L.hiddenCards[0].rect.y);
   });
@@ -607,30 +616,35 @@ describe("三选一弹层(卡片内四件与两行标题)", () => {
 /* ==================== 6. 头部几何(裸 assets.draw 横幅 / iconText / 纯代码返回钮) ==================== */
 
 describe("头部几何(对标 Web 的裸横幅、iconText 与纯代码返回钮)", () => {
-  it("标题恒一档:左起笔于 pad、基线 36、fs.title(横幅没有缺图回退档,不是 skinHeader)", () => {
-    expect(FU_TITLE_BASE_Y).toBe(36);
+  it("标题两档:缺图左起笔于 pad、有横幅居中于绸带,同一基线 44、fs.title", () => {
+    expect(FU_TITLE_BASE_Y).toBe(44);
     for (const h of [H_STD, H_TALL]) {
       const L = fusionLayout(W, h, [], NO_FORMS);
-      expect([L.title.x, L.title.baseY, L.title.px, L.title.align]).toEqual([PAD, 36, FS.title, "left"]);
-      expect(right({ x: L.title.x, y: 0, w: L.title.maxW, h: 0 })).toBeLessThanOrEqual(L.backBtn.x);
+      expect([L.title.x, L.title.baseY, L.title.px, L.title.align]).toEqual([PAD, 44, FS.title, "left"]);
+      expect([L.titleOnBanner.baseY, L.titleOnBanner.px, L.titleOnBanner.align]).toEqual([44, FS.title, "center"]);
+      expect(L.titleOnBanner.x).toBe(evenDown(L.headerBanner.x + L.headerBanner.w / 2));
+      expect(L.titleOnBanner.maxW).toBe(L.headerBanner.w - FU_BANNER_DX * 2);
+      // 让位 10px:标题末笔压在返回钮起笔之前(限宽在布局里 evenDown 过)
+      expect(right({ x: L.title.x, y: 0, w: L.title.maxW, h: 0 })).toBe(L.backBtn.x - 10);
     }
   });
 
-  it("星尘读数走 iconText(size 14):图标盒 (pad, 62 − 14 + 2, 14, 14),有图时文字右移 14 + 4、缺图时回到 pad", () => {
-    expect([FU_ICON_SIZE, FU_ICON_DY, FU_ICON_TEXT_DX, FU_RES_BASE_Y]).toEqual([14, 2, 4, 62]);
+  it("星尘读数走 iconText(size 28 = 自然尺寸):图标盒 (pad, 88 − 28 + 2, 28, 28),有图时文字右移 28 + 8、缺图时回到 pad", () => {
+    expect([FU_ICON_SIZE, FU_ICON_DY, FU_ICON_TEXT_DX, FU_RES_BASE_Y]).toEqual([28, 2, 8, 88]);
     const L = fusionLayout(W, H_STD, [], NO_FORMS);
-    expect(L.stardustIcon).toEqual({ x: PAD, y: 50, w: 14, h: 14 });
-    expect([L.stardustTextWithIcon.x, L.stardustTextBare.x]).toEqual([PAD + 14 + 4, PAD]);
+    expect(L.stardustIcon).toEqual({ x: PAD, y: 62, w: 28, h: 28 });
+    expect([L.stardustTextWithIcon.x, L.stardustTextBare.x]).toEqual([PAD + 28 + 8, PAD]);
     for (const t of [L.stardustTextWithIcon, L.stardustTextBare]) {
-      expect([t.baseY, t.px, t.align]).toEqual([62, FS.body, "left"]);
-      expect(right({ x: t.x, y: 0, w: t.maxW, h: 0 })).toBe(W - PAD);
+      expect([t.baseY, t.px, t.align]).toEqual([88, FS.body, "left"]);
+      expect(right({ x: t.x, y: 0, w: t.maxW, h: 0 })).toBe(W - PAD - 10);
+      expect(t.maxW % 2).toBe(0);
     }
   });
 
-  it("返回钮是纯代码矩形:文字居中、基线 rowTextY(22, 34, fs.muted) = 43(fs.muted,不是 skinIconButton 的 fs.body)", () => {
+  it("返回钮是纯代码矩形:文字居中、基线 rowTextY(18, 44, fs.muted) = 44(fs.muted,不是 skinIconButton 的 fs.body)", () => {
     const L = fusionLayout(W, H_STD, [], NO_FORMS);
-    expect([L.backText.x, L.backText.baseY, L.backText.maxW, L.backText.px, L.backText.align]).toEqual([L.backBtn.x + 36, 43, PAD_.backW, FS.muted, "center"]);
-    expect(L.backText.baseY).toBe(rowTextY(FU_BACK_Y, PAD_.backH, FS.muted));
+    expect([L.backText.x, L.backText.baseY, L.backText.maxW, L.backText.px, L.backText.align]).toEqual([L.backBtn.x + 36, 44, PAD_.backW, FS.muted, "center"]);
+    expect(L.backText.baseY).toBe(rowTextY(FU_BACK_Y, 44, FS.muted));
   });
 });
 

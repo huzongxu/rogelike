@@ -148,8 +148,10 @@ export interface FusionLayout {
   panelKey: string;
   /** 标题横幅贴图盒(Web `assets.draw` 的整幅拉伸实参 `(pad − 6, 8, 190, 40)`) */
   headerBanner: FuRect;
-  /** 标题:恒左起笔于 pad、基线 36(横幅不接返回值,没有缺图回退档) */
+  /** 标题:缺图那一档 —— 左起笔于页边距、基线 44 */
   title: FuTextLine;
+  /** 标题:有横幅那一档 —— 居中于 `banner_mid_blue` 带内、同一基线 */
+  titleOnBanner: FuTextLine;
   /** 星尘读数:图标盒 + 有图 / 缺图两档文字位 */
   stardustIcon: FuRect;
   stardustTextWithIcon: FuTextLine;
@@ -189,28 +191,35 @@ export interface FusionLayout {
   forms: FusionForms;
 }
 
-/* Web fusionLayout / drawFusion / drawHiddenChoice / triplePanelRects / drawTriplePanel 的内联几何常量 */
-/** 融合钮:半宽 / 宽 / 高 / 底缘相对 `h − pad` 的上抬 */
+/* 屏专属几何常量(像素暗黑翻新档:具名一处;坐标与尺寸一律取偶) */
+/** 页边距 16 / 内容宽 528:右缘恒落 544(`ui.pad` 是 Web 冻结档 14,本屏不再用) */
+export const FU_PAD = 16;
+export const FU_CONTENT_W = 528;
+/** 取偶下界:像素栅格 module = 2,奇数坐标会让贴图错半格 */
+export const evenDown = (v: number): number => Math.floor(v / 2) * 2;
+/** 融合钮:半宽 / 宽 / 高 / 底缘相对 `evenDown(h) − FU_PAD` 的上抬 */
 export const FU_FUSE_HALF_W = 110;
 export const FU_FUSE_W = 220;
 export const FU_FUSE_H = 48;
 export const FU_FUSE_UP = 48;
-/** 面板区顶缘相对融合钮顶缘的让位(Web 的 `panelY = fuseBtn.y − 180`) */
-export const FU_PANEL_DY = 180;
-/** 行区顶缘与预算底缘的让位(Web 的 92 与 `panelY − 12`) */
-export const FU_ROWS_Y0 = 92;
+/** 面板区顶缘相对融合钮顶缘的让位(容纳 44 高模式钮 + 三行读数 + 缝) */
+export const FU_PANEL_DY = 196;
+/** 行区顶缘与预算底缘的让位 */
+export const FU_ROWS_Y0 = 100;
 export const FU_ROWS_BOTTOM_DY = 12;
-/** 行高钳制两档(Web spreadRows 的第四/第五实参;第六实参不传 → 默认 maxGap 20) */
+/** 行高钳制两档(两档取偶;spreadRows 出数后再 evenDown,余量落进 rowsToPanel 那道呼吸缝) */
 export const FU_ROW_MIN_H = 44;
 export const FU_ROW_MAX_H = 76;
-/** 行内两行布局的两个裸加数(Web 的 `− 6` 与 `+ 19`) */
+/** 行距下限(取偶) */
+export const FU_ROW_MIN_GAP = 4;
+/** 行内两行布局的两个裸加数 */
 export const FU_L1_DY = 6;
-export const FU_L2_DY = 19;
-/** 行内三处偏移:文字起笔内缩 / 选中标记的固定让位 */
-export const FU_ROW_TEXT_DX = 6;
+export const FU_L2_DY = 20;
+/** 行内三处偏移:文字起笔内缩(走行板 nineMargin 的 16)/ 选中标记的固定让位 */
+export const FU_ROW_TEXT_DX = 16;
 export const FU_SEL_TAG_DX = 24;
 /** 返回钮顶缘 */
-export const FU_BACK_Y = 22;
+export const FU_BACK_Y = 18;
 /** 三选一卡片:宽 / 高 / 间距 / 纵向中心相对 `h/2` 的下沉 */
 export const FU_CARD_W = 150;
 export const FU_CARD_H = 128;
@@ -222,38 +231,38 @@ export const FU_CARD_NAME_DY = 30;
 export const FU_CARD_DESC_DY = 56;
 export const FU_CARD_DESC_LINE = 16;
 export const FU_CARD_HINT_DY = 12;
-/** 卡片描边宽度(Web 把 lineWidth 临时设 2 再复位 1) */
+/** 卡片描边宽度 */
 export const FU_CARD_STROKE_W = 2;
-/** 描述折行的行数上限(Web drawHiddenChoice 的 `line < 4`;每行 10 字的切分在内容层) */
+/** 描述折行的行数上限(每行 10 字的切分在内容层) */
 export const FU_CARD_DESC_MAX_LINES = 4;
-/** 弹层标题与副行相对 `h/2` 的上抬(Web 的 `h/2 − 110` 与 `h/2 − 78`) */
+/** 弹层标题与副行相对 `evenDown(h/2)` 的上抬 */
 export const FU_HIDDEN_TITLE_DY = 110;
 export const FU_HIDDEN_SUB_DY = 78;
-/** 头部:标题基线 / 横幅盒的四处实参(Web assets.draw 的 `pad − 6, 8, 190, 40`) */
-export const FU_TITLE_BASE_Y = 36;
+/** 头部:标题基线 / 横幅盒(`banner_mid_blue` 固有 95×20 → 190×40 整数倍,不裁不拉) */
+export const FU_TITLE_BASE_Y = 44;
 export const FU_BANNER_DX = 6;
-export const FU_BANNER_Y = 8;
+export const FU_BANNER_Y = 18;
 export const FU_BANNER_W = 190;
 export const FU_BANNER_H = 40;
-/** 星尘读数:基线 / 图标边长 / 图标相对基线的上抬 / 图标与文字间距 */
-export const FU_RES_BASE_Y = 62;
-export const FU_ICON_SIZE = 14;
+/** 星尘读数:基线 / 图标边长(`icon_stardust` 固有 14×14 → 28×28)/ 图标相对基线的上抬 / 图标与文字间距 */
+export const FU_RES_BASE_Y = 88;
+export const FU_ICON_SIZE = 28;
 export const FU_ICON_DY = 2;
-export const FU_ICON_TEXT_DX = 4;
-/** 双选态三行读数相对 panelY 的基线(Web 的 `+20 / +42 / +62`) */
+export const FU_ICON_TEXT_DX = 8;
+/** 双选态三行读数相对 panelY 的基线 */
 export const FU_PAIR_READOUT_DY = 20;
 export const FU_PAIR_PREVIEW_DY = 42;
 export const FU_PAIR_NOTE_DY = 62;
-/** 未选齐提示的基线(Web 的 `panelY + 20`,与双选态读数行同高) */
+/** 未选齐提示的基线(与双选态读数行同高) */
 export const FU_HINT_DY = 20;
-/** 模式钮:宽 / 高 / 第二枚相对 pad 的横向起笔(Web triplePanelRects 的 124 / 36 / 132) */
-export const FU_MODE_W = 124;
-export const FU_MODE_H = 36;
-export const FU_MODE2_DX = 132;
-/** 三重态三行读数相对 panelY 的基线(Web 的 `+54 / +76 / +96`) */
-export const FU_TRIPLE_READOUT_DY = 54;
-export const FU_TRIPLE_PREVIEW_DY = 76;
-export const FU_TRIPLE_NOTE_DY = 96;
+/** 模式钮:宽 / 高(热区下限 44)/ 第二枚相对 pad 的横向起笔(= 宽 + 列距 8) */
+export const FU_MODE_W = 128;
+export const FU_MODE_H = 44;
+export const FU_MODE2_DX = 136;
+/** 三重态三行读数相对 panelY 的基线 */
+export const FU_TRIPLE_READOUT_DY = 56;
+export const FU_TRIPLE_PREVIEW_DY = 80;
+export const FU_TRIPLE_NOTE_DY = 104;
 /** 融合钮与行底板选中档的描边宽度(Web 两处都把 lineWidth 临时设 2 再复位 1) */
 export const FU_FUSE_STROKE_W = 2;
 export const FU_ROW_SEL_STROKE_W = 2;
@@ -262,9 +271,9 @@ export const FU_PANEL_NINE = 32;
 /** 文本带限宽与相邻文本之间留的余量(Cocos 侧口径;Web 的 fillText 不限宽) */
 export const TEXT_SLACK = 10;
 
-/** 融合钮矩形(Web 的 `x = w/2 − 110`、`y = h − pad − 48`;底边锚定 h) */
+/** 融合钮矩形(`x = evenDown(w/2 − 110)`、`y = evenDown(h) − FU_PAD − 48`;底边锚定屏高) */
 export function fusionFuseBtn(w: number, h: number): FuRect {
-  return { x: w / 2 - FU_FUSE_HALF_W, y: h - ui.pad - FU_FUSE_UP, w: FU_FUSE_W, h: FU_FUSE_H };
+  return { x: evenDown(w / 2 - FU_FUSE_HALF_W), y: evenDown(h) - FU_PAD - FU_FUSE_UP, w: FU_FUSE_W, h: FU_FUSE_H };
 }
 
 /** 面板区顶缘(Web 的 `panelY = fuseBtn.y − 180`;随融合钮一起底边锚定) */
@@ -278,7 +287,7 @@ export function fusionRowsBottom(w: number, h: number): number {
 }
 
 function rowLayout(id: number, index: number, rect: FuRect): FusionRowLayout {
-  const l1 = Math.round(rect.y + rect.h / 2 - FU_L1_DY);
+  const l1 = evenDown(rect.y + rect.h / 2 - FU_L1_DY);
   const l2 = l1 + FU_L2_DY;
   const leftX = rect.x + FU_ROW_TEXT_DX;
   return {
@@ -287,10 +296,10 @@ function rowLayout(id: number, index: number, rect: FuRect): FusionRowLayout {
     rect,
     l1,
     l2,
-    selTag: { x: leftX, baseY: l1, maxW: rect.w - FU_ROW_TEXT_DX * 2, px: fs.body, align: "left" },
-    nameWithTag: { x: leftX + FU_SEL_TAG_DX, baseY: l1, maxW: rect.w - FU_ROW_TEXT_DX - FU_SEL_TAG_DX - TEXT_SLACK, px: fs.body, align: "left" },
-    nameBare: { x: leftX, baseY: l1, maxW: rect.w - FU_ROW_TEXT_DX - TEXT_SLACK, px: fs.body, align: "left" },
-    sub: { x: leftX, baseY: l2, maxW: rect.w - FU_ROW_TEXT_DX * 2, px: fs.micro, align: "left" },
+    selTag: { x: leftX, baseY: l1, maxW: evenDown(rect.w - FU_ROW_TEXT_DX * 2), px: fs.body, align: "left" },
+    nameWithTag: { x: leftX + FU_SEL_TAG_DX, baseY: l1, maxW: evenDown(rect.w - FU_ROW_TEXT_DX - FU_SEL_TAG_DX - TEXT_SLACK), px: fs.body, align: "left" },
+    nameBare: { x: leftX, baseY: l1, maxW: evenDown(rect.w - FU_ROW_TEXT_DX - TEXT_SLACK), px: fs.body, align: "left" },
+    sub: { x: leftX, baseY: l2, maxW: evenDown(rect.w - FU_ROW_TEXT_DX * 2), px: fs.micro, align: "left" },
   };
 }
 
@@ -318,13 +327,18 @@ function hiddenCardLayout(idx: number, x: number, y: number): FusionHiddenCardLa
  * `rowsToPanel` 这一段空档里;件数多时行高才开始吃预算(数字见 `tests/cocos-phase4-fusion.test.ts`)。
  */
 export function fusionLayout(w: number, h: number, eqIds: readonly number[], forms: FusionForms): FusionLayout {
-  const pad = ui.pad;
+  const hh = evenDown(h);
+  const pad = FU_PAD;
   const rowW = w - pad * 2;
-  const fuseBtn = fusionFuseBtn(w, h);
-  const panelY = fusionPanelY(w, h);
-  const rowsBottom = fusionRowsBottom(w, h);
+  const midX = evenDown(w / 2);
+  const midY = evenDown(hh / 2);
+  const fuseBtn = fusionFuseBtn(w, hh);
+  const panelY = fusionPanelY(w, hh);
+  const rowsBottom = fusionRowsBottom(w, hh);
 
-  const { rowH, gap } = spreadRows(eqIds.length, FU_ROWS_Y0, rowsBottom, FU_ROW_MIN_H, FU_ROW_MAX_H);
+  const spread = spreadRows(eqIds.length, FU_ROWS_Y0, rowsBottom, FU_ROW_MIN_H, FU_ROW_MAX_H);
+  const rowH = Math.max(FU_ROW_MIN_H, evenDown(spread.rowH));
+  const gap = eqIds.length > 1 ? Math.max(FU_ROW_MIN_GAP, evenDown(spread.gap)) : spread.gap;
   const rowStep = rowH + gap;
   const rows: FusionRowLayout[] = [];
   for (let i = 0; i < eqIds.length; i++) rows.push(rowLayout(eqIds[i], i, { x: pad, y: FU_ROWS_Y0 + i * rowStep, w: rowW, h: rowH }));
@@ -337,13 +351,13 @@ export function fusionLayout(w: number, h: number, eqIds: readonly number[], for
   const modeBtns: FusionModeBtnLayout[] = modeRects.map((rect, index) => ({
     index,
     rect,
-    text: { x: rect.x + rect.w / 2, baseY: rowTextY(rect.y, rect.h, fs.muted), maxW: rect.w, px: fs.muted, align: "center" },
+    text: { x: rect.x + rect.w / 2, baseY: rowTextY(rect.y, rect.h, fs.muted), maxW: evenDown(rect.w), px: fs.muted, align: "center" },
   }));
 
-  const leftLine = (baseY: number, px: number): FuTextLine => ({ x: pad, baseY, maxW: rowW, px, align: "left" });
+  const leftLine = (baseY: number, px: number): FuTextLine => ({ x: pad, baseY, maxW: evenDown(rowW - TEXT_SLACK), px, align: "left" });
   const bottom: FusionBottomLayout = {
     panelY,
-    hint: { x: w / 2, baseY: panelY + FU_HINT_DY, maxW: rowW, px: fs.muted, align: "center" },
+    hint: { x: midX, baseY: panelY + FU_HINT_DY, maxW: rowW, px: fs.muted, align: "center" },
     pairReadout: leftLine(panelY + FU_PAIR_READOUT_DY, fs.muted),
     pairPreview: leftLine(panelY + FU_PAIR_PREVIEW_DY, fs.body),
     pairNote: leftLine(panelY + FU_PAIR_NOTE_DY, fs.micro),
@@ -352,29 +366,31 @@ export function fusionLayout(w: number, h: number, eqIds: readonly number[], for
     triplePreview: leftLine(panelY + FU_TRIPLE_PREVIEW_DY, fs.body),
     tripleNote: leftLine(panelY + FU_TRIPLE_NOTE_DY, fs.micro),
     fuseBtn,
-    fuseText: { x: fuseBtn.x + fuseBtn.w / 2, baseY: rowTextY(fuseBtn.y, fuseBtn.h, fs.section), maxW: fuseBtn.w, px: fs.section, align: "center" },
+    fuseText: { x: fuseBtn.x + fuseBtn.w / 2, baseY: rowTextY(fuseBtn.y, fuseBtn.h, fs.section), maxW: evenDown(fuseBtn.w), px: fs.section, align: "center" },
   };
 
-  const backBtn: FuRect = { x: w - pad - ui.backW, y: FU_BACK_Y, w: ui.backW, h: ui.backH };
-  const cx = (w - FU_CARD_W * 3 - FU_CARD_GAP * 2) / 2;
-  const cy = h / 2 - FU_CARD_H / 2 + FU_CARD_CY_DY;
+  const backH = Math.max(44, ui.backH);
+  const backBtn: FuRect = { x: evenDown(w - pad - ui.backW), y: FU_BACK_Y, w: evenDown(ui.backW), h: backH };
+  const cx = evenDown((w - FU_CARD_W * 3 - FU_CARD_GAP * 2) / 2);
+  const cy = evenDown(midY - FU_CARD_H / 2 + FU_CARD_CY_DY);
   const hiddenCards: FusionHiddenCardLayout[] = [0, 1, 2].map((i) => hiddenCardLayout(i, cx + i * (FU_CARD_W + FU_CARD_GAP), cy));
 
   const headerBanner: FuRect = { x: pad - FU_BANNER_DX, y: FU_BANNER_Y, w: FU_BANNER_W, h: FU_BANNER_H };
   const stardustIcon: FuRect = { x: pad, y: FU_RES_BASE_Y - FU_ICON_SIZE + FU_ICON_DY, w: FU_ICON_SIZE, h: FU_ICON_SIZE };
-  const resLine = (x: number): FuTextLine => ({ x, baseY: FU_RES_BASE_Y, maxW: w - pad - x, px: fs.body, align: "left" });
+  const resLine = (x: number): FuTextLine => ({ x, baseY: FU_RES_BASE_Y, maxW: evenDown(w - pad - TEXT_SLACK - x), px: fs.body, align: "left" });
 
   return {
-    panel: { x: pad, y: pad, w: rowW, h: h - pad * 2 },
+    panel: { x: pad, y: pad, w: rowW, h: hh - pad * 2 },
     panelKey: "panel_dark_corners",
     headerBanner,
-    title: { x: pad, baseY: FU_TITLE_BASE_Y, maxW: backBtn.x - TEXT_SLACK - pad, px: fs.title, align: "left" },
+    title: { x: pad, baseY: FU_TITLE_BASE_Y, maxW: evenDown(backBtn.x - TEXT_SLACK - pad), px: fs.title, align: "left" },
+    titleOnBanner: { x: evenDown(headerBanner.x + headerBanner.w / 2), baseY: FU_TITLE_BASE_Y, maxW: evenDown(headerBanner.w - FU_BANNER_DX * 2), px: fs.title, align: "center" },
     stardustIcon,
     stardustTextWithIcon: resLine(pad + FU_ICON_SIZE + FU_ICON_TEXT_DX),
     stardustTextBare: resLine(pad),
     backBtn,
-    backText: { x: backBtn.x + backBtn.w / 2, baseY: rowTextY(backBtn.y, backBtn.h, fs.muted), maxW: backBtn.w, px: fs.muted, align: "center" },
-    emptyText: { x: w / 2, baseY: h / 2, maxW: w - pad - w / 2, px: fs.body, align: "left" },
+    backText: { x: backBtn.x + backBtn.w / 2, baseY: rowTextY(backBtn.y, backBtn.h, fs.muted), maxW: evenDown(backBtn.w), px: fs.muted, align: "center" },
+    emptyText: { x: midX, baseY: midY, maxW: evenDown(w - pad - midX), px: fs.body, align: "left" },
     eqCount: eqIds.length,
     rowsTop: FU_ROWS_Y0,
     rowsBottom,
@@ -386,8 +402,8 @@ export function fusionLayout(w: number, h: number, eqIds: readonly number[], for
     rows,
     bottom,
     hiddenCards,
-    hiddenTitle: { x: w / 2, baseY: h / 2 - FU_HIDDEN_TITLE_DY, maxW: rowW, px: fs.title, align: "center" },
-    hiddenSub: { x: w / 2, baseY: h / 2 - FU_HIDDEN_SUB_DY, maxW: rowW, px: fs.body, align: "center" },
+    hiddenTitle: { x: midX, baseY: evenDown(midY - FU_HIDDEN_TITLE_DY), maxW: rowW, px: fs.title, align: "center" },
+    hiddenSub: { x: midX, baseY: evenDown(midY - FU_HIDDEN_SUB_DY), maxW: rowW, px: fs.body, align: "center" },
     forms,
   };
 }

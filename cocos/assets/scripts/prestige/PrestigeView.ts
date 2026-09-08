@@ -219,7 +219,7 @@ export class PrestigeView {
     placeRect(this.banner.node, banner ? L.headerBanner : ZERO);
     this.title.bold(true);
     const tt = banner ? L.titleWithBanner : L.titleBare;
-    this.title.set(tt.x, tt.baseY, tt.maxW, tt.px, c.title, tt.align, p4.ptTitle);
+    this.title.set(tt.x, tt.baseY, tt.maxW, tt.px, c.title, tt.align, banner ? HEX.gold : p4.ptTitle);
 
     // 头部小立绘:固定坐标的一笔,无回退分支;画在四行文字之前(Web 的覆盖顺序)
     const pose = this.pose.show(KEY_POSE);

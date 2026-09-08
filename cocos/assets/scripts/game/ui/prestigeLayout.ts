@@ -1,50 +1,45 @@
 /**
- * 转生与天赋屏纯几何 —— Web `src/game.ts:prestigeLayout`(4178-4222)、`drawPrestige`
- * (4224-4353)与 `onPrestigeClick`(4355-4385)的 cc-free 抽取。
+ * 转生与天赋屏纯几何 —— 像素暗黑翻新档(批 6):单一出口,绘制与命中判定共读这一份矩形。
  *
- * 单一出口:绘制与命中判定共读这一份矩形,宿主视图不产任何几何。口径与 Web 逐项同数:
- *  - **底部锚定,行区上界固定**:分区自下而上是 `开始新轮回钮 → 完美蓝图块 → 定向搜索块 → 节点行区`。
- *    `startBtn = { x: w/2 − 130, y: h − pad − 52, w: 260, h: 52 }`;`blockTop` 从 `startBtn.y − 10`
- *    起,**每命中一个条件块就再减 46**,行区预算底缘就是 `blockTop − 8`;
- *  - **两个条件块会吃掉行区预算**,所以下界在 `startBtn.y − 10 / − 56 / − 102` 三档跳
- *    (`hasBlueprint` / `hasTargetedSearch` 各让一档)。行区上界恒为 `PT_LIST_Y0 = 156`,
- *    于是这一屏的行高对屏高与对"拥有哪几枚天赋"同时敏感;
- *  - 绘制顺序决定纵向位置:**蓝图块先让位、定向搜索块后让位**,所以定向搜索块压在蓝图块之上
- *    (`triggerLabelY = startBtn.y − 102`、`effectLabelY = startBtn.y − 56` 那一档),
- *    两块都在时行区只剩 664..914 的预算;
- *  - 行区 `spreadRows(routeLen, PT_LIST_Y0, blockTop − 8, 40, 64)` —— **只传五个实参**,
- *    第六个 `maxGap` 走默认 20,行距步进就是 `rowH + gap`(与 gearup 丢弃 gap 硬编码 4 正相反);
- *  - 行 `y = PT_LIST_Y0 + i × (rowH + gap)`、`x = pad`、`w = w − pad×2`,行**以天赋 id 为键**;
- *  - 条件块内的钮:`bw = (w − pad×2 − (n−1)×gap) / n`,定向搜索 6 枚间距 6、完美蓝图 8 枚间距 4,
- *    钮 `y = labelY + 18`、`h = 28`,水平从 `pad + i×(bw + gap)` 起;
- *  - 三系页签 `tabW = (w − pad×2)/3`、`y = 120`、`h = 30`,恒三枚;整条贴图打底
- *    `tabs_talent_three`(盒 = `tabs[0].x, y, tabs[0].w×3, h`),再逐签画覆盖层;
- *  - 头部是 `skinHeader("banner_purple_cosmic", "转生与天赋", pad, 36, …, 240, 46)` —— **横幅键 +
- *    显式 240×46**(与 gacha 同参数):有图时标题居中于横幅、基线 `36 − 4`,缺图时左起笔于 `pad`、
- *    基线 36;紧接一枚**固定坐标**的小立绘 `player_pose_5 (252, 4, 38, 60)` 压在头部区,
- *    四行信息在它之后绘制(Web 的先后顺序就是覆盖顺序,本层不做平移);
- *  - 节点行是**两行布局**:`l1 = Math.round(r.y + r.h/2 − 6)`、`l2 = l1 + 19`;
- *    名称在 `r.x + 8` 限宽 150,右侧右对齐末笔 `r.x + r.w − 8`;已拥有档的勾选标记 13×13 落在
- *    `r.x + r.w − 12 − 量字宽 − 17`、`l1 − 12`,量字宽按 Cocos 侧近似量字(CJK = 1×px)由
- *    `PT_OWNED_TEXT_W = 3 × fs.muted` 给出 —— **与 Web 的 `measureText("已拥有").width` 不同源**,
- *    这一档偏差与已落地五屏同类,不在几何层修;
- *  - 面板底走 `panelPad(g, w, h)` **不传专属键**,于是那一步就是 `panel_dark_corners`
- *    九宫格 `(pad, pad, w − pad×2, h − pad×2)`、切深 32;
- *  - 开始新轮回钮是纯代码矩形,描边 `lineWidth` 临时设 2 再复位 1(`PT_START_STROKE_W`)。
+ * 网格:页边距 `PT_PAD = 16`、内容宽 528(右缘恒落 544)、设计高先 `evenDown(h)`,
+ * 于是**所有坐标与尺寸都落在 module = 2 的偶数栅格上**(1 美术 px = 2 逻辑 px)。
+ * `ui.pad`(Web 冻结档 14)在本屏不再使用,与排行榜 / 英雄两屏同一处置。
+ *
+ * 分区自下而上:`开始新轮回钮 → 完美蓝图块 → 定向搜索块 → 节点行区 → 页签带 → 头部四行 → 标题横幅`。
+ *  - `startBtn = { x: evenDown(w/2 − 130), y: evenDown(h) − 16 − 52, w: 260, h: 52 }`,底缘正落面板内缘;
+ *  - 条件块每枚钮 `h = 44`(热区下限),`PT_BLOCK_H = 68` 一档吃掉「标签 + 钮 + 缝」整块;
+ *    块内钮 `bw = evenDown((528 − (n−1)×8)/n)` 后**整组居中**,余量落在组的两端而不落在列距里,
+ *    所以列距恒为栅格的 8,不会出现 62.5 这类半格;
+ *  - 行区预算 `[PT_LIST_Y0 = 192, blockTop − 8]`。`spreadRows` 的 rowH / gap 出数后再 `evenDown`,
+ *    让下来的余量全部落进 `rowsEnd … rowsBottom` 这道**无硬上限的呼吸缝**,不落进任何有上限的字段;
+ *    行内 `l1 = evenDown(y + h/2 − 6)`、`l2 = l1 + 20`,行内起笔与右缘内缩一律 16(行板 nineMargin);
+ *  - 三系页签 `tabW = evenDown(528/3) = 176`、`y = 140`、`h = 44`(热区下限,Web 的 30 不达),
+ *    整条贴图 `tabs_talent_three` 按固有 264×15 art px 的 2 倍 = **528×30** 落在带内顶缘下沉 8 处,
+ *    既不拉伸也不切边;
+ *  - 头部横幅 `banner_purple_cosmic` 走固有 120×23 → **240×46 整数倍**、盒 `(18, 18)`,
+ *    完全落在面板内缘之内(Web 的 `y = −2` 会把上沿两像素裁掉,本档改掉);横幅在否两档
+ *    共用基线 48,`PT_BANNER_DX / DY / TEXT_DY` 因此恒为 0,只作向后兼容保留;
+ *  - 头部小立绘 `player_pose_5` 移到右列 `(500, 18, 44, 60)`,右缘就是内容列右缘 544,
+ *    纵向 18..78 与四行信息基线(84 / 84 / 104 / 122)错开 —— **Web 那里文字压在立绘之上**,
+ *    本档把两件事拆开:立绘不再当文字底,四行的限宽也不必再为它让位;
+ *    44×60 是 67×92 源比例(0.728)下最贴近的偶数档(0.733),旧世代图,见挂账;
+ *  - 已拥有档的勾选标记 `mark_check_green` 走固有 7×7 → **14×14**,与「已拥有」四字
+ *    (`PT_OWNED_TEXT_W = 40`,取偶)之间留 `PT_MARK_GAP = 16`,标记整体坐在行右内缩 16 之内;
+ *  - 面板底 `panel_dark_corners` 九宫格 `(16, 16, 528, evenDown(h) − 32)`。
  *
  * 命中口径(几何侧的事实):热区按 Web 的判定顺序排 —— 页签 → 逐行 → 触发器钮 → 效果钮 →
  * 开始新轮回钮。热区之外的空白**没有"其余一律"兜底**,点下去不产动作。
  * **本屏没有返回钮**:Web 的 `onPrestigeClick` 里不存在 backBtn,屏内唯一离开路径就是
  * "开始新轮回"(见 `PrestigeModel.ts` 文件头与 `docs/COCOS-MIGRATION.md` §8)。
  *
- * 文本带限宽(`maxW`)是 Cocos 侧的口径:Web 的 `fillText` 不限宽,这里给的每一档只决定
- * `fitOne` 什么时候补「…」,不改变任何起笔与基线。
+ * 文本带限宽(`maxW`)是 Cocos 侧的口径:每档都 `evenDown` 过,只决定 `fitOne` 什么时候补
+ * 「…」,不改变任何起笔与基线。
  *
  * 颜色、字号、贴图键与替代字形这类纯表现项在 `core/ViewTable.ts` 的 `phase4` 段(键前缀 `pt`);
  * 本文件只留几何 —— 共享层读不到 import 了 `cc` 的 ViewTable,同一个数放两边就是两个事实源。
  */
 
-import { fs, rowTextY, spreadRows, ui } from "./theme";
+import { fs, rowTextY, spreadRows } from "./theme";
 import type { EffectType, TriggerType } from "../data/affixes";
 import type { TalentId } from "../data/talents";
 
@@ -176,69 +171,81 @@ export interface PrestigeLayout {
   startText: PtTextLine;
 }
 
-/* Web drawPrestige / prestigeLayout 的内联几何常量(屏专属常量在本文件具名一处) */
-/** 开始新轮回钮:半宽 / 宽 / 高 / 底缘相对 `h − pad` 的上抬 */
+/* 屏专属常量(像素暗黑翻新档:具名一处,不散在函数体里;坐标与尺寸一律取偶) */
+/** 页边距 16 / 内容宽 528:右缘恒落 544,与像素栅格同一把尺(`ui.pad` 是 Web 冻结档 14,本屏不再用) */
+export const PT_PAD = 16;
+export const PT_CONTENT_W = 528;
+/** 开始新轮回钮:半宽 / 宽 / 高 / 底缘相对 `h − PT_PAD` 的上抬 */
 export const PT_START_HALF_W = 130;
 export const PT_START_W = 260;
 export const PT_START_H = 52;
 export const PT_START_UP = 52;
-/** 条件块起始纵线与每块让位(Web 的 `startBtn.y − 10` 与两次 `blockTop −= 46`) */
+/** 条件块起始纵线与每块让位(块内容 = 标签基线一档 + 44 高钮,让位必须盖住整块) */
 export const PT_BLOCK_DY = 10;
-export const PT_BLOCK_H = 46;
-/** 块内钮相对标签基线的下移与钮高(Web 的 `blockTop + 18`、`h: 28`) */
+export const PT_BLOCK_H = 68;
+/** 块内钮相对块顶缘的下移与钮高(钮高抬到热区下限 44) */
 export const PT_BTN_DY = 18;
-export const PT_BTN_H = 28;
-/** 块内钮枚数与横向间距(Web 的 `(w − pad×2 − 7×4)/8` 与 `(w − pad×2 − 5×6)/6`) */
+export const PT_BTN_H = 44;
+/** 块内钮枚数与横向间距(列距走栅格的 8;钮宽取偶后整组居中) */
 export const PT_EFFECT_N = 8;
-export const PT_EFFECT_GAP = 4;
+export const PT_EFFECT_GAP = 8;
 export const PT_TRIGGER_N = 6;
-export const PT_TRIGGER_GAP = 6;
-/** 块标签相对块顶缘的下移(Web 的 `labelY + 10`) */
-export const PT_LABEL_DY = 10;
-/** 行区顶缘与预算底缘的让位(Web 的 `listY0 = 156`、`blockTop − 8`) */
-export const PT_LIST_Y0 = 156;
+export const PT_TRIGGER_GAP = 8;
+/** 块标签相对块顶缘的下移 */
+export const PT_LABEL_DY = 12;
+/** 行区顶缘与预算底缘的让位 */
+export const PT_LIST_Y0 = 192;
 export const PT_ROWS_BOTTOM_DY = 8;
-/** 行高钳制两档(Web spreadRows 的第四/第五实参;第六实参不传 → 默认 maxGap 20) */
+/** 行高钳制两档(两档取偶;`spreadRows` 出数后再 evenDown,余量落进行区与块之间那道呼吸缝) */
 export const PT_ROW_MIN_H = 40;
 export const PT_ROW_MAX_H = 64;
-/** 页签行带(Web 的 `y = 120`、`h = 30`、恒三枚) */
-export const PT_TAB_Y = 120;
-export const PT_TAB_H = 30;
+/** 行距下限(取偶,零行距会让行板贴在一起) */
+export const PT_ROW_MIN_GAP = 4;
+/** 页签行带(热区抬到 44;`tabs_talent_three` 的固有 2 倍尺寸 528×30 垂直坐在这一带里) */
+export const PT_TAB_Y = 140;
+export const PT_TAB_H = 44;
 export const PT_TAB_N = 3;
-/** 头部:标题基线 / 横幅宽高与 skinHeader 的三处让位 / 文字上抬 */
-export const PT_TITLE_BASE_Y = 36;
+/** 页签整条贴图:固有尺寸 264×15 art px → 528×30 逻辑 px,相对页签带顶缘下沉 8 */
+export const PT_TABS_STRIP_W = 528;
+export const PT_TABS_STRIP_H = 30;
+export const PT_TABS_STRIP_DY = 8;
+/** 头部:标题基线 / 横幅宽高与落位(`banner_purple_cosmic` 固有 120×23 → 240×46 整数倍,不裁不拉) */
+export const PT_TITLE_BASE_Y = 48;
 export const PT_BANNER_W = 240;
 export const PT_BANNER_H = 46;
-export const PT_BANNER_DX = 8;
-export const PT_BANNER_DY = 8;
-export const PT_BANNER_TEXT_DY = 4;
-/** 头部小立绘的固定坐标(Web 逐字照搬) */
-export const PT_POSE_X = 252;
-export const PT_POSE_Y = 4;
-export const PT_POSE_W = 38;
+export const PT_BANNER_X = 18;
+export const PT_BANNER_Y = 18;
+/** 保留键:横幅档与裸档共用同一基线,故文字相对基线的让位为 0 */
+export const PT_BANNER_DX = 0;
+export const PT_BANNER_DY = 0;
+export const PT_BANNER_TEXT_DY = 0;
+/** 头部小立绘(`player_pose_5` 源 67×92,44×60 是最贴近固有比例的偶数档;挂在右列,不再压头部四行) */
+export const PT_POSE_X = 500;
+export const PT_POSE_Y = 18;
+export const PT_POSE_W = 44;
 export const PT_POSE_H = 60;
 /** 头部四行信息的基线,以及「可支配」相对 pad 的横向偏移 */
-export const PT_ECHO_BASE_Y = 60;
-export const PT_AVAIL_BASE_Y = 60;
-export const PT_AVAIL_DX = 210;
-export const PT_ROUTE_BASE_Y = 82;
-export const PT_COLL_BASE_Y = 100;
-/** 节点行两行布局的两个裸加数(Web 的 `− 6` 与 `+ 19`) */
+export const PT_ECHO_BASE_Y = 84;
+export const PT_AVAIL_BASE_Y = 84;
+export const PT_AVAIL_DX = 198;
+export const PT_ROUTE_BASE_Y = 104;
+export const PT_COLL_BASE_Y = 122;
+/** 节点行两行布局的两个裸加数(两档取偶,l1 再 evenDown 兜一次) */
 export const PT_L1_DY = 6;
-export const PT_L2_DY = 19;
-/** 行内三处偏移:名称起笔 / 右列末笔内缩 / 描述起笔与限宽收进 */
-export const PT_NAME_DX = 8;
+export const PT_L2_DY = 20;
+/** 行内三处偏移:名称起笔 / 右列末笔内缩 / 描述起笔与限宽收进(一律走行板 nineMargin 的 16) */
+export const PT_NAME_DX = 16;
 export const PT_NAME_MAX_W = 150;
-export const PT_RIGHT_DX = 8;
-export const PT_DESC_DX = 8;
-export const PT_DESC_MAX_DX = 24;
-/** 勾选标记:边长 / 相对 l1 的上抬 / 右缘内缩 / 与「已拥有」的间隙 */
-export const PT_MARK_SIZE = 13;
+export const PT_RIGHT_DX = 16;
+export const PT_DESC_DX = 16;
+export const PT_DESC_MAX_DX = 32;
+/** 勾选标记:边长(`mark_check_green` 固有 7×7 → 14)/ 相对 l1 的上抬 / 右缘内缩 / 与「已拥有」的间隙 */
+export const PT_MARK_SIZE = 14;
 export const PT_MARK_DY = 12;
-export const PT_MARK_INSET = 12;
-export const PT_MARK_GAP = 17;
-/** 「已拥有」三字的近似量字宽(CJK = 1×px;Web 用的是 measureText,与 Cocos 不同源) */
-export const PT_OWNED_TEXT_W = 3 * fs.muted;
+export const PT_MARK_INSET = 16;
+export const PT_MARK_GAP = 16;
+/** 「已拥有」三字的近似量字宽(取偶;Web 用的是 measureText,与 Cocos 不同源) */
+export const PT_OWNED_TEXT_W = 40;
 /** 开始新轮回钮的描边宽度(Web 把 lineWidth 临时设 2 再复位 1) */
 export const PT_START_STROKE_W = 2;
 /** 面板九宫格切深(Web panelPad 的 drawNine 第六实参) */
@@ -257,14 +264,17 @@ export const PT_TAB_DEFS: readonly { route: PtRouteKey; label: string }[] = [
   { route: "conqueror", label: "征服者" },
 ];
 
-/** 开始新轮回钮矩形(Web 的 `x = w/2 − 130`、`y = h − pad − 52`) */
+/** 取偶下界:像素栅格 module = 2,1 美术 px = 2 逻辑 px,任何奇数坐标都会让贴图错半格 */
+const evenDown = (v: number): number => Math.floor(v / 2) * 2;
+
+/** 开始新轮回钮矩形(`x = w/2 − 130`、`y = evenDown(h) − PT_PAD − 52`;底缘贴面板内缘) */
 export function prestigeStartBtn(w: number, h: number): PtRect {
-  return { x: w / 2 - PT_START_HALF_W, y: h - ui.pad - PT_START_UP, w: PT_START_W, h: PT_START_H };
+  return { x: evenDown(w / 2 - PT_START_HALF_W), y: evenDown(h) - PT_PAD - PT_START_UP, w: PT_START_W, h: PT_START_H };
 }
 
 /**
- * 条件块累计让位后的纵线:蓝图块先减一档、定向搜索块再减一档(顺序就是 Web 的书写顺序,
- * 于是两块都在时定向搜索块落在更靠上的那一档)。
+ * 条件块累计让位后的纵线:蓝图块先减一档、定向搜索块再减一档(顺序就是书写顺序,
+ * 于是两块都在时定向搜索块落在更靠上的那一档)。每档是整块高度(标签 + 44 高钮 + 缝)。
  */
 export function prestigeBlockTop(w: number, h: number, hasBlueprint: boolean, hasTargetedSearch: boolean): number {
   let blockTop = prestigeStartBtn(w, h).y - PT_BLOCK_DY;
@@ -273,19 +283,27 @@ export function prestigeBlockTop(w: number, h: number, hasBlueprint: boolean, ha
   return blockTop;
 }
 
-/** n 枚等宽钮的宽度:`(w − pad×2 − (n−1)×gap) / n` */
-function choiceWidth(w: number, n: number, gap: number): number {
-  return (w - ui.pad * 2 - (n - 1) * gap) / n;
+/**
+ * n 枚等宽钮的一档:`bw = evenDown((contentW − (n−1)×gap) / n)`。
+ * 取偶后整组宽度必然 ≤ 内容宽,余量(恒为偶)一分为二落在组的两端 —— 落在组外,
+ * 不落在钮与钮之间,于是列距恒等于 `gap`,栅格不会被半格挤歪。
+ */
+function choiceGeom(w: number, n: number, gap: number): { bw: number; x0: number } {
+  const contentW = w - PT_PAD * 2;
+  // 4 的倍数:bw/2 也落在偶数上,钮内居中文字的锚点才不掉出栅格
+  const bw = Math.floor((contentW - (n - 1) * gap) / n / 4) * 4;
+  const slack = evenDown((contentW - (bw * n + gap * (n - 1))) / 2);
+  return { bw, x0: PT_PAD + slack };
 }
 
 function choiceLayout(type: TriggerType | EffectType, w: number, n: number, gap: number, blockTop: number, index: number): PrestigeChoiceLayout {
-  const bw = choiceWidth(w, n, gap);
-  const rect: PtRect = { x: ui.pad + index * (bw + gap), y: blockTop + PT_BTN_DY, w: bw, h: PT_BTN_H };
-  return { type, rect, text: { x: rect.x + rect.w / 2, baseY: rowTextY(rect.y, rect.h, fs.micro), maxW: rect.w, px: fs.micro, align: "center" } };
+  const { bw, x0 } = choiceGeom(w, n, gap);
+  const rect: PtRect = { x: x0 + index * (bw + gap), y: blockTop + PT_BTN_DY, w: bw, h: PT_BTN_H };
+  return { type, rect, text: { x: rect.x + rect.w / 2, baseY: rowTextY(rect.y, rect.h, fs.micro), maxW: evenDown(rect.w), px: fs.micro, align: "center" } };
 }
 
 function rowLayout(id: TalentId, index: number, rect: PtRect): PrestigeRowLayout {
-  const l1 = Math.round(rect.y + rect.h / 2 - PT_L1_DY);
+  const l1 = evenDown(rect.y + rect.h / 2 - PT_L1_DY);
   const l2 = l1 + PT_L2_DY;
   const rightX = rect.x + rect.w - PT_RIGHT_DX;
   return {
@@ -295,10 +313,10 @@ function rowLayout(id: TalentId, index: number, rect: PtRect): PrestigeRowLayout
     l1,
     l2,
     name: { x: rect.x + PT_NAME_DX, baseY: l1, maxW: PT_NAME_MAX_W, px: fs.body, align: "left" },
-    cost: { x: rightX, baseY: l1, maxW: rect.w - PT_NAME_DX - PT_NAME_MAX_W - TEXT_SLACK, px: fs.muted, align: "right" },
+    cost: { x: rightX, baseY: l1, maxW: evenDown(rect.w - PT_NAME_DX - PT_NAME_MAX_W - TEXT_SLACK), px: fs.muted, align: "right" },
     ownedText: { x: rightX, baseY: l1, maxW: PT_OWNED_TEXT_W, px: fs.muted, align: "right" },
     ownedMark: { x: rect.x + rect.w - PT_MARK_INSET - PT_OWNED_TEXT_W - PT_MARK_GAP - PT_MARK_SIZE, y: l1 - PT_MARK_DY, w: PT_MARK_SIZE, h: PT_MARK_SIZE },
-    desc: { x: rect.x + PT_DESC_DX, baseY: l2, maxW: rect.w - PT_DESC_MAX_DX, px: fs.micro, align: "left" },
+    desc: { x: rect.x + PT_DESC_DX, baseY: l2, maxW: evenDown(rect.w - PT_DESC_MAX_DX), px: fs.micro, align: "left" },
   };
 }
 
@@ -313,12 +331,13 @@ function rowLayout(id: TalentId, index: number, rect: PtRect): PrestigeRowLayout
  * 六格矩阵实测都不越界(数字见 `tests/cocos-phase4-prestige.test.ts`)。
  */
 export function prestigeLayout(w: number, h: number, routeIds: readonly TalentId[], hasBlueprint: boolean, hasTargetedSearch: boolean): PrestigeLayout {
-  const pad = ui.pad;
+  const hh = evenDown(h);
+  const pad = PT_PAD;
   const rowW = w - pad * 2;
-  const startBtn = prestigeStartBtn(w, h);
+  const startBtn = prestigeStartBtn(w, hh);
   let blockTop = startBtn.y - PT_BLOCK_DY;
 
-  // 蓝图块先让位(于是它落在靠下的那一档),定向搜索块后让位(靠上)—— 与 Web 的书写顺序同序
+  // 蓝图块先让位(于是它落在靠下的那一档),定向搜索块后让位(靠上)—— 与绘制顺序同序
   let effectLabelY = 0;
   const effectBtns: PrestigeChoiceLayout[] = [];
   if (hasBlueprint) {
@@ -336,33 +355,39 @@ export function prestigeLayout(w: number, h: number, routeIds: readonly TalentId
 
   const rowsTop = PT_LIST_Y0;
   const rowsBottom = blockTop - PT_ROWS_BOTTOM_DY;
-  const { rowH, gap } = spreadRows(routeIds.length, rowsTop, rowsBottom, PT_ROW_MIN_H, PT_ROW_MAX_H);
+  const spread = spreadRows(routeIds.length, rowsTop, rowsBottom, PT_ROW_MIN_H, PT_ROW_MAX_H);
+  // spreadRows 出数不带栅格意识:两档一律取偶,让下来的余量自然落进 rowsEnd..rowsBottom 那道无上限呼吸缝
+  const rowH = Math.max(PT_ROW_MIN_H, evenDown(spread.rowH));
+  const gap = routeIds.length > 1 ? Math.max(PT_ROW_MIN_GAP, evenDown(spread.gap)) : spread.gap;
   const rowStep = rowH + gap;
   const rows: PrestigeRowLayout[] = [];
   for (let i = 0; i < routeIds.length; i++) rows.push(rowLayout(routeIds[i], i, { x: pad, y: rowsTop + i * rowStep, w: rowW, h: rowH }));
   const rowsEnd = routeIds.length > 0 ? rowsTop + (routeIds.length - 1) * rowStep + rowH : rowsTop;
 
-  const tabW = rowW / PT_TAB_N;
+  const tabW = evenDown(rowW / PT_TAB_N);
   const tabs: PrestigeTabLayout[] = PT_TAB_DEFS.map((t, i) => {
     const rect: PtRect = { x: pad + tabW * i, y: PT_TAB_Y, w: tabW, h: PT_TAB_H };
-    return { route: t.route, label: t.label, rect, text: { x: rect.x + rect.w / 2, baseY: rowTextY(rect.y, rect.h, fs.muted), maxW: rect.w, px: fs.muted, align: "center" } };
+    return { route: t.route, label: t.label, rect, text: { x: rect.x + rect.w / 2, baseY: rowTextY(rect.y, rect.h, fs.muted), maxW: evenDown(rect.w), px: fs.muted, align: "center" } };
   });
 
-  const headerBanner: PtRect = { x: pad - PT_BANNER_DX, y: PT_TITLE_BASE_Y - PT_BANNER_H + PT_BANNER_DY, w: PT_BANNER_W, h: PT_BANNER_H };
+  const headerBanner: PtRect = { x: PT_BANNER_X, y: PT_BANNER_Y, w: PT_BANNER_W, h: PT_BANNER_H };
+  // 立绘右缘就是内容列右缘(544);四行文字的最右锚点一律收在立绘起笔之前
+  const poseRight = PT_POSE_X;
+  const textMaxRight = evenDown(poseRight - TEXT_SLACK - pad);
 
   return {
-    panel: { x: pad, y: pad, w: rowW, h: h - pad * 2 },
+    panel: { x: pad, y: pad, w: rowW, h: hh - pad * 2 },
     panelKey: "panel_dark_corners",
     headerBanner,
-    titleWithBanner: { x: headerBanner.x + headerBanner.w / 2, baseY: PT_TITLE_BASE_Y - PT_BANNER_TEXT_DY, maxW: headerBanner.w, px: fs.title, align: "center" },
-    titleBare: { x: pad, baseY: PT_TITLE_BASE_Y, maxW: PT_POSE_X - PT_BANNER_DX - TEXT_SLACK - pad, px: fs.title, align: "left" },
+    titleWithBanner: { x: headerBanner.x + headerBanner.w / 2, baseY: PT_TITLE_BASE_Y - PT_BANNER_TEXT_DY, maxW: evenDown(headerBanner.w), px: fs.title, align: "center" },
+    titleBare: { x: pad, baseY: PT_TITLE_BASE_Y, maxW: textMaxRight, px: fs.title, align: "left" },
     pose: { x: PT_POSE_X, y: PT_POSE_Y, w: PT_POSE_W, h: PT_POSE_H },
-    // 第一行收到「可支配」起笔前;第二行右缘收到立绘起笔前;后两行整幅宽
-    echoLine: { x: pad, baseY: PT_ECHO_BASE_Y, maxW: PT_AVAIL_DX - TEXT_SLACK, px: fs.body, align: "left" },
-    availLine: { x: pad + PT_AVAIL_DX, baseY: PT_AVAIL_BASE_Y, maxW: w - pad - (pad + PT_AVAIL_DX), px: fs.body, align: "left" },
-    routeLine: { x: pad, baseY: PT_ROUTE_BASE_Y, maxW: rowW, px: fs.micro, align: "left" },
-    collLine: { x: pad, baseY: PT_COLL_BASE_Y, maxW: rowW, px: fs.micro, align: "left" },
-    tabsStrip: { x: tabs[0].rect.x, y: tabs[0].rect.y, w: tabs[0].rect.w * PT_TAB_N, h: PT_TAB_H },
+    // 四行都在立绘之下起笔,横向让位只为隔开同带的回响点数与可支配两点读数
+    echoLine: { x: pad, baseY: PT_ECHO_BASE_Y, maxW: evenDown(PT_AVAIL_DX - TEXT_SLACK), px: fs.body, align: "left" },
+    availLine: { x: pad + PT_AVAIL_DX, baseY: PT_AVAIL_BASE_Y, maxW: evenDown(w - pad - TEXT_SLACK - (pad + PT_AVAIL_DX)), px: fs.body, align: "left" },
+    routeLine: { x: pad, baseY: PT_ROUTE_BASE_Y, maxW: evenDown(rowW - TEXT_SLACK), px: fs.micro, align: "left" },
+    collLine: { x: pad, baseY: PT_COLL_BASE_Y, maxW: evenDown(rowW - TEXT_SLACK), px: fs.micro, align: "left" },
+    tabsStrip: { x: pad + evenDown((rowW - PT_TABS_STRIP_W) / 2), y: PT_TAB_Y + PT_TABS_STRIP_DY, w: PT_TABS_STRIP_W, h: PT_TABS_STRIP_H },
     tabs,
     rowsTop,
     rowsBottom,

@@ -263,11 +263,12 @@ export class FusionView {
     this.paintDim(p4.fuDim);
     this.panel.show(L.panelKey, L.panel, "slice", p3.detailBg, p3.detailStroke);
 
-    // 标题:横幅整幅拉伸、无回退分支(缺图收成零位盒),标题恒左起笔一档
+    // 标题:横幅两档 —— 有图居中落在绸带内,缺图切左起笔(与其它已翻新屏同一口径)
     const banner = this.banner.show(KEY_BANNER);
     placeRect(this.banner.node, banner ? L.headerBanner : ZERO);
     this.title.bold(true);
-    this.title.set(L.title.x, L.title.baseY, L.title.maxW, L.title.px, c.title, "left", p4.fuTitle);
+    const tl = banner ? L.titleOnBanner : L.title;
+    this.title.set(tl.x, tl.baseY, tl.maxW, tl.px, c.title, tl.align, p4.fuTitle);
 
     // 星尘读数:iconText 两档(有图右移、缺图前置替代字形),不加粗(Web 只设一次 F(fs.body))
     this.paintIconText(L, c, p4);

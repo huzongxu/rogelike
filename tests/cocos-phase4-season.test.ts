@@ -33,7 +33,7 @@ import { readFileSync } from "node:fs";
 import { DAY_MS, SEASON_DAYS, SEASON_STARDUST_RATE, seasonDay, seasonEnded, seasonScore, seasonStardust } from "@game/data/season";
 import { seasonTheme } from "@game/data/seasonSets";
 import { STAGES } from "@game/data/stages";
-import { fs as FS, rowTextY, ui as THEME_UI } from "@game/ui/theme";
+import { fs as FS, rowTextY } from "@game/ui/theme";
 import {
   SE_ANCHOR_RATIO,
   SE_BANNER_DY,
@@ -51,6 +51,7 @@ import {
   SE_DUST_PX,
   SE_EMBLEM_DX,
   SE_EMBLEM_DY,
+  SE_EMBLEM_H,
   SE_EMBLEM_SIZE,
   SE_NOTE_DY,
   SE_NOTE_PX,
@@ -85,7 +86,8 @@ import * as cocosSeasonSets from "../cocos/assets/scripts/game/data/seasonSets";
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
-const PAD = THEME_UI.pad;
+/** 第六批翻新:本屏走自己的 SE_PAD = 16(偶数栅格、内容宽 528),不再跟 Web 冻结的 ui.pad = 14 */
+const PAD = 16;
 
 /** 一个可复现的时间基准(14 天整 = 1_209_600_000 ms,与 Date 无关) */
 const START = 1_700_000_000_000;
@@ -185,18 +187,18 @@ describe("四格几何矩阵(h ∈ {996,1246} × 摘要形态 ∈ {上屏,收起
   /* 期望值由 seasonLayout(560, h, summary) 实算得出后写死 */
   const MATRIX: Record<number, { anchor: number; emblemY: number; bannerY: number; base: number[]; btnY: number; btnText: number }> = {
     996: {
-      anchor: 278.88000000000005,
-      emblemY: 182.88000000000005,
-      bannerY: 246.88000000000005,
-      base: [312.88000000000005, 340.88000000000005, 364.88000000000005, 392.88000000000005],
+      anchor: 278,
+      emblemY: 182,
+      bannerY: 246,
+      base: [312, 340, 364, 392],
       btnY: 918,
       btnText: 946,
     },
     1246: {
-      anchor: 348.88000000000005,
-      emblemY: 252.88000000000005,
-      bannerY: 316.88000000000005,
-      base: [382.88000000000005, 410.88000000000005, 434.88000000000005, 462.88000000000005],
+      anchor: 348,
+      emblemY: 252,
+      bannerY: 316,
+      base: [382, 410, 434, 462],
       btnY: 1168,
       btnText: 1196,
     },
@@ -204,15 +206,15 @@ describe("四格几何矩阵(h ∈ {996,1246} × 摘要形态 ∈ {上屏,收起
 
   for (const h of [H_STD, H_TALL]) {
     const M = MATRIX[h];
-    it(`h=${h}:锚线与五处盒位逐字对标 Web 的 h × 0.28 / h − 78`, () => {
+    it(`h=${h}:锚线与五处盒位对标 Web 的 h × 0.28 取偶档 / h − 78`, () => {
       for (const s of [true, false]) {
         const L = laid(h, s);
-        expect(L.anchorY).toBeCloseTo(M.anchor, 10);
-        expect(L.anchorY).toBeCloseTo(h * SE_ANCHOR_RATIO, 10);
-        expect(L.emblem).toEqual({ x: 256, y: M.emblemY, w: 48, h: 48 });
+        expect(L.anchorY).toBe(M.anchor);
+        expect(L.anchorY).toBe(Math.floor((h * SE_ANCHOR_RATIO) / 2) * 2);
+        expect(L.emblem).toEqual({ x: 256, y: M.emblemY, w: SE_EMBLEM_SIZE, h: SE_EMBLEM_H });
         expect(L.banner).toEqual({ x: 160, y: M.bannerY, w: SE_BANNER_W, h: SE_BANNER_H });
-        expect(L.closeBtn).toEqual({ x: 185, y: M.btnY, w: SE_BTN_W, h: SE_BTN_H });
-        expect(L.title.baseY).toBeCloseTo(M.anchor, 10);
+        expect(L.closeBtn).toEqual({ x: 170, y: M.btnY, w: SE_BTN_W, h: SE_BTN_H });
+        expect(L.title.baseY).toBe(M.anchor);
         expect([L.themeLine.baseY, L.scoreLine.baseY, L.dustLine.baseY, L.noteLine.baseY].map((n) => +n.toFixed(10))).toEqual(M.base.map((n) => +n.toFixed(10)));
         expect(L.closeText.baseY).toBe(M.btnText);
       }
@@ -236,11 +238,11 @@ describe("四格几何矩阵(h ∈ {996,1246} × 摘要形态 ∈ {上屏,收起
     const a = laid(H_STD, true);
     const b = laid(H_TALL, true);
     const dH = H_TALL - H_STD;
-    expect(b.anchorY - a.anchorY).toBeCloseTo(dH * SE_ANCHOR_RATIO, 10);
-    expect(b.emblem.y - a.emblem.y).toBeCloseTo(dH * SE_ANCHOR_RATIO, 10);
-    expect(b.banner.y - a.banner.y).toBeCloseTo(dH * SE_ANCHOR_RATIO, 10);
-    expect(b.themeLine.baseY - a.themeLine.baseY).toBeCloseTo(dH * SE_ANCHOR_RATIO, 10);
-    expect(b.noteLine.baseY - a.noteLine.baseY).toBeCloseTo(dH * SE_ANCHOR_RATIO, 10);
+    expect(b.anchorY - a.anchorY).toBe(70);
+    expect(b.emblem.y - a.emblem.y).toBe(70);
+    expect(b.banner.y - a.banner.y).toBe(70);
+    expect(b.themeLine.baseY - a.themeLine.baseY).toBe(70);
+    expect(b.noteLine.baseY - a.noteLine.baseY).toBe(70);
     expect(b.closeBtn.y - a.closeBtn.y).toBe(dH);
     expect(b.closeText.baseY - a.closeText.baseY).toBe(dH);
     expect(bottom(b.closeBtn) - bottom(a.closeBtn)).toBe(dH);
@@ -302,12 +304,16 @@ describe("四格几何矩阵(h ∈ {996,1246} × 摘要形态 ∈ {上屏,收起
     }
   });
 
-  it("本屏一次都不调 spreadRows:共享层里没有它的引用,几何也不随存档条数变", () => {
+  it("本屏一次都不调 spreadRows,也不再 import ui.pad:像素栅格由本屏具名常量钉住", () => {
     const src = codeOf(fileSource("../cocos/assets/scripts/game/ui/seasonLayout.ts"));
     expect(src.includes("spreadRows")).toBe(false);
     expect(src.includes("rowTextY")).toBe(false);
-    // 只 import ui.pad
-    expect(fileSource("../cocos/assets/scripts/game/ui/seasonLayout.ts")).toContain('import { ui } from "./theme";');
+    // 第六批翻新:本屏不再 import ui.pad,栅格由本屏具名常量钉死
+    const raw = fileSource("../cocos/assets/scripts/game/ui/seasonLayout.ts");
+    expect(raw).not.toContain('import { ui } from "./theme";');
+    expect(raw).toContain("export const SE_PAD = 16;");
+    expect(raw).toContain("export const SE_CONTENT_W = 528;");
+    expect(raw).toContain('export const SE_PANEL_KEY = "panel_dark_corners";');
   });
 
   it("四格全部矩形与七行文本带都不越出横向 [pad, w − pad],也不越出纵向 [0, h]", () => {
@@ -630,13 +636,13 @@ describe("Web 字面量与本屏表常量的同数关系", () => {
     expect([SE_TITLE_PX, SE_THEME_PX, SE_SCORE_PX, SE_DUST_PX, SE_NOTE_PX, SE_BTN_PX]).toEqual([24, 16, 17, 17, 16, 15]);
   });
 
-  it("两处贴图盒的字面量与共享层常量同数(48 / 240×44 / 上抬 96 与 32)", () => {
+  it("两处贴图盒的字面量与共享层常量同数(48×40 / 240×44 / 上抬 96 与 32)", () => {
     const web = webDrawSeason();
     expect(web.includes('this.assets.draw(g, "emblem_flow_gold", w / 2 - 24, h * 0.28 - 96, 48, 48);')).toBe(true);
     expect(web.includes('this.assets.draw(g, "banner_mid_bronze", w / 2 - 120, h * 0.28 - 32, 240, 44);')).toBe(true);
-    expect([SE_EMBLEM_DX, SE_EMBLEM_DY, SE_EMBLEM_SIZE]).toEqual([24, 96, 48]);
+    expect([SE_EMBLEM_DX, SE_EMBLEM_DY, SE_EMBLEM_SIZE, SE_EMBLEM_H]).toEqual([24, 96, 48, 40]);
     expect([SE_BANNER_DX, SE_BANNER_DY, SE_BANNER_W, SE_BANNER_H]).toEqual([120, 32, 240, 44]);
-    expect(SE_BTN_W).toBe(190);
+    expect(SE_BTN_W).toBe(220);
     expect(SE_BTN_UP).toBe(78);
     // Web 这一笔 strokeRect 没有显式设 lineWidth,取全项目"描边后复位 1"的约定档
     expect(SE_BTN_STROKE_W).toBe(1);
@@ -780,11 +786,14 @@ describe("GameShell 的赛季结算屏接线", () => {
     expect(view.includes('const KEY_BANNER = "banner_mid_bronze";')).toBe(true);
     expect(view.includes("this.summaryNode.active = c.hasSummary;")).toBe(true);
     expect(view.includes("get summaryVisible(): boolean")).toBe(true);
-    // 本屏没有面板,所以不引 Plate、也不画九宫格
+    // 第六批翻新:本屏补上 panel_dark_corners 九宫格底板(Plate 自带子节点 Graphics 回退)
     const viewCode = codeOf(view);
-    expect(viewCode.includes("Plate")).toBe(false);
-    expect(viewCode.includes('"slice"')).toBe(false);
+    expect(viewCode.includes("Plate")).toBe(true);
+    expect(viewCode.includes('"slice"')).toBe(true);
+    expect(viewCode.includes("L.panelKey")).toBe(true);
+    // 键仍然只在共享层出现一次,视图侧不重复写字面量
     expect(viewCode.includes("panel_dark_corners")).toBe(false);
+    expect((fileSource("../cocos/assets/scripts/game/ui/seasonLayout.ts").match(/= "panel_dark_corners";/g) ?? []).length).toBe(1);
   });
 
   it("Web 侧本屏的全部入口与出口:只有一个进屏条件、一个钮与一个 Esc", () => {

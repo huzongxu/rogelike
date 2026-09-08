@@ -34,7 +34,7 @@ import { EFFECTS, MODIFIERS, TRIGGERS, effectDef, triggerDef, type EffectType, t
 import { ENEMY_DEFS } from "@game/data/enemies";
 import { SEASON_MONSTERS } from "@game/data/seasonMonsters";
 import { ALL_TALENTS, BUILDER_ROUTE, CONQUEROR_ROUTE, EFFICIENT_ROUTE, isTierUnlocked, routeCost, routeOf, talentOf, type TalentId } from "@game/data/talents";
-import { fs as FS, rowTextY, spreadRows, ui as PAD_ } from "@game/ui/theme";
+import { fs as FS, rowTextY, spreadRows } from "@game/ui/theme";
 import * as sharedTalents from "@game/data/talents";
 import {
   PT_AVAIL_DX,
@@ -70,6 +70,7 @@ import {
   PT_POSE_Y,
   PT_RIGHT_DX,
   PT_ROW_MAX_H,
+  PT_ROW_MIN_GAP,
   PT_ROW_MIN_H,
   PT_ROUTE_BASE_Y,
   PT_ROWS_BOTTOM_DY,
@@ -93,6 +94,13 @@ import {
   type PtRect,
   type PtRouteKey,
   type PtTextLine,
+  PT_BANNER_X,
+  PT_BANNER_Y,
+  PT_CONTENT_W,
+  PT_PAD,
+  PT_TABS_STRIP_DY,
+  PT_TABS_STRIP_H,
+  PT_TABS_STRIP_W,
 } from "@game/ui/prestigeLayout";
 
 /* ---------- Cocos 宿主侧(本文件的被测物;只吃 cc-free 模型,不碰视图) ---------- */
@@ -118,7 +126,8 @@ import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
-const PAD = PAD_.pad;
+/** 第六批翻新:本屏走自己的 PT_PAD = 16(偶数栅格、内容宽 528),不再跟 Web 冻结的 ui.pad = 14 */
+const PAD = 16;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
 const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
@@ -182,7 +191,15 @@ function lastRowBottom(L: PrestigeLayout): number {
 }
 
 /** spreadRows 直算一遍(矩阵里的数不是从布局函数里抄回来的) */
-const direct = (n: number, rowsTop: number, rowsBottom: number) => spreadRows(n, rowsTop, rowsBottom, PT_ROW_MIN_H, PT_ROW_MAX_H);
+/** 偶数栅格:与共享层同一取偶方向(往下),rowH / gap 出数后都要过它 */
+const evenDown = (v: number): number => Math.floor(v / 2) * 2;
+
+/** 与 prestigeLayout 同式的直算:spreadRows 出数后再 evenDown,并各自兜住下限 */
+const direct = (n: number, rowsTop: number, rowsBottom: number) => {
+  const s = spreadRows(n, rowsTop, rowsBottom, PT_ROW_MIN_H, PT_ROW_MAX_H);
+  const rowH = Math.max(PT_ROW_MIN_H, evenDown(s.rowH));
+  return { rowH, gap: n > 1 ? Math.max(PT_ROW_MIN_GAP, evenDown(s.gap)) : s.gap };
+};
 
 /** 该格预算内最多能塞几行不越界(n 从 1 起递增;rowH / gap 随 n 现算,与真实调用同式) */
 function maxFitRows(rowsTop: number, rowsBottom: number): number {
@@ -294,19 +311,19 @@ describe("底部锚定的分区纵线(与 Web 同一批裸加数)", () => {
     expect([PT_START_HALF_W, PT_START_W, PT_START_H, PT_START_UP]).toEqual([130, 260, 52, 52]);
   });
 
-  it("blockTop 三档跳:−10 / −56 / −102(蓝图先让位、定向搜索后让位)", () => {
+  it("blockTop 三档跳:−10 / −78 / −146(蓝图先让位、定向搜索后让位)", () => {
     for (const h of [H_STD, H_TALL]) {
       const y0 = prestigeStartBtn(W, h).y;
       expect(prestigeBlockTop(W, h, false, false)).toBe(y0 - PT_BLOCK_DY);
       expect(prestigeBlockTop(W, h, true, false)).toBe(y0 - PT_BLOCK_DY - PT_BLOCK_H);
       expect(prestigeBlockTop(W, h, false, true)).toBe(y0 - PT_BLOCK_DY - PT_BLOCK_H);
       expect(prestigeBlockTop(W, h, true, true)).toBe(y0 - PT_BLOCK_DY - 2 * PT_BLOCK_H);
-      expect([PT_BLOCK_DY, PT_BLOCK_H]).toEqual([10, 46]);
+      expect([PT_BLOCK_DY, PT_BLOCK_H]).toEqual([10, 68]);
     }
   });
 
-  it("行区上界恒为 156,下界就是 blockTop − 8", () => {
-    expect(PT_LIST_Y0).toBe(156);
+  it("行区上界恒为 192,下界就是 blockTop − 8", () => {
+    expect(PT_LIST_Y0).toBe(192);
     expect(PT_ROWS_BOTTOM_DY).toBe(8);
     for (const h of [H_STD, H_TALL]) {
       for (const [bp, ts] of BLOCKS) {
@@ -319,18 +336,18 @@ describe("底部锚定的分区纵线(与 Web 同一批裸加数)", () => {
     }
   });
 
-  it("三系页签恒三枚、y = 120、h = 30、tabW = (w − pad×2)/3", () => {
+  it("三系页签恒三枚、y = 140、h = 44(热区下限)、tabW 取偶", () => {
     const L = prestigeLayout(W, H_STD, routeIds("builder"), false, false);
     expect(L.tabs).toHaveLength(PT_TAB_N);
-    expect([PT_TAB_Y, PT_TAB_H, PT_TAB_N]).toEqual([120, 30, 3]);
-    const tabW = (W - PAD * 2) / 3;
+    expect([PT_TAB_Y, PT_TAB_H, PT_TAB_N]).toEqual([140, 44, 3]);
+    const tabW = Math.floor((W - PAD * 2) / 3 / 2) * 2;
     for (let i = 0; i < L.tabs.length; i++) {
       expect(L.tabs[i].rect).toEqual({ x: PAD + tabW * i, y: PT_TAB_Y, w: tabW, h: PT_TAB_H });
     }
     expect(L.tabs.map((t) => t.route)).toEqual(["builder", "efficient", "conqueror"]);
     expect(L.tabs.map((t) => t.label)).toEqual(["构筑师", "效率专家", "征服者"]);
     // 整条打底盒 = 三枚合并
-    expect(L.tabsStrip).toEqual({ x: L.tabs[0].rect.x, y: PT_TAB_Y, w: tabW * 3, h: PT_TAB_H });
+    expect(L.tabsStrip).toEqual({ x: 16, y: 148, w: 528, h: 30 });
     expect(L.tabsStrip.w).toBe(W - PAD * 2);
   });
 
@@ -340,7 +357,7 @@ describe("底部锚定的分区纵线(与 Web 同一批裸加数)", () => {
     expect(L.tabs[0].rect.y + L.tabs[0].rect.h).toBeLessThanOrEqual(L.rowsTop);
   });
 
-  it("面板底是 panelPad 不传专属键的那一档:panel_dark_corners 九宫 (pad,pad,w−2pad,h−2pad)", () => {
+  it("面板底是 panel_dark_corners 九宫 (pad,pad,w−2pad,evenDown(h)−2pad)", () => {
     const L = prestigeLayout(W, H_STD, routeIds("builder"), false, false);
     expect(L.panelKey).toBe("panel_dark_corners");
     expect(L.panel).toEqual({ x: PAD, y: PAD, w: W - PAD * 2, h: H_STD - PAD * 2 });
@@ -360,17 +377,17 @@ describe("六格矩阵:h ∈ {996,1246} × 条件块 ∈ {无,只有其一,两�
   /** 每格的期望值:`[rowsBottom, rowH, gap, rowsEnd, 余量, 最多可塞行数]` */
   const CELL: Record<string, [number, number, number, number, number, number]> = {
     // 996 × 两块都不在
-    "996|00": [912, 64, 12, 904, 8, 17],
-    // 996 × 只有完美蓝图 / 只有定向搜索(两格同数,各减 46)
-    "996|10": [866, 64, 7, 859, 7, 16],
-    "996|01": [866, 64, 7, 859, 7, 16],
-    // 996 × 两块都在(最紧的一格:余量只有 1px)
-    "996|11": [820, 60, 7, 819, 1, 15],
-    // 1246 × 三档,rowH 已顶到 64 上限、gap 顶到 20 上限,故 rowsEnd 恒 976
-    "1246|00": [1162, 64, 20, 976, 186, 22],
-    "1246|10": [1116, 64, 20, 976, 140, 21],
-    "1246|01": [1116, 64, 20, 976, 140, 21],
-    "1246|11": [1070, 64, 20, 976, 94, 20],
+    "996|00": [910, 64, 8, 904, 6, 16],
+    // 996 × 只有完美蓝图 / 只有定向搜索(两格同数,各减 68)
+    "996|10": [842, 58, 6, 826, 16, 14],
+    "996|01": [842, 58, 6, 826, 16, 14],
+    // 996 × 两块都在(最紧的一格:行高被压到 52、行距 6,呼吸缝 8px)
+    "996|11": [774, 52, 6, 766, 8, 13],
+    // 1246 × 三档,rowH 已顶到 64 上限、gap 顶到 20 上限,故 rowsEnd 恒 1012
+    "1246|00": [1160, 64, 20, 1012, 148, 22],
+    "1246|10": [1092, 64, 20, 1012, 80, 20],
+    "1246|01": [1092, 64, 20, 1012, 80, 20],
+    "1246|11": [1024, 64, 20, 1012, 12, 19],
   };
 
   const key = (h: number, bp: boolean, ts: boolean) => `${h}|${bp ? 1 : 0}${ts ? 1 : 0}`;
@@ -421,26 +438,26 @@ describe("六格矩阵:h ∈ {996,1246} × 条件块 ∈ {无,只有其一,两�
     }
   });
 
-  it("行区越界是线性放大的:超出行数阈值后每多一行末行底边就多 rowH + 4(两下限同时兜住)", () => {
-    // 996 × 两块都在:15 行还在线内,16 行越出
+  it("行区越界是线性放大的:超出行数阈值后每多一行末行底边就多 rowH + gap(两下限同时兜住)", () => {
+    // 996 × 两块都在:13 行还在线内,14 行越出
     const rowsBottom = prestigeLayout(W, H_STD, routeIds("builder"), true, true).rowsBottom;
     const fit = maxFitRows(PT_LIST_Y0, rowsBottom);
-    expect(fit).toBe(15);
+    expect(fit).toBe(13);
     const over = firstOverflowN(PT_LIST_Y0, rowsBottom);
-    expect(over).toBe(16);
+    expect(over).toBe(14);
     const at = (n: number) => {
       const { rowH, gap } = direct(n, PT_LIST_Y0, rowsBottom);
       return PT_LIST_Y0 + (n - 1) * (rowH + gap) + rowH;
     };
     expect(at(fit)).toBeLessThanOrEqual(rowsBottom);
     expect(at(over)).toBeGreaterThan(rowsBottom);
-    expect(at(over)).toBe(856);
-    expect(at(over) - rowsBottom).toBe(36);
-    // 两个下限同时兜住之后,每多一行末行底边就多 rowH + gap = 40 + 4
+    expect(at(over)).toBe(804);
+    expect(at(over) - rowsBottom).toBe(30);
+    // 两个下限同时兜住之后,每多一行末行底边就多 rowH + gap = 40 + 4(取偶后仍是 44 的步进)
     expect(at(over + 1) - at(over)).toBe(44);
   });
 
-  it("行 y 就是 rowsTop + i × (rowH + gap)(本屏使用 spreadRows 返回的 gap,与 gearup 丢弃它正相反)", () => {
+  it("行 y 就是 rowsTop + i × (rowH + gap)(本屏使用取偶后的 gap,与 gearup 丢弃它正相反)", () => {
     const L = prestigeLayout(W, H_STD, routeIds("builder"), true, true);
     expect(L.rowGap).toBeGreaterThan(4);
     for (let i = 0; i < L.rows.length; i++) {
@@ -470,12 +487,12 @@ describe("六格矩阵:h ∈ {996,1246} × 条件块 ∈ {无,只有其一,两�
 /* ==================== 3. 节点行两行布局 ==================== */
 
 describe("节点行的两行布局(l1 / l2 / 右列两档 / 勾选标记)", () => {
-  it("l1 = round(r.y + r.h/2 − 6)、l2 = l1 + 19", () => {
-    expect([PT_L1_DY, PT_L2_DY]).toEqual([6, 19]);
+  it("l1 = evenDown(r.y + r.h/2 − 6)、l2 = l1 + 20", () => {
+    expect([PT_L1_DY, PT_L2_DY]).toEqual([6, 20]);
     for (const [bp, ts] of BLOCKS) {
       const L = prestigeLayout(W, H_STD, routeIds("builder"), bp, ts);
       for (const row of L.rows) {
-        expect(row.l1).toBe(Math.round(row.rect.y + row.rect.h / 2 - PT_L1_DY));
+        expect(row.l1).toBe(evenDown(row.rect.y + row.rect.h / 2 - PT_L1_DY));
         expect(row.l2).toBe(row.l1 + PT_L2_DY);
         expect(row.name.baseY).toBe(row.l1);
         expect(row.cost.baseY).toBe(row.l1);
@@ -485,8 +502,8 @@ describe("节点行的两行布局(l1 / l2 / 右列两档 / 勾选标记)", () =
     }
   });
 
-  it("名称起笔 r.x + 8、限宽 150(fs.body);描述起笔 r.x + 8、限宽 r.w − 24(fs.micro)", () => {
-    expect([PT_NAME_DX, PT_NAME_MAX_W, PT_DESC_DX, PT_DESC_MAX_DX]).toEqual([8, 150, 8, 24]);
+  it("名称起笔 r.x + 16、限宽 150(fs.body);描述起笔 r.x + 16、限宽 r.w − 32(fs.micro)", () => {
+    expect([PT_NAME_DX, PT_NAME_MAX_W, PT_DESC_DX, PT_DESC_MAX_DX]).toEqual([16, 150, 16, 32]);
     const L = prestigeLayout(W, H_STD, routeIds("builder"), false, false);
     for (const row of L.rows) {
       expect(row.name.x).toBe(row.rect.x + PT_NAME_DX);
@@ -499,8 +516,8 @@ describe("节点行的两行布局(l1 / l2 / 右列两档 / 勾选标记)", () =
     }
   });
 
-  it("右列两档共用同一末笔 r.x + r.w − 8 与同一基线,都是右对齐 fs.muted", () => {
-    expect(PT_RIGHT_DX).toBe(8);
+  it("右列两档共用同一末笔 r.x + r.w − 16 与同一基线,都是右对齐 fs.muted", () => {
+    expect(PT_RIGHT_DX).toBe(16);
     const L = prestigeLayout(W, H_STD, routeIds("builder"), false, false);
     for (const row of L.rows) {
       const rightX = row.rect.x + row.rect.w - PT_RIGHT_DX;
@@ -512,8 +529,8 @@ describe("节点行的两行布局(l1 / l2 / 右列两档 / 勾选标记)", () =
     }
   });
 
-  it("勾选标记:13×13 落在 (右缘 − 12 − 量字宽 − 17, l1 − 12),量字宽是 Cocos 侧近似值", () => {
-    expect([PT_MARK_SIZE, PT_MARK_INSET, PT_MARK_GAP, PT_MARK_DY]).toEqual([13, 12, 17, 12]);
+  it("勾选标记:14×14 落在 (右缘 − 16 − 量字宽 − 16, l1 − 12),量字宽是 Cocos 侧近似值", () => {
+    expect([PT_MARK_SIZE, PT_MARK_INSET, PT_MARK_GAP, PT_MARK_DY]).toEqual([14, 16, 16, 12]);
     const L = prestigeLayout(W, H_STD, routeIds("builder"), false, false);
     for (const row of L.rows) {
       expect(row.ownedMark.w).toBe(PT_MARK_SIZE);
@@ -528,8 +545,9 @@ describe("节点行的两行布局(l1 / l2 / 右列两档 / 勾选标记)", () =
   });
 
   it("「已拥有」的量字宽按 Cocos 侧近似系数(CJK = 1×px)——这一档与 Web 的 measureText 不同源", () => {
-    expect(PT_OWNED_TEXT_W).toBe(3 * FS.muted);
-    expect(PT_OWNED_TEXT_W).toBe(39);
+    expect(PT_OWNED_TEXT_W).toBe(40);
+    // 取偶后比 CJK 近似宽(3 × fs.muted = 39)略宽,保证栅格不掉半个像素
+    expect(PT_OWNED_TEXT_W).toBeGreaterThan(3 * FS.muted);
   });
 
   it("两行布局的 l2 恒在行矩形之内(描述不会被挤出本行)", () => {
@@ -558,42 +576,47 @@ describe("开局配置块:定向搜索 6 枚 / 完美蓝图 8 枚", () => {
     expect(L.hasTargetedSearch).toBe(false);
   });
 
-  it("定向搜索:6 枚、bw = (w − pad×2 − 5×6)/6、间距 6、y = blockTop + 18、h = 28", () => {
+  it("定向搜索:6 枚、bw = evenDown4((528 − 5×8)/6) = 80、整组居中、y = blockTop + 18、h = 44", () => {
     const L = prestigeLayout(W, H_STD, routeIds("builder"), false, true);
     expect(PT_TRIGGER_N).toBe(6);
-    expect(PT_TRIGGER_GAP).toBe(6);
+    expect(PT_TRIGGER_GAP).toBe(8);
     expect(L.triggerBtns).toHaveLength(6);
-    const bw = (W - PAD * 2 - 5 * 6) / 6;
+    const bw = Math.floor((W - PAD * 2 - 5 * 8) / 6 / 4) * 4;
     for (let i = 0; i < 6; i++) {
-      expect(L.triggerBtns[i].rect).toEqual({ x: PAD + i * (bw + 6), y: L.blockTop + PT_BTN_DY, w: bw, h: PT_BTN_H });
+      expect(L.triggerBtns[i].rect).toEqual({ x: 20 + i * (bw + 8), y: L.blockTop + PT_BTN_DY, w: bw, h: PT_BTN_H });
       expect(L.triggerBtns[i].type).toBe(PT_TRIGGER_TYPES[i]);
     }
-    expect(bw).toBeCloseTo(83.66666666666667, 10);
+    expect(bw).toBe(80);
+    // 组宽 6×80 + 5×8 = 520,让下来的 8px 平分到两端:左右空档严格对称,且 bw 是 4 的倍数(钮内居中文字的锚点不掉出栅格)
+    expect(L.triggerBtns[0].rect.x - PAD).toBe(W - PAD - (L.triggerBtns[5].rect.x + bw));
+    expect(bw % 4).toBe(0);
   });
 
-  it("完美蓝图:8 枚、bw = (w − pad×2 − 7×4)/8 = 63、间距 4", () => {
+  it("完美蓝图:8 枚、bw = evenDown4((528 − 7×8)/8) = 56、整组居中、间距 8", () => {
     const L = prestigeLayout(W, H_STD, routeIds("builder"), true, false);
     expect(PT_EFFECT_N).toBe(8);
-    expect(PT_EFFECT_GAP).toBe(4);
+    expect(PT_EFFECT_GAP).toBe(8);
     expect(L.effectBtns).toHaveLength(8);
-    const bw = (W - PAD * 2 - 7 * 4) / 8;
-    expect(bw).toBe(63);
+    const bw = Math.floor((W - PAD * 2 - 7 * 8) / 8 / 4) * 4;
+    expect(bw).toBe(56);
     for (let i = 0; i < 8; i++) {
-      expect(L.effectBtns[i].rect).toEqual({ x: PAD + i * (bw + 4), y: L.blockTop + PT_BTN_DY, w: bw, h: PT_BTN_H });
+      expect(L.effectBtns[i].rect).toEqual({ x: 28 + i * (bw + 8), y: L.blockTop + PT_BTN_DY, w: bw, h: PT_BTN_H });
       expect(L.effectBtns[i].type).toBe(PT_EFFECT_TYPES[i]);
     }
-    // 末枚右缘贴面板右缘
+    // 组宽 8×56 + 7×8 = 504,让下来的 24px 平分到两端:左右各 12 的空档严格对称
     const last = L.effectBtns[7].rect;
-    expect(last.x + last.w).toBeCloseTo(W - PAD, 10);
+    expect(last.x + last.w).toBe(532);
+    expect(L.effectBtns[0].rect.x - PAD).toBe(W - PAD - (last.x + last.w));
+    expect(bw % 4).toBe(0);
   });
 
   it("两块都在时定向搜索压在完美蓝图之上(Web 的 blockTop 递减次序)", () => {
     const L = prestigeLayout(W, H_STD, routeIds("builder"), true, true);
     expect(L.triggerBtns[0].rect.y).toBeLessThan(L.effectBtns[0].rect.y);
     expect(L.triggerLabel!.baseY).toBeLessThan(L.effectLabel!.baseY);
-    expect(L.effectLabel!.baseY).toBe(884);
-    expect(L.triggerLabel!.baseY).toBe(838);
-    expect(PT_LABEL_DY).toBe(10);
+    expect(L.effectLabel!.baseY).toBe(862);
+    expect(L.triggerLabel!.baseY).toBe(794);
+    expect(PT_LABEL_DY).toBe(12);
     expect(L.triggerLabel!.baseY - L.triggerBtns[0].rect.y).toBe(-PT_BTN_DY + PT_LABEL_DY);
   });
 
@@ -625,17 +648,17 @@ describe("开局配置块:定向搜索 6 枚 / 完美蓝图 8 枚", () => {
 /* ==================== 5. 头部:横幅两档 + 立绘 + 四行信息 ==================== */
 
 describe("头部几何(对标 Web skinHeader 与四行 fillText)", () => {
-  it("横幅盒 = (pad − 8, 36 − 46 + 8, 240, 46);有图时标题居中于横幅、基线 36 − 4", () => {
+  it("横幅盒 = (pad + 2, 18, 240, 46);有图时标题居中于横幅、基线 48", () => {
     const L = prestigeLayout(W, H_STD, routeIds("builder"), false, false);
-    expect([PT_BANNER_W, PT_BANNER_H, PT_TITLE_BASE_Y]).toEqual([240, 46, 36]);
-    expect(L.headerBanner).toEqual({ x: PAD - 8, y: 36 - PT_BANNER_H + 8, w: PT_BANNER_W, h: PT_BANNER_H });
+    expect([PT_BANNER_W, PT_BANNER_H, PT_TITLE_BASE_Y]).toEqual([240, 46, 48]);
+    expect(L.headerBanner).toEqual({ x: PAD + 2, y: 18, w: PT_BANNER_W, h: PT_BANNER_H });
     expect(L.titleWithBanner.x).toBe(L.headerBanner.x + L.headerBanner.w / 2);
     expect(L.titleWithBanner.baseY).toBe(PT_TITLE_BASE_Y - PT_BANNER_TEXT_DY);
     expect(L.titleWithBanner.align).toBe("center");
     expect(L.titleWithBanner.px).toBe(FS.title);
   });
 
-  it("缺图时标题左起笔于 pad、基线 36,并且收在小立绘起笔前", () => {
+  it("缺图时标题左起笔于 pad、基线 48,并且收在小立绘起笔前", () => {
     const L = prestigeLayout(W, H_STD, routeIds("builder"), false, false);
     expect(L.titleBare.x).toBe(PAD);
     expect(L.titleBare.baseY).toBe(PT_TITLE_BASE_Y);
@@ -643,32 +666,32 @@ describe("头部几何(对标 Web skinHeader 与四行 fillText)", () => {
     expect(L.titleBare.x + L.titleBare.maxW).toBeLessThanOrEqual(PT_POSE_X);
   });
 
-  it("小立绘的固定坐标逐字照搬 Web:(252, 4, 38, 60)", () => {
+  it("小立绘挪到右上角 (500, 18, 44, 60):Web 那一档压在标题字上,且 38 是奇数宽", () => {
     const L = prestigeLayout(W, H_STD, routeIds("builder"), false, false);
     expect(L.pose).toEqual({ x: PT_POSE_X, y: PT_POSE_Y, w: PT_POSE_W, h: PT_POSE_H });
-    expect([PT_POSE_X, PT_POSE_Y, PT_POSE_W, PT_POSE_H]).toEqual([252, 4, 38, 60]);
+    expect([PT_POSE_X, PT_POSE_Y, PT_POSE_W, PT_POSE_H]).toEqual([500, 18, 44, 60]);
   });
 
-  it("四行信息的基线 60 / 60 / 82 / 100,「可支配」从 pad + 210 起笔", () => {
+  it("四行信息的基线 84 / 84 / 104 / 122,「可支配」从 pad + 198 起笔", () => {
     const L = prestigeLayout(W, H_STD, routeIds("builder"), false, false);
-    expect([PT_ECHO_BASE_Y, PT_AVAIL_DX, PT_ROUTE_BASE_Y, PT_COLL_BASE_Y]).toEqual([60, 210, 82, 100]);
+    expect([PT_ECHO_BASE_Y, PT_AVAIL_DX, PT_ROUTE_BASE_Y, PT_COLL_BASE_Y]).toEqual([84, 198, 104, 122]);
     expect(L.echoLine.x).toBe(PAD);
-    expect(L.echoLine.baseY).toBe(60);
+    expect(L.echoLine.baseY).toBe(84);
     expect(L.echoLine.px).toBe(FS.body);
     expect(L.availLine.x).toBe(PAD + PT_AVAIL_DX);
-    expect(L.availLine.baseY).toBe(60);
+    expect(L.availLine.baseY).toBe(84);
     expect(L.availLine.px).toBe(FS.body);
-    expect(L.routeLine.baseY).toBe(82);
+    expect(L.routeLine.baseY).toBe(104);
     expect(L.routeLine.px).toBe(FS.micro);
-    expect(L.collLine.baseY).toBe(100);
+    expect(L.collLine.baseY).toBe(122);
     expect(L.collLine.px).toBe(FS.micro);
   });
 
   it("回响行收到「可支配」起笔前;两行让位互不重叠", () => {
     const L = prestigeLayout(W, H_STD, routeIds("builder"), false, false);
     expect(L.echoLine.x + L.echoLine.maxW).toBeLessThanOrEqual(L.availLine.x);
-    expect(L.routeLine.maxW).toBe(W - PAD * 2);
-    expect(L.collLine.maxW).toBe(W - PAD * 2);
+    expect(L.routeLine.maxW).toBe(W - PAD * 2 - 10);
+    expect(L.collLine.maxW).toBe(W - PAD * 2 - 10);
   });
 });
 
@@ -1530,13 +1553,17 @@ describe("共享层导出的几何常量逐项对上 Web", () => {
     expect(layout.includes("y: listY0 + i * (rowH + gap)")).toBe(true);
   });
 
-  it("共享层常量的值就是那一批裸加数", () => {
-    expect([PT_LIST_Y0, PT_ROWS_BOTTOM_DY, PT_ROW_MIN_H, PT_ROW_MAX_H]).toEqual([156, 8, 40, 64]);
-    expect([PT_BTN_DY, PT_BTN_H, PT_EFFECT_GAP, PT_TRIGGER_GAP]).toEqual([18, 28, 4, 6]);
-    expect([PT_NAME_DX, PT_NAME_MAX_W, PT_RIGHT_DX, PT_DESC_DX, PT_DESC_MAX_DX]).toEqual([8, 150, 8, 8, 24]);
-    expect([PT_MARK_SIZE, PT_MARK_INSET, PT_MARK_GAP]).toEqual([13, 12, 17]);
-    expect(PT_AVAIL_DX).toBe(210);
-    expect([PT_ECHO_BASE_Y, PT_ROUTE_BASE_Y, PT_COLL_BASE_Y]).toEqual([60, 82, 100]);
+  it("共享层常量的值就是那一批裸加数(第六批翻新档:栅格取偶后的常量组)", () => {
+    expect([PT_LIST_Y0, PT_ROWS_BOTTOM_DY, PT_ROW_MIN_H, PT_ROW_MAX_H]).toEqual([192, 8, 40, 64]);
+    expect([PT_BTN_DY, PT_BTN_H, PT_EFFECT_GAP, PT_TRIGGER_GAP]).toEqual([18, 44, 8, 8]);
+    expect([PT_NAME_DX, PT_NAME_MAX_W, PT_RIGHT_DX, PT_DESC_DX, PT_DESC_MAX_DX]).toEqual([16, 150, 16, 16, 32]);
+    expect([PT_MARK_SIZE, PT_MARK_INSET, PT_MARK_GAP]).toEqual([14, 16, 16]);
+    expect(PT_AVAIL_DX).toBe(198);
+    expect([PT_ECHO_BASE_Y, PT_ROUTE_BASE_Y, PT_COLL_BASE_Y]).toEqual([84, 104, 122]);
+    // 第六批新引入的三档:横幅落点、页签条带、行距下限
+    expect([PT_BANNER_X, PT_BANNER_Y]).toEqual([18, 18]);
+    expect([PT_TABS_STRIP_W, PT_TABS_STRIP_H, PT_TABS_STRIP_DY]).toEqual([528, 30, 8]);
+    expect([PT_PAD, PT_CONTENT_W, PT_ROW_MIN_GAP]).toEqual([16, 528, 4]);
   });
 
   it("共享层出口就是 prestigeLayout 本身(视图没有第二个几何源)", () => {

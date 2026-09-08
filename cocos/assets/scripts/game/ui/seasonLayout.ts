@@ -29,7 +29,11 @@
  * 本文件只留几何。
  */
 
-import { ui } from "./theme";
+/** 页边距 16 / 内容宽 528:右缘恒落 544(`ui.pad` 是 Web 冻结档 14,本屏不再用) */
+export const SE_PAD = 16;
+export const SE_CONTENT_W = 528;
+/** 取偶下界:像素栅格 module = 2,奇数坐标会让贴图错半格 */
+export const evenDown = (v: number): number => Math.floor(v / 2) * 2;
 
 /** 左上原点设计像素矩形(与 core/DesignMetrics.Rect 同形;共享层不引宿主类型) */
 export interface SeRect {
@@ -42,7 +46,7 @@ export interface SeRect {
 /** 文本对齐,取值与 `ctx.textAlign` 一致 */
 export type SeAlign = "left" | "center" | "right";
 
-/** 一行文本的落位请求:x/baseY 就是 Web fillText 的锚点与基线,maxW 为限宽 */
+/** 一行文本的落位请求:x/baseY 就是 fillText 的锚点与基线,maxW 为限宽 */
 export interface SeTextLine {
   x: number;
   baseY: number;
@@ -54,36 +58,43 @@ export interface SeTextLine {
 
 /** 整屏几何 */
 export interface SeasonLayout {
-  /** 全屏唯一的纵向锚线(Web 的 `h * 0.28`,七处实参都从它加减) */
+  /** 屏底板(像素九宫格 panel_dark_corners 的落位矩形) */
+  panel: SeRect;
+  /** 屏底板贴图键 */
+  panelKey: string;
+  /** 全屏唯一的纵向锚线(`evenDown(h × 0.28)`,七处实参都从它加减) */
   anchorY: number;
-  /** 顶部徽标盒(`anchorY` 上方 96,边长 48) */
+  /** 顶部徽标盒(`anchorY` 上方 96;48×40 贴 `emblem_flow_gold` 的 100×84 源比例) */
   emblem: SeRect;
-  /** 标题横幅盒(`anchorY` 上方 32,240×44;整幅拉伸,没有缺图回退档) */
+  /** 标题横幅盒(`anchorY` 上方 32,240×44 = `banner_mid_bronze` 固有 120×22 的 2 倍) */
   banner: SeRect;
-  /** 标题「赛季结算」(居中于 `anchorY`) */
+  /** 标题「赛季结算」有横幅那一档(居中于 `anchorY`,落在横幅带内) */
   title: SeTextLine;
+  /** 标题缺图那一档:左起笔于页边距,基线同一处 */
+  titleBare: SeTextLine;
   /** 摘要四行(仅 `summary` 为真时上屏;矩形与基线恒算) */
   themeLine: SeTextLine;
   scoreLine: SeTextLine;
   dustLine: SeTextLine;
   noteLine: SeTextLine;
-  /** 摘要四行相对 `anchorY` 的基线偏移(Web 的 `+34 / +62 / +86 / +114`) */
+  /** 摘要四行相对 `anchorY` 的基线偏移 */
   summaryDys: number[];
-  /** 贴底钮(热区 + 底板;`by = h − 78`) */
+  /** 贴底钮(热区 + 底板;`by = evenDown(h) − 78`) */
   closeBtn: SeRect;
   closeText: SeTextLine;
-  /** 钮顶缘相对屏底的上抬(Web 的裸 78;钮底边因此落在 `h − 34`) */
+  /** 钮顶缘相对屏底的上抬(78;钮底边因此落在 `h − 34`) */
   btnBottomGap: number;
   /** 摘要形态位(原样带回,命中与绘制层据此分派) */
   summary: boolean;
 }
 
-/* Web drawSeason 的内联几何常量 */
+/* 屏专属几何常量(具名一处,不散在函数体里;一律偶数) */
 /** 全屏纵向锚线相对屏高的比例 */
 export const SE_ANCHOR_RATIO = 0.28;
-/** 徽标:半宽(= 边长的一半)与相对锚线的上抬 */
+/** 徽标:半宽与相对锚线的上抬;边长走源比例(100×84)→ 48 宽 / 40 高 */
 export const SE_EMBLEM_DX = 24;
 export const SE_EMBLEM_SIZE = 48;
+export const SE_EMBLEM_H = 40;
 export const SE_EMBLEM_DY = 96;
 /** 横幅:半宽 / 宽 / 高 / 相对锚线的上抬 */
 export const SE_BANNER_DX = 120;
@@ -95,15 +106,16 @@ export const SE_THEME_DY = 34;
 export const SE_SCORE_DY = 62;
 export const SE_DUST_DY = 86;
 export const SE_NOTE_DY = 114;
-/** 贴底钮:宽 / 高 / 半宽 / 顶缘相对屏底的上抬 / 钮内文字相对钮顶的基线 */
-export const SE_BTN_W = 190;
+/** 贴底钮:宽 / 高 / 半宽 / 顶缘相对屏底的上抬 / 钮内文字相对钮顶的基线
+ *  (宽 190 → 220 是为了让 `w/2 − half` 落在偶数上;高 44 就是热区下限) */
+export const SE_BTN_W = 220;
 export const SE_BTN_H = 44;
-export const SE_BTN_HALF_W = 95;
+export const SE_BTN_HALF_W = 110;
 export const SE_BTN_UP = 78;
 export const SE_BTN_TEXT_DY = 28;
-/** 钮底板描边宽度(Web 这里不设 lineWidth,取全项目"描边后复位 1"的约定档) */
+/** 钮底板描边宽度 */
 export const SE_BTN_STROKE_W = 1;
-/** 字号:Web 六处 `g.font` 的字面量档位(24 / 17 / 15 三档不在 `fs` 表内) */
+/** 字号档(24 / 17 / 15 三档不在 `fs` 表内,留在本层是文本行几何签名的一部 分) */
 export const SE_TITLE_PX = 24;
 export const SE_THEME_PX = 16;
 export const SE_SCORE_PX = 17;
@@ -112,12 +124,14 @@ export const SE_NOTE_PX = 16;
 export const SE_BTN_PX = 15;
 /** 摘要行数(四行;`summary` 为假时整支不画) */
 export const SE_SUMMARY_LINES = 4;
-/** 翻页时写回的星数槽宽(Web 的字面量 `[0,0,0,0,0,0,0,0]`,长度 = 关卡数 + 1,索引 0 不用) */
+/** 翻页时写回的星数槽宽(长度 = 关卡数 + 1,索引 0 不用) */
 export const SE_STARS_RESET: readonly number[] = [0, 0, 0, 0, 0, 0, 0, 0];
+/** 屏底板贴图键(与已落地各屏同一张九宫格) */
+export const SE_PANEL_KEY = "panel_dark_corners";
 
-/** 贴底钮矩形(Web 的 `bx = w/2 − bw/2`、`by = h − 78`) */
+/** 贴底钮矩形(`x = evenDown(w/2 − 110)`、`y = evenDown(h) − 78`) */
 export function seasonCloseBtn(w: number, h: number): SeRect {
-  return { x: w / 2 - SE_BTN_HALF_W, y: h - SE_BTN_UP, w: SE_BTN_W, h: SE_BTN_H };
+  return { x: evenDown(w / 2 - SE_BTN_HALF_W), y: evenDown(h) - SE_BTN_UP, w: SE_BTN_W, h: SE_BTN_H };
 }
 
 function line(x: number, baseY: number, maxW: number, px: number, bold: boolean): SeTextLine {
@@ -125,29 +139,36 @@ function line(x: number, baseY: number, maxW: number, px: number, bold: boolean)
 }
 
 /**
- * 整屏几何。`summary` 是摘要形态位(= Web 的 `this.seasonSummary` 是否为空),
- * 本层不读存档、不查时间。
+ * 整屏几何。`summary` 是摘要形态位(= 赛季摘要是否为空),本层不读存档、不查时间。
+ *
+ * 纵向全靠两条锚线(`anchorY` 与 `evenDown(h) − 78`),于是 996 与 1246 两档之间
+ * 所有矩形都按 `h` 线性走;`anchorY` 与 `h` 都先取偶,徽标 / 横幅 / 四行摘要的
+ * 相对偏移又全是偶数,所以任何一档屏高都不会掉出栅格。
  */
 export function seasonLayout(w: number, h: number, summary: boolean): SeasonLayout {
-  const pad = ui.pad;
-  const maxW = w - pad * 2;
-  const anchorY = h * SE_ANCHOR_RATIO;
-  const cx = w / 2;
-  const btn = seasonCloseBtn(w, h);
+  const hh = evenDown(h);
+  const pad = SE_PAD;
+  const maxW = SE_CONTENT_W;
+  const anchorY = evenDown(hh * SE_ANCHOR_RATIO);
+  const cx = evenDown(w / 2);
+  const btn = seasonCloseBtn(w, hh);
   return {
+    panel: { x: pad, y: pad, w: SE_CONTENT_W, h: hh - pad * 2 },
+    panelKey: SE_PANEL_KEY,
     anchorY,
-    emblem: { x: cx - SE_EMBLEM_DX, y: anchorY - SE_EMBLEM_DY, w: SE_EMBLEM_SIZE, h: SE_EMBLEM_SIZE },
+    emblem: { x: cx - SE_EMBLEM_DX, y: anchorY - SE_EMBLEM_DY, w: SE_EMBLEM_SIZE, h: SE_EMBLEM_H },
     banner: { x: cx - SE_BANNER_DX, y: anchorY - SE_BANNER_DY, w: SE_BANNER_W, h: SE_BANNER_H },
     title: line(cx, anchorY, maxW, SE_TITLE_PX, true),
+    titleBare: { x: pad, baseY: anchorY, maxW: evenDown(cx - pad - 10), px: SE_TITLE_PX, align: "left", bold: true },
     themeLine: line(cx, anchorY + SE_THEME_DY, maxW, SE_THEME_PX, false),
     scoreLine: line(cx, anchorY + SE_SCORE_DY, maxW, SE_SCORE_PX, true),
-    // Web 这一行没有重设 g.font,继承上一行的 bold 17px
+    // 这一行继承上一行的 bold 17px
     dustLine: line(cx, anchorY + SE_DUST_DY, maxW, SE_DUST_PX, true),
     noteLine: line(cx, anchorY + SE_NOTE_DY, maxW, SE_NOTE_PX, false),
     summaryDys: [SE_THEME_DY, SE_SCORE_DY, SE_DUST_DY, SE_NOTE_DY],
     closeBtn: btn,
     closeText: line(cx, btn.y + SE_BTN_TEXT_DY, maxW, SE_BTN_PX, true),
-    btnBottomGap: h - (btn.y + btn.h),
+    btnBottomGap: hh - (btn.y + btn.h),
     summary,
   };
 }
