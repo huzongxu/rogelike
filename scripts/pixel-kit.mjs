@@ -157,8 +157,9 @@ function keyGlobalOut(im, r, keyRgb, tol) {
   }
 }
 
-/** 腐蚀 n 次:吃掉抗锯齿残留的软边,保证像素边缘硬 */
-function erodeAlpha(im, r, n) {
+/** 腐蚀 n 次:吃掉抗锯齿残留的软边,保证像素边缘硬。
+ *  `legacy = true` 恢复旧语义（区域外按非实心）：已入库有 12 张是旧语义产物，逐键钉住以便复现全集。 */
+function erodeAlpha(im, r, n, legacy = false) {
   for (let k = 0; k < n; k++) {
     const kill = [];
     for (let y = r.y0; y < r.y1; y++) {
@@ -167,12 +168,12 @@ function erodeAlpha(im, r, n) {
         const solid = (dx, dy) => {
           const nx = x + dx, ny = y + dy;
           /**
-           * 区域外按实心处理：r 是内容紧框（手钉 rects 或 alphaBBox 的结果），贴边像素本就是
+           * 默认区域外按实心处理：r 是内容紧框（手钉 rects 或 alphaBBox 的结果），贴边像素本就是
            * 有效内容。若把越界判成非实心，腐蚀会无条件吃掉紧框最外一圈，而 resample 用 floor
            * 采样、取样点整体偏左上，于是只有输出的首行/首列落进那圈透明里 —— 表现为贴图
            * 恒定缺上边与左边。腐蚀的用途只是吃抗锯齿软边，只该在贴着真透明处生效。
            */
-          if (nx < r.x0 || ny < r.y0 || nx >= r.x1 || ny >= r.y1) return true;
+          if (nx < r.x0 || ny < r.y0 || nx >= r.x1 || ny >= r.y1) return !legacy;
           return get(im, nx, ny)[3] > 0;
         };
         if (!(solid(1, 0) && solid(-1, 0) && solid(0, 1) && solid(0, -1))) kill.push([x, y]);
@@ -183,11 +184,16 @@ function erodeAlpha(im, r, n) {
   }
 }
 
+/** 取框阈值保持 >0。曾试过 128 想排除抗锯齿发丝，实测反而造成回归
+ *  （banner_title_gold_c 出品红描边、frame_* 多一条黑色左列），故否掉、不留该档。
+ *  bar_capsule / btn_primary 的发丝问题根因在 flatCenter 取代表列与腐蚀的交互，另案修。 */
+const FRAME_ALPHA_MIN = 0;
+
 function alphaBBox(im, r) {
   let x0 = r.x1, y0 = r.y1, x1 = r.x0 - 1, y1 = r.y0 - 1;
   for (let y = r.y0; y < r.y1; y++) {
     for (let x = r.x0; x < r.x1; x++) {
-      if (get(im, x, y)[3] > 0) {
+      if (get(im, x, y)[3] > FRAME_ALPHA_MIN) {
         if (x < x0) x0 = x; if (x > x1) x1 = x;
         if (y < y0) y0 = y; if (y > y1) y1 = y;
       }
@@ -425,7 +431,7 @@ function processOne(src, spec, sheetRect) {
     const bg = pickKeyColor(im, r);
     keyOut(im, r, bg, spec.tolerance ?? KEY_TOL);
     if (spec.keyGlobal) keyGlobalOut(im, r, bg, spec.tolerance ?? KEY_TOL);
-    erodeAlpha(im, r, spec.erode ?? KEY_ERODE);
+    erodeAlpha(im, r, spec.erode ?? KEY_ERODE, spec.legacyErode === true);
   }
   const box = spec.cropBBox === false ? r : alphaBBox(im, r) || r;
   const bboxAspect = (box.x1 - box.x0) / (box.y1 - box.y0);
@@ -487,6 +493,10 @@ const warnings = [];
 fs.mkdirSync(OUT_DIR, { recursive: true });
 for (const job of jobs) {
   if (ONLY && !ONLY.includes(job.key) && !(job.spec.keys || []).some((k) => ONLY.includes(k))) continue;
+  if (job.spec.frozen) {
+    console.log(`[frozen] ${job.key} 跳过：源图已冻结/丢失，保留已入库贴图`);
+    continue;
+  }
   const { art, coverage, bboxAspect, artW, artH } = processOne(job.src, job.spec, job.rect);
   const k = job.spec.export ?? EXPORT;
   const png = encodePNG(art.w * k, art.h * k, k === 1 ? art.rgba : upscale(art, k).rgba);

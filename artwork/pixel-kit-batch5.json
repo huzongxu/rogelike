@@ -51,20 +51,49 @@
     "rows": 5
    },
    "rects": [
-    [12, 14, 1524, 206],
-    [18, 216, 1518, 406],
-    [18, 418, 1519, 607],
-    [17, 618, 1519, 808],
-    [17, 819, 1524, 1006]
+    [
+     12,
+     14,
+     1524,
+     206
+    ],
+    [
+     18,
+     216,
+     1518,
+     406
+    ],
+    [
+     18,
+     418,
+     1519,
+     607
+    ],
+    [
+     17,
+     618,
+     1519,
+     808
+    ],
+    [
+     17,
+     819,
+     1524,
+     1006
+    ]
    ],
    "cells": [
     {
      "key": "banner_title_gold_c",
-     "art": [122, 21],
+     "art": [
+      122,
+      21
+     ],
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
-     "wm": false
+     "wm": false,
+     "legacyErode": true
     },
     {
      "key": "banner_title_iron",
@@ -111,15 +140,38 @@
     "rows": 4
    },
    "rects": [
-    [32, 34, 1504, 251],
-    [32, 280, 1504, 499],
-    [32, 526, 1504, 744],
-    [33, 773, 1524, 990]
+    [
+     32,
+     34,
+     1504,
+     251
+    ],
+    [
+     32,
+     280,
+     1504,
+     499
+    ],
+    [
+     32,
+     526,
+     1504,
+     744
+    ],
+    [
+     33,
+     773,
+     1524,
+     990
+    ]
    ],
    "cells": [
     {
      "key": "banner_mid_black",
-     "art": [110, 20],
+     "art": [
+      110,
+      20
+     ],
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
@@ -128,7 +180,10 @@
     },
     {
      "key": "banner_mid_navy",
-     "art": [248, 37],
+     "art": [
+      248,
+      37
+     ],
      "slice": 6,
      "export": 2,
      "fit": "stretch",
@@ -139,7 +194,10 @@
     },
     {
      "key": "banner_large_navy_a",
-     "art": [120, 24],
+     "art": [
+      120,
+      24
+     ],
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
@@ -148,12 +206,20 @@
     },
     {
      "key": "banner_large_red",
-     "art": [120, 24],
+     "art": [
+      120,
+      24
+     ],
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
      "insetPx": 2,
-     "wm": [0.869, 0.968, 0.131, 0.032]
+     "wm": [
+      0.869,
+      0.968,
+      0.131,
+      0.032
+     ]
     }
    ]
   },
@@ -164,22 +230,44 @@
     "rows": 3
    },
    "rects": [
-    [49, 44, 1487, 316],
-    [51, 328, 1484, 638],
-    [57, 680, 1480, 982]
+    [
+     49,
+     44,
+     1487,
+     316
+    ],
+    [
+     51,
+     328,
+     1484,
+     638
+    ],
+    [
+     57,
+     680,
+     1480,
+     982
+    ]
    ],
    "cells": [
     {
      "key": "bar_progress_teal",
-     "art": [100, 4],
+     "art": [
+      100,
+      4
+     ],
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
-     "wm": false
+     "wm": false,
+     "legacyErode": true
     },
     {
      "key": "tabs_talent_three",
-     "art": [264, 15],
+     "art": [
+      264,
+      15
+     ],
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
@@ -188,11 +276,15 @@
     },
     {
      "key": "panel_parchment",
-     "art": [264, 75],
+     "art": [
+      264,
+      75
+     ],
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
-     "wm": false
+     "wm": false,
+     "legacyErode": true
     }
    ]
   }
