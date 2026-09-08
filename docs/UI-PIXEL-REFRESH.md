@@ -84,6 +84,18 @@ node scripts/pixel-kit.mjs [--config=artwork/pixel-kit.json] [--out=dir] [--cont
 - `npm run sync:cocos` 是 Web→Cocos 单向镜像。`scripts/sync-cocos.mjs` 现在把 `artwork/pixel-kit*.json`（主菜单批 `pixel-kit.json` + 战斗 HUD 批 `pixel-kit-hud.json`）里声明的每个 key 当作 **Cocos 独占资产**：这些 png 一律不回灌，日志末尾打印保护条数。新增批次只要进任一规格表就自动受保护。
 - `pxnum_*` 与 `crest` 不在 `ASSET_MANIFEST`（Web 侧会 404），由 `PIXEL_ART_KEYS` 直接进预载集；`restFrameKeys()` 已把它们从流式队列里摘出。
 
+### 5.1 共享层共读名单：「只改 Cocos」不等于「改动不碰 Web」
+
+`@game` 别名指向 `cocos/assets/scripts/game`（`vite.config.ts` 与 `tsconfig.json` 的 paths），共享层**物理上只有一份**。
+`src/game.ts` 实际 import 了其中一部分，**改这些模块等于同时改 Web 的渲染**：
+
+- 共读（改即两端生效）：`@game/ui/theme`（`confirmRects` / `ui` / `fs` / `rowTextY` / `spreadRows`）、`@game/ui/hud`、`@game/ui/shop`、`@game/ui/menuLayout`、`@game/ui/heroSelectLayout`、`@game/ui/scrollList`，以及全部 `@game/data/*`。
+- 不共读（Web 用的是 `src/game.ts` 自己带内联数的私有方法）：各屏 `*Layout.ts`（season / prestige / fusion / commission / energy / victory / gameOver）。注意同名易误判——`src/game.ts` 里的 `commissionLayout()` 是它自己的私有方法，不是 import。
+
+**纪律：像素栅格类的对齐改动（页边距、取偶、热区、半宽推导）一律落在 Cocos 独有层**（该屏视图 / 模型 / 该屏 layout），不要动共读模块里的几何函数。确需动共读模块时，先按本名单评估 Web 侧影响并在提交说明里写明。
+
+**已接受的记账**：批 2 改过共读的 `game/ui/shop.ts`（`SHOP_PAD` 14→16、布局由"几何恒定"改为"按屏高弹性分配"），因此 Web 商店自该笔起与刷新前差 **2px 横向右移、内容窄 4px**，996 以上不再在底坞以下留平色带而是把富余摊进行高/带距/卡高；996 档纵向与旧版同构。`shopLayoutPure` 的屏高参带默认值 996，Web 的两参旧调用不会取到 undefined。Web 为遗留参照、Web/Cocos 逐项对标判据已撤，故**接受该漂移、不做回补**；如需两端各持一把尺，改法是给 `shopLayoutPure` 加 pad 参（共享层默认 14、`ShopModel` 传 16），代价是共享层背两个 pad。
+
 ## 6. 像素数字字形
 
 - 字形表：`pxnum_0..9` `pxnum_dot` `pxnum_comma` `pxnum_plus` `pxnum_times` `pxnum_pct` `pxnum_slash`，art 8×10（PNG 同为 8×10，1 贴图像素 = 1 逻辑 px 落屏，需要整体放大时用 `PixelNumber` 的整数 `scale`）。
