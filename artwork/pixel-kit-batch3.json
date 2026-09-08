@@ -45,29 +45,29 @@
  ],
  "sheets": [
   {
-   "src": "vibe_images/px_sheet_banners.png",
+   "src": "vibe_images/px_sheet_banners_c.png",
    "grid": {
     "cols": 1,
     "rows": 2
    },
+   "tolerance": 130,
    "rects": [
     [
-     0,
-     0,
-     1536,
-     480
+     62,
+     154,
+     1474,
+     512
     ],
     [
-     0,
-     525,
-     1536,
-     1024
+     62,
+     512,
+     1474,
+     893
     ]
    ],
    "cells": [
     {
      "key": "banner_large_purple",
-     "frozen": true,
      "art": [
       120,
       23
@@ -79,7 +79,6 @@
     },
     {
      "key": "banner_title_gold_b",
-     "frozen": true,
      "art": [
       110,
       21
@@ -87,12 +86,7 @@
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
-     "wm": [
-      0.703,
-      0.872,
-      0.297,
-      0.128
-     ]
+     "wm": false
     }
    ]
   },
