@@ -191,7 +191,7 @@ export class DailyView {
     const banner = this.header.show(KEY_HEADER);
     placeRect(this.header.node, banner ? L.headerPlate : { x: 0, y: 0, w: 0, h: 0 });
     this.title.bold(true);
-    if (banner) this.title.set(L.titleOnBanner.x, L.titleOnBanner.baseY, L.titleOnBanner.maxW, L.titleOnBanner.px, c.title, "center", HEX.gold);
+    if (banner) this.title.set(L.titleOnBanner.x, L.titleOnBanner.baseY, L.titleOnBanner.maxW, L.titleOnBanner.px, c.title, "center", HEX.bgDeep);
     else this.title.set(L.titleBare.x, L.titleBare.baseY, L.titleBare.maxW, L.titleBare.px, c.title, "left", HEX.gold);
 
     // 装饰立绘:缺图即不画(Web assets.draw 的返回值直接被丢掉)
