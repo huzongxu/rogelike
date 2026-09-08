@@ -34,7 +34,7 @@
 import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
-import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
+import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
 import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
 import { PT_START_STROKE_W, type PrestigeChoiceLayout, type PrestigeLayout, type PrestigeRowLayout, type PtRect, type PtTextLine } from "../game/ui/prestigeLayout";
 import { hitPrestige, type PrestigeAction, type PrestigeChoiceContent, type PrestigeContent, type PrestigeRowContent } from "./PrestigeModel";
@@ -220,6 +220,7 @@ export class PrestigeView {
     this.title.bold(true);
     const tt = banner ? L.titleWithBanner : L.titleBare;
     this.title.set(tt.x, tt.baseY, tt.maxW, tt.px, c.title, tt.align, banner ? HEX.gold : p4.ptTitle);
+    setTextOutline(this.title.lb, banner ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
 
     // 头部小立绘:固定坐标的一笔,无回退分支;画在四行文字之前(Web 的覆盖顺序)
     const pose = this.pose.show(KEY_POSE);

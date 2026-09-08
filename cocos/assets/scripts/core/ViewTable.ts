@@ -344,6 +344,15 @@ export interface Phase4Params {
     gcRowLevel: string;
     gcRowBadge: string;
 
+    /* ---------- 横幅标题描边（压带屏四屏共用） ---------- */
+    /**
+     * 标题落在横幅贴上那一档的字形描边宽（逻辑 px，0 = 关）。
+     * 带心区的亮度跨度实测有 5~6 档（如紫绸 #2b1f47→#c8b6ff），任何单一字色都做不到
+     * 处处 ≥3:1；描边把对比面从"字色 vs 带面"换成"字色 vs 描边"，是 16-bit 的常规解法。
+     * 描边色走 `theme.bgDeep`，不再另开色键。
+     */
+    bannerTitleOutlineW: number;
+
     /* ---------- 转生与天赋屏(Web drawPrestige 4224-4353 与 onPrestigeClick 4355-4385 的内联字面量) ---------- */
     /** 全屏覆盖底(rgba(8,10,16,0.86),与 psDim / guDim / gcDim 同值,按屏分键便于独立调表) */
     ptDim: string;
@@ -803,6 +812,9 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     gcRowStroke: "rgba(255,255,255,0.12)",
     gcRowLevel: "#8F9BB3",
     gcRowBadge: "#4DFFC8",
+
+    /* 横幅标题描边：2 逻辑 px 落在 24~28 字阶上是"看得出一圈、又不糊住笔画"的那一档 */
+    bannerTitleOutlineW: 2,
 
     /* 转生与天赋屏(逐项对标 Web drawPrestige / onPrestigeClick) */
     ptDim: "rgba(8,10,16,0.86)",

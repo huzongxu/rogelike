@@ -227,3 +227,31 @@ node scripts/pixel-kit.mjs [--config=artwork/pixel-kit.json] [--out=dir] [--cont
 4. `bar_capsule` 源右下角一枚高光 texel（#a9b4c4）经 sliced 落在条右端成浅色短划。接线可修（切边改 5 或出图抹除）。
 5. `slot_skill` 源内容长宽比 1.50 与 24×24 盒差 >45%（管线警告），槽内亮轨被横向拉宽。要重出图。
 6. `joy_base` 底缘一枚黑色「柄」texel 为源图内容残留。要重出图（或接受为底座支架）。
+
+## 11. 压在横幅贴图上的标题
+
+绸带类贴图的**带心区亮度跨度可达 5~6 档**（紫绸实测 `#2b1f47`→`#c8b6ff`、铁带 `#1a2233`→`#a9b4c4`），
+任何单一字色都无法处处达对比——实测四屏压带标题的最坏对比只有 1.16~3.54。
+
+标准解法是**字形描边**，把对比面从「字色 vs 带面」换成「字色 vs 描边」：
+
+- 出口：`ui/Widgets.ts:setTextOutline(lb, width, colorHex)`（幂等，`width` 传 0 即关闭，
+  所以缺图那一档不调描边）。
+- 宽度：`viewTable.phase4.bannerTitleOutlineW`（默认 2 逻辑 px），**不在视图里内联字面量**。
+- 描边色：沿用 `theme.bgDeep`，不另开色键。
+- 字色：亮字族（`HEX.gold` / `p4.fuTitle` / `p4.cmTitle`）。
+
+改后四屏最差可辨识度（按「字→描边→带面」全链路取每个像素的最大可辨路径）：
+
+| 屏 | 改前 | 改后 |
+| --- | --- | --- |
+| prestige | 1.31 | 4.02 |
+| fusion | 2.06 | 4.02 |
+| season | 3.54 | 3.94 |
+| commission | 1.16 | 4.02 |
+
+**例外**：每日屏的 `banner_title_gold_c` 带心只有两档亮度（`#d9a63c`→`#ffd76a`），深字直接 8.71，
+故维持深色字不开描边——按带面实况选档，不为统一而改已验收屏。
+
+四屏各有一条源码闸盯住这件事（`tests/cocos-phase4-<屏>.test.ts` 末节的「压带标题描边闸」）：
+视图必须调 `setTextOutline(this.title.lb…)`、必须读 `bannerTitleOutlineW`、不得自己写 `outlineWidth =`。

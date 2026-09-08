@@ -43,7 +43,7 @@
 import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
-import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
+import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
 import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
 import { CM_START_STROKE_W, commissionBarRects, type CmRect, type CommissionLayout, type CommissionPanelLayout, type CommissionRowLayout } from "../game/ui/commissionLayout";
 import { DIFFICULTIES, REGIONS } from "../game/data/commissions";
@@ -265,6 +265,7 @@ export class CommissionView {
     this.title.bold(true);
     const tt = banner ? L.titleWithBanner : L.titleBare;
     this.title.set(tt.x, tt.baseY, tt.maxW, tt.px, c.title, tt.align, p4.cmTitle);
+    setTextOutline(this.title.lb, banner ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
 
     // 头部小立绘:固定坐标的一笔,无回退分支;画在三项读数之前(Web 的覆盖顺序)
     const pose = this.pose.show(KEY_POSE);

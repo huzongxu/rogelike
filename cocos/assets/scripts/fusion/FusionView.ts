@@ -40,7 +40,7 @@
 import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
-import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
+import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
 import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
 import {
   FU_CARD_STROKE_W,
@@ -269,6 +269,7 @@ export class FusionView {
     this.title.bold(true);
     const tl = banner ? L.titleOnBanner : L.title;
     this.title.set(tl.x, tl.baseY, tl.maxW, tl.px, c.title, tl.align, p4.fuTitle);
+    setTextOutline(this.title.lb, banner ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
 
     // 星尘读数:iconText 两档(有图右移、缺图前置替代字形),不加粗(Web 只设一次 F(fs.body))
     this.paintIconText(L, c, p4);

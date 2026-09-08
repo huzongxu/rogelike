@@ -1646,3 +1646,15 @@ describe("Web 基准的几条反直觉口径已原样带上", () => {
     expect(menu.includes("COMMISSION_READY_HOURS")).toBe(true);
   });
 });
+
+/* ==================== 压带标题描边闸 ==================== */
+
+describe("CommissionView 的压带标题必须走描边出口，且宽度取自表", () => {
+  const code = codeOf(readFileSync(new URL("../cocos/assets/scripts/commission/CommissionView.ts", import.meta.url), "utf8"));
+
+  it("横幅在位时开描边、缺图档关掉，宽度不内联字面量", () => {
+    expect(code.includes("setTextOutline(this.title.lb")).toBe(true);
+    expect(code.includes("bannerTitleOutlineW")).toBe(true);
+    expect(code.includes("outlineWidth =")).toBe(false);
+  });
+});

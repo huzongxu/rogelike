@@ -106,6 +106,21 @@ export function bindLabel(lb: Label, text: string): void {
     lb.string = text;
 }
 
+/**
+ * 字形描边:压在横幅贴图上的标题走这一档。
+ * 带心区亮度跨度实测有 5~6 档,任何单一字色都做不到处处达对比;描边把对比面换成
+ * "字色 vs 描边"。幂等实现(各屏 paint 会反复调),`width` 传 0 即关闭。
+ */
+export function setTextOutline(lb: Label, width: number, colorHex: string): void {
+    const on = width > 0;
+    if (lb.enableOutline !== on) lb.enableOutline = on;
+    if (!on) return;
+    if (lb.outlineWidth !== width) lb.outlineWidth = width;
+    const c = hexToColor(colorHex);
+    const cur = lb.outlineColor;
+    if (cur.r !== c.r || cur.g !== c.g || cur.b !== c.b) lb.outlineColor = c;
+}
+
 /** 九宫格 Sprite:边距由 ViewTable.borderOf 推导,替代 drawNineUniform */
 export function sliced(
     name: string,

@@ -24,7 +24,7 @@
 import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
-import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
+import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
 import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
 import { SE_BTN_STROKE_W, type SeRect, type SeasonLayout } from "../game/ui/seasonLayout";
 import { hitSeason, type SeasonAction, type SeasonContent } from "./SeasonModel";
@@ -155,9 +155,10 @@ export class SeasonView {
     const banner = this.banner.show(KEY_BANNER);
     placeRect(this.banner.node, banner ? L.banner : ZERO);
 
-    // 标题两档:有横幅落在绸带上居中,缺图切左起笔(与其它已翻新屏同一口径)
+    // 标题两档:有横幅走亮金字 + 深色描边(与其它三屏压带标题同一口径),缺图切左起笔
     const tl = banner ? L.title : L.titleBare;
-    this.title.set(tl.x, tl.baseY, tl.maxW, tl.px, c.title, true, banner ? HEX.bgDeep : p4.seTitle);
+    this.title.set(tl.x, tl.baseY, tl.maxW, tl.px, c.title, true, banner ? HEX.gold : p4.seTitle);
+    setTextOutline(this.title.lb, banner ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
 
     this.summaryNode.active = c.hasSummary;
     if (c.hasSummary) {

@@ -1705,3 +1705,15 @@ describe("页签 × 两个条件块 × 开局配置开关的联动", () => {
 function prestigeCollectionTotalsExported() {
   return prestigeCollectionTotals();
 }
+
+/* ==================== 压带标题描边闸 ==================== */
+
+describe("PrestigeView 的压带标题必须走描边出口，且宽度取自表", () => {
+  const code = codeOf(readFileSync(new URL("../cocos/assets/scripts/prestige/PrestigeView.ts", import.meta.url), "utf8"));
+
+  it("横幅在位时开描边、缺图档关掉，宽度不内联字面量", () => {
+    expect(code.includes("setTextOutline(this.title.lb")).toBe(true);
+    expect(code.includes("bannerTitleOutlineW")).toBe(true);
+    expect(code.includes("outlineWidth =")).toBe(false);
+  });
+});
