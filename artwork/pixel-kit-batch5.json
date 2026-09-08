@@ -68,15 +68,16 @@
     },
     {
      "key": "banner_title_iron",
-     "art": [110, 21],
+     "artH": 21,
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
+     "insetPx": 2,
      "wm": false
     },
     {
      "key": "banner_purple_cosmic",
-     "art": [120, 23],
+     "artH": 23,
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
@@ -85,7 +86,7 @@
     },
     {
      "key": "banner_mid_blue",
-     "art": [95, 20],
+     "artH": 20,
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
@@ -94,7 +95,7 @@
     },
     {
      "key": "banner_mid_bronze",
-     "art": [120, 22],
+     "artH": 22,
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,

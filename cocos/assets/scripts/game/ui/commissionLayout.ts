@@ -23,8 +23,9 @@
  *    左内缩 `r.x + 8`、右内缩 `r.x + r.w − 8`;
  *  - 难度钮内两行是**固定偏移** `d.y + 17` 与 `d.y + 33`(不走 `rowTextY`),难度说明基线
  *    `diffY − 6`;
- *  - 头部是 `skinHeader("banner_title_iron", "委托挂机", pad, 36, …)` —— **不传宽高**,于是走
- *    `skin.ts` 的默认 220×42:横幅盒 `(pad − 8, 36 − 42 + 8, 220, 42)`,有图时标题居中于横幅、
+ *  - 头部是 `skinHeader("banner_title_iron", "委托挂机", pad, 36, …)` —— Web **不传宽高**,于是走
+ *    `skin.ts` 的默认 220×42;本档按 `banner_title_iron` 固有 169×21 的 2 倍取盒
+ *    `(pad − 8, 36 − 42 + 8, 338, 42)`,有图时标题居中于横幅、
  *    基线 `36 − 4`,缺图时左起笔于 `pad`、基线 36;紧接一枚固定坐标的小立绘
  *    `player_pose_6 (252, 4, 38, 60)`;
  *  - 两项读数走 `iconText(…, y = 60, size = 13)`:图标盒 `(x, 60 − 13 + 2, 13, 13)`,有图时文字
@@ -250,13 +251,14 @@ export const CM_BACK_ICON_SHRINK = 12;
 export const CM_BACK_TEXT_DY = 5;
 /** 头部:标题基线 / 横幅宽高(skinHeader 的默认档)与三处让位 / 文字上抬 */
 export const CM_TITLE_BASE_Y = 36;
-export const CM_BANNER_W = 220;
+/** `banner_title_iron` 固有 169×21 → 338×42 整数倍(Web 仍按 skin.ts 默认 220×42 绘制) */
+export const CM_BANNER_W = 338;
 export const CM_BANNER_H = 42;
 export const CM_BANNER_DX = 8;
 export const CM_BANNER_DY = 8;
 export const CM_BANNER_TEXT_DY = 4;
-/** 头部小立绘的固定坐标(Web 逐字照搬) */
-export const CM_POSE_X = 252;
+/** 头部小立绘的固定坐标：让开加宽后的铁带右缘（带 6–344），与 ExchangeBtn 左缘 396 留 10 */
+export const CM_POSE_X = 348;
 export const CM_POSE_Y = 4;
 export const CM_POSE_W = 38;
 export const CM_POSE_H = 60;

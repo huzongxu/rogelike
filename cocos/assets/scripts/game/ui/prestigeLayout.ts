@@ -16,7 +16,7 @@
  *  - 三系页签 `tabW = evenDown(528/3) = 176`、`y = 140`、`h = 44`(热区下限,Web 的 30 不达),
  *    整条贴图 `tabs_talent_three` 按固有 264×15 art px 的 2 倍 = **528×30** 落在带内顶缘下沉 8 处,
  *    既不拉伸也不切边;
- *  - 头部横幅 `banner_purple_cosmic` 走固有 120×23 → **240×46 整数倍**、盒 `(18, 18)`,
+ *  - 头部横幅 `banner_purple_cosmic` 走固有 186×23 → **372×46 整数倍**、盒 `(18, 18)`,
  *    完全落在面板内缘之内(Web 的 `y = −2` 会把上沿两像素裁掉,本档改掉);横幅在否两档
  *    共用基线 48,`PT_BANNER_DX / DY / TEXT_DY` 因此恒为 0,只作向后兼容保留;
  *  - 头部小立绘 `player_pose_5` 移到右列 `(500, 18, 44, 60)`,右缘就是内容列右缘 544,
@@ -209,9 +209,9 @@ export const PT_TAB_N = 3;
 export const PT_TABS_STRIP_W = 528;
 export const PT_TABS_STRIP_H = 30;
 export const PT_TABS_STRIP_DY = 8;
-/** 头部:标题基线 / 横幅宽高与落位(`banner_purple_cosmic` 固有 120×23 → 240×46 整数倍,不裁不拉) */
+/** 头部:标题基线 / 横幅宽高与落位(`banner_purple_cosmic` 固有 186×23 → 372×46 整数倍,不裁不拉) */
 export const PT_TITLE_BASE_Y = 48;
-export const PT_BANNER_W = 240;
+export const PT_BANNER_W = 372;
 export const PT_BANNER_H = 46;
 export const PT_BANNER_X = 18;
 export const PT_BANNER_Y = 18;

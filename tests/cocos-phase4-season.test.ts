@@ -212,7 +212,7 @@ describe("四格几何矩阵(h ∈ {996,1246} × 摘要形态 ∈ {上屏,收起
         expect(L.anchorY).toBe(M.anchor);
         expect(L.anchorY).toBe(Math.floor((h * SE_ANCHOR_RATIO) / 2) * 2);
         expect(L.emblem).toEqual({ x: 256, y: M.emblemY, w: SE_EMBLEM_SIZE, h: SE_EMBLEM_H });
-        expect(L.banner).toEqual({ x: 160, y: M.bannerY, w: SE_BANNER_W, h: SE_BANNER_H });
+        expect(L.banner).toEqual({ x: 100, y: M.bannerY, w: SE_BANNER_W, h: SE_BANNER_H });
         expect(L.closeBtn).toEqual({ x: 170, y: M.btnY, w: SE_BTN_W, h: SE_BTN_H });
         expect(L.title.baseY).toBe(M.anchor);
         expect([L.themeLine.baseY, L.scoreLine.baseY, L.dustLine.baseY, L.noteLine.baseY].map((n) => +n.toFixed(10))).toEqual(M.base.map((n) => +n.toFixed(10)));
@@ -225,7 +225,11 @@ describe("四格几何矩阵(h ∈ {996,1246} × 摘要形态 ∈ {上屏,收起
       expect(L.emblem.x).toBe(W / 2 - SE_EMBLEM_DX);
       expect(center(L.emblem)).toBe(280);
       expect(L.banner.x).toBe(W / 2 - SE_BANNER_DX);
-      expect(center(L.banner)).toBe(280);
+      // art 宽 181 为奇数 → 362 无法既居中于 280 又让两缘落在偶数 art 栅格上;
+      // 本档取栅格对齐(左缘 100 / 右缘 462 皆偶),带心因此右移 1 逻辑像素
+      expect(center(L.banner)).toBe(281);
+      expect(L.banner.x % 2).toBe(0);
+      expect((L.banner.x + L.banner.w) % 2).toBe(0);
       expect(L.closeBtn.x).toBe(W / 2 - SE_BTN_HALF_W);
       expect(center(L.closeBtn)).toBe(280);
       expect(L.title.x).toBe(280);
@@ -636,12 +640,15 @@ describe("Web 字面量与本屏表常量的同数关系", () => {
     expect([SE_TITLE_PX, SE_THEME_PX, SE_SCORE_PX, SE_DUST_PX, SE_NOTE_PX, SE_BTN_PX]).toEqual([24, 16, 17, 17, 16, 15]);
   });
 
-  it("两处贴图盒的字面量与共享层常量同数(48×40 / 240×44 / 上抬 96 与 32)", () => {
+  it("两处贴图盒:徽标与 Web 字面量同数,横幅按重出贴图放开(48×40 / 362×44 / 上抬 96 与 32)", () => {
     const web = webDrawSeason();
     expect(web.includes('this.assets.draw(g, "emblem_flow_gold", w / 2 - 24, h * 0.28 - 96, 48, 48);')).toBe(true);
     expect(web.includes('this.assets.draw(g, "banner_mid_bronze", w / 2 - 120, h * 0.28 - 32, 240, 44);')).toBe(true);
     expect([SE_EMBLEM_DX, SE_EMBLEM_DY, SE_EMBLEM_SIZE, SE_EMBLEM_H]).toEqual([24, 96, 48, 40]);
-    expect([SE_BANNER_DX, SE_BANNER_DY, SE_BANNER_W, SE_BANNER_H]).toEqual([120, 32, 240, 44]);
+    // 横幅盒按 `banner_mid_bronze` 固有 181×22 的 2 倍放开(Web 那一笔仍是 240×44,由上面的源码闸钉住);
+    // SE_BANNER_DX 不再是独立字面量,而是 SE_BANNER_W 的 evenDown 半宽
+    expect([SE_BANNER_DX, SE_BANNER_DY, SE_BANNER_W, SE_BANNER_H]).toEqual([180, 32, 362, 44]);
+    expect(SE_BANNER_DX).toBe(Math.floor(SE_BANNER_W / 2 / 2) * 2);
     expect(SE_BTN_W).toBe(220);
     expect(SE_BTN_UP).toBe(78);
     // Web 这一笔 strokeRect 没有显式设 lineWidth,取全项目"描边后复位 1"的约定档

@@ -337,10 +337,10 @@ describe("分区纵线(与 Web fusionLayout 同一批裸加数)", () => {
   });
 
   it("返回钮 / 标题横幅 / 面板底:三处固定矩形(横幅是 assets.draw 的整幅拉伸实参)", () => {
-    expect([FU_BACK_Y, FU_BANNER_DX, FU_BANNER_Y, FU_BANNER_W, FU_BANNER_H]).toEqual([18, 6, 18, 190, 40]);
+    expect([FU_BACK_Y, FU_BANNER_DX, FU_BANNER_Y, FU_BANNER_W, FU_BANNER_H]).toEqual([18, 6, 18, 322, 40]);
     const L = fusionLayout(W, H_STD, [], NO_FORMS);
     expect(L.backBtn).toEqual({ x: W - PAD - PAD_.backW, y: 18, w: PAD_.backW, h: 44 });
-    expect(L.headerBanner).toEqual({ x: PAD - 6, y: 18, w: 190, h: 40 });
+    expect(L.headerBanner).toEqual({ x: PAD - 6, y: 18, w: 322, h: 40 });
     expect(right(L.backBtn)).toBe(W - PAD);
     expect(FU_PANEL_NINE).toBe(32);
     for (const h of [H_STD, H_TALL]) {

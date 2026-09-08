@@ -578,22 +578,27 @@ describe("进行中面板的几何(1 与 2 个槽位)", () => {
 /* ==================== 6. 头部几何(skinHeader 默认档 / iconText / 返回钮) ==================== */
 
 describe("头部几何(对标 Web skinHeader 的默认宽高、iconText 与 skinIconButton)", () => {
-  it("横幅盒 = (pad − 8, 36 − 42 + 8, 220, 42) —— 本屏不传宽高,走 skin.ts 的默认档", () => {
-    expect([CM_BANNER_W, CM_BANNER_H]).toEqual([220, 42]);
+  it("横幅盒 = (pad − 8, 36 − 42 + 8, 338, 42) —— 本屏按重出贴图的固有 2 倍取盒", () => {
+    expect([CM_BANNER_W, CM_BANNER_H]).toEqual([338, 42]);
     const L = commissionLayout(W, H_STD, 0);
-    expect(L.headerBanner).toEqual({ x: PAD - 8, y: CM_TITLE_BASE_Y - CM_BANNER_H + 8, w: 220, h: 42 });
+    expect(L.headerBanner).toEqual({ x: PAD - 8, y: CM_TITLE_BASE_Y - CM_BANNER_H + 8, w: CM_BANNER_W, h: CM_BANNER_H });
     expect(L.headerBanner.y).toBe(2);
-    expect([L.titleWithBanner.x, L.titleWithBanner.baseY, L.titleWithBanner.px, L.titleWithBanner.align]).toEqual([116, 32, FS.title, "center"]);
+    // 真值取自纯函数:本屏 ui.pad = 14 → 盒 x = 6,带心 = 6 + 338/2 = 175
+    expect([L.titleWithBanner.x, L.titleWithBanner.baseY, L.titleWithBanner.px, L.titleWithBanner.align]).toEqual([175, 32, FS.title, "center"]);
     expect(L.titleWithBanner.baseY).toBe(CM_TITLE_BASE_Y - CM_BANNER_TEXT_DY);
     expect([L.titleBare.x, L.titleBare.baseY, L.titleBare.px, L.titleBare.align]).toEqual([PAD, 36, FS.title, "left"]);
     // 与 prestige / gacha 的显式 240×46 不同档
     expect(L.headerBanner.w).not.toBe(240);
   });
 
-  it("小立绘的固定坐标逐字照搬 Web:(252, 4, 38, 60)", () => {
-    expect([CM_POSE_X, CM_POSE_Y, CM_POSE_W, CM_POSE_H]).toEqual([252, 4, 38, 60]);
-    expect(commissionLayout(W, H_STD, 0).pose).toEqual({ x: 252, y: 4, w: 38, h: 60 });
-    expect(commissionLayout(W, H_TALL, 2).pose).toEqual({ x: 252, y: 4, w: 38, h: 60 });
+  it("小立绘落在铁带右缘之外:(348, 4, 38, 60)，且与横幅盒、兑换钮都不相交", () => {
+    expect([CM_POSE_X, CM_POSE_Y, CM_POSE_W, CM_POSE_H]).toEqual([348, 4, 38, 60]);
+    for (const h of [H_STD, H_TALL]) {
+      const L = commissionLayout(W, h, 2);
+      expect(L.pose).toEqual({ x: 348, y: 4, w: 38, h: 60 });
+      expect(L.pose.x >= L.headerBanner.x + L.headerBanner.w).toBe(true);
+      expect(L.pose.x + L.pose.w <= L.exchangeBtn.x).toBe(true);
+    }
   });
 
   it("两项读数走 iconText(size 13):图标盒 (x, 60 − 13 + 2, 13, 13),有图时文字右移 13 + 4、缺图时回到 x", () => {

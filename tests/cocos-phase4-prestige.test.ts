@@ -648,10 +648,12 @@ describe("开局配置块:定向搜索 6 枚 / 完美蓝图 8 枚", () => {
 /* ==================== 5. 头部:横幅两档 + 立绘 + 四行信息 ==================== */
 
 describe("头部几何(对标 Web skinHeader 与四行 fillText)", () => {
-  it("横幅盒 = (pad + 2, 18, 240, 46);有图时标题居中于横幅、基线 48", () => {
+  it("横幅盒 = (pad + 2, 18, 372, 46);有图时标题居中于横幅、基线 48", () => {
     const L = prestigeLayout(W, H_STD, routeIds("builder"), false, false);
-    expect([PT_BANNER_W, PT_BANNER_H, PT_TITLE_BASE_Y]).toEqual([240, 46, 48]);
+    expect([PT_BANNER_W, PT_BANNER_H, PT_TITLE_BASE_Y]).toEqual([372, 46, 48]);
     expect(L.headerBanner).toEqual({ x: PAD + 2, y: 18, w: PT_BANNER_W, h: PT_BANNER_H });
+    // 加宽后的横幅右缘仍要在右上角立绘起笔之前(18 + 372 = 390 < 500)
+    expect(L.headerBanner.x + L.headerBanner.w).toBeLessThanOrEqual(PT_POSE_X);
     expect(L.titleWithBanner.x).toBe(L.headerBanner.x + L.headerBanner.w / 2);
     expect(L.titleWithBanner.baseY).toBe(PT_TITLE_BASE_Y - PT_BANNER_TEXT_DY);
     expect(L.titleWithBanner.align).toBe("center");

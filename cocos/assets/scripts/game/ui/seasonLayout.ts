@@ -66,7 +66,7 @@ export interface SeasonLayout {
   anchorY: number;
   /** 顶部徽标盒(`anchorY` 上方 96;48×40 贴 `emblem_flow_gold` 的 100×84 源比例) */
   emblem: SeRect;
-  /** 标题横幅盒(`anchorY` 上方 32,240×44 = `banner_mid_bronze` 固有 120×22 的 2 倍) */
+  /** 标题横幅盒(`anchorY` 上方 32,362×44 = `banner_mid_bronze` 固有 181×22 的 2 倍) */
   banner: SeRect;
   /** 标题「赛季结算」有横幅那一档(居中于 `anchorY`,落在横幅带内) */
   title: SeTextLine;
@@ -96,9 +96,11 @@ export const SE_EMBLEM_DX = 24;
 export const SE_EMBLEM_SIZE = 48;
 export const SE_EMBLEM_H = 40;
 export const SE_EMBLEM_DY = 96;
-/** 横幅:半宽 / 宽 / 高 / 相对锚线的上抬 */
-export const SE_BANNER_DX = 120;
-export const SE_BANNER_W = 240;
+/** 横幅:宽 / 高 / 半宽 / 相对锚线的上抬
+ *  (`banner_mid_bronze` 固有 181×22 → 362×44;art 宽为奇数故半宽取 evenDown 档,
+ *   让 `x = cx − SE_BANNER_DX` 仍落在 2 逻辑像素栅格上,视觉中心相对屏心让位 1 逻辑像素) */
+export const SE_BANNER_W = 362;
+export const SE_BANNER_DX = evenDown(SE_BANNER_W / 2);
 export const SE_BANNER_H = 44;
 export const SE_BANNER_DY = 32;
 /** 摘要四行相对锚线的基线偏移 */

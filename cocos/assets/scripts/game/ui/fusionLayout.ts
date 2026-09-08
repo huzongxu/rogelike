@@ -238,11 +238,11 @@ export const FU_CARD_DESC_MAX_LINES = 4;
 /** 弹层标题与副行相对 `evenDown(h/2)` 的上抬 */
 export const FU_HIDDEN_TITLE_DY = 110;
 export const FU_HIDDEN_SUB_DY = 78;
-/** 头部:标题基线 / 横幅盒(`banner_mid_blue` 固有 95×20 → 190×40 整数倍,不裁不拉) */
+/** 头部:标题基线 / 横幅盒(`banner_mid_blue` 固有 161×20 → 322×40 整数倍,不裁不拉) */
 export const FU_TITLE_BASE_Y = 44;
 export const FU_BANNER_DX = 6;
 export const FU_BANNER_Y = 18;
-export const FU_BANNER_W = 190;
+export const FU_BANNER_W = 322;
 export const FU_BANNER_H = 40;
 /** 星尘读数:基线 / 图标边长(`icon_stardust` 固有 14×14 → 28×28)/ 图标相对基线的上抬 / 图标与文字间距 */
 export const FU_RES_BASE_Y = 88;
