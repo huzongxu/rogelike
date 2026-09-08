@@ -123,6 +123,7 @@
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
+     "insetPx": 2,
      "wm": false
     },
     {
@@ -133,6 +134,7 @@
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
+     "insetPx": 2,
      "wm": false
     },
     {
@@ -141,6 +143,7 @@
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
+     "insetPx": 2,
      "wm": false
     },
     {
@@ -149,6 +152,7 @@
      "fit": "stretch",
      "fillBox": true,
      "cropBBox": false,
+     "insetPx": 2,
      "wm": [0.869, 0.968, 0.131, 0.032]
     }
    ]
