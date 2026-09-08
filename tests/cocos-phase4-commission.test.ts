@@ -53,16 +53,19 @@ import { fs as FS, rowTextY, spreadRows, ui as PAD_ } from "@game/ui/theme";
 import {
   CM_BACK_ICON_DX,
   CM_BACK_ICON_SHRINK,
+  CM_BACK_H,
   CM_BACK_TEXT_DY,
   CM_BACK_Y,
   CM_BANNER_H,
-  CM_BANNER_TEXT_DY,
   CM_BANNER_W,
+  CM_BANNER_X,
+  CM_BANNER_Y,
   CM_BAR_DY,
   CM_BAR_DX,
   CM_BAR_H,
   CM_BAR_W,
   CM_DIFF_GAP_X,
+  CM_DIFF_GAP_Y,
   CM_DIFF_H,
   CM_DIFF_LABEL_DY,
   CM_DIFF_N,
@@ -71,10 +74,14 @@ import {
   CM_EXCHANGE_H,
   CM_EXCHANGE_W,
   CM_EXCHANGE_Y,
+  CM_ICON_DY,
   CM_ICON_SIZE,
+  CM_ICON_TEXT_DX,
   CM_L1_DY,
   CM_L2_DY,
   CM_NAME_MAX_W,
+  CM_PAD,
+  CM_PANEL_BTN_DY,
   CM_PANEL_BTN_GAP,
   CM_PANEL_BTN_H,
   CM_PANEL_BTN_W,
@@ -84,7 +91,9 @@ import {
   CM_PANEL_LINE2_DY,
   CM_PANEL_LINE3_DY,
   CM_PANEL_NINE,
+  CM_PANEL_TEXT_DX,
   CM_PANEL_TOP_Y,
+  CM_POSE_GAP,
   CM_POSE_H,
   CM_POSE_W,
   CM_POSE_X,
@@ -93,6 +102,8 @@ import {
   CM_RES_BASE_Y,
   CM_ROW_MAX_H,
   CM_ROW_MIN_H,
+  CM_ROW_RIGHT_DX,
+  CM_ROW_TEXT_DX,
   CM_ROWS_BOTTOM_DY,
   CM_ROWS_Y0,
   CM_START_H,
@@ -102,12 +113,18 @@ import {
   CM_START_W,
   CM_STARDUST_DX,
   CM_TITLE_BASE_Y,
+  CM_TOP_Y,
+  TEXT_SLACK,
+  commissionBackBtn,
   commissionBarRects,
+  commissionDiffBtnW,
   commissionDiffY,
+  commissionExchangeBtn,
   commissionLayout,
   commissionRowsBottom,
   commissionScreenLayout,
   commissionStartBtn,
+  evenDown,
   type CmRect,
   type CmTextLine,
   type CommissionLayout,
@@ -139,7 +156,11 @@ import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
-const PAD = PAD_.pad;
+/** 页边距走本屏 `CM_PAD = 16`(`PAD_.pad` 是 Web 冻结档 14,本屏已不再读它) */
+const PAD = CM_PAD;
+/** 内容宽 = 560 − 16×2;右缘基准 544 */
+const CONTENT_W = W - PAD * 2;
+const RIGHT_EDGE = W - PAD;
 /** 钉死的时间源:模型不读 Date.now(),所有涉及时间的断言都拿这一个数 */
 const NOW = 1800000000000;
 const HOUR = 3600000;
@@ -196,8 +217,11 @@ function phase4Defaults(): Record<string, string> {
   return out;
 }
 
-/** spreadRows 直算一遍(矩阵里的数不是从布局函数里抄回来的) */
-const direct = (rowsBottom: number) => spreadRows(REGIONS.length, CM_ROWS_Y0, rowsBottom, CM_ROW_MIN_H, CM_ROW_MAX_H);
+/** spreadRows 直算一遍再各取一次偶(矩阵里的数不是从布局函数里抄回来的) */
+const direct = (rowsBottom: number) => {
+  const s = spreadRows(REGIONS.length, CM_ROWS_Y0, rowsBottom, CM_ROW_MIN_H, CM_ROW_MAX_H);
+  return { rowH: evenDown(s.rowH), gap: evenDown(s.gap) };
+};
 
 /** 一帧几何 + 一帧文案(内容层要读同一帧几何,故成对取) */
 function frame(slots: number, s: CommissionSaveView = withSlots(slots), selection: CommissionSelection = sel(), h: number = H_STD) {
@@ -269,64 +293,89 @@ describe("端间共读同一份共享层与本屏要用到的表事实", () => {
 
 /* ==================== 1. 分区纵线:顶边锚定的列表 + 底边锚定的难度行与开始钮 ==================== */
 
-describe("分区纵线(与 Web commissionLayout 同一批裸加数)", () => {
-  it("开始委托钮:x 居中减半宽、y = h − pad − 52、260×52(底边锚定 h)", () => {
-    expect(CM_START_HALF_W).toBe(130);
+describe("分区纵线(列表顶边锚定 + 难度行与开始钮底边锚定)", () => {
+  it("开始委托钮:x 居中减半宽(半宽由宽度推导)、y = evenDown(h) − 16 − 52、260×52(底边锚定 h)", () => {
+    expect(CM_START_HALF_W).toBe(evenDown(CM_START_W / 2));
     expect([CM_START_W, CM_START_H, CM_START_UP]).toEqual([260, 52, 52]);
     for (const h of [H_STD, H_TALL]) {
       const b = commissionStartBtn(W, h);
-      expect(b).toEqual({ x: W / 2 - 130, y: h - PAD - 52, w: 260, h: 52 });
-      expect(bottom(b)).toBe(h - PAD);
+      expect(b).toEqual({ x: evenDown(W / 2) - CM_START_HALF_W, y: evenDown(h) - PAD - CM_START_UP, w: CM_START_W, h: CM_START_H });
+      expect(bottom(b)).toBe(evenDown(h) - PAD);
+      expect(Math.min(b.w, b.h), "开始钮热区").toBeGreaterThanOrEqual(PAD_.touchMin);
+      for (const v of [b.x, b.y, b.w, b.h]) expect(v % 2).toBe(0);
     }
   });
 
-  it("难度行顶缘 = 开始钮顶缘 − 30 − 42,预算底缘再让 24", () => {
+  it("难度行顶缘 = 开始钮顶缘 − 28 − 44(钮高抬到热区下限),预算底缘再让 24", () => {
+    expect([CM_DIFF_GAP_Y, CM_DIFF_H]).toEqual([28, Math.max(PAD_.touchMin, 42)]);
     for (const h of [H_STD, H_TALL]) {
-      expect(commissionDiffY(W, h)).toBe(commissionStartBtn(W, h).y - 72);
+      expect(commissionDiffY(W, h)).toBe(commissionStartBtn(W, h).y - CM_DIFF_GAP_Y - CM_DIFF_H);
       expect(commissionRowsBottom(W, h)).toBe(commissionDiffY(W, h) - CM_ROWS_BOTTOM_DY);
       const L = commissionLayout(W, h, 0);
       expect(L.diffY).toBe(commissionDiffY(W, h));
+      expect(L.diffY % 2, "diffY 取偶").toBe(0);
       expect(L.rowsBottom).toBe(commissionRowsBottom(W, h));
       expect(L.diffLabel.baseY).toBe(L.diffY - CM_DIFF_LABEL_DY);
+      expect(L.diffLabel.baseY % 2, "难度说明基线取偶").toBe(0);
     }
   });
 
-  it("区域行区顶缘恒 100,行高钳在 52..88、行距上限走 spreadRows 的默认 maxGap 20", () => {
-    expect([CM_ROWS_Y0, CM_ROW_MIN_H, CM_ROW_MAX_H]).toEqual([100, 52, 88]);
+  it("区域行区顶缘恒 136,行高钳在 52..88、行距上限走 spreadRows 的默认 maxGap 20", () => {
+    expect([CM_ROWS_Y0, CM_ROW_MIN_H, CM_ROW_MAX_H]).toEqual([136, 52, 88]);
     const L = commissionLayout(W, H_STD, 0);
     expect(L.rowsTop).toBe(CM_ROWS_Y0);
-    // 只传五个实参:第六个 maxGap 走默认 20,显式传 40 会得到另一个 gap
-    expect(spreadRows(REGIONS.length, CM_ROWS_Y0, L.rowsBottom, CM_ROW_MIN_H, CM_ROW_MAX_H, 40).gap).toBe(40);
+    expect(L.rowsTop % 2).toBe(0);
+    // 只传五个实参:第六个 maxGap 走默认 20。放开上限复算会得到 33,
+    // 于是布局用的 20 是默认上限在起作用,不是被预算逼出来的
+    expect(spreadRows(REGIONS.length, CM_ROWS_Y0, L.rowsBottom, CM_ROW_MIN_H, CM_ROW_MAX_H, 64).gap).toBe(33);
     expect(L.rowGap).toBe(20);
+    expect(L.rowGap).toBeLessThan(spreadRows(REGIONS.length, CM_ROWS_Y0, L.rowsBottom, CM_ROW_MIN_H, CM_ROW_MAX_H, 64).gap);
     expect(direct(L.rowsBottom)).toEqual({ rowH: L.rowH, gap: L.rowGap });
   });
 
-  it("难度钮恒五枚、bw = (w − pad×2 − 4×8)/5、间距 8、h = 42", () => {
-    expect([CM_DIFF_N, CM_DIFF_GAP_X, CM_DIFF_H]).toEqual([5, 8, 42]);
+  it("难度钮恒五枚、bw = evenDown((内容宽 − 4×12)/5) = 96、间距 12、h 抬到 44,五枚正好铺满 528", () => {
+    expect([CM_DIFF_N, CM_DIFF_GAP_X, CM_DIFF_H]).toEqual([5, 12, 44]);
     const L = commissionLayout(W, H_STD, 0);
-    const bw = (W - PAD * 2 - 4 * 8) / 5;
-    expect(bw).toBe(100);
+    const bw = commissionDiffBtnW(CONTENT_W);
+    expect(bw).toBe(96);
+    expect(L.diffBtnW).toBe(bw);
+    // 由内容宽推导:五枚 + 四条缝正好铺满 528,左起 16、右缘 544
+    expect(bw * CM_DIFF_N + CM_DIFF_GAP_X * (CM_DIFF_N - 1)).toBe(CONTENT_W);
     L.diffs.forEach((d, i) => {
-      expect(d.rect).toEqual({ x: PAD + i * (bw + 8), y: L.diffY, w: bw, h: 42 });
+      expect(d.rect).toEqual({ x: PAD + i * (bw + CM_DIFF_GAP_X), y: L.diffY, w: bw, h: CM_DIFF_H });
       expect(d.index).toBe(i);
+      expect(Math.min(d.rect.w, d.rect.h), `难度钮${i} 热区`).toBeGreaterThanOrEqual(PAD_.touchMin);
+      for (const v of [d.rect.x, d.rect.y, d.rect.w, d.rect.h]) expect(v % 2).toBe(0);
     });
-    expect(right(L.diffs[4].rect)).toBe(W - PAD);
+    expect(L.diffs[0].rect.x).toBe(PAD);
+    expect(right(L.diffs[4].rect)).toBe(RIGHT_EDGE);
   });
 
-  it("返回钮与兑换钮:右上两处固定矩形", () => {
+  it("返回钮与兑换钮:右上两处固定矩形,热区都抬到 44、右缘正落 544、两枚分占两带不相交", () => {
     const L = commissionLayout(W, H_STD, 0);
-    expect(L.backBtn).toEqual({ x: W - PAD - PAD_.backW, y: CM_BACK_Y, w: PAD_.backW, h: PAD_.backH });
+    expect(L.backBtn).toEqual({ x: W - PAD - PAD_.backW, y: CM_BACK_Y, w: PAD_.backW, h: CM_BACK_H });
     expect(L.exchangeBtn).toEqual({ x: W - PAD - CM_EXCHANGE_W, y: CM_EXCHANGE_Y, w: CM_EXCHANGE_W, h: CM_EXCHANGE_H });
-    expect(right(L.backBtn)).toBe(W - PAD);
-    expect(right(L.exchangeBtn)).toBe(W - PAD);
+    expect(commissionBackBtn(W)).toEqual(L.backBtn);
+    expect(commissionExchangeBtn(W)).toEqual(L.exchangeBtn);
+    expect(CM_BACK_H).toBe(Math.max(PAD_.touchMin, PAD_.backH));
+    expect(CM_EXCHANGE_H).toBe(Math.max(PAD_.touchMin, 32));
+    for (const r of [L.backBtn, L.exchangeBtn]) {
+      expect(Math.min(r.w, r.h)).toBeGreaterThanOrEqual(PAD_.touchMin);
+      expect(right(r)).toBe(RIGHT_EDGE);
+      for (const v of [r.x, r.y, r.w, r.h]) expect(v % 2).toBe(0);
+    }
+    // 返回钮占头部第一带(16..60),兑换钮占第二带(80..124),纵向不抢同一条带
+    expect(bottom(L.backBtn)).toBeLessThanOrEqual(L.exchangeBtn.y);
   });
 
-  it("面板底是 panelPad 不传专属键的那一档:panel_dark_corners 九宫 (pad,pad,w−2pad,h−2pad)", () => {
+  it("面板底是 panelPad 不传专属键的那一档:panel_dark_corners 九宫 (16,16,528,evenDown(h)−32)", () => {
     expect(CM_PANEL_NINE).toBe(32);
     for (const h of [H_STD, H_TALL]) {
       const L = commissionLayout(W, h, 0);
       expect(L.panelKey).toBe("panel_dark_corners");
-      expect(L.panel).toEqual({ x: PAD, y: PAD, w: W - PAD * 2, h: h - PAD * 2 });
+      expect(L.panel).toEqual({ x: PAD, y: PAD, w: CONTENT_W, h: evenDown(h) - PAD * 2 });
+      expect(right(L.panel)).toBe(RIGHT_EDGE);
+      expect(bottom(L.panel)).toBe(evenDown(h) - PAD);
     }
   });
 });
@@ -336,12 +385,12 @@ describe("分区纵线(与 Web commissionLayout 同一批裸加数)", () => {
 describe("六格矩阵:h ∈ {996,1246} × 分支 ∈ {列表态, 1 个面板, 2 个面板}", () => {
   /** 每格的期望值:`[rowsBottom, rowH, gap, rowsEnd, rowsToDiff, diffY, startBtn.y]` */
   const CELL: Record<string, [number, number, number, number, number, number, number]> = {
-    "996|0": [834, 88, 20, 728, 124, 858, 930],
-    "996|1": [834, 88, 20, 728, 124, 858, 930],
-    "996|2": [834, 88, 20, 728, 124, 858, 930],
-    "1246|0": [1084, 88, 20, 728, 374, 1108, 1180],
-    "1246|1": [1084, 88, 20, 728, 374, 1108, 1180],
-    "1246|2": [1084, 88, 20, 728, 374, 1108, 1180],
+    "996|0": [832, 88, 20, 764, 84, 856, 928],
+    "996|1": [832, 88, 20, 764, 84, 856, 928],
+    "996|2": [832, 88, 20, 764, 84, 856, 928],
+    "1246|0": [1082, 88, 20, 764, 334, 1106, 1178],
+    "1246|1": [1082, 88, 20, 764, 334, 1106, 1178],
+    "1246|2": [1082, 88, 20, 764, 334, 1106, 1178],
   };
 
   for (const h of [H_STD, H_TALL]) {
@@ -360,12 +409,25 @@ describe("六格矩阵:h ∈ {996,1246} × 分支 ∈ {列表态, 1 个面板, 2
         expect(L.startBtn.y).toBe(startY);
         // 与 spreadRows 直算对照:矩阵不是从布局函数里抄回来的
         expect(direct(rowsBottom)).toEqual({ rowH, gap });
-        // 末行底边落在预算内,开始钮底边恰好压在 h − pad 上(不越界)
+        // 末行底边落在预算内,开始钮底边恰好压在 evenDown(h) − pad 上(不越界)
         expect(L.rowsEnd).toBeLessThanOrEqual(L.rowsBottom);
-        expect(bottom(L.startBtn)).toBe(h - PAD);
-        expect(bottom(L.startBtn)).toBeLessThanOrEqual(h - PAD);
+        expect(bottom(L.startBtn)).toBe(evenDown(h) - PAD);
         expect(L.slotCount).toBe(slots);
         expect(L.panels).toHaveLength(slots);
+        // module = 2:这一格的每条锚线都落在 art 网格上
+        for (const [tag, v] of [
+          ["rowsTop", L.rowsTop],
+          ["rowsBottom", L.rowsBottom],
+          ["rowH", L.rowH],
+          ["rowGap", L.rowGap],
+          ["rowStep", L.rowStep],
+          ["rowsEnd", L.rowsEnd],
+          ["rowsToDiff", L.rowsToDiff],
+          ["diffY", L.diffY],
+          ["startBtn.y", L.startBtn.y],
+        ] as [string, number][]) {
+          expect(v % 2, `${tag} 取偶`).toBe(0);
+        }
       });
     }
   }
@@ -393,38 +455,81 @@ describe("六格矩阵:h ∈ {996,1246} × 分支 ∈ {列表态, 1 个面板, 2
     expect(b.rowsToDiff).toBeGreaterThan(a.rowsToDiff);
   });
 
-  it("面板几何只随槽位数变,与屏高无关:panelH 恒 150、topY 恒 84、面板间距 12", () => {
-    expect([CM_PANEL_H, CM_PANEL_TOP_Y, CM_PANEL_GAP]).toEqual([150, 84, 12]);
+  it("面板几何只随槽位数变,与屏高无关:panelH 恒 158、topY 恒 136、面板间距 12,富余只进 seamBelowPanels", () => {
+    expect([CM_PANEL_H, CM_PANEL_TOP_Y, CM_PANEL_GAP]).toEqual([158, 136, 12]);
+    /** 每档屏高下面板态的呼吸缝真值(末面板底边 → evenDown(h) − pad) */
+    const SEAM: Record<string, number> = { "996|1": 686, "996|2": 516, "1246|1": 936, "1246|2": 766 };
     for (const h of [H_STD, H_TALL]) {
       const L = commissionLayout(W, h, 2);
-      expect(L.panels[0].rect).toEqual({ x: PAD, y: 84, w: W - PAD * 2, h: 150 });
-      expect(L.panels[1].rect).toEqual({ x: PAD, y: 246, w: W - PAD * 2, h: 150 });
-      expect(bottom(L.panels[1].rect)).toBe(396);
-      expect(bottom(L.panels[1].rect)).toBeLessThanOrEqual(h - PAD);
+      expect(L.panels[0].rect).toEqual({ x: PAD, y: CM_PANEL_TOP_Y, w: CONTENT_W, h: CM_PANEL_H });
+      expect(L.panels[1].rect).toEqual({ x: PAD, y: CM_PANEL_TOP_Y + CM_PANEL_H + CM_PANEL_GAP, w: CONTENT_W, h: CM_PANEL_H });
+      expect(bottom(L.panels[1].rect)).toBe(464);
+      expect(bottom(L.panels[1].rect)).toBeLessThanOrEqual(evenDown(h) - PAD);
+      // 面板高与间距都是常量,屏高的差全落进末面板之下那条无上限的缝
+      expect(L.seamBelowPanels).toBe(SEAM[`${h}|2`]);
+      expect(L.seamBelowPanels).toBe(evenDown(h) - PAD - bottom(L.panels[1].rect));
+      expect(commissionLayout(W, h, 1).seamBelowPanels).toBe(SEAM[`${h}|1`]);
+      expect(commissionLayout(W, h, 0).seamBelowPanels).toBe(0);
+      // 面板顶缘让开头部第二带(兑换钮底边 124),两件不抢同一条带
+      expect(L.panels[0].rect.y).toBeGreaterThanOrEqual(bottom(L.exchangeBtn));
     }
   });
 
-  it("横向边界:六格下所有矩形都不越出 [pad, w − pad](标题横幅除外,它按 skinHeader 的 bx = x − 8 起笔)", () => {
+  it("横向边界:六格下所有矩形都卡在 [16, 544] 内、坐标尺寸全偶、热区短边 ≥44", () => {
     for (const h of [H_STD, H_TALL]) {
       for (const slots of BRANCHES) {
         const L = commissionLayout(W, h, slots);
-        const rects: CmRect[] = [
-          L.panel,
-          L.backBtn,
-          L.exchangeBtn,
-          L.startBtn,
-          L.diffLabel && { x: PAD, y: 0, w: L.diffLabel.maxW, h: 0 },
-          ...L.rows.map((r) => r.rect),
-          ...L.diffs.map((d) => d.rect),
-          ...L.panels.flatMap((p) => [p.rect, p.bar, p.collect, p.abandon]),
-        ].filter(Boolean) as CmRect[];
-        for (const r of rects) {
-          expect(r.x, `h=${h} slots=${slots} x=${r.x}`).toBeGreaterThanOrEqual(PAD);
-          expect(right(r), `h=${h} slots=${slots} right=${right(r)}`).toBeLessThanOrEqual(W - PAD);
+        const rects: [string, CmRect][] = [
+          ["屏底板", L.panel],
+          ["标题横幅", L.headerBanner],
+          ["小立绘", L.pose],
+          ["碎片图标", L.fragmentIcon],
+          ["星尘图标", L.stardustIcon],
+          ["兑换钮", L.exchangeBtn],
+          ["返回钮", L.backBtn],
+          ["返回钮图标", L.backIcon],
+          ["开始钮", L.startBtn],
+          ...L.rows.map((r, i) => [`区域行${i}`, r.rect] as [string, CmRect]),
+          ...L.diffs.map((d, i) => [`难度钮${i}`, d.rect] as [string, CmRect]),
+          ...L.panels.flatMap((p) => [
+            [`面板${p.index}底`, p.rect],
+            [`面板${p.index}进度条`, p.bar],
+            [`面板${p.index}领取钮`, p.collect],
+            [`面板${p.index}放弃钮`, p.abandon],
+          ] as [string, CmRect][]),
+        ];
+        for (const [tag, r] of rects) {
+          const at = `h=${h} slots=${slots} ${tag}`;
+          expect(r.x, `${at} 左缘`).toBeGreaterThanOrEqual(PAD);
+          expect(right(r), `${at} 右缘`).toBeLessThanOrEqual(RIGHT_EDGE);
+          expect(r.x % 2, `${at} x 取偶`).toBe(0);
+          expect(r.y % 2, `${at} y 取偶`).toBe(0);
+          expect(r.w % 2, `${at} w 取偶`).toBe(0);
+          expect(r.h % 2, `${at} h 取偶`).toBe(0);
+          expect(r.y, `${at} 顶缘`).toBeGreaterThanOrEqual(0);
+          expect(bottom(r), `${at} 底缘`).toBeLessThanOrEqual(evenDown(h));
         }
-        // 横幅是 Web skinHeader 的 `bx = x − 8`,与 prestige / gacha 同性质:故意探出 pad
-        expect(L.headerBanner.x).toBe(PAD - 8);
-        expect(right(L.headerBanner)).toBeLessThanOrEqual(W - PAD);
+        // 每枚可点件的短边都不小于 ui.touchMin(屏底板 / 横幅 / 立绘 / 图标 / 进度条不是热区)
+        const hits: [string, CmRect][] = [
+          ["兑换钮", L.exchangeBtn],
+          ["返回钮", L.backBtn],
+          ["开始钮", L.startBtn],
+          ...L.rows.map((r, i) => [`区域行${i}`, r.rect] as [string, CmRect]),
+          ...L.diffs.map((d, i) => [`难度钮${i}`, d.rect] as [string, CmRect]),
+          ...L.panels.flatMap((p) => [
+            [`面板${p.index}领取钮`, p.collect],
+            [`面板${p.index}放弃钮`, p.abandon],
+          ] as [string, CmRect][]),
+        ];
+        for (const [tag, r] of hits) expect(Math.min(r.w, r.h), `h=${h} slots=${slots} ${tag} 热区`).toBeGreaterThanOrEqual(PAD_.touchMin);
+        // 标题横幅不再探出页边距:左缘正落 16,右缘仍在 544 之内
+        expect(L.headerBanner.x).toBe(PAD);
+        expect(right(L.headerBanner)).toBeLessThanOrEqual(RIGHT_EDGE);
+        // 文本限宽档也都收在内容带里(三条读数与难度说明)
+        for (const t of [L.diffLabel, L.fragmentTextWithIcon, L.fragmentTextBare, L.stardustTextWithIcon, L.stardustTextBare, L.prestigesText]) {
+          expect(t.x, `h=${h} slots=${slots} 文本起笔`).toBeGreaterThanOrEqual(PAD);
+          expect(t.x + t.maxW, `h=${h} slots=${slots} 文本限宽右界`).toBeLessThanOrEqual(RIGHT_EDGE);
+        }
       }
     }
   });
@@ -445,41 +550,48 @@ describe("六格矩阵:h ∈ {996,1246} × 分支 ∈ {列表态, 1 个面板, 2
 /* ==================== 3. 区域行的两行布局 ==================== */
 
 describe("区域行(两行布局 + 右对齐产出)", () => {
-  it("行 y = 100 + i × (rowH + gap)、x = pad、w = w − pad×2、h = rowH", () => {
+  it("行 y = 136 + i × (rowH + gap)、x = 16、w = 内容宽 528、h = rowH", () => {
     const L = commissionLayout(W, H_STD, 0);
     L.rows.forEach((r, i) => {
-      expect(r.rect).toEqual({ x: PAD, y: CM_ROWS_Y0 + i * L.rowStep, w: W - PAD * 2, h: L.rowH });
+      expect(r.rect).toEqual({ x: PAD, y: CM_ROWS_Y0 + i * L.rowStep, w: CONTENT_W, h: L.rowH });
       expect(r.index).toBe(i);
+      expect(r.rect.y % 2, `行${i} y 取偶`).toBe(0);
     });
-    expect(L.rows[0].rect.y).toBe(100);
-    expect(L.rows[5].rect.y).toBe(640);
+    expect(L.rows[0].rect.y).toBe(136);
+    expect(L.rows[5].rect.y).toBe(676);
     expect(bottom(L.rows[5].rect)).toBe(L.rowsEnd);
+    expect(L.rowsEnd).toBe(764);
   });
 
-  it("两行基线 l1 = round(y + h/2 − 5)、l2 = l1 + 18(与每日屏同一批裸加数)", () => {
-    expect([CM_L1_DY, CM_L2_DY]).toEqual([5, 18]);
+  it("两行基线 l1 = evenDown(y + h/2 − 4)、l2 = l1 + 18(与每日屏同一批取偶加数)", () => {
+    expect([CM_L1_DY, CM_L2_DY]).toEqual([4, 18]);
     const L = commissionLayout(W, H_STD, 0);
     for (const r of L.rows) {
-      expect(r.l1).toBe(Math.round(r.rect.y + r.rect.h / 2 - CM_L1_DY));
+      expect(r.l1).toBe(evenDown(r.rect.y + r.rect.h / 2 - CM_L1_DY));
       expect(r.l2).toBe(r.l1 + CM_L2_DY);
       expect(r.name.baseY).toBe(r.l1);
       expect(r.rate.baseY).toBe(r.l1);
       expect(r.sub.baseY).toBe(r.l2);
+      expect(r.l1 % 2, "l1 取偶").toBe(0);
+      expect(r.l2 % 2, "l2 取偶").toBe(0);
     }
-    expect(L.rows[0].l1).toBe(139);
-    expect(L.rows[0].l2).toBe(157);
+    expect(L.rows[0].l1).toBe(176);
+    expect(L.rows[0].l2).toBe(194);
   });
 
-  it("名字起笔 r.x + 8 限宽 150(fs.body);第二行同一起笔、整幅内宽(fs.micro);产出右对齐末笔 r.x + r.w − 8(fs.muted)", () => {
+  it("名字起笔 r.x + 16 限宽 150(fs.body);第二行同一起笔、整幅内宽(fs.micro);产出右对齐末笔 r.x + r.w − 16(fs.muted)", () => {
     expect(CM_NAME_MAX_W).toBe(150);
+    expect([CM_ROW_TEXT_DX, CM_ROW_RIGHT_DX]).toEqual([16, 16]);
     const L = commissionLayout(W, H_STD, 0);
     for (const r of L.rows) {
-      expect([r.name.x, r.name.maxW, r.name.px, r.name.align]).toEqual([r.rect.x + 8, 150, FS.body, "left"]);
-      expect([r.sub.x, r.sub.maxW, r.sub.px, r.sub.align]).toEqual([r.rect.x + 8, r.rect.w - 16, FS.micro, "left"]);
-      expect([r.rate.x, r.rate.px, r.rate.align]).toEqual([r.rect.x + r.rect.w - 8, FS.muted, "right"]);
+      expect([r.name.x, r.name.maxW, r.name.px, r.name.align]).toEqual([r.rect.x + CM_ROW_TEXT_DX, 150, FS.body, "left"]);
+      expect([r.sub.x, r.sub.maxW, r.sub.px, r.sub.align]).toEqual([r.rect.x + CM_ROW_TEXT_DX, r.rect.w - CM_ROW_TEXT_DX * 2, FS.micro, "left"]);
+      expect([r.rate.x, r.rate.px, r.rate.align]).toEqual([r.rect.x + r.rect.w - CM_ROW_RIGHT_DX, FS.muted, "right"]);
       // 两行都在行矩形之内
       expect(r.l1).toBeGreaterThan(r.rect.y);
       expect(r.l2).toBeLessThan(bottom(r.rect));
+      // 右对齐末笔正落行右缘内缩 16,不越内容带
+      expect(r.rate.x).toBe(RIGHT_EDGE - CM_ROW_RIGHT_DX);
     }
   });
 });
@@ -487,78 +599,97 @@ describe("区域行(两行布局 + 右对齐产出)", () => {
 /* ==================== 4. 难度钮:两行固定偏移(不是 rowTextY) ==================== */
 
 describe("难度钮的两行文字是固定偏移", () => {
-  it("第一行 d.y + 17(fs.muted 加粗)、第二行 d.y + 33(fs.micro),都水平居中", () => {
-    expect([CM_DIFF_TEXT_DY1, CM_DIFF_TEXT_DY2]).toEqual([17, 33]);
+  it("第一行 d.y + 18(fs.muted 加粗)、第二行 d.y + 34(fs.micro),都水平居中且基线取偶", () => {
+    expect([CM_DIFF_TEXT_DY1, CM_DIFF_TEXT_DY2]).toEqual([18, 34]);
     const L = commissionLayout(W, H_STD, 0);
     for (const d of L.diffs) {
-      expect([d.mult.baseY, d.mult.px, d.mult.align, d.mult.maxW]).toEqual([d.rect.y + 17, FS.muted, "center", d.rect.w]);
-      expect([d.fail.baseY, d.fail.px, d.fail.align, d.fail.maxW]).toEqual([d.rect.y + 33, FS.micro, "center", d.rect.w]);
-      expect(d.mult.x).toBe(d.rect.x + d.rect.w / 2);
-      expect(d.fail.x).toBe(d.rect.x + d.rect.w / 2);
+      expect([d.mult.baseY, d.mult.px, d.mult.align, d.mult.maxW]).toEqual([d.rect.y + CM_DIFF_TEXT_DY1, FS.muted, "center", d.rect.w]);
+      expect([d.fail.baseY, d.fail.px, d.fail.align, d.fail.maxW]).toEqual([d.rect.y + CM_DIFF_TEXT_DY2, FS.micro, "center", d.rect.w]);
+      expect(d.mult.x).toBe(evenDown(d.rect.x + d.rect.w / 2));
+      expect(d.fail.x).toBe(d.mult.x);
+      expect(d.mult.baseY % 2, "倍率行基线取偶").toBe(0);
+      expect(d.fail.baseY % 2, "败率行基线取偶").toBe(0);
       // 这两条不是 rowTextY:同一矩形按 rowTextY 会得到别的基线
       expect(d.mult.baseY).not.toBe(rowTextY(d.rect.y, d.rect.h, FS.muted));
       expect(bottom(d.rect)).toBeGreaterThan(d.fail.baseY);
     }
   });
 
-  it("难度说明左起笔于 pad、基线 diffY − 6、fs.micro", () => {
-    const L = commissionLayout(W, H_TALL, 0);
-    expect([L.diffLabel.x, L.diffLabel.baseY, L.diffLabel.px, L.diffLabel.align]).toEqual([PAD, L.diffY - 6, FS.micro, "left"]);
-    expect(L.diffLabel.maxW).toBe(W - PAD * 2);
+  it("难度说明左起笔于 16、基线 diffY − 8、fs.micro、限宽就是内容宽", () => {
+    for (const h of [H_STD, H_TALL]) {
+      const L = commissionLayout(W, h, 0);
+      expect([L.diffLabel.x, L.diffLabel.baseY, L.diffLabel.px, L.diffLabel.align]).toEqual([PAD, L.diffY - CM_DIFF_LABEL_DY, FS.micro, "left"]);
+      expect(L.diffLabel.maxW).toBe(CONTENT_W);
+      expect(L.diffLabel.baseY % 2).toBe(0);
+      // 说明行落在末行与难度行之间那条呼吸缝里,两头都不压
+      expect(L.diffLabel.baseY).toBeGreaterThan(L.rowsEnd);
+      expect(L.diffLabel.baseY).toBeLessThan(L.diffY);
+    }
   });
 });
 
 /* ==================== 5. 面板内的三行 / 进度条 / 两枚钮 ==================== */
 
 describe("进行中面板的几何(1 与 2 个槽位)", () => {
-  it("三行基线 y+24 / y+48 / y+68,起笔 pad + 8,字号依次 body / muted / micro", () => {
+  it("三行基线 y+24 / y+48 / y+68,起笔 pad + 16,字号依次 body / muted / micro", () => {
     expect([CM_PANEL_LINE1_DY, CM_PANEL_LINE2_DY, CM_PANEL_LINE3_DY]).toEqual([24, 48, 68]);
+    expect(CM_PANEL_TEXT_DX).toBe(16);
     const L = commissionLayout(W, H_STD, 2);
     L.panels.forEach((p, i) => {
       const y = CM_PANEL_TOP_Y + i * (CM_PANEL_H + CM_PANEL_GAP);
-      expect([p.line1.baseY, p.line2.baseY, p.line3.baseY]).toEqual([y + 24, y + 48, y + 68]);
+      expect([p.line1.baseY, p.line2.baseY, p.line3.baseY]).toEqual([y + CM_PANEL_LINE1_DY, y + CM_PANEL_LINE2_DY, y + CM_PANEL_LINE3_DY]);
       for (const t of [p.line1, p.line2, p.line3]) {
-        expect(t.x).toBe(PAD + 8);
-        expect(t.maxW).toBe(p.rect.w - 16);
+        expect(t.x).toBe(PAD + CM_PANEL_TEXT_DX);
+        expect(t.maxW).toBe(p.rect.w - CM_PANEL_TEXT_DX * 2);
         expect(t.align).toBe("left");
+        expect(t.baseY % 2, "面板内基线取偶").toBe(0);
       }
       expect([p.line1.px, p.line2.px, p.line3.px]).toEqual([FS.body, FS.muted, FS.micro]);
       expect(p.index).toBe(i);
+      expect(p.rect.y).toBe(y);
     });
   });
 
-  it("进度条 (pad + 8, y + h − 58, 200, 8);两枚钮 (w − pad − 2×112 − 8 / w − pad − 112, y + h − 44, 112, 36)", () => {
-    expect([CM_BAR_DY, CM_BAR_DX, CM_BAR_W, CM_BAR_H]).toEqual([58, 8, 200, 8]);
-    expect([CM_PANEL_BTN_W, CM_PANEL_BTN_H, CM_PANEL_BTN_GAP]).toEqual([112, 36, 8]);
+  it("进度条 (16 + 8, y + h − 66, 200, 8);两枚钮 (w − 16 − 2×112 − 8 / w − 16 − 112, y + h − 52, 112, 44)", () => {
+    expect([CM_BAR_DY, CM_BAR_DX, CM_BAR_W, CM_BAR_H]).toEqual([66, 8, 200, 8]);
+    expect([CM_PANEL_BTN_W, CM_PANEL_BTN_H, CM_PANEL_BTN_GAP, CM_PANEL_BTN_DY]).toEqual([112, Math.max(PAD_.touchMin, 36), 8, 52]);
     const L = commissionLayout(W, H_STD, 2);
     L.panels.forEach((p, i) => {
       const y = CM_PANEL_TOP_Y + i * (CM_PANEL_H + CM_PANEL_GAP);
-      expect(p.bar).toEqual({ x: PAD + 8, y: y + CM_PANEL_H - 58, w: 200, h: 8 });
-      expect(p.collect).toEqual({ x: W - PAD - 2 * 112 - 8, y: y + CM_PANEL_H - 44, w: 112, h: 36 });
-      expect(p.abandon).toEqual({ x: W - PAD - 112, y: y + CM_PANEL_H - 44, w: 112, h: 36 });
-      expect(p.collect.x).toBe(314);
-      expect(p.abandon.x).toBe(434);
-      expect(right(p.abandon)).toBe(W - PAD);
-      // 进度条在两枚钮之上,三者互不相叠
+      expect(p.bar).toEqual({ x: PAD + CM_BAR_DX, y: y + CM_PANEL_H - CM_BAR_DY, w: CM_BAR_W, h: CM_BAR_H });
+      expect(p.collect).toEqual({ x: W - PAD - 2 * CM_PANEL_BTN_W - CM_PANEL_BTN_GAP, y: y + CM_PANEL_H - CM_PANEL_BTN_DY, w: CM_PANEL_BTN_W, h: CM_PANEL_BTN_H });
+      expect(p.abandon).toEqual({ x: W - PAD - CM_PANEL_BTN_W, y: y + CM_PANEL_H - CM_PANEL_BTN_DY, w: CM_PANEL_BTN_W, h: CM_PANEL_BTN_H });
+      expect(p.collect.x).toBe(312);
+      expect(p.abandon.x).toBe(432);
+      expect(right(p.abandon)).toBe(RIGHT_EDGE);
+      // 两枚钮都够一枚 44 的点击区,坐标尺寸全偶
+      for (const r of [p.bar, p.collect, p.abandon]) {
+        for (const v of [r.x, r.y, r.w, r.h]) expect(v % 2).toBe(0);
+      }
+      for (const r of [p.collect, p.abandon]) expect(Math.min(r.w, r.h)).toBeGreaterThanOrEqual(PAD_.touchMin);
+      // 进度条在两枚钮之上,三者互不相叠;钮底边与面板底边仍留 8
       expect(bottom(p.bar)).toBeLessThan(p.collect.y);
       expect(p.collect.y).toBe(p.abandon.y);
       expect(bottom(p.collect)).toBeLessThanOrEqual(bottom(p.rect));
+      expect(bottom(p.rect) - bottom(p.collect)).toBe(8);
     });
   });
 
-  it("两枚钮的文字居中并用 rowTextY(fs.body)", () => {
+  it("两枚钮的文字居中并用 rowTextY(fs.body) 再取偶", () => {
     const L = commissionLayout(W, H_STD, 1);
     for (const [r, t] of [
       [L.panels[0].collect, L.panels[0].collectText],
       [L.panels[0].abandon, L.panels[0].abandonText],
     ] as [CmRect, CmTextLine][]) {
       expect(t.align).toBe("center");
-      expect(t.x).toBe(r.x + r.w / 2);
+      expect(t.x).toBe(evenDown(r.x + r.w / 2));
       expect(t.maxW).toBe(r.w);
       expect(t.px).toBe(FS.body);
-      expect(t.baseY).toBe(rowTextY(r.y, r.h, FS.body));
+      expect(t.baseY).toBe(evenDown(rowTextY(r.y, r.h, FS.body)));
+      expect(t.baseY).toBeGreaterThan(r.y);
+      expect(t.baseY).toBeLessThan(bottom(r));
     }
-    expect(L.panels[0].collectText.baseY).toBe(213);
+    expect(L.panels[0].collectText.baseY).toBe(268);
   });
 
   it("进度条两档钳制:贴图档盖空缺(frac ≥ 1 时不盖)、缺图档从左画 min(1, frac)", () => {
@@ -578,79 +709,130 @@ describe("进行中面板的几何(1 与 2 个槽位)", () => {
 /* ==================== 6. 头部几何(skinHeader 默认档 / iconText / 返回钮) ==================== */
 
 describe("头部几何(对标 Web skinHeader 的默认宽高、iconText 与 skinIconButton)", () => {
-  it("横幅盒 = (pad − 8, 36 − 42 + 8, 338, 42) —— 本屏按重出贴图的固有 2 倍取盒", () => {
+  it("横幅盒 = (16, 16, 338, 42) —— 左缘正落页边距,宽高取 banner_title_iron 固有 169×21 的 2 倍", () => {
     expect([CM_BANNER_W, CM_BANNER_H]).toEqual([338, 42]);
+    expect([CM_BANNER_X, CM_BANNER_Y]).toEqual([PAD, CM_TOP_Y]);
     const L = commissionLayout(W, H_STD, 0);
-    expect(L.headerBanner).toEqual({ x: PAD - 8, y: CM_TITLE_BASE_Y - CM_BANNER_H + 8, w: CM_BANNER_W, h: CM_BANNER_H });
-    expect(L.headerBanner.y).toBe(2);
-    // 真值取自纯函数:本屏 ui.pad = 14 → 盒 x = 6,带心 = 6 + 338/2 = 175
-    expect([L.titleWithBanner.x, L.titleWithBanner.baseY, L.titleWithBanner.px, L.titleWithBanner.align]).toEqual([175, 32, FS.title, "center"]);
-    expect(L.titleWithBanner.baseY).toBe(CM_TITLE_BASE_Y - CM_BANNER_TEXT_DY);
-    expect([L.titleBare.x, L.titleBare.baseY, L.titleBare.px, L.titleBare.align]).toEqual([PAD, 36, FS.title, "left"]);
+    expect(L.headerBanner).toEqual({ x: CM_BANNER_X, y: CM_BANNER_Y, w: CM_BANNER_W, h: CM_BANNER_H });
+    expect(L.headerBanner.y).toBe(16);
+    expect(right(L.headerBanner)).toBe(354);
+    // 真值取自纯函数:带心 = evenDown(16 + 338/2) = 184,基线走 rowTextY(16, 42, 22) 的取偶档 44
+    expect([L.titleWithBanner.x, L.titleWithBanner.baseY, L.titleWithBanner.px, L.titleWithBanner.align]).toEqual([184, 44, FS.title, "center"]);
+    expect(L.titleWithBanner.baseY).toBe(CM_TITLE_BASE_Y);
+    expect(CM_TITLE_BASE_Y).toBe(evenDown(rowTextY(CM_BANNER_Y, CM_BANNER_H, FS.title)));
+    // 标题在带内:基线落在横幅上下缘之间
+    expect(L.titleWithBanner.baseY).toBeGreaterThan(L.headerBanner.y);
+    expect(L.titleWithBanner.baseY).toBeLessThan(bottom(L.headerBanner));
+    expect([L.titleBare.x, L.titleBare.baseY, L.titleBare.px, L.titleBare.align]).toEqual([PAD, CM_TITLE_BASE_Y, FS.title, "left"]);
+    expect(L.titleBare.x + L.titleBare.maxW + TEXT_SLACK).toBeLessThanOrEqual(L.pose.x);
     // 与 prestige / gacha 的显式 240×46 不同档
     expect(L.headerBanner.w).not.toBe(240);
   });
 
-  it("小立绘落在铁带右缘之外:(348, 4, 38, 60)，且与横幅盒、兑换钮都不相交", () => {
-    expect([CM_POSE_X, CM_POSE_Y, CM_POSE_W, CM_POSE_H]).toEqual([348, 4, 38, 60]);
+  it("小立绘左缘由横幅右缘推导:(358, 16, 38, 60)，头部五件两两不相交", () => {
+    expect([CM_POSE_GAP, CM_POSE_W, CM_POSE_H]).toEqual([4, 38, 60]);
+    expect(CM_POSE_X).toBe(CM_BANNER_X + CM_BANNER_W + CM_POSE_GAP);
+    expect(CM_POSE_Y).toBe(CM_TOP_Y);
     for (const h of [H_STD, H_TALL]) {
-      const L = commissionLayout(W, h, 2);
-      expect(L.pose).toEqual({ x: 348, y: 4, w: 38, h: 60 });
-      expect(L.pose.x >= L.headerBanner.x + L.headerBanner.w).toBe(true);
-      expect(L.pose.x + L.pose.w <= L.exchangeBtn.x).toBe(true);
+      for (const slots of BRANCHES) {
+        const L = commissionLayout(W, h, slots);
+        expect(L.pose).toEqual({ x: CM_POSE_X, y: CM_POSE_Y, w: CM_POSE_W, h: CM_POSE_H });
+        // 同一带里的两件横向分开:横幅 → 立绘 → 返回钮
+        expect(L.pose.x).toBeGreaterThanOrEqual(right(L.headerBanner));
+        expect(L.pose.x + L.pose.w).toBeLessThanOrEqual(L.backBtn.x);
+        // 立绘与兑换钮分占两带:立绘底边 76 压在兑换钮顶缘 80 之上
+        expect(bottom(L.pose)).toBeLessThanOrEqual(L.exchangeBtn.y);
+        // 头部五件两两二维不相交(立绘与兑换钮横向相邻 2px,靠纵向 4px 分开)
+        const head: [string, CmRect][] = [
+          ["横幅", L.headerBanner],
+          ["立绘", L.pose],
+          ["返回钮", L.backBtn],
+          ["兑换钮", L.exchangeBtn],
+          ["碎片图标", L.fragmentIcon],
+          ["星尘图标", L.stardustIcon],
+        ];
+        for (let i = 0; i < head.length; i++) {
+          for (let j = i + 1; j < head.length; j++) {
+            const a = head[i][1];
+            const b = head[j][1];
+            const ox = Math.min(right(a), right(b)) - Math.max(a.x, b.x);
+            const oy = Math.min(bottom(a), bottom(b)) - Math.max(a.y, b.y);
+            expect(ox > 0 && oy > 0, `${head[i][0]} × ${head[j][0]} 不相交`).toBe(false);
+          }
+        }
+      }
     }
   });
 
-  it("两项读数走 iconText(size 13):图标盒 (x, 60 − 13 + 2, 13, 13),有图时文字右移 13 + 4、缺图时回到 x", () => {
-    expect(CM_ICON_SIZE).toBe(13);
+  it("两项读数走 iconText(size 14,取偶):图标盒 (x, 104 − 14 + 2, 14, 14),有图时文字右移 14 + 4、缺图时回到 x", () => {
+    expect([CM_ICON_SIZE, CM_ICON_DY, CM_ICON_TEXT_DX, CM_RES_BASE_Y]).toEqual([14, 2, 4, 104]);
+    expect(CM_ICON_SIZE % 2).toBe(0);
     const L = commissionLayout(W, H_STD, 0);
-    expect(L.fragmentIcon).toEqual({ x: PAD, y: CM_RES_BASE_Y - 13 + 2, w: 13, h: 13 });
-    expect(L.stardustIcon).toEqual({ x: PAD + CM_STARDUST_DX, y: 49, w: 13, h: 13 });
-    expect([L.fragmentTextWithIcon.x, L.fragmentTextBare.x]).toEqual([PAD + 13 + 4, PAD]);
-    expect([L.stardustTextWithIcon.x, L.stardustTextBare.x]).toEqual([PAD + 130 + 13 + 4, PAD + 130]);
+    expect(L.fragmentIcon).toEqual({ x: PAD, y: CM_RES_BASE_Y - CM_ICON_SIZE + CM_ICON_DY, w: CM_ICON_SIZE, h: CM_ICON_SIZE });
+    expect(L.stardustIcon).toEqual({ x: PAD + CM_STARDUST_DX, y: 92, w: CM_ICON_SIZE, h: CM_ICON_SIZE });
+    expect([L.fragmentTextWithIcon.x, L.fragmentTextBare.x]).toEqual([PAD + CM_ICON_SIZE + CM_ICON_TEXT_DX, PAD]);
+    expect([L.stardustTextWithIcon.x, L.stardustTextBare.x]).toEqual([PAD + CM_STARDUST_DX + CM_ICON_SIZE + CM_ICON_TEXT_DX, PAD + CM_STARDUST_DX]);
     for (const t of [L.fragmentTextWithIcon, L.fragmentTextBare, L.stardustTextWithIcon, L.stardustTextBare, L.prestigesText]) {
-      expect([t.baseY, t.px, t.align]).toEqual([60, FS.muted, "left"]);
+      expect([t.baseY, t.px, t.align]).toEqual([CM_RES_BASE_Y, FS.muted, "left"]);
+      expect(t.baseY % 2, "读数基线取偶").toBe(0);
     }
     // 三段让位互不重叠:碎片收到星尘图标前、星尘收到「转生」起笔前
-    expect(right({ x: L.fragmentTextWithIcon.x, y: 0, w: L.fragmentTextWithIcon.maxW, h: 0 })).toBeLessThanOrEqual(L.stardustIcon.x);
-    expect(right({ x: L.stardustTextWithIcon.x, y: 0, w: L.stardustTextWithIcon.maxW, h: 0 })).toBeLessThanOrEqual(L.prestigesText.x);
+    expect(right({ x: L.fragmentTextWithIcon.x, y: 0, w: L.fragmentTextWithIcon.maxW, h: 0 }) + TEXT_SLACK).toBe(L.stardustIcon.x);
+    expect(right({ x: L.stardustTextWithIcon.x, y: 0, w: L.stardustTextWithIcon.maxW, h: 0 }) + TEXT_SLACK).toBe(L.prestigesText.x);
   });
 
-  it("「转生 N 次」起笔 pad + 250、与两项读数同基线,限宽收到面板右缘", () => {
+  it("「转生 N 次」起笔 16 + 250、与两项读数同基线,限宽收到兑换钮左缘之前", () => {
     expect(CM_PRESTIGES_DX).toBe(250);
     const L = commissionLayout(W, H_STD, 0);
-    expect([L.prestigesText.x, L.prestigesText.baseY]).toEqual([PAD + 250, 60]);
-    expect(right({ x: L.prestigesText.x, y: 0, w: L.prestigesText.maxW, h: 0 })).toBe(W - PAD);
+    expect([L.prestigesText.x, L.prestigesText.baseY]).toEqual([PAD + CM_PRESTIGES_DX, CM_RES_BASE_Y]);
+    expect(L.prestigesText.x).toBe(266);
+    // 限宽收在兑换钮左缘前 10:读数串再长也不会钻到钮底下
+    expect(right({ x: L.prestigesText.x, y: 0, w: L.prestigesText.maxW, h: 0 }) + TEXT_SLACK).toBe(L.exchangeBtn.x);
+    expect(L.prestigesText.maxW).toBe(118);
   });
 
-  it("返回钮的图标位与两档文字位(Web skinIconButton:ih = h − 12、文字基线 y + h/2 + 5)", () => {
+  it("返回钮的图标位与两档文字位(ih = h − 12、文字基线 evenDown(y + h/2 + 5))", () => {
     expect([CM_BACK_ICON_DX, CM_BACK_ICON_SHRINK, CM_BACK_TEXT_DY]).toEqual([4, 12, 5]);
     const L = commissionLayout(W, H_STD, 0);
-    const ih = L.backBtn.h - 12;
-    expect(L.backIcon).toEqual({ x: L.backBtn.x + 4, y: L.backBtn.y + (L.backBtn.h - ih) / 2, w: ih, h: ih });
-    expect(L.backIcon).toEqual({ x: 478, y: 28, w: 22, h: 22 });
-    const baseY = L.backBtn.y + L.backBtn.h / 2 + 5;
-    expect(baseY).toBe(44);
+    const ih = L.backBtn.h - CM_BACK_ICON_SHRINK;
+    expect(L.backIcon).toEqual({ x: L.backBtn.x + CM_BACK_ICON_DX, y: evenDown(L.backBtn.y + (L.backBtn.h - ih) / 2), w: ih, h: ih });
+    expect(L.backIcon).toEqual({ x: 476, y: 22, w: 32, h: 32 });
+    const baseY = evenDown(L.backBtn.y + L.backBtn.h / 2 + CM_BACK_TEXT_DY);
+    expect(baseY).toBe(42);
     expect([L.backTextWithIcon.baseY, L.backTextBare.baseY]).toEqual([baseY, baseY]);
-    expect(L.backTextWithIcon.x).toBe(L.backBtn.x + 4 + ih + (L.backBtn.w - 4 - ih) / 2);
-    expect(L.backTextBare.x).toBe(L.backBtn.x + L.backBtn.w / 2);
+    expect(L.backTextWithIcon.x).toBe(evenDown(L.backBtn.x + CM_BACK_ICON_DX + ih + (L.backBtn.w - CM_BACK_ICON_DX - ih) / 2));
+    expect(L.backTextBare.x).toBe(evenDown(L.backBtn.x + L.backBtn.w / 2));
     expect([L.backTextWithIcon.px, L.backTextBare.px]).toEqual([FS.body, FS.body]);
+    // 图标与文字都落在钮内
+    expect(L.backIcon.x).toBeGreaterThan(L.backBtn.x);
+    expect(right(L.backIcon)).toBeLessThan(right(L.backBtn));
+    expect(baseY).toBeGreaterThan(L.backBtn.y);
+    expect(baseY).toBeLessThan(bottom(L.backBtn));
   });
 
-  it("兑换钮与开始钮的居中文字位都用 rowTextY", () => {
+  it("兑换钮与开始钮的居中文字位都用 rowTextY 再取偶", () => {
     const L = commissionLayout(W, H_STD, 0);
     expect([L.exchangeText.x, L.exchangeText.baseY, L.exchangeText.maxW, L.exchangeText.px, L.exchangeText.align]).toEqual([
-      L.exchangeBtn.x + L.exchangeBtn.w / 2,
-      rowTextY(CM_EXCHANGE_Y, CM_EXCHANGE_H, FS.muted),
+      evenDown(L.exchangeBtn.x + L.exchangeBtn.w / 2),
+      evenDown(rowTextY(CM_EXCHANGE_Y, CM_EXCHANGE_H, FS.muted)),
       CM_EXCHANGE_W,
       FS.muted,
       "center",
     ]);
-    expect(L.exchangeText.baseY).toBe(78);
-    expect([L.startText.x, L.startText.maxW, L.startText.px, L.startText.align]).toEqual([L.startBtn.x + 130, CM_START_W, FS.section, "center"]);
-    expect(L.startText.baseY).toBe(rowTextY(L.startBtn.y, CM_START_H, FS.section));
-    expect(L.startText.baseY).toBe(961);
-    expect(commissionLayout(W, H_TALL, 0).startText.baseY).toBe(1211);
+    expect([L.exchangeText.x, L.exchangeText.baseY]).toEqual([468, 106]);
+    expect([L.startText.x, L.startText.maxW, L.startText.px, L.startText.align]).toEqual([evenDown(L.startBtn.x + CM_START_HALF_W), CM_START_W, FS.section, "center"]);
+    expect(L.startText.baseY).toBe(evenDown(rowTextY(L.startBtn.y, CM_START_H, FS.section)));
+    expect(L.startText.baseY).toBe(958);
+    expect(commissionLayout(W, H_TALL, 0).startText.baseY).toBe(1208);
+    // 两处钮内文字都落在自己那枚钮里
+    for (const [r, t] of [
+      [L.exchangeBtn, L.exchangeText],
+      [L.startBtn, L.startText],
+    ] as [CmRect, CmTextLine][]) {
+      expect(t.baseY).toBeGreaterThan(r.y);
+      expect(t.baseY).toBeLessThan(bottom(r));
+      expect(t.baseY % 2).toBe(0);
+    }
     expect(CM_START_STROKE_W).toBe(2);
   });
 });
@@ -696,12 +878,12 @@ describe("文本带右界(commissionLayout 全网格)", () => {
     }
   });
 
-  it("右对齐的产出串末笔贴行右缘内缩 8;居中文字位都在自己那个矩形里", () => {
+  it("右对齐的产出串末笔贴行右缘内缩 16;居中文字位都在自己那个矩形里", () => {
     const L = commissionLayout(W, H_TALL, 2);
     for (const row of L.rows) {
       const band = anchorBand(row.rate.x, row.rate.baseY, row.rate.maxW, row.rate.px, "right", LIFT);
-      expect(band.x + band.w).toBe(row.rect.x + row.rect.w - 8);
-      expect(band.x + band.w).toBe(W - PAD - 8);
+      expect(band.x + band.w).toBe(row.rect.x + row.rect.w - CM_ROW_RIGHT_DX);
+      expect(band.x + band.w).toBe(RIGHT_EDGE - CM_ROW_RIGHT_DX);
     }
     const pairs: [CmRect, CmTextLine][] = [
       ...L.diffs.flatMap((d): [CmRect, CmTextLine][] => [
@@ -717,9 +899,12 @@ describe("文本带右界(commissionLayout 全网格)", () => {
     ];
     for (const [r, t] of pairs) {
       expect(t.align).toBe("center");
-      expect(t.x).toBe(r.x + r.w / 2);
+      // 居中锚点过 evenDown:150 宽的兑换钮真中心 469 是奇数,取偶后视觉中心让位 1 逻辑像素
+      expect(t.x).toBe(evenDown(center(r).x));
+      expect(Math.abs(t.x - center(r).x)).toBeLessThanOrEqual(1);
       expect(t.maxW).toBe(r.w);
-      expect(center(r).x).toBe(t.x);
+      expect(t.x).toBeGreaterThan(r.x);
+      expect(t.x).toBeLessThan(right(r));
     }
   });
 });
@@ -1400,6 +1585,21 @@ describe("CommissionView 的纪律:几何全来自共享层、文本只走 place
   it("视图不产几何:不自算 diffY / bw / 面板 y,一律读 layout", () => {
     for (const bad of ["diffY =", "h - ui.pad", "(w - pad", "bw =", "topY +", "panelH"]) expect(code.includes(bad), bad).toBe(false);
     for (const good of ["L.startBtn", "L.rows", "L.diffs", "L.panels", "L.exchangeBtn", "L.backBtn", "L.headerBanner", "L.pose", "L.diffLabel"]) expect(code.includes(good), good).toBe(true);
+  });
+
+  it("源码闸:布局模块不再读 Web 冻结档 ui.pad,半宽与难度钮宽都由宽度推导", () => {
+    const layout = codeOf(fileSource("../cocos/assets/scripts/game/ui/commissionLayout.ts"));
+    for (const bad of ["ui.pad", "ui.backH,", "CM_BANNER_DX"]) expect(layout.includes(bad), bad).toBe(false);
+    // 半宽由宽推导:开始钮半宽 = evenDown(宽 / 2),不留第二个事实源
+    expect(layout.includes("export const CM_START_HALF_W = evenDown(CM_START_W / 2);")).toBe(true);
+    // 难度钮宽由内容宽推导
+    expect(layout.includes("export function commissionDiffBtnW(rowW: number): number {")).toBe(true);
+    // 立绘左缘由横幅右缘推导
+    expect(layout.includes("export const CM_POSE_X = CM_BANNER_X + CM_BANNER_W + CM_POSE_GAP;")).toBe(true);
+    // 三枚矮热区一律抬到 ui.touchMin,不是各自钉一个字面量
+    for (const k of ["CM_BACK_H", "CM_EXCHANGE_H", "CM_DIFF_H", "CM_PANEL_BTN_H"]) expect(layout.includes(`export const ${k} = Math.max(ui.touchMin,`), k).toBe(true);
+    expect(CM_PAD).toBe(16);
+    expect(CONTENT_W).toBe(528);
   });
 
   it("文本只有 placeLine 一个入口,七个贴图键都收在常量里", () => {

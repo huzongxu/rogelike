@@ -36,16 +36,31 @@ import { fs as FS, ui as UI } from "@game/ui/theme";
 import * as sharedDaily from "@game/data/daily";
 import {
   dailyLayout,
+  DL_BACK_H,
+  DL_BACK_Y,
+  DL_BANNER_H,
+  DL_BANNER_W,
+  DL_BANNER_X,
+  DL_BANNER_Y,
+  DL_DECO_GAP,
+  DL_DECO_H,
+  DL_DECO_W,
   DL_LABEL_H,
+  DL_LABEL_DY,
   DL_LINE_SPACING,
   DL_LINE1_DY,
   DL_LIST_TOP,
-  DL_MAKEUP_EXTRA_GAP,
-  DL_MAKEUP_GAP_THRESHOLD,
   DL_NAME_DX,
+  DL_PAD,
+  DL_PANEL_KEY,
+  DL_RES_BASE_Y,
+  DL_RES_ICON_BOX,
   DL_ROW_MAX_H,
   DL_ROW_MIN_H,
   DL_STATUS_INSET,
+  DL_TEXT_SLACK,
+  DL_TOP_Y,
+  evenDown,
   type DailyRowGeom,
   type DailyTextLine,
 } from "@game/ui/dailyLayout";
@@ -65,7 +80,11 @@ import { alignAx, anchorBand, type Band, type TextAlign } from "../cocos/assets/
 const W = 560;
 const H_STD = 996;
 const H_TALL = 1246;
-const PAD = UI.pad;
+/** 页边距走本屏 `DL_PAD = 16`(`UI.pad` 是 Web 冻结档 14,本屏已不再读它) */
+const PAD = DL_PAD;
+/** 内容宽 = 560 − 16×2;右缘基准 544 */
+const CONTENT_W = W - PAD * 2;
+const RIGHT_EDGE = W - PAD;
 /** lift 与运行时同源:表现参数只认 resources/config/viewTable.json 那一份 */
 const LIFT: number = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8")).menu.baselineLift;
 
@@ -172,36 +191,44 @@ describe("行数分档(三区:宝箱 + 每日天赋 + 1 行补领)", () => {
 describe("行矩形几何(996 与 1246 两档屏高)", () => {
   for (const h of [H_STD, H_TALL]) {
     for (const talents of [[], TALENTS.slice(0, 1), TALENTS] as string[][]) {
-      it(`h=${h} 天赋 ${talents.length} 条:三区行两两不重叠、恒在 0..560 内、末行底边 ≤ h − pad`, () => {
+      it(`h=${h} 天赋 ${talents.length} 条:三区行两两不重叠、横向恒 [16, 544]、坐标全偶、补领行贴底`, () => {
         const L = dailyScreenLayout(W, h, save({ dailyTalents: talents }));
         expect(L.rowH).toBeGreaterThanOrEqual(DL_ROW_MIN_H);
         expect(L.rowH).toBeLessThanOrEqual(DL_ROW_MAX_H);
         expect(L.gap).toBeGreaterThanOrEqual(0);
         const rows = allRows(L);
-        const bottomLimit = h - PAD;
+        const bottomLimit = evenDown(h) - PAD;
         for (let i = 0; i < rows.length; i++) {
           const r = rows[i].rect;
-          // 横向:左沿 = pad,右沿 = w − pad
+          // 横向:左沿 = 页边距 16,宽 = 内容宽 528,右沿正落 544
           expect(r.x, `行${i} 左沿`).toBe(PAD);
-          expect(r.w, `行${i} 宽`).toBe(W - PAD * 2);
+          expect(r.w, `行${i} 宽`).toBe(CONTENT_W);
+          expect(r.x + r.w, `行${i} 右沿`).toBe(RIGHT_EDGE);
           expect(r.x, `行${i} 左界`).toBeGreaterThanOrEqual(0);
-          expect(r.x + r.w, `行${i} 右沿`).toBeLessThanOrEqual(W);
+          expect(r.x + r.w, `行${i} 不越画布`).toBeLessThanOrEqual(W);
           expect(r.h, `行${i} 高`).toBe(L.rowH);
-          // 纵向:文档顺序递增且不重叠(三区之间还夹着标签带与补领让位,所以只卡不重叠)
+          // module = 2:坐标与尺寸一律偶数(奇数会让行板九宫边距错半格)
+          expect(r.x % 2, `行${i} x 取偶`).toBe(0);
+          expect(r.y % 2, `行${i} y 取偶`).toBe(0);
+          expect(r.w % 2, `行${i} w 取偶`).toBe(0);
+          expect(r.h % 2, `行${i} h 取偶`).toBe(0);
+          // 热区下限:每行都是一枚可点区,短边不小于 ui.touchMin
+          expect(Math.min(r.w, r.h), `行${i} 热区`).toBeGreaterThanOrEqual(UI.touchMin);
+          // 纵向:文档顺序递增且不重叠(三区之间还夹着标签带,所以只卡不重叠)
           if (i > 0) {
             const prev = rows[i - 1].rect;
             expect(r.y, `行${i} 不重叠`).toBeGreaterThanOrEqual(prev.y + prev.h);
           }
         }
-        // 首行顶缘 = listTop + labelH;末行底边不越过 h − pad
+        // 首行顶缘 = listTop + labelH;补领行贴底,底边正落 evenDown(h) − pad
         expect(rows[0].rect.y).toBe(DL_LIST_TOP + DL_LABEL_H);
         const last = rows[rows.length - 1].rect;
-        expect(last.y + last.h, "末行底边").toBeLessThanOrEqual(bottomLimit);
+        expect(last.y + last.h, "补领行底边贴底").toBe(bottomLimit);
       });
     }
   }
 
-  it("逐行递推口径与 Web dailyLayout 同式(宝箱区 → 标签带 → 天赋区 → 补领让位)", () => {
+  it("逐行递推口径(宝箱区 → 标签带 → 天赋区 → 补领行贴底,富余只进呼吸缝)", () => {
     for (const h of [H_STD, H_TALL]) {
       const L = dailyScreenLayout(W, h, save());
       const step = L.rowH + L.gap;
@@ -209,21 +236,33 @@ describe("行矩形几何(996 与 1246 两档屏高)", () => {
       L.boxRows.forEach((r, i) => expect(r.rect.y, `宝箱${i}`).toBe(DL_LIST_TOP + DL_LABEL_H + i * step));
       // 天赋组标签 = 宝箱末行之后的 y + 16,随后 y 再吃掉一个 labelH
       const afterBoxes = DL_LIST_TOP + DL_LABEL_H + DAILY_BOXES.length * step;
-      expect(L.talentLabelY).toBe(afterBoxes + 16);
-      expect(L.boxLabelY).toBe(DL_LIST_TOP + 16);
+      expect(L.talentLabelY).toBe(afterBoxes + DL_LABEL_DY);
+      expect(L.boxLabelY).toBe(DL_LIST_TOP + DL_LABEL_DY);
       L.talentRows.forEach((r, i) => expect(r.rect.y, `天赋${i}`).toBe(afterBoxes + DL_LABEL_H + i * step));
-      // 补领行:gap 大于阈值时多让 12px
+      // 补领行贴底:底边 = evenDown(h) − pad,顶缘由 rowH 反推
+      expect(L.makeUpRow.rect.y).toBe(evenDown(h) - PAD - L.rowH);
+      // 呼吸缝 = 天赋末行底边 → 补领行顶缘,是本屏唯一无硬上限的吸余体
       const afterTalents = afterBoxes + DL_LABEL_H + L.talentRows.length * step;
-      expect(L.makeUpRow.rect.y).toBe(afterTalents + (L.gap > DL_MAKEUP_GAP_THRESHOLD ? DL_MAKEUP_EXTRA_GAP : 0));
+      expect(L.seamAboveMakeUp).toBe(L.makeUpRow.rect.y - afterTalents);
     }
   });
 
-  it("天赋条数长到把行区挤满时,gap 收到阈值以下、补领让位自动归零(Web 的 `gap > 6 ? 12 : 0`)", () => {
-    const crowded = dailyScreenLayout(W, H_STD, save({ dailyTalents: DAILY_TALENT_POOL.map((t) => t.id) }));
-    expect(crowded.talentCount).toBe(DAILY_TALENT_POOL.length);
-    expect(crowded.gap).toBeLessThanOrEqual(DL_MAKEUP_GAP_THRESHOLD);
-    const afterTalents = DL_LIST_TOP + DL_LABEL_H + (DAILY_BOXES.length + crowded.talentCount) * (crowded.rowH + crowded.gap) + DL_LABEL_H;
-    expect(crowded.makeUpRow.rect.y).toBe(afterTalents);
+  it("天赋条数长到把行区挤满时:spreadRows 出数再各取一次偶,补领行仍贴底、呼吸缝不被吃穿", () => {
+    for (const h of [H_STD, H_TALL]) {
+      const crowded = dailyScreenLayout(W, h, save({ dailyTalents: DAILY_TALENT_POOL.map((t) => t.id) }));
+      const lean = dailyScreenLayout(W, h, save());
+      expect(crowded.talentCount).toBe(DAILY_TALENT_POOL.length);
+      // 挤满档的行高与行距都收到下沿,且仍落在 art 网格上(偶数)
+      expect(crowded.rowH % 2).toBe(0);
+      expect(crowded.gap % 2).toBe(0);
+      expect(crowded.rowH).toBeLessThanOrEqual(lean.rowH);
+      expect(crowded.makeUpRow.rect.y + crowded.makeUpRow.rect.h).toBe(evenDown(h) - PAD);
+      // 富余一分不落进行高行距,全部进呼吸缝;缝恒正且不小于 8
+      expect(crowded.seamAboveMakeUp).toBeGreaterThanOrEqual(8);
+      expect(crowded.seamAboveMakeUp).toBe(
+        crowded.makeUpRow.rect.y - (DL_LIST_TOP + DL_LABEL_H + (DAILY_BOXES.length + crowded.talentCount) * (crowded.rowH + crowded.gap) + DL_LABEL_H)
+      );
+    }
   });
 });
 
@@ -318,31 +357,41 @@ describe("文本带右界(dailyLayout 全网格)", () => {
   });
 });
 
-/* ==================== 4. 两行文本基线:l1 = round(y + h/2 − 5),l2 = l1 + 18 ==================== */
+/* ==================== 4. 两行文本基线:l1 = evenDown(y + h/2 − 4),l2 = l1 + 18 ==================== */
 
 describe("行内两行文本基线(18px 固定行距,不走 spreadRows)", () => {
-  it("固定行距就是 18,首行下沉就是 −5(逐项对标 Web drawDaily)", () => {
+  it("固定行距就是 18,首行下沉就是 −4(取偶档,让基线落在 art 网格上)", () => {
     expect(DL_LINE_SPACING).toBe(18);
-    expect(DL_LINE1_DY).toBe(-5);
+    expect(DL_LINE1_DY).toBe(4);
+    expect(DL_LINE_SPACING % 2).toBe(0);
+    expect(DL_LINE1_DY % 2).toBe(0);
   });
 
   for (const h of [H_STD, H_TALL]) {
-    it(`h=${h}:每行 l1 = round(y + h/2 − 5)、l2 = l1 + 18,l2 不越出行底,状态与 l1 同基线`, () => {
+    it(`h=${h}:每行 l1 = evenDown(y + h/2 − 4)、l2 = l1 + 18,l2 不越出行底,状态与 l1 同基线`, () => {
       const L = dailyScreenLayout(W, h, save());
       for (const row of allRows(L)) {
         const r = row.rect;
-        const l1 = Math.round(r.y + r.h / 2 + DL_LINE1_DY);
+        const l1 = evenDown(r.y + r.h / 2 - DL_LINE1_DY);
         expect(row.line1.baseY).toBe(l1);
         expect(row.line2.baseY).toBe(l1 + DL_LINE_SPACING);
         expect(row.status.baseY).toBe(l1);
+        expect(row.line1.baseY % 2, "l1 取偶").toBe(0);
+        expect(row.line2.baseY % 2, "l2 取偶").toBe(0);
         expect(row.line2.baseY, "l2 不越行底").toBeLessThanOrEqual(r.y + r.h);
         expect(row.line1.baseY, "l1 在行内").toBeGreaterThanOrEqual(r.y);
-        // 字号档位:名字 body、描述 micro、状态 muted(Web 三段各自的 F(...) 实参)
+        // 字号档位:名字 body、描述 micro、状态 muted
         expect(row.line1.px).toBe(FS.body);
         expect(row.line2.px).toBe(FS.micro);
         expect(row.status.px).toBe(FS.muted);
         expect(row.line1.align).toBe("left");
         expect(row.line2.align).toBe("left");
+        // 行内起笔与右缘内缩一律走行板 btn_minor 的九宫边距 16,装饰带里不压字
+        expect(row.line1.x).toBe(r.x + DL_NAME_DX);
+        expect(row.line2.x).toBe(r.x + DL_NAME_DX);
+        expect(row.status.x).toBe(r.x + r.w - DL_STATUS_INSET);
+        expect(DL_NAME_DX).toBe(16);
+        expect(DL_STATUS_INSET).toBe(16);
       }
     });
   }
@@ -453,9 +502,11 @@ describe("补领行三态(可补领 / 已补领 / 已首通)与底板档位", ()
     const m = L.makeUpRow;
     expect(m.rect.w).toBe(L.boxRows[0].rect.w);
     expect(m.rect.h).toBe(L.rowH);
-    expect(m.line1.baseY).toBe(Math.round(m.rect.y + m.rect.h / 2 + DL_LINE1_DY));
+    expect(m.line1.baseY).toBe(evenDown(m.rect.y + m.rect.h / 2 - DL_LINE1_DY));
     expect(m.line2.baseY).toBe(m.line1.baseY + DL_LINE_SPACING);
     expect(m.status.align).toBe("right");
+    expect(m.line1.x).toBe(m.rect.x + DL_NAME_DX);
+    expect(m.status.x).toBe(m.rect.x + m.rect.w - DL_STATUS_INSET);
   });
 });
 
@@ -468,7 +519,14 @@ describe("命中判定(对标 Web onDailyClick 的四段顺序)", () => {
   it("返回钮热区独立:命中 back,且不落到任何行", () => {
     const c = buildDailyContent(save(), NOW);
     const B = L.backBtn;
-    expect(B).toEqual({ x: W - PAD - UI.backW, y: 22, w: UI.backW, h: UI.backH });
+    expect(B).toEqual({ x: W - PAD - UI.backW, y: DL_BACK_Y, w: UI.backW, h: DL_BACK_H });
+    // 热区抬到下限:共享档 ui.backH = 34 不够一枚 44 的点击区
+    expect(DL_BACK_H).toBe(Math.max(UI.touchMin, UI.backH));
+    expect(Math.min(B.w, B.h)).toBeGreaterThanOrEqual(UI.touchMin);
+    // 页边距与右缘基准:左缘 ≥ 16、右缘正落 544、坐标尺寸全偶
+    expect(B.x).toBeGreaterThanOrEqual(PAD);
+    expect(B.x + B.w).toBe(RIGHT_EDGE);
+    for (const v of [B.x, B.y, B.w, B.h]) expect(v % 2).toBe(0);
     const bc = center(B);
     expect(hitDaily(L, c, B.x + 2, B.y + 2)).toEqual({ kind: "back" });
     expect(hitDaily(L, c, bc.x, bc.y)).toEqual({ kind: "back" });
@@ -649,6 +707,108 @@ describe("模型纯度(存档只读,写入意图是返回值)", () => {
     expect(c.talentLabel).toBe("每日天赋(数值墙工具 · 当日有效)");
     expect(c.resText).toBe("钻石 42 · 今日广告 7 次");
     expect(c.backText).toBe("返回");
+  });
+});
+
+/* ==================== 8.5 头部与屏底板几何(像素栅格:页边距 16 / 内容宽 528 / 坐标全偶) ==================== */
+
+type Box = { x: number; y: number; w: number; h: number };
+
+describe("头部与屏底板几何(art 网格)", () => {
+  for (const h of [H_STD, H_TALL]) {
+    it(`h=${h}:屏底板就是九宫格内缩区 [16, evenDown(h) − 16],贴图键与已落地各屏同一张`, () => {
+      const L = dailyScreenLayout(W, h, save());
+      expect(L.panel).toEqual({ x: PAD, y: PAD, w: CONTENT_W, h: evenDown(h) - PAD * 2 });
+      expect(L.panelKey).toBe(DL_PANEL_KEY);
+      expect(L.panel.x + L.panel.w).toBe(RIGHT_EDGE);
+      expect(L.panel.y + L.panel.h).toBe(evenDown(h) - PAD);
+    });
+
+    it(`h=${h}:标题横幅取 banner_title_gold_c 固有 122×21 的 2 倍,左缘落页边距、标题在带内`, () => {
+      const L = dailyScreenLayout(W, h, save());
+      expect(L.headerPlate).toEqual({ x: DL_BANNER_X, y: DL_BANNER_Y, w: DL_BANNER_W, h: DL_BANNER_H });
+      expect([DL_BANNER_W, DL_BANNER_H]).toEqual([244, 42]);
+      expect(L.headerPlate.x).toBe(PAD);
+      expect(L.headerPlate.y).toBe(DL_TOP_Y);
+      expect(L.headerPlate.x + L.headerPlate.w).toBeLessThanOrEqual(RIGHT_EDGE);
+      // 标题在带内:居中锚点就是带心,基线落在带的上下缘之间
+      expect(L.titleOnBanner.x).toBe(evenDown(L.headerPlate.x + DL_BANNER_W / 2));
+      expect(L.titleOnBanner.baseY).toBeGreaterThan(L.headerPlate.y);
+      expect(L.titleOnBanner.baseY).toBeLessThan(L.headerPlate.y + DL_BANNER_H);
+      expect(L.titleOnBanner.align).toBe("center");
+      // 缺图那一档:左起笔于页边距、同一基线、限宽收到返回钮左缘之前
+      expect(L.titleBare.x).toBe(PAD);
+      expect(L.titleBare.baseY).toBe(L.titleOnBanner.baseY);
+      expect(L.titleBare.align).toBe("left");
+      expect(L.titleBare.x + L.titleBare.maxW + DL_TEXT_SLACK).toBeLessThanOrEqual(L.backBtn.x);
+    });
+
+    it(`h=${h}:装饰立绘让开横幅右缘、资源行图标边长取偶,两件都不越右缘`, () => {
+      const L = dailyScreenLayout(W, h, save());
+      expect(L.deco).toEqual({ x: DL_BANNER_X + DL_BANNER_W + DL_DECO_GAP, y: DL_TOP_Y, w: DL_DECO_W, h: DL_DECO_H });
+      expect(L.deco.x).toBeGreaterThanOrEqual(L.headerPlate.x + L.headerPlate.w);
+      expect(L.deco.x + L.deco.w).toBeLessThanOrEqual(L.backBtn.x);
+      expect(L.resIcon).toEqual({ x: PAD, y: DL_RES_BASE_Y - DL_RES_ICON_BOX + 2, w: DL_RES_ICON_BOX, h: DL_RES_ICON_BOX });
+      expect(DL_RES_ICON_BOX % 2).toBe(0);
+      expect(L.resText.x).toBe(PAD + DL_RES_ICON_BOX + 4);
+      expect(L.resText.baseY).toBe(DL_RES_BASE_Y);
+      expect(L.resTextBare.x).toBe(PAD);
+      expect(L.resText.x + L.resText.maxW).toBeLessThanOrEqual(RIGHT_EDGE);
+      // 立绘底边压在资源行图标顶缘之上,两件不抢同一条带
+      expect(L.deco.y + L.deco.h).toBeLessThanOrEqual(L.resIcon.y);
+    });
+
+    it(`h=${h}:全部矩形坐标尺寸取偶、左缘 ≥16、右缘 ≤544,非底板件两两不相交`, () => {
+      const L = dailyScreenLayout(W, h, save());
+      const boxes: [string, Box][] = [
+        ["屏底板", L.panel],
+        ["标题横幅", L.headerPlate],
+        ["装饰立绘", L.deco],
+        ["资源图标", L.resIcon],
+        ["返回钮", L.backBtn],
+        ...L.boxRows.map((r, i) => [`宝箱${i}`, r.rect] as [string, Box]),
+        ...L.talentRows.map((r, i) => [`天赋${i}`, r.rect] as [string, Box]),
+        ["补领行", L.makeUpRow.rect],
+      ];
+      for (const [tag, r] of boxes) {
+        expect(r.x % 2, `${tag} x 取偶`).toBe(0);
+        expect(r.y % 2, `${tag} y 取偶`).toBe(0);
+        expect(r.w % 2, `${tag} w 取偶`).toBe(0);
+        expect(r.h % 2, `${tag} h 取偶`).toBe(0);
+        expect(r.x, `${tag} 左缘`).toBeGreaterThanOrEqual(PAD);
+        expect(r.x + r.w, `${tag} 右缘`).toBeLessThanOrEqual(RIGHT_EDGE);
+        expect(r.y, `${tag} 顶缘`).toBeGreaterThanOrEqual(0);
+        expect(r.y + r.h, `${tag} 底缘`).toBeLessThanOrEqual(evenDown(h));
+      }
+      // 屏底板是容器(其余件都画在它上面),两两不相交只比内容件
+      const inner = boxes.filter(([tag]) => tag !== "屏底板");
+      for (let i = 0; i < inner.length; i++) {
+        for (let j = i + 1; j < inner.length; j++) {
+          const a = inner[i][1];
+          const b = inner[j][1];
+          const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+          const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+          expect(ox > 0 && oy > 0, `${inner[i][0]} × ${inner[j][0]} 不相交`).toBe(false);
+        }
+      }
+    });
+  }
+
+  it("源码闸:本屏布局与视图都不再读 Web 冻结档 ui.pad,页边距只有 DL_PAD 一个事实源", () => {
+    /** 去掉注释后的代码体:源码纪律断言只该看代码,不该被文档注释里的字段名带跑 */
+    const codeOf = (rel: string): string =>
+      readFileSync(new URL(rel, import.meta.url), "utf8")
+        .replace(/\r\n/g, "\n")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+    const layout = codeOf("../cocos/assets/scripts/game/ui/dailyLayout.ts");
+    const view = codeOf("../cocos/assets/scripts/daily/DailyView.ts");
+    expect(layout.includes("ui.pad")).toBe(false);
+    expect(view.includes("ui.pad")).toBe(false);
+    expect(view.includes("game/ui/theme")).toBe(false);
+    // 视图不产几何:屏底板矩形与贴图键都问布局模块
+    expect(view.includes("this.panel.show(L.panelKey, L.panel")).toBe(true);
+    expect(DL_PAD).toBe(16);
   });
 });
 

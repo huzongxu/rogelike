@@ -25,17 +25,15 @@ import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
 import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
-import { ui } from "../game/ui/theme";
 import { DAILY_BOXES, DAILY_TALENT_POOL } from "../game/data/daily";
 import { hitDaily, type DailyAction, type DailyContent } from "./DailyModel";
 import type { DailyLayout, DailyRowGeom, DailyRowLayout } from "../game/ui/dailyLayout";
 
-/** 贴图键(与 Web drawDaily 的实参逐字对应;四件都在 ASSET_MANIFEST 里。
- *  两种行底板的键由共享层布局给出:`L.rowPlate.key` / `L.makeUpPlate.key`) */
+/** 贴图键(与 Web drawDaily 的实参逐字对应;都在 ASSET_MANIFEST 里。
+ *  两种行底板与屏底板的键由共享层布局给出:`L.rowPlate.key` / `L.makeUpPlate.key` / `L.panelKey`) */
 const KEY_HEADER = "banner_title_gold_c";
 const KEY_DECO = "player_pose_2";
 const KEY_RES_ICON = "badge_gem_purple";
-const KEY_PANEL = "panel_dark_corners";
 
 /** 一行可重排的文本:落位只走 `ui/PanelKit.placeLine`(与 ShopView/HeroSelectView/LeaderboardView 同款) */
 class Txt {
@@ -181,11 +179,10 @@ export class DailyView {
     const p4 = viewTable().phase4;
     const L = this.hooks.layout();
     const c = this.hooks.content();
-    const pad = ui.pad;
 
-    // 覆盖底:全屏暗底(Web rgba(8,10,16,0.9))+ 面板底(对标 panelPad 的九宫格内缩 pad)
+    // 覆盖底:全屏暗底(Web rgba(8,10,16,0.9))+ 面板底(矩形与贴图键都由共享层布局给出)
     this.paintDim(p4.dlDim);
-    this.panel.show(KEY_PANEL, { x: pad, y: pad, w: DESIGN_W - pad * 2, h: logicalH() - pad * 2 }, "slice", p3.detailBg, p3.detailStroke);
+    this.panel.show(L.panelKey, L.panel, "slice", p3.detailBg, p3.detailStroke);
 
     // 标题横幅:贴图优先,缺图不画底板、标题切到左起笔那一档(Web skinHeader 的两支)
     const banner = this.header.show(KEY_HEADER);
