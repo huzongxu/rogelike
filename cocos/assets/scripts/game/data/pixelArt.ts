@@ -6,7 +6,8 @@
  * 英雄立绘 `pixel-kit-heroes.json` / 图标与底板 `pixel-kit-icons.json` /
  * 战斗单位与姿态 `pixel-kit-units.json` / 特效与弹道 `pixel-kit-fx.json` /
  * 战场与外层背景 `pixel-kit-bg.json`(十份出图规格)。
- * 这里只回答一个问题:「哪些资产键的值是像素艺术,必须最近邻采样」。
+ * 这里回答两个问题:「哪些资产键的值是像素艺术,必须最近邻采样」,
+ * 以及「ready 之后这批键按什么顺序流式加载」(streamFrameKeys,纯数组运算)。
  *
  * 分工:本文件被共享层与 Cocos 两侧同时读到,`setFilters()` 只发生在
  * `GameShell.loadFrames()`(共享层禁止 import cc,见 tests/shared-purity.test.ts)。
@@ -187,12 +188,16 @@ const ICON_KEYS: readonly string[] = [
  * 与图标批同口径(export=1 → 贴图像素 = 逻辑 px 1:1,art 档 = 实机清点的绘制盒),
  * 整图 contain 绘制、永不切边;战斗里随半径缩放的那批同样走这张表,所以也必须最近邻。
  */
-const UNIT_KEYS: readonly string[] = [
+const ENEMY_KEYS: readonly string[] = [
   "enemy_chaser", "enemy_swift", "enemy_hider", "enemy_goldkind", "enemy_reflector", "enemy_splitter",
   "enemy_splitling", "enemy_devourer", "enemy_shieldguard", "enemy_summoner", "enemy_tank", "enemy_elite",
   "enemy_god", "enemy_boss",
-  "player", "player_pose_1", "player_pose_2", "player_pose_4", "player_pose_5", "player_pose_6",
 ];
+
+/** 玩家本体 + 5 枚姿态立绘(姿态件只在结算与英雄展示上屏,战斗里画的是 `player`) */
+const PLAYER_KEYS: readonly string[] = ["player", "player_pose_1", "player_pose_2", "player_pose_4", "player_pose_5", "player_pose_6"];
+
+const UNIT_KEYS: readonly string[] = [...ENEMY_KEYS, ...PLAYER_KEYS];
 
 /**
  * 特效批(artwork/pixel-kit-fx.json)的贴花与弹道:export=2 把 art 网格按 2× 烘进 PNG,
@@ -201,6 +206,19 @@ const UNIT_KEYS: readonly string[] = [
  */
 const FX_KEYS: readonly string[] = [
   "fx_nova", "fx_blast", "fx_chain", "fx_drain", "fx_shield", "fx_poison", "fx_summon", "proj_lightning",
+];
+
+/**
+ * 战斗第一拍要画的像素件:像素数字字形 + 玩家本体 + 敌人 + 特效弹道。
+ * ready 前只 await `HUD_PRELOAD_KEYS`(坞板那批构建期定格的件),这一批改为 ready 之后
+ * **排在流式队列最前**先到位——它们是每帧从 frames 现读的,晚到一拍只是晚出现,不会永久缺图;
+ * 而把它们放在 await 集合里会让 ready 时间按枚数线性上涨(实测约 5 ms/枚)。
+ */
+export const BATTLE_FIRST_PAINT_KEYS: readonly string[] = [
+  ...PXNUM_KEYS,
+  ...ENEMY_KEYS,
+  "player",
+  ...FX_KEYS,
 ];
 
 export const PIXEL_ART_KEYS: readonly string[] = [
@@ -218,6 +236,32 @@ export const PIXEL_ART_KEYS: readonly string[] = [
   ...UNIT_KEYS,
   ...FX_KEYS,
 ];
+
+/**
+ * ready 之后要流式加载的完整队列(纯数组运算,单测可直接调)。
+ * 队首是战斗第一拍那批,其后依次是像素批次的其余件、清单里其余的世界美术;
+ * 三份输入里出现过的键只出一次,已 await 与已退役的不进队列。
+ * 「谁在 ready 前 await」由调用方传进来,本函数不认识 GameShell 的那两张表。
+ */
+export function streamFrameKeys(
+  awaited: readonly string[],
+  retired: readonly string[],
+  manifestKeys: readonly string[],
+): string[] {
+  const seen = new Set<string>([...awaited, ...retired]);
+  const out: string[] = [];
+  const push = (keys: readonly string[]) => {
+    for (const k of keys) {
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(k);
+    }
+  };
+  push(BATTLE_FIRST_PAINT_KEYS);
+  push(PIXEL_ART_KEYS);
+  push(manifestKeys);
+  return out;
+}
 
 const PIXEL_ART_SET = new Set<string>(PIXEL_ART_KEYS);
 

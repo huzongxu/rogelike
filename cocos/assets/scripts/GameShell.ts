@@ -7,7 +7,7 @@ import { readSave, writeSave } from "./core/SaveChannel";
 import { showRewardedAd } from "./core/AdChannel";
 import { HEX, UI, bindLabel, hexToColor, label, makeNode, solidRect } from "./ui/Widgets";
 import { ASSET_MANIFEST } from "./game/data/assets";
-import { PIXEL_ART_KEYS, isPixelArtKey, isPixelNumFrameKey } from "./game/data/pixelArt";
+import { isPixelArtKey, isPixelNumFrameKey, streamFrameKeys } from "./game/data/pixelArt";
 import { neutraliseGlyphHoles } from "./ui/PixelNumber";
 import { applyBalance as applyDaily, DIAMOND_AD_DAILY, DIAMOND_PER_AD } from "./game/data/daily";
 import { applyBalance as applyStages } from "./game/data/stages";
@@ -135,9 +135,12 @@ const COMMISSION_TICK_SECONDS = 1;
 
 
 /**
- * HUD 构建期一次性读取的贴图(坞板九宫格 / 徽章 / 横幅 / 14 张装备卡效果图标):
- * 这些在 buildLayers 时定格,不参与每帧热换,必须先到位再建界面;其余(敌人/玩家/
- * 弹道/背景/特效/掉落/召唤物)每帧从 frames 读取,可后台流式加载并自动换上。
+ * ready 之前唯一 await 的贴图集合:HUD 构建期一次性读取的件(坞板九宫格 / 徽章 / 横幅 /
+ * 14 张装备卡效果图标)——这些在 buildLayers 时定格,不参与每帧热换,必须先到位再建界面。
+ * 其余(敌人/玩家/弹道/背景/特效/掉落/召唤物 + 各屏皮)每帧从 frames 读取,晚到只会晚出现
+ * 不会永久缺图,故全部挪到 ready 之后流式加载,战斗第一拍那批排在队首
+ * (见 `game/data/pixelArt.ts` 的 `BATTLE_FIRST_PAINT_KEYS`)。
+ * 分档的理由是枚数而不是字节:ready 前每多 await 一枚 PNG 约多花 13 ms。
  */
 const HUD_PRELOAD_KEYS = [
     "hud_dock_top",
@@ -209,10 +212,13 @@ const RETIRED_FRAME_KEYS = new Set([
     "frame_highlight_gold",
 ]);
 
-/** 预载集之外的全部清单键(世界美术 + 后续阶段菜单美术,后台流式加载) */
+/**
+ * ready 之后要流式加载的完整队列:队首是战斗第一拍那批像素件(它们已从 ready 前的 await
+ * 集合里摘出来,不能按 ASSET_MANIFEST 的任意顺序排在世界美术之后),其后是像素批次的其余件
+ * 与清单里其余的键。排序与去重都在 `pixelArt.ts` 的纯函数里,便于单测直接盯"有没有键漏流"。
+ */
 function restFrameKeys(): string[] {
-    const pre = new Set([...HUD_PRELOAD_KEYS, ...PIXEL_ART_KEYS]);
-    return Object.keys(ASSET_MANIFEST).filter((k) => !pre.has(k) && !RETIRED_FRAME_KEYS.has(k));
+    return streamFrameKeys(HUD_PRELOAD_KEYS, Array.from(RETIRED_FRAME_KEYS), Object.keys(ASSET_MANIFEST));
 }
 
 /** balance.json → 共享数值模块(与 Web src/platform/balance.ts 同一分发口径) */
@@ -446,10 +452,9 @@ export class GameShell extends Component {
         applySharedBalance(balance);
         await loadViewTable();
         if (!this.node) return;
-        // HUD 构建期一次性贴图先到位(坞板/图标/横幅/装备卡图标 + 像素翻新批次的菜单皮与字形),再建界面
-        // 用 Array.from 而非 [...new Set(...)]:构建把展开一个 Set downlevel 成 [].concat(Set),
-        // 而 concat 只摊平数组、不摊 Set,会把整枚 Set 当成一个键(→ textures/[object Set] 加载失败)。
-        await this.loadFrames(Array.from(new Set([...HUD_PRELOAD_KEYS, ...PIXEL_ART_KEYS])));
+        // HUD 构建期定格的这批先到位再建界面(坞板/图标/横幅/装备卡图标);
+        // 像素批次的战斗第一拍与其余美术在 ready 之后按 restFrameKeys 的队首顺序流式补上。
+        await this.loadFrames(HUD_PRELOAD_KEYS);
         if (!this.node) return;
         this.buildLayers();
         this.ready = true;

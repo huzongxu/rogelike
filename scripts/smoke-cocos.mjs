@@ -16,12 +16,13 @@
  * 也不碰 bundle 分组 / 远程资源 / wechatgame 平台构建。
  *
  * 异常判据（白名单式，另见 docs/COCOS-MIGRATION.md「Phase 6 包体与首屏实测」一节）：
- *   既有挂账：GameShell.loadFrames（源 cocos/assets/scripts/GameShell.ts:356）的贴图回调
- *   没有防护组件销毁 —— ready 之后还有 128 枚贴图在后台流式加载（22 枚 HUD 预载之外），
- *   此期间页面内重建场景（loadScene）会把带在飞回调的 GameShell 销毁（引擎 destroy 把实例
- *   字段置 null），落进已销毁组件的回调读 `this.frames.set(...)` 抛
- *   `TypeError: Cannot read properties of null (reading 'set')`，每条在飞加载一枚。
- *   实测：ready 点重载场景 → 128 条（全部在飞，.probe/p29-loadscene2-test.mjs）；
+ *   GameShell.loadFrames（源 cocos/assets/scripts/GameShell.ts）的贴图回调防护过组件销毁 ——
+ *   ready 前只 await 27 枚 HUD 构建期定格的贴图，其余 131 枚在 ready 之后后台流式加载，
+ *   此期间页面内重建场景（loadScene）会销毁带在飞回调的 GameShell（引擎 destroy 把实例字段
+ *   置 null）。修复前落进已销毁组件的回调读 `this.frames.set(...)` 会抛
+ *   `TypeError: Cannot read properties of null (reading 'set')`，每条在飞加载一枚；
+ *   现在的写法是进 Promise 前捕获 frames 引用，销毁后的回调只推进计数。
+ *   修复前实测：ready 点重载场景 → 128 条（全部在飞，.probe/p29-loadscene2-test.mjs）；
  *   p28 探针 harness（探针开头条件式 loadScene('Main') 与自举抢跑）→ 113 条；
  *   单次冷导航（本脚本与 p29 三轮的形态）→ 0 条，不触发。
  *   白名单签名：异常描述以该 TypeError 文本开头 且 首个栈帧 URL 含 "/assets/main/index.js"。
