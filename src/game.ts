@@ -274,7 +274,7 @@ export class Game {
 
   /* ================= 战场世界(共享层 BattleWorld;Web 与 Cocos 同一份推进与结算) ================= */
 
-  /** 战场实体与结算:见 cocos-prototype/assets/scripts/game/systems/battleWorld.ts */
+  /** 战场实体与结算:见 cocos/assets/scripts/game/systems/battleWorld.ts */
   private world!: BattleWorld<FxLayer>;
 
   /** 局外配置:世界层每帧现取,存档数组被整体替换(每日重置/购天赋)时不会读到陈旧引用 */
