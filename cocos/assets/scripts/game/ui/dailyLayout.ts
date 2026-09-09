@@ -120,12 +120,8 @@ export interface DailyLayout {
   titleBare: DailyTextLine;
   /** 装饰立绘位(`player_pose_2`;缺图则不画) */
   deco: DailyRect;
-  /** 资源行图标位(`badge_gem_purple`) */
-  resIcon: DailyRect;
-  /** 资源行文本:有图标时起笔于 pad + size + gap */
+  /** 资源行文本:起笔于 pad,由视图前置替代字形(钻石图标已在 Cocos 侧退役) */
   resText: DailyTextLine;
-  /** 资源行文本:缺图时起笔于 pad,由视图前置替代字形 */
-  resTextBare: DailyTextLine;
   /** 右上返回钮矩形(热区与绘制框逐位同一) */
   backBtn: DailyRect;
   backText: DailyTextLine;
@@ -150,11 +146,8 @@ export const DL_DECO_GAP = 4;
 export const DL_DECO_W = 38;
 export const DL_DECO_H = 60;
 export const DL_DECO_Y = DL_TOP_Y;
-/** 资源行:基线 / 图标边长(原档 13 是奇数,取偶到 14)/ 图标相对基线的上抬 / 图标与文本间距 */
+/** 资源行基线(图标位随 `badge_gem_purple` 退役,那一行只剩替代字形 + 文本) */
 export const DL_RES_BASE_Y = 92;
-export const DL_RES_ICON_BOX = 14;
-export const DL_RES_ICON_DY = 2;
-export const DL_RES_TEXT_GAP = 4;
 /** 行区顶缘(组标签带占它上面 labelH 高) */
 export const DL_LIST_TOP = 104;
 /** 组标签带高 */
@@ -247,8 +240,6 @@ export function dailyLayout(w: number, h: number, talentIds: readonly string[] =
 
   const backBtn = dailyBackBtn(w);
   const headerPlate = dailyHeaderPlate();
-  const resIconX = pad;
-  const resTextX = pad + DL_RES_ICON_BOX + DL_RES_TEXT_GAP;
   return {
     rowCount,
     boxCount: DAILY_BOXES.length,
@@ -276,9 +267,7 @@ export function dailyLayout(w: number, h: number, talentIds: readonly string[] =
     },
     titleBare: { x: pad, baseY: evenDown(rowTextY(headerPlate.y, headerPlate.h, DL_TITLE_PX)), maxW: evenDown(backBtn.x - DL_TEXT_SLACK - pad), px: DL_TITLE_PX, align: "left" },
     deco: { x: headerPlate.x + headerPlate.w + DL_DECO_GAP, y: DL_DECO_Y, w: DL_DECO_W, h: DL_DECO_H },
-    resIcon: { x: resIconX, y: DL_RES_BASE_Y - DL_RES_ICON_BOX + DL_RES_ICON_DY, w: DL_RES_ICON_BOX, h: DL_RES_ICON_BOX },
-    resText: { x: resTextX, baseY: DL_RES_BASE_Y, maxW: evenDown(w - pad - resTextX), px: DL_RES_PX, align: "left" },
-    resTextBare: { x: pad, baseY: DL_RES_BASE_Y, maxW: rowW, px: DL_RES_PX, align: "left" },
+    resText: { x: pad, baseY: DL_RES_BASE_Y, maxW: rowW, px: DL_RES_PX, align: "left" },
     backBtn,
     backText: {
       x: evenDown(backBtn.x + backBtn.w / 2),

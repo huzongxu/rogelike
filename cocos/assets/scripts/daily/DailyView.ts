@@ -2,18 +2,21 @@
  * 每日福利屏 —— Web `src/game.ts:drawDaily`(4815-4937)的节点化替换(Phase 4 第二屏)。
  *
  * 分工:几何全部来自共享层 `game/ui/dailyLayout.ts`(经 `dailyScreenLayout` 单一出口,
- * 三区行矩形 / 每行三段文本锚点 / 标题横幅 / 装饰立绘 / 资源行图标 / 返回钮与 Web 逐项同数),
+ * 三区行矩形 / 每行三段文本锚点 / 标题横幅 / 装饰立绘 / 资源行文本 / 返回钮与 Web 逐项同数),
  * 内容与命中来自 `daily/DailyModel.ts`,本文件只把矩形落到节点上:
  * 全屏暗底 + 面板底 + 标题横幅 + 装饰立绘 + 资源行 + 两组标签 + 宝箱行 + 天赋行 +
  * 补领行 + 右上返回钮 + 整屏 Capture 热区。
  *
- * 贴图三件(`banner_title_gold_c` / `player_pose_2` / `badge_gem_purple`)与两种底板
+ * 贴图两件(`banner_title_gold_c` / `player_pose_2`)与两种底板
  * (`btn_minor` / `btn_primary`)都在 `ASSET_MANIFEST` 里,走"贴图优先、缺图回退代码形状":
- *  - 横幅与图标用 `PanelKit.iconNode`,缺图即不画(= Web `assets.draw` 返回 false 那一支),
+ *  - 横幅与立绘用 `PanelKit.iconNode`,缺图即不画(= Web `assets.draw` 返回 false 那一支),
  *    标题随之从"横幅内居中"切到"左起笔于 pad"(= Web `themePaint.header` 的回退);
  *  - 行底板用 `PanelKit.Plate`。**已领行恒走代码形状**:Web 的 `claimed || skinButtonBase(...)`
  *    短路掉了贴图分支,所以已领态是"底 + 描边"两笔矩形,这里给 Plate 传空键得到同一结果。
  *  - 返回钮在 Web 是纯色 rect(不是 skinButtonBase),故这里走 `flatBox`,不挂贴图。
+ *  - 资源行**恒走「替代字形 + 文本」**:Web `iconText` 的钻石图标那一支挂的是旧世代图
+ *    `badge_gem_purple`,Cocos 侧已退役(`GameShell.ts:RETIRED_FRAME_KEYS` 与
+ *    `scripts/sync-cocos.mjs:RETIRED_IN_COCOS`),这里只保留缺图那一档。
  *
  * 文本落位只有 `ui/PanelKit.placeLine` 一个入口(R5 纪律):文本节点一律挂屏根、
  * 以整屏为 box,layout 给的 x 就是 Web fillText 的锚点(左起笔 / 中中心 / 右末笔),
@@ -33,7 +36,6 @@ import type { DailyLayout, DailyRowGeom, DailyRowLayout } from "../game/ui/daily
  *  两种行底板与屏底板的键由共享层布局给出:`L.rowPlate.key` / `L.makeUpPlate.key` / `L.panelKey`) */
 const KEY_HEADER = "banner_title_gold_c";
 const KEY_DECO = "player_pose_2";
-const KEY_RES_ICON = "badge_gem_purple";
 
 /** 一行可重排的文本:落位只走 `ui/PanelKit.placeLine`(与 ShopView/HeroSelectView/LeaderboardView 同款) */
 class Txt {
@@ -111,7 +113,6 @@ export class DailyView {
   private header: ReturnType<typeof iconNode>;
   private title: Txt;
   private deco: ReturnType<typeof iconNode>;
-  private resIcon: ReturnType<typeof iconNode>;
   private resText: Txt;
   private boxLabel: Txt;
   private talentLabel: Txt;
@@ -133,7 +134,6 @@ export class DailyView {
     this.header = iconNode("Header", this.root, frames, { x: 0, y: 0, w: 1, h: 1 });
     this.title = new Txt("Title", this.root);
     this.deco = iconNode("Deco", this.root, frames, { x: 0, y: 0, w: 1, h: 1 });
-    this.resIcon = iconNode("ResIcon", this.root, frames, { x: 0, y: 0, w: 1, h: 1 });
     this.resText = new Txt("ResText", this.root);
     this.boxLabel = new Txt("BoxLabel", this.root);
     this.talentLabel = new Txt("TalentLabel", this.root);
@@ -195,11 +195,8 @@ export class DailyView {
     const deco = this.deco.show(KEY_DECO);
     placeRect(this.deco.node, deco ? L.deco : { x: 0, y: 0, w: 0, h: 0 });
 
-    // 资源行:图标就位则文本右移 size+4,否则文本回到 pad 并前置替代字形(Web iconText 的两支)
-    const icon = this.resIcon.show(KEY_RES_ICON);
-    placeRect(this.resIcon.node, icon ? L.resIcon : { x: 0, y: 0, w: 0, h: 0 });
-    if (icon) this.resText.set(L.resText.x, L.resText.baseY, L.resText.maxW, L.resText.px, c.resText, "left", p4.dlResText);
-    else this.resText.set(L.resTextBare.x, L.resTextBare.baseY, L.resTextBare.maxW, L.resTextBare.px, `${p4.dlResGlyph} ${c.resText}`, "left", p4.dlResText);
+    // 资源行:替代字形 + 文本,起笔于 pad(Web iconText 的缺图那一支;钻石图标已在 Cocos 侧退役)
+    this.resText.set(L.resText.x, L.resText.baseY, L.resText.maxW, L.resText.px, `${p4.dlResGlyph} ${c.resText}`, "left", p4.dlResText);
 
     this.boxLabel.bold(true);
     this.boxLabel.set(L.boxLabel.x, L.boxLabel.baseY, L.boxLabel.maxW, L.boxLabel.px, c.boxLabel, "left", p4.dlBoxLabel);

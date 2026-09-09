@@ -83,6 +83,7 @@ node scripts/pixel-kit.mjs [--config=artwork/pixel-kit.json] [--out=dir] [--cont
 - 本批 39 张贴图落在 `cocos/assets/resources/textures/`，**同名覆盖、key 名不变**，加载通路沿用 `resources.load("textures/<key>/spriteFrame")`。
 - `npm run sync:cocos` 是 Web→Cocos 单向镜像。`scripts/sync-cocos.mjs` 现在把 `artwork/pixel-kit*.json`（主菜单批 `pixel-kit.json` + 战斗 HUD 批 `pixel-kit-hud.json`）里声明的每个 key 当作 **Cocos 独占资产**：这些 png 一律不回灌，日志末尾打印保护条数。新增批次只要进任一规格表就自动受保护。
 - `pxnum_*` 与 `crest` 不在 `ASSET_MANIFEST`（Web 侧会 404），由 `PIXEL_ART_KEYS` 直接进预载集；`restFrameKeys()` 已把它们从流式队列里摘出。
+- **Cocos 侧退役件**：`badge_gem_purple`（旧世代钻石图标，87×112 拉进 14×14 盒）已退役——`resources/textures/` 里不再有该文件，`scripts/sync-cocos.mjs` 的 `RETIRED_IN_COCOS` 拦住镜像回灌，`GameShell.ts` 的 `RETIRED_FRAME_KEYS` 把它从流式加载队列摘出（否则每启动一条加载失败日志）。`ASSET_MANIFEST` 保留该键不动：Web 冻结基准照旧读 `public/assets`。每日屏资源行因此恒走「替代字形 ◆ + 文本」那一档，`dailyLayout` 的图标位与「带图标 / 缺图标」两档文本随之收成一条 `resText`。`icon_fragment`（委托屏碎片图标）仍是旧世代图，保持原图挂账。
 
 ### 5.1 共享层共读名单：「只改 Cocos」不等于「改动不碰 Web」
 
@@ -116,8 +117,8 @@ node scripts/pixel-kit.mjs [--config=artwork/pixel-kit.json] [--out=dir] [--cont
 | 5 | gearup 装备 | ✅ | ✅ |
 | 6 | gacha 扭蛋 | ✅ | ✅ |
 | 7 | pass 通行证 | ✅ | ✅ |
-| 8 | daily 每日 | ✅ | ☐ |
-| 9 | commission 委托 | ✅ | ☐ |
+| 8 | daily 每日 | ✅ | ✅ |
+| 9 | commission 委托 | ✅ | ✅ |
 | 10 | fusion 合成 | ✅ | ✅ |
 | 11 | prestige 轮回 | ✅ | ✅ |
 | 12 | season 赛季 | ✅ | ✅ |
@@ -127,7 +128,7 @@ node scripts/pixel-kit.mjs [--config=artwork/pixel-kit.json] [--out=dir] [--cont
 | 16 | gameover 失败 | ✅ | ✅ |
 | — | confirm 常驻弹层 | ✅ | ✅ |
 
-「重排」列以各屏 `*Layout.ts` 的最后触及提交为准：gearup 与 pass 的几何现已收进共享层 `game/ui/gearUpLayout.ts` 与 `game/ui/passLayout.ts`，按 art 网格（module=2、pad 16、内容宽 528、热区 ≥44）重排并重基线几何测试；`dailyLayout` / `commissionLayout` 不在本轮触及范围内。
+「重排」列以各屏 `*Layout.ts` 的最后触及提交为准：`dailyLayout` / `commissionLayout` / `gearUpLayout` / `passLayout` 四份都在共享层 `game/ui/` 下，已按 art 网格（module=2、pad 16、内容宽 528、热区 ≥44）重排并重基线几何测试；四份都不与 Web 共读（Web 用的是 `src/game.ts` 自己的同名私有方法，见 §5.1）。
 
 ## 8. 验收判据
 

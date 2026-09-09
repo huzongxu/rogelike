@@ -54,7 +54,6 @@ import {
   DL_PAD,
   DL_PANEL_KEY,
   DL_RES_BASE_Y,
-  DL_RES_ICON_BOX,
   DL_ROW_MAX_H,
   DL_ROW_MIN_H,
   DL_STATUS_INSET,
@@ -298,9 +297,8 @@ function textBands(h: number, talents: string[]): TextRequest[] {
     // 标题两档:有横幅 → 横幅内居中;缺图 → 左起笔于 pad
     lineReq("标题(横幅内)", L.titleOnBanner),
     lineReq("标题(缺图回退)", L.titleBare),
-    // 资源行两档:有图标 → 右移 size+4;缺图 → 回到 pad 并前置替代字形
-    lineReq("资源行(带图标)", L.resText),
-    lineReq("资源行(缺图标)", L.resTextBare),
+    // 资源行一档:钻石图标退役后恒为「替代字形 + 文本」,起笔于 pad
+    lineReq("资源行", L.resText),
     lineReq("宝箱区标签", L.boxLabel),
     lineReq("天赋区标签", L.talentLabel),
     lineReq("返回钮", L.backText),
@@ -330,8 +328,8 @@ describe("文本带右界(dailyLayout 全网格)", () => {
     for (const h of [H_STD, H_TALL]) {
       for (const talents of [[], TALENTS.slice(0, 1), TALENTS] as string[][]) {
         const bands = textBands(h, talents);
-        // 7 屏级 + (宝箱 + 天赋 + 补领)行 × 3 段
-        expect(bands.length, `h=${h} 天赋${talents.length}`).toBe(7 + (DAILY_BOXES.length + talents.length + 1) * 3);
+        // 6 屏级 + (宝箱 + 天赋 + 补领)行 × 3 段
+        expect(bands.length, `h=${h} 天赋${talents.length}`).toBe(6 + (DAILY_BOXES.length + talents.length + 1) * 3);
         expectInsideScreen(bands);
       }
     }
@@ -743,19 +741,19 @@ describe("头部与屏底板几何(art 网格)", () => {
       expect(L.titleBare.x + L.titleBare.maxW + DL_TEXT_SLACK).toBeLessThanOrEqual(L.backBtn.x);
     });
 
-    it(`h=${h}:装饰立绘让开横幅右缘、资源行图标边长取偶,两件都不越右缘`, () => {
+    it(`h=${h}:装饰立绘让开横幅右缘、资源行只剩字形 + 文本一档,两件都不越右缘`, () => {
       const L = dailyScreenLayout(W, h, save());
       expect(L.deco).toEqual({ x: DL_BANNER_X + DL_BANNER_W + DL_DECO_GAP, y: DL_TOP_Y, w: DL_DECO_W, h: DL_DECO_H });
       expect(L.deco.x).toBeGreaterThanOrEqual(L.headerPlate.x + L.headerPlate.w);
       expect(L.deco.x + L.deco.w).toBeLessThanOrEqual(L.backBtn.x);
-      expect(L.resIcon).toEqual({ x: PAD, y: DL_RES_BASE_Y - DL_RES_ICON_BOX + 2, w: DL_RES_ICON_BOX, h: DL_RES_ICON_BOX });
-      expect(DL_RES_ICON_BOX % 2).toBe(0);
-      expect(L.resText.x).toBe(PAD + DL_RES_ICON_BOX + 4);
+      // 钻石图标退役:资源行回到「替代字形 + 文本」一档,起笔于页边距、限宽吃满内容宽
+      expect(L.resText.x).toBe(PAD);
       expect(L.resText.baseY).toBe(DL_RES_BASE_Y);
-      expect(L.resTextBare.x).toBe(PAD);
+      expect(L.resText.maxW).toBe(CONTENT_W);
+      expect(L.resText.align).toBe("left");
       expect(L.resText.x + L.resText.maxW).toBeLessThanOrEqual(RIGHT_EDGE);
-      // 立绘底边压在资源行图标顶缘之上,两件不抢同一条带
-      expect(L.deco.y + L.deco.h).toBeLessThanOrEqual(L.resIcon.y);
+      // 立绘底边压在资源行文本带顶缘之上,两件不抢同一条带
+      expect(L.deco.y + L.deco.h).toBeLessThanOrEqual(bandOf(lineReq("资源行", L.resText)).y);
     });
 
     it(`h=${h}:全部矩形坐标尺寸取偶、左缘 ≥16、右缘 ≤544,非底板件两两不相交`, () => {
@@ -764,7 +762,6 @@ describe("头部与屏底板几何(art 网格)", () => {
         ["屏底板", L.panel],
         ["标题横幅", L.headerPlate],
         ["装饰立绘", L.deco],
-        ["资源图标", L.resIcon],
         ["返回钮", L.backBtn],
         ...L.boxRows.map((r, i) => [`宝箱${i}`, r.rect] as [string, Box]),
         ...L.talentRows.map((r, i) => [`天赋${i}`, r.rect] as [string, Box]),

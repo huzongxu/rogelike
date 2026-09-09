@@ -169,10 +169,18 @@ const HUD_PRELOAD_KEYS = [
     "icon_fx_haunt_crown",
 ];
 
+/**
+ * 清单里 Cocos 侧不随包的键:`badge_gem_purple` 退役后每日屏资源行走替代字形,
+ * resources/textures 里没有这个文件,继续按清单请求只会换来一条加载失败日志。
+ * 与 `scripts/sync-cocos.mjs` 的 `RETIRED_IN_COCOS` 是同一件事的两侧(那边拦住镜像回灌);
+ * `ASSET_MANIFEST` 保留该键不动 —— Web 冻结基准照旧读 public/assets。
+ */
+const RETIRED_FRAME_KEYS = new Set(["badge_gem_purple"]);
+
 /** 预载集之外的全部清单键(世界美术 + 后续阶段菜单美术,后台流式加载) */
 function restFrameKeys(): string[] {
     const pre = new Set([...HUD_PRELOAD_KEYS, ...PIXEL_ART_KEYS]);
-    return Object.keys(ASSET_MANIFEST).filter((k) => !pre.has(k));
+    return Object.keys(ASSET_MANIFEST).filter((k) => !pre.has(k) && !RETIRED_FRAME_KEYS.has(k));
 }
 
 /** balance.json → 共享数值模块(与 Web src/platform/balance.ts 同一分发口径) */

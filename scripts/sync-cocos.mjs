@@ -3,6 +3,8 @@
 // 只新增/覆盖,从不删除:编辑器生成的 .meta 与手工换图不受影响。
 // 例外:Cocos 独占 key —— 像素翻新批次只存在于 resources/textures,
 // public/assets 里是同名的旧图,镜像过来会把新皮覆盖回去,故一律跳过。
+// 另一条例外:Cocos 侧已退役的 key(见 RETIRED_IN_COCOS)同样不镜像,
+// 免得旧世代图重新进包;Web 侧照旧读 public/assets,不受影响。
 import { readdirSync, statSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,6 +43,13 @@ function cocosOnlyAssets() {
 
 const COCOS_ONLY = cocosOnlyAssets();
 
+/**
+ * Cocos 侧已退役的资产名(含 .png 后缀):Web 冻结基准照旧读 public/assets,
+ * 但 Cocos 侧已无消费者、resources/textures 里也不再存文件,镜像回来就是旧世代图重新进包。
+ * badge_gem_purple —— 每日屏资源行的钻石图标,退役后那一行走替代字形 + 文本。
+ */
+const RETIRED_IN_COCOS = new Set(["badge_gem_purple.png"]);
+
 const PAIRS = [
     { from: join(ROOT, "public", "assets"), to: join(OUT, "textures"), filter: (f) => f.endsWith(".png") },
     { from: join(ROOT, "public", "config"), to: join(OUT, "config"), filter: (f) => f.endsWith(".json") },
@@ -56,6 +65,7 @@ function needsCopy(src, dst) {
 let copied = 0;
 let skipped = 0;
 let guarded = 0;
+let retired = 0;
 for (const { from, to, filter } of PAIRS) {
     if (!existsSync(from)) {
         console.warn(`[sync-cocos] 源目录不存在,跳过:${from}`);
@@ -70,6 +80,10 @@ for (const { from, to, filter } of PAIRS) {
             pairGuarded++;
             continue;
         }
+        if (RETIRED_IN_COCOS.has(file)) {
+            retired++;
+            continue;
+        }
         const src = join(from, file);
         const dst = join(to, file);
         if (!needsCopy(src, dst)) {
@@ -82,4 +96,4 @@ for (const { from, to, filter } of PAIRS) {
     }
     if (pairGuarded) console.log(`[sync-cocos] ${basename(to)}:保留 Cocos 独占 ${pairGuarded} 个(不回灌)`);
 }
-console.log(`[sync-cocos] 完成:新增/更新 ${copied} 个,已是最新 ${skipped} 个,Cocos 独占保护 ${guarded} 个`);
+console.log(`[sync-cocos] 完成:新增/更新 ${copied} 个,已是最新 ${skipped} 个,Cocos 独占保护 ${guarded} 个,Cocos 侧退役不镜像 ${retired} 个`);
