@@ -33,7 +33,7 @@ import { readFileSync } from "node:fs";
 /* ---------- 共享层（Web 与 Cocos 共用的单一事实源） ---------- */
 import { ECHO_RETAIN_RATE, splitEcho } from "@game/data/stages";
 import { DAILY_TALENT_POOL, dailyTalentOf } from "@game/data/daily";
-import { fs as FS, rowTextY, ui as THEME_UI, theme } from "@game/ui/theme";
+import { fs as FS, rowTextY, theme } from "@game/ui/theme";
 import {
   GO_ANCHOR_RATIO,
   GO_BANNER_DY,

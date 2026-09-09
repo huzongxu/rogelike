@@ -46,7 +46,7 @@
  * 本文件不复制那份系数、也不另写一套量字。
  */
 
-import { CONFIRM_BTN_GAP, CONFIRM_BTN_H, CONFIRM_BTN_W, CONFIRM_H, CONFIRM_W, confirmRects, evenDown, fs } from "../game/ui/theme";
+import { CONFIRM_BTN_H, CONFIRM_BTN_W, CONFIRM_H, CONFIRM_W, confirmRects, evenDown, fs } from "../game/ui/theme";
 
 /** 左上原点设计像素矩形（与 core/DesignMetrics.Rect 同形；共享层不引宿主类型） */
 export interface CfRect {
