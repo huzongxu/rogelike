@@ -1,0 +1,81 @@
+{
+ "$comment": "§13 批 B —— 玩家、怪物与结算立绘 20 枚按实测绘制盒 1:1 重出（export=1，1 贴图像素 = 1 逻辑 px）。两张表都是生成器满幅出图，底色漂到玫红族（b1 实测 #bf3390 / b2 #b73a8f），逐表用 keyColor 钉住实测底色、tolerance 收到 36：神之敌的品红焰光与底色只差 4133（<96²），容差留在默认 96 会把整圈光焰当底吃掉。两表都开 keyGlobal：生成器固执地给每只脚画一枚椭圆地影，地影环把底色围成封闭腔，边界洪水播种进不去，量化后在角色脚下留一块亮品红（实测关掉全局这一档时 chaser 脚下即如此）；神之敌那一格反过来关掉它——它的焰光本就贴着底色色族，全局档实测削掉 35% 不透明像素，把光焰削薄成渣。所有格关 wm：水印固定压整幅右下角，而这一批的内容铺到格底，逐格镜像上行会把脚部与地影抹平，改为只给压了水印的末格把 rect 下缘收到水印带上沿（实测 b1 精英的水印自 y988 起、脚部墨迹到 y986 止；b2 委托立绘的水印自 y968 起、脚部到 y953 止）。rects 逐格手钉而不走等分：神之敌的焰光实测铺到 x416，等分线 384 会把它右缘切平。重采样一律走默认 contain：绘制盒是正方形而怪物是竖构图，stretch 会把石巨压成扁的，留边比失真好。调色板在批 A 的 33 色之外补五族（黄绿 / 青 / 铁锈 / 品红 / 蓝灰紫）与两档高亮蓝，覆盖 enemies.ts 的 14 个 identity color；粉族只留 #ff2d8f / #ff8fc0 两档亮粉——地影的暗部实测量化进 #7a1040 / #c01f6a（每枚 15~64 像素、全落在脚底最后一行），在蓝黑战场上读成一块品红水洼，去掉这两档后同一批暗部落进已有的 #7a1f2a / #3a1218，神之敌的焰光靠两档亮粉仍然成梯度。",
+ "module": 2,
+ "export": 1,
+ "keyout": { "color": "#ff00ff", "tolerance": 36, "erode": 2, "keyTolerance": 60 },
+ "palette": [
+  "#05070c", "#0b0e14", "#121826", "#1a2233", "#232e44", "#2a3548", "#38465e", "#4a5a76", "#62738f", "#8391a8", "#a9b4c4", "#c8cdd6", "#e8ecf4",
+  "#0e3b36", "#17624f", "#2e9e7f", "#4dffc8",
+  "#0d3f3c", "#17706a", "#26a69a", "#6fe0d4",
+  "#3f4a12", "#6b7a1c", "#a3b833", "#d4e86a",
+  "#2b1f47", "#4b3a7a", "#8a6fd1", "#c8b6ff",
+  "#4a4258", "#7d6b8f", "#b0a0c0",
+  "#4a3410", "#8a6220", "#d9a63c", "#ffd76a",
+  "#3a2216", "#6b4028", "#b06a4a", "#d69a70", "#ff9a70",
+  "#3a1218", "#7a1f2a", "#a8202a", "#c0374a", "#e05040", "#ff2d2d", "#ff5a6e",
+  "#ff2d8f", "#ff8fc0",
+  "#10294a", "#1f4e8a", "#2f7fd1", "#4aa3ff", "#7fd0ff", "#a8e4ff"
+ ],
+ "sheets": [
+  {
+   "src": "vibe_images/px_sheet_units_b1.png",
+   "grid": { "cols": 4, "rows": 3 },
+   "keyColor": "#bf3390",
+   "keyGlobal": true,
+   "rects": [
+    [0, 0, 384, 341],
+    [384, 0, 768, 341],
+    [768, 0, 1152, 341],
+    [1152, 0, 1536, 341],
+    [0, 341, 384, 683],
+    [384, 341, 768, 683],
+    [768, 341, 1152, 683],
+    [1152, 341, 1536, 683],
+    [0, 683, 384, 1024],
+    [384, 683, 768, 1024],
+    [768, 683, 1152, 1024],
+    [1152, 683, 1536, 986]
+   ],
+   "cells": [
+    { "key": "enemy_chaser", "art": [36, 36], "wm": false },
+    { "key": "enemy_swift", "art": [28, 28], "wm": false },
+    { "key": "enemy_hider", "art": [32, 32], "wm": false },
+    { "key": "enemy_goldkind", "art": [34, 34], "wm": false },
+    { "key": "enemy_reflector", "art": [36, 36], "wm": false },
+    { "key": "enemy_splitter", "art": [42, 42], "wm": false },
+    { "key": "enemy_splitling", "art": [26, 26], "wm": false },
+    { "key": "enemy_devourer", "art": [42, 42], "wm": false },
+    { "key": "enemy_shieldguard", "art": [46, 46], "wm": false },
+    { "key": "enemy_summoner", "art": [46, 46], "wm": false },
+    { "key": "enemy_tank", "art": [62, 62], "wm": false },
+    { "key": "enemy_elite", "art": [88, 88], "wm": false }
+   ]
+  },
+  {
+   "src": "vibe_images/px_sheet_units_b2.png",
+   "grid": { "cols": 4, "rows": 2 },
+   "keyColor": "#b73a8f",
+   "keyGlobal": true,
+   "rects": [
+    [0, 0, 440, 512],
+    [440, 0, 760, 512],
+    [768, 0, 1152, 512],
+    [1152, 0, 1536, 512],
+    [0, 512, 384, 1024],
+    [384, 512, 768, 1024],
+    [768, 512, 1152, 1024],
+    [1152, 512, 1536, 962]
+   ],
+   "cells": [
+    { "key": "enemy_god", "art": [104, 104], "wm": false, "tolerance": 30, "keyGlobal": false },
+    { "key": "enemy_boss", "art": [124, 124], "wm": false },
+    { "key": "player", "art": [44, 44], "wm": false },
+    { "key": "player_pose_1", "art": [58, 92], "wm": false },
+    { "key": "player_pose_2", "art": [38, 60], "wm": false },
+    { "key": "player_pose_4", "art": [58, 92], "wm": false },
+    { "key": "player_pose_5", "art": [44, 60], "wm": false },
+    { "key": "player_pose_6", "art": [38, 60], "wm": false }
+   ]
+  }
+ ]
+}

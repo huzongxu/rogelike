@@ -116,7 +116,6 @@ export class ShopView {
 
   private cover: Node;
   private coverSp: Sprite;
-  private coverGfx: Graphics;
   private dim: Node;
   private dimGfx: Graphics;
   private zone: ReturnType<typeof flatBox>;
@@ -160,7 +159,6 @@ export class ShopView {
     this.cover = makeNode("Cover", this.root);
     this.coverSp = this.cover.addComponent(Sprite);
     this.coverSp.sizeMode = Sprite.SizeMode.CUSTOM;
-    this.coverGfx = this.cover.addComponent(Graphics);
     this.dim = makeNode("Dim", this.root);
     this.dimGfx = this.dim.addComponent(Graphics);
     this.zone = flatBox("Zone", this.root);
@@ -462,7 +460,6 @@ export class ShopView {
     const p3 = viewTable().phase3;
     const frame = this.frames.get("bg_shop");
     this.coverSp.enabled = !!frame;
-    this.coverGfx.enabled = !frame;
     const band = fullRect();
     if (frame) {
       this.coverSp.spriteFrame = frame;

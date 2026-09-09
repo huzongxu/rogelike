@@ -10,7 +10,7 @@ import { isSkinHidden, isSkinTextHidden, resolveSkinKey } from "../game/dev/labS
 import type { MenuPanelId } from "../game/data/menuSkin";
 import type { SetId } from "../game/data/sets";
 import { menuChipRects, type MenuRowContent, type MenuTextContent } from "./MenuContentModel";
-import { placeLine } from "../ui/PanelKit";
+import { placeLine, sizeFallback, strokeRing } from "../ui/PanelKit";
 import { PixelNumber, pixelNumber } from "../ui/PixelNumber";
 
 /**
@@ -173,7 +173,10 @@ export class MenuLayoutView {
     const root = makeNode(name, parent);
     const sprite = root.addComponent(Sprite);
     sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-    return { root, sprite, gfx: root.addComponent(Graphics) };
+    // 兜底形状挂**子节点**:每节点只收一个 UIRenderer,与同节点的 Sprite 抢槽位时先挂上的赢,
+    // 于是皮肤 hidden / 图未就绪那一档会连回退形状一起不上屏(与 PanelKit.Plate 同一口径)。
+    const gfxNode = makeNode("Fallback", root);
+    return { root, sprite, gfx: gfxNode.addComponent(Graphics) };
   }
 
   /** 主菜单表现参数:viewTable.json 的 `menu` 段优先,缺字段回落共享层默认 */
@@ -201,6 +204,7 @@ export class MenuLayoutView {
     if (p.gfx) {
       p.gfx.clear();
       if (!frame) this.drawFallback(p, rect, mode, solidColor);
+      sizeFallback(p.gfx.node, rect);
     }
     placeRect(p.root, rect);
     return !!frame;
@@ -234,10 +238,9 @@ export class MenuLayoutView {
     g.fillColor = hexToColor(m.fallbackPlate);
     g.rect(-rect.w / 2, -rect.h / 2, rect.w, rect.h);
     g.fill();
-    g.lineWidth = 1;
-    g.strokeColor = hexToColor(m.fallbackStroke);
-    g.rect(-rect.w / 2, -rect.h / 2, rect.w, rect.h);
-    g.stroke();
+    // 描边走实心环带:引擎的 Graphics.stroke 成图带宽恒为 lineWidth − 1.5,1px 在这里画不出像素
+    g.fillColor = hexToColor(m.fallbackStroke);
+    strokeRing(g, rect.w, rect.h, 1);
   }
 
   /* ==================== 布局 ==================== */

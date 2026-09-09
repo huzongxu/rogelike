@@ -373,11 +373,11 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 
 **派单顺序（一屏一单，子 agent 150 turn 上限扛不住多屏）**：排行 → 每日 → 通行证 → 升级 → 扭蛋 → prestige → 委托 → 融合 → 赛季。理由是先用只读零写入的排行屏把"抽纯布局 + Cocos 视图 + 路由增键 + 热区分发 + 测试"这条链跑通，再依次引入广告与写入、文字测量截断、溢出风险、条件块压缩、实时时序、跨屏 `overlayFrom`，最后做没有手动入口、需要构造触发条件的赛季屏。
 
-**已落地两屏与 Web 的已知分歧**（均为有意）：排行屏的关卡框徽标按 Phase 3 立绘同款处置（`avatar_<品质>` 贴图优先，缺图回退代码金圈 + 框心数字）。每日屏要用的四个贴图键（`banner_title_gold_c` 标题横幅、`player_pose_2` 装饰立绘、`btn_minor` 行底板、`btn_primary` 补领底板）在 `ASSET_MANIFEST` 与 `resources/textures/` 里都在，一律贴图优先，两条缺图回退分支与 Web 同语义（横幅缺图 → 标题从"横幅内居中、基线 36−4"切到 `themePaint.header` 那一档"左起笔于 pad、基线 36"；行底板缺图 → `rgba(255,255,255,0.05)` 底 + `rgba(255,255,255,0.15)` 描边）。资源行原先还挂第五枚 `badge_gem_purple`（钻石图标），该键已在 Cocos 侧退役：png 与 `.meta` 从 `resources/textures/` 删除、`scripts/sync-cocos.mjs` 的 `RETIRED_IN_COCOS` 拦住镜像回灌、`GameShell.ts` 的 `RETIRED_FRAME_KEYS` 把它从流式加载队列摘出（`ASSET_MANIFEST` 保留该键，Web 冻结基准照旧读 `public/assets`），于是本屏资源行恒走 Web 的缺图那一档「`pad` 起笔 + 前置「◆」」，`dailyLayout` 的图标位与两档文本也收成一条 `resText`，详见 `docs/UI-PIXEL-REFRESH.md` §5。两处照抄 Web 而非照抄排行屏：每日屏的返回钮是纯色 rect（`#2a3d55` + `rgba(255,255,255,0.3)`）而不是 `skinButtonBase`，所以不挂贴图；已领行恒走代码形状，因为 Web 的 `claimed || skinButtonBase(…)` 把贴图分支短路掉了，Cocos 侧给 `Plate` 传空键得到同一结果。三处口径差：Web `skinButtonBase` 的圆角实参（普通行 8 / 补领行 10）在 Cocos 侧没有消费者，九宫格边距走 `nineSlice.keys`（`btn_minor`/`btn_primary` 均为 71），与 Phase 2 已记的"边距值只在 Cocos 侧产生实际效果"同类，原值作为档位差留在共享布局的 `DL_ROW_PLATE` / `DL_MAKEUP_PLATE` 里供断言与取键；每日屏的几何常量（`listTop 92`、`labelH 24`、行高钳制 46–92、两行文本的 18px 固定行距、两种底板档位）住在共享层 `game/ui/dailyLayout.ts` 的具名常量里而不进 `viewTable` 的 `phase4` 段 —— 共享层读不到 import 了 `cc` 的 `core/ViewTable.ts`，同一个数放两边就成了两个事实源，`phase4` 段收的是纯表现项（键前缀 `dl`：覆盖底、两组区标签色、未领与已领三档的底/描边/文字色、补领两档、返回钮三色、资源行替代字形），默认值逐项对标 Web；Web 的 `fillText` 不限宽，Cocos 侧每段文本带都给了 `maxW`（名字与描述收到右对齐状态起笔前 10px，缺图档标题收到返回钮前 10px），超宽由 `fitOne` 截断补「…」，与排行屏同款。
+**已落地两屏与 Web 的已知分歧**（均为有意）：排行屏的关卡框徽标按 Phase 3 立绘同款处置（`avatar_<品质>` 贴图优先，缺图回退代码金圈 + 框心数字）。每日屏要用的四个贴图键（`banner_title_gold_c` 标题横幅、`player_pose_2` 装饰立绘、`btn_minor` 行底板、`btn_primary` 补领底板）在 `ASSET_MANIFEST` 与 `resources/textures/` 里都在，一律贴图优先，两条缺图回退分支与 Web 同语义（横幅缺图 → 标题从"横幅内居中、基线 36−4"切到 `themePaint.header` 那一档"左起笔于 pad、基线 36"；行底板缺图 → `rgba(255,255,255,0.05)` 底 + `rgba(255,255,255,0.15)` 描边）。资源行原先还挂第五枚 `badge_gem_purple`（钻石图标），该键已在 Cocos 侧退役：png 与 `.meta` 从 `resources/textures/` 删除、`scripts/sync-cocos.mjs` 的 `RETIRED_IN_COCOS` 拦住镜像回灌、`GameShell.ts` 的 `RETIRED_FRAME_KEYS` 把它从流式加载队列摘出（`ASSET_MANIFEST` 保留该键，Web 冻结基准照旧读 `public/assets`），于是本屏资源行恒走 Web 的缺图那一档「`pad` 起笔 + 前置「◆」」，`dailyLayout` 的图标位与两档文本也收成一条 `resText`，详见 `docs/UI-PIXEL-REFRESH.md` §5。两处照抄 Web 而非照抄排行屏：每日屏的返回钮是纯色 rect（`#2a3d55` + `rgba(255,255,255,0.3)`）而不是 `skinButtonBase`，所以不挂贴图；已领行恒走代码形状，因为 Web 的 `claimed || skinButtonBase(…)` 把贴图分支短路掉了，Cocos 侧给 `Plate` 传空键得到同一结果。三处口径差：Web `skinButtonBase` 的圆角实参（普通行 8 / 补领行 10）在 Cocos 侧没有消费者，九宫格边距走 `nineSlice.keys`（`btn_minor` 16 / `btn_primary` 20），与 Phase 2 已记的"边距值只在 Cocos 侧产生实际效果"同类，原值作为档位差留在共享布局的 `DL_ROW_PLATE` / `DL_MAKEUP_PLATE` 里供断言与取键；每日屏的几何常量（`listTop 92`、`labelH 24`、行高钳制 46–92、两行文本的 18px 固定行距、两种底板档位）住在共享层 `game/ui/dailyLayout.ts` 的具名常量里而不进 `viewTable` 的 `phase4` 段 —— 共享层读不到 import 了 `cc` 的 `core/ViewTable.ts`，同一个数放两边就成了两个事实源，`phase4` 段收的是纯表现项（键前缀 `dl`：覆盖底、两组区标签色、未领与已领三档的底/描边/文字色、补领两档、返回钮三色、资源行替代字形），默认值逐项对标 Web；Web 的 `fillText` 不限宽，Cocos 侧每段文本带都给了 `maxW`（名字与描述收到右对齐状态起笔前 10px，缺图档标题收到返回钮前 10px），超宽由 `fitOne` 截断补「…」，与排行屏同款。
 
 **已落地两屏的宿主接线差异**（不是画面分歧）：激励视频收敛成 `GameShell.watchAd(onOk, onFail?)` 一个入口，语义逐项对标 Web `game.ts:watchAd` —— 在途期间不接受第二次点击，看完先记一次 `adWatchCount` 并在 `DIAMOND_AD_DAILY` 之内发 `DIAMOND_PER_AD` 钻石、落一次盘，再调 `onOk` 发本屏奖励，平台分流仍在 `core/AdChannel.showRewardedAd`。Phase 3 的回响筹码原先自己走一遍 `showRewardedAd` 且不回写 `adWatchCount`，现在改为调这一入口，于是点回响筹码也会让每日屏的"今日广告 N 次"+1 并在上限内 +1 钻。每日重置原先只随 `BattleSim.update()` 跑，而壳层在非战斗屏整帧早退（`router.blocksPlay()`），停在菜单或每日屏跨天就永远不清零、本屏会一直显示"已领取"；现在 `BattleSim.syncDaily()` 被提到路由闸门之前逐帧调，与 Web `update()` 里"任何状态下都执行"同口径，真的改了存档时顺带重排每日屏与主菜单的每日红点。**广告闸门的口径（2026-09-05 定）**：闸门只有 `watchAd` 首行那一道 `if (this.adPending) return;`，与 Web `watchAd` 首行的 `adBusy` 同位同义 —— 广告在途时**同步领取照常执行**，被挡的只有"第二次看广告"。各屏 action 开头一律不加这道闸：一方面每日免费天赋（`dailyTalentClaimed`）、补领（`dailyClearedDate` / `makeUpDate`）、通行证档位（`passTier`）这些领取本身已按存档状态幂等，屏级闸门并没有买到防重复发奖；另一方面它会让广告在途期间的整屏点击失效，与冻结基准分歧，并且外溢到装备升级 / 扭蛋 / 转生 / 委托四个**根本没有广告位**的屏（它们的点击会被别的屏发起的广告吞掉）。六个屏级 action 的这道早退已一并去掉，`tests/cocos-phase4-gacha.test.ts` 里加了反向守卫（action 段不含 `adPending`、全文件 `if (this.adPending) return;` 计数恒为 1）。**尚未验完**：构建包实机复核这条口径时 `.probe/probe-gacha.js` 在第 52 行就抛 `Cannot read properties of undefined (reading 'x')`，崩点在该探针第六节（广告段）之前、与本项改动无关，属既有探针腐化，故新口径目前只有单测与源码守卫覆盖。
 
-**待界面翻新统一处理的画面偏差（本轮不修）**：每日屏七行的行底板装饰翼与行内文字存在可读性差 —— 名字下方那行描述（如 `扭蛋券 ×2 + 星尘 ×10`）与右对齐状态文字（`▶ 广告开启` / `免费领取`）会被本行贴图的左右装饰翼压住，读起来比基准吃力。布局侧已用实测排除：`plateBoxH` 与 `rowH` 同为 92、底板矩形就是行矩形、行间隔 20，上一行描述基线 y814 与本行底板顶缘 y770 之间净空 44，**没有跨行压字**；文本基线与 Web 共用同一份 `dailyLayout`，两侧同数。差异落在**九宫格 `slice` 的渲染口径**：Cocos 按 `nineSlice.keys` 的边距（`btn_minor` / `btn_primary` 均 71）切图，装饰翼保留接近贴图原始的比例；Web `skinButtonBase` 画进同一个行矩形时翼更收敛。整界面翻新会重出这批行皮肤与边距，届时一并处理。复核入口：同尺度对标图 `.probe/cocos-p4-daily-684.png` 对 `.probe/web-p4-daily.png`（都是 684 宽、设计 560×996），探针判据是逐行取 `getComponent('cc.UITransform').getBoundingBoxToWorld()` 的盒高与 `rowH` 对比。构建包侧的运行时账（26 枚标签全 active、`minLeft 14 / maxRight 536` 无越界、三种领取的存档增量与 `localStorage['echo-abyss-save-v1']` 落盘）已逐项实测通过。
+**待界面翻新统一处理的画面偏差（本轮不修）**：每日屏七行的行底板装饰翼与行内文字存在可读性差 —— 名字下方那行描述（如 `扭蛋券 ×2 + 星尘 ×10`）与右对齐状态文字（`▶ 广告开启` / `免费领取`）会被本行贴图的左右装饰翼压住，读起来比基准吃力。布局侧已用实测排除：`plateBoxH` 与 `rowH` 同为 92、底板矩形就是行矩形、行间隔 20，上一行描述基线 y814 与本行底板顶缘 y770 之间净空 44，**没有跨行压字**；文本基线与 Web 共用同一份 `dailyLayout`，两侧同数。差异落在**九宫格 `slice` 的渲染口径**：Cocos 按 `nineSlice.keys` 的边距（`btn_minor` 16 / `btn_primary` 20，由 `artwork/pixel-kit.json` 的 `slice` 8 / 10 × `export` 2 推导）切图，装饰翼保留接近贴图原始的比例；Web `skinButtonBase` 画进同一个行矩形时翼更收敛。这两枚键已是像素档、不在 §13 的旧世代清零对象里，边距也不随那四批变，所以本条留在画面偏差账上，动本屏皮肤时按同尺度对标图复核。复核入口：同尺度对标图 `.probe/cocos-p4-daily-684.png` 对 `.probe/web-p4-daily.png`（都是 684 宽、设计 560×996），探针判据是逐行取 `getComponent('cc.UITransform').getBoundingBoxToWorld()` 的盒高与 `rowH` 对比。构建包侧的运行时账（26 枚标签全 active、`minLeft 14 / maxRight 536` 无越界、三种领取的存档增量与 `localStorage['echo-abyss-save-v1']` 落盘）已逐项实测通过。
 
 **本期尚未核实、动到该屏前要先测的**：装备槽上限中 `extra_gear → runSlotBonus` 的注入路径。
 
@@ -447,7 +447,7 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 | 编号 | 风险 | 影响 | 处置 |
 | --- | --- | --- | --- |
 | R1 | 纯逻辑与 Cocos 侧各留一份拷贝 | 数值/系统行为双端漂移，回归成本极高 | 已闭合。Phase 0 把 42 个纯逻辑文件进共享层 + `@game` alias；Phase 1 把战斗编排层也抽进 `game/systems/battleWorld.ts`，`src/game.ts` 与 `BattleSim` 共用同一份（`damageEnemy`/`killEnemy`/`updateProjectiles` 等在 `src/game.ts` 中已各 0 处）。两道测试守住：`tests/shared-purity.test.ts` 挡宿主依赖混入共享层，`tests/battle-fingerprint.test.ts` 挡编排行为漂移 |
-| R2 | 152 张 PNG 全量入 `resources` | 包体超限、首屏变慢 | 实测已闭合（见「Phase 6 包体与首屏实测」）：整包 45,709,014 B，其中贴图 41,537,590 B（90.9%），首屏关键路径仅 ≈4.78 MB。**原处置中"分组进 bundle"覆盖不了背景** —— `bg_*` 10 张 = 32,682,562 B（31.17 MiB）= 贴图 78.7%，任何小游戏包体上限都装不下，分组能覆盖的只有 8,855,028 B 非背景资产；背景必须减重（10 张 alpha 恒 255，去通道转 JPG/WebP）或走远程资源，属**发布阻塞项**。2026-09-06 拍板：本轮只记账不动资产，以免破坏"与 Web 逐屏像素对标"闸门 |
+| R2 | 全量 PNG 入 `resources`（现 158 张） | 包体超限、首屏变慢 | 已闭合（见「Phase 6 包体与首屏实测」的 2026-09-09 复测）：整包 **6,144,511 B（5.86 MiB）**，其中贴图 1,954,271 B（158 枚，占整包 31.81%），`bg_*` 10 枚 1,814,824 B，首屏关键路径 ≈4.01 MB。闭合方式是**背景按 1:1 像素档重出**（§13 批 D：七枚 23,553,515 → 1,386,170 B），不是分组或远程资源——2026-09-06 那轮记账给出的结论「分组覆盖不了背景、必须减重才谈上线」正是照这条走的，当时贴图为 41,537,590 B / 整包 45,709,014 B。bundle 分组与远程资源两项因此不再是发布前置，留作后续可选优化 |
 | R3 | 微信小游戏端资源与广告 API | 上线受阻 | `AdChannel` 已按端分流；Cocos 版冒烟已落地 `scripts/smoke-cocos.mjs`（`npm run smoke:cocos`，7 项断言，无头 Edge 真实启动构建产物）。**wechatgame 平台构建与真机/官方模拟器验收仍未做** —— 本机无微信开发者工具，无法自证，属发布前必须在有工具的环境补的一步 |
 | R4 | `Label` 每帧改文本 | 明显掉帧 | 全量走 `bindLabel`；Phase 1 加命中率打点 |
 | R5 | 文本落位口径：子局部矩形忘传父尺寸 / 把对齐锚点当盒左沿 | 文字飞出屏幕，或右对齐与居中标签整体右移半个盒宽（越出 560 右界、压住相邻文本） | 三屏文本统一走 `ui/PanelKit.placeLine`（唯一入口，`box` 为子局部矩形参数），锚点折盒集中在 cc-free 的 `ui/TextBand.ts:anchorBand`；`tests/cocos-phase3.test.ts` 第 7 节按 `shopLayoutPure` / `heroSelectLayout` 全网格断言每条文本带落在 `0..560`，Code Review 检查所有 `rect` 调用 |
@@ -465,7 +465,7 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 2. **目标端为 web-desktop + 微信小游戏**，iOS/Android 原生包暂不列入本轮。
 3. **工程目录名 `cocos/`**：已由 `cocos-prototype/` 更名（已拍板执行），牵动同步的脚本为 `build:cocos` / `serve:cocos` / `sync:cocos` 与门 5 脚本（`scripts/cocos-typecheck.mjs`）。
 4. **布局台在 Phase 2 重定向**（而不是先做完屏幕再回头补工具）。理由：后面 13 屏的几何调整都靠它，早一期拿到工具，后面省的是"标注→猜像素"的循环。
-5. **包体与远程资源策略延后到 Phase 6**，但它是发布阻塞项，不随本轮重写关闭。
+5. **包体与远程资源策略延后到 Phase 6**，但它是发布阻塞项，不随本轮重写关闭。（现状以 §9 R2 为准：2026-09-09 复测后整包 5.86 MiB，阻塞项已闭合。）
 6. **逐模块重写的推进节奏**：一个 Phase 一次提交、一次截图对标、一次你的确认。需要更快时可以合并 Phase 3/4，但风险是单次对标面变宽。
 
 ## 逐屏视觉对标挂账（2026-09-05，Phase 4 三屏同尺度对标）
@@ -571,7 +571,7 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 
 ## Phase 6 包体与首屏实测（数据）
 
-采集日 2026-09-06，对象 = `adb8774` 工作树上 `npm run build:cocos` 的既有产物（`cocos/build/web-desktop/`，产物时间 01:01，本节不触发重建）。测量机为本机 Windows + 无头 Edge（`--headless=new`，窗口 684×1217，即 560×996 档），静态服务 `scripts/serve-build.mjs`（localhost）。本机 harness 在 `.probe/p29-size-boot.sh`（`.probe/` gitignored，复跑 `bash .probe/p29-size-boot.sh`；包体数字也可用文末的纯命令口径重导）。**本节数据是 bundle 分组与远程资源两项待决策（§9 R2）的输入**，不是结论；两项决策与 wechatgame 平台构建均不在本单范围。
+本节两份快照：**当前数字 = 2026-09-09 复测**（见该小节），2026-09-06 那份是 §13 全量像素翻新前的留档。09-06 采集对象 = `adb8774` 工作树上 `npm run build:cocos` 的既有产物（`cocos/build/web-desktop/`，产物时间 01:01，那一次不触发重建）。测量机为本机 Windows + 无头 Edge（`--headless=new`，窗口 684×1217，即 560×996 档），静态服务 `scripts/serve-build.mjs`（localhost）。本机 harness 在 `.probe/p29-size-boot.sh`（`.probe/` gitignored，复跑 `bash .probe/p29-size-boot.sh`；包体数字也可用文末的纯命令口径重导）。**这些数据是 §9 R2 的输入**；bundle 分组与远程资源两项在 09-09 复测后不再是发布前置（见 R2 处置），wechatgame 平台构建不在本单范围。
 
 ### 包体构成（`cocos/build/web-desktop/`，全为实测字节）
 
@@ -620,7 +620,40 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 
 给 R2 决策的读法（只摆事实）：首屏关键路径 ≈ 4.78 MB，只占整包 10.4%；整包的 90.9% 是 PNG，其中 97.4% 的 PNG 字节（40.5/41.5 MB）在 ready 后才需要。"进本地包的必须集"与"可分组/可远程的候选集"的天然分界已经存在于加载时序里（22 枚预载 vs 128 枚流式）。
 
+### 2026-09-09 复测（§13 全量像素翻新落地后）
+
+对象 = 当前工作树（批 A~D 全部落地、五道门绿），产物由本轮 `npm run build:cocos` 重建；量法与上一节同一套 harness（`bash .probe/p29-size-boot.sh`，包体纯文件系统统计 + 首屏三里程碑 ×3 冷缓存）。**本节数字取代 09-06 快照，是 §9 R2 现在的输入。**
+
+**包体构成**：总字节 **6,144,511**（5.86 MiB），分项和与总字节逐位相等。
+
+| 分项 | 字节 | 占整包 | 09-06 快照 | 备注 |
+| --- | --- | --- | --- | --- |
+| `assets/resources/` | 2,106,663 | 34.29% | 41,696,230 | `native/` 158 枚 PNG = **1,954,271**；`import/` 116,782；`config.json` 35,005；`index.js` 605 |
+| `cocos-js/`（引擎运行时） | 3,140,951 | 51.12% | 3,140,951 | 与资产无关，逐位不变 |
+| `assets/main/`（业务包） | 583,944 | 9.50% | 558,880 | 业务 js **581,175**（+25,064）；场景序列化与 config 余量 |
+| `assets/internal/` | 240,753 | 3.92% | 240,753 | 不变 |
+| `src/`（引导与设置） | 64,286 | 1.05% | 64,286 | 不变 |
+| 根文件 | 7,914 | 0.13% | 7,914 | 不变 |
+
+整包 **−39,564,503 B（−86.6%）**，全部落在贴图：90.9% → 31.81% 占比，41,537,590 → 1,954,271 B。引擎运行时因此取代贴图成为最大单项。序列化侧 `balance.json` 2,099 → 1,530 B 不变，`viewTable.json` 源 6,378 → 产物 4,388 B（源由 5,969 涨到 6,378，来自 §13 各批的 `nineSlice.keys` 与档位登记）。
+
+**镜像口径变了**：源图 `cocos/assets/resources/textures/` 158 枚 ↔ 产物 `assets/resources/native/` 158 枚，逐文件 md5 **158/158 一致**；与 `public/assets/`（152 枚 / 41,537,590 B）在 125 枚上 md5 不同、文件名集合也不再相等（源侧多出新键、少掉 27 枚退役件）。这正是 `scripts/sync-cocos.mjs` 的两条既有机制在起作用：`artwork/pixel-kit*.json` 声明的键按 Cocos 独占保护不回灌（125 = 该轮日志的保护数），`RETIRED_IN_COCOS` 的 27 枚不镜像。09-06 那节的「三方 152/152 逐字节 1:1」自今日起只对「源 ↔ 产物」两方成立，`public/assets/` 仍是 Web 冻结基准。
+
+**首屏三里程碑**（冷缓存 ×3，每轮全新 profile）：
+
+| 里程碑 | 中位数 | run0 | run1 | run2 | 09-06 中位数 |
+| --- | --- | --- | --- | --- | --- |
+| `cc.game.inited` | **472 ms** | 481 | 436 | 472 | 654 |
+| 首帧画出（totalFrames > 0） | **2,055 ms** | 2,055 | 2,055 | 2,051 | 2,051 |
+| `GameShell.ready` | **3,138 ms** | 3,183 | 3,138 | 3,128 | 2,452 |
+
+到 ready 为止的关键路径：250 个请求 / **4,014,576 B**（09-06 为 91~106 请求 / 4,777,712 B），其中 PNG 73~74 枚 = 262,380 / 262,801 B（09-06 为 22 枚 = 1,079,175 B）。
+
+**一条反向变化值得记账**：`ready` 比 09-06 晚 686 ms，而它等到的 PNG 字节从 1.08 MB 掉到 0.26 MB。差别在**枚数**不在字节——ready 前的 await 集合是 `GameShell.ts:452` 的 `HUD_PRELOAD_KEYS ∪ PIXEL_ART_KEYS`，而 `PIXEL_ART_KEYS` 随 §13 每批登记增长（图标 / 单位 / 特效 / 英雄 / 背景都进了这张表），ready 前完成的 PNG 由 22 枚涨到 73 枚，逐枚 `resources.load` 的固定开销随之上升。`inited`（654 → 472）与首帧（2,051 → 2,055）都没有变差。修法是把首屏真正要画的小批留在 await 集、其余挪进流式队列，属可选优化，本轮未动，记在此处供发布前决策取用。
+
 ### 源资产构成：R2 处置口径的修正（2026-09-06 拍板：只记账，不动资产）
+
+> 本小节是 2026-09-06 那日的资产形态快照（1024×1792 RGBA 背景、152 枚镜像）。当前资产形态与包体数字见下一节「2026-09-09 复测」。
 
 产物侧的 41,537,590 B 贴图是源图逐字节镜像，所以「哪部分能分组、哪部分不能」要看源资产的构成。实测（`cocos/assets/resources/textures/`，152 枚全为 RGBA 8bit）：
 

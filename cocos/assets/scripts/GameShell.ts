@@ -151,8 +151,8 @@ const HUD_PRELOAD_KEYS = [
     "icon_echo",
     "icon_stardust",
     "affix_boss",
-    "banner_mid_red",
-    "banner_large_navy_b",
+    "banner_large_red",
+    "banner_mid_navy",
     "icon_fx_knife",
     "icon_fx_nova",
     "icon_fx_skeleton",
@@ -170,12 +170,44 @@ const HUD_PRELOAD_KEYS = [
 ];
 
 /**
- * 清单里 Cocos 侧不随包的键:`badge_gem_purple` 退役后每日屏资源行走替代字形,
- * resources/textures 里没有这个文件,继续按清单请求只会换来一条加载失败日志。
- * 与 `scripts/sync-cocos.mjs` 的 `RETIRED_IN_COCOS` 是同一件事的两侧(那边拦住镜像回灌);
- * `ASSET_MANIFEST` 保留该键不动 —— Web 冻结基准照旧读 public/assets。
+ * 清单里 Cocos 侧不随包的键:退役掉的旧世代位图,resources/textures 里没有这些文件,
+ * 继续按清单请求只会换来一条加载失败日志。与 `scripts/sync-cocos.mjs` 的 `RETIRED_IN_COCOS`
+ * 是同一件事的两侧(那边拦住镜像回灌);`ASSET_MANIFEST` 保留这些键不动 —— Web 冻结基准照旧读 public/assets。
+ *  - `badge_gem_purple`：每日屏资源行钻石图标,退役后走替代字形 + 文本;
+ *  - `banner_large_navy_b`：引导横幅底(1000×200),改贴像素档 `banner_mid_navy`,缺帧走代码暗底;
+ *  - `banner_mid_red`：Boss 警告横幅底(172×67),改贴像素档 `banner_large_red` 九宫格;
+ *  - 以下 22 枚是 Cocos 侧无绘制点名的旧世代位图(横幅 5 / 条 4 / 词缀 6 / 徽标 2 / 品质框 1 +
+ *    btn_close、divider_bar_dark、icon_wechat_share、panel_gearup),分组与新画法见
+ *    `scripts/sync-cocos.mjs` 的 `RETIRED_IN_COCOS` —— 两侧名单要同步,否则这边放行的键会在
+ *    那边被镜像回灌。
  */
-const RETIRED_FRAME_KEYS = new Set(["badge_gem_purple"]);
+const RETIRED_FRAME_KEYS = new Set([
+    "badge_gem_purple",
+    "banner_large_navy_b",
+    "banner_mid_red",
+    "banner_mid_iron",
+    "banner_mid_navy_b",
+    "banner_mid_red_b",
+    "banner_title_abyss",
+    "banner_title_gold_a",
+    "bar_hp",
+    "bar_boss_hp",
+    "bar_progress_blue",
+    "bar_progress_gold",
+    "affix_death_chain",
+    "affix_heal_aura",
+    "affix_mist",
+    "affix_reflect_field",
+    "affix_space_warp",
+    "affix_time_dilation",
+    "badge_season",
+    "badge_star_gold",
+    "btn_close",
+    "divider_bar_dark",
+    "icon_wechat_share",
+    "panel_gearup",
+    "frame_highlight_gold",
+]);
 
 /** 预载集之外的全部清单键(世界美术 + 后续阶段菜单美术,后台流式加载) */
 function restFrameKeys(): string[] {

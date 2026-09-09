@@ -92,6 +92,9 @@ export interface ViewTable {
         bossBarH: number;
         chapterBarW: number;
         chapterBarH: number;
+        /** 顶坞三行的行心 y(自顶向下,px)。顶坞 64 高、九宫边距 8 ⇒ 平涂内容带 [8,56] 三等分 = 16/32/48;
+         *  坞内所有条/图标/文字基线都由行心推导(基线 = 行心 + 0.35×字号),不再各写一个字面量 */
+        topRowCenters: number[];
         /** 胶囊条四件套颜色(对标 Web ui/skin.ts drawBar) */
         barTrack: string;
         barGloss: string;
@@ -1184,6 +1187,7 @@ export const FALLBACK: ViewTable = {
         bossBarH: 10,
         chapterBarW: 170,
         chapterBarH: 6,
+        topRowCenters: [16, 32, 48],
         barTrack: "rgba(6,8,14,0.8)",
         barGloss: "rgba(255,255,255,0.22)",
         barStroke: "rgba(255,255,255,0.14)",

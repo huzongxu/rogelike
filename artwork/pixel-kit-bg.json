@@ -1,0 +1,84 @@
+{
+ "$comment": "§13 批 D —— 战场与外层背景 7 枚按像素管线重出。绘制盒就是全屏 560×996（GameShell 按 `bg_stage_<关卡>` 取，无限关落 `bg_outside`），所以 art 档 = 盒本身、`export: 1`，出图后 1 贴图像素 = 1 逻辑 px。背景是平涂全幅件：`keyout: false`（无抠底）、`cropBBox: false`（不裁边，alpha 恒 255）、`fit: \"cover\"`（源图 1024×1792 与 560×996 同比例，实际只缩不裁）。量化档沿用已验收 `bg_stage_1` 的口径：`dither` 默认开、`quant` 默认 rgb。表用 56 档而非 33 档：它是 33 基表的严格超集（`bg_stage_1` 用到的色全在表内），多出的火族 `#b06a4a`…`#ff9a70`、苔绿 `#6b7a1c`/`#a3b833`、冰蓝 `#7fd0ff`/`#a8e4ff` 正是裂谷火海 / 荒野求生 / 深渊之喉三族主题要的落点，用 33 档会把熔岩挤进金族、把裂隙挤进寒冰族。七张的共同构图纪律：俯视地面、无地平线无透视灭点，中央竖带是低细节的安静地板（单位在这条带上打，必须压住），细节全压在左右两侧与上下两端，主题色只作边缘点缀、不许铺满地面。\n\n水印盒：生图右下角是「半透明暗底板 + 浅灰文字」，八张源图（含 `bg_stage_1`）底板盒实测一致落在 x 788..1024、y 1700..1792（1024×1792 源），归一化 `[0.765, 0.945, 0.235, 0.055]`，逐枚钉在 single 上。默认 `WM_DEFAULT` 的 45%×14% 大盒会连带吃掉底板上方一整块地面纹理，而它的填充是把盒上方紧邻的一行向下拉伸——全幅背景上因此读成一梳竖向拖影（`bg_stage_1` 等入库件即此状）。本批改走 tight 盒 + `wmFill: \"slide\"`：只覆盖底板，填充取盒左侧同宽、同高、同行的块平移过来，地面纹理的横向走向接得上，唯一 tell 是左侧醒目物件（栅栏/符文/车轮）会在角上复现一次，读作多堆杂物。`mirror`（盒正上方等高块逐行镜像下来）实测更差——角上出现一条竖直镜像轴，树根与熔岩被对成蝴蝶纹。",
+ "module": 2,
+ "export": 1,
+ "wmFill": "slide",
+ "palette": [
+  "#05070c", "#0b0e14", "#121826", "#1a2233", "#232e44", "#2a3548", "#38465e", "#4a5a76", "#62738f", "#8391a8", "#a9b4c4", "#c8cdd6", "#e8ecf4",
+  "#0e3b36", "#17624f", "#2e9e7f", "#4dffc8",
+  "#0d3f3c", "#17706a", "#26a69a", "#6fe0d4",
+  "#3f4a12", "#6b7a1c", "#a3b833", "#d4e86a",
+  "#2b1f47", "#4b3a7a", "#8a6fd1", "#c8b6ff",
+  "#4a4258", "#7d6b8f", "#b0a0c0",
+  "#4a3410", "#8a6220", "#d9a63c", "#ffd76a",
+  "#3a2216", "#6b4028", "#b06a4a", "#d69a70", "#ff9a70",
+  "#3a1218", "#7a1f2a", "#a8202a", "#c0374a", "#e05040", "#ff2d2d", "#ff5a6e",
+  "#ff2d8f", "#ff8fc0",
+  "#10294a", "#1f4e8a", "#2f7fd1", "#4aa3ff", "#7fd0ff", "#a8e4ff"
+ ],
+ "singles": [
+  {
+   "key": "bg_stage_2",
+   "src": "vibe_images/px_bg_stage_2_1788949200843_73c3564d.png",
+   "art": [560, 996],
+   "fit": "cover",
+   "keyout": false,
+   "cropBBox": false,
+   "wm": [0.765, 0.945, 0.235, 0.055]
+  },
+  {
+   "key": "bg_stage_3",
+   "src": "vibe_images/px_bg_stage_3_1788949261031_82477def.png",
+   "art": [560, 996],
+   "fit": "cover",
+   "keyout": false,
+   "cropBBox": false,
+   "wm": [0.765, 0.945, 0.235, 0.055]
+  },
+  {
+   "key": "bg_stage_4",
+   "src": "vibe_images/px_bg_stage_4_1788949339818_277c4d10.png",
+   "art": [560, 996],
+   "fit": "cover",
+   "keyout": false,
+   "cropBBox": false,
+   "wm": [0.765, 0.945, 0.235, 0.055]
+  },
+  {
+   "key": "bg_stage_5",
+   "src": "vibe_images/px_bg_stage_5_1788949412261_cdaf8eef.png",
+   "art": [560, 996],
+   "fit": "cover",
+   "keyout": false,
+   "cropBBox": false,
+   "wm": [0.765, 0.945, 0.235, 0.055]
+  },
+  {
+   "key": "bg_stage_6",
+   "src": "vibe_images/px_bg_stage_6_1788949495388_5dbf8fc0.png",
+   "art": [560, 996],
+   "fit": "cover",
+   "keyout": false,
+   "cropBBox": false,
+   "wm": [0.765, 0.945, 0.235, 0.055]
+  },
+  {
+   "key": "bg_stage_7",
+   "src": "vibe_images/px_bg_stage_7_1788950668613_2eebd107.png",
+   "art": [560, 996],
+   "fit": "cover",
+   "keyout": false,
+   "cropBBox": false,
+   "wm": [0.765, 0.945, 0.235, 0.055]
+  },
+  {
+   "key": "bg_outside",
+   "src": "vibe_images/px_bg_outside_1788949630926_ee80b4d0.png",
+   "art": [560, 996],
+   "fit": "cover",
+   "keyout": false,
+   "cropBBox": false,
+   "wm": [0.765, 0.945, 0.235, 0.055]
+  }
+ ]
+}

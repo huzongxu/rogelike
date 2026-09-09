@@ -15,6 +15,7 @@ import { DESIGN_W, logicalH, placeRect, Rect } from "../core/DesignMetrics";
 import { viewTable, borderOf } from "../core/ViewTable";
 import { bindLabel, hexToColor, label, makeNode, sliced, solidRect } from "../ui/Widgets";
 import { HUD_TOP_H, HUD_BOT_H, HUD_PAD, pickTicker, equipRowLayout, barFillW } from "../game/ui/hud";
+import { strokeRing } from "../ui/PanelKit";
 import { hexA } from "../game/ui/theme";
 import { clamp } from "../game/core/math";
 import { COMBOS, comboStates } from "../game/data/combos";
@@ -110,6 +111,22 @@ export class HudView {
     /** 基线 y → 文本节点矩形(视觉中心 ≈ 基线 - 0.35×字号;行高 1.25×,与 label() 同源) */
     private baselineRect(x: number, b: number, px: number, w: number): Rect {
         return { x, y: b - px * 0.975, w, h: px * 1.25 };
+    }
+
+    /** 顶坞第 i 行的行心 y(表值 hud.topRowCenters,坞高 − 两道九宫边距后三等分) */
+    private rowY(i: number): number {
+        return viewTable().hud.topRowCenters[i];
+    }
+
+    /** 行心 → 文字基线:与 baselineRect 同一个「视觉中心 = 基线 − 0.35×字号」模型 */
+    private rowBase(i: number, px: number): number {
+        return Math.round(this.rowY(i) + px * 0.35);
+    }
+
+    /** 行内图形:以行心纵向居中并把 y 取偶(行心 − h/2 常落半像素,坞内条/图标要贴 2px 网格) */
+    private rowBand(i: number, x: number, w: number, hh: number): Rect {
+        const raw = this.rowY(i) - hh / 2;
+        return { x, y: raw % 2 === 0 ? raw : Math.ceil(raw / 2) * 2, w, h: hh };
     }
 
     /** 近似量字:CJK = 1×px,ASCII = asciiWidth×px,空格 = spaceWidth×px(viewTable 可调) */
@@ -280,43 +297,43 @@ export class HudView {
         this.dockPlate("TopDock", "hud_dock_top", { x: 0, y: 0, w: DESIGN_W, h: HUD_TOP_H }, false);
 
         // R1 左:血条 + 盾徽章 + HP 数值
-        this.hpBar = this.makeBarNodeIn(this.root, "HpBar", { x: lx, y: 8, w: h.hpBarW, h: h.hpBarH });
-        this.shieldBadge = this.makeIconIn(this.root, "ShieldBadge", "badge_shield_bronze", { x: lx + h.hpBarW + 4, y: 5, w: 14, h: 17 });
+        this.hpBar = this.makeBarNodeIn(this.root, "HpBar", this.rowBand(0, lx, h.hpBarW, h.hpBarH));
+        this.shieldBadge = this.makeIconIn(this.root, "ShieldBadge", "badge_shield_bronze", this.rowBand(0, lx + h.hpBarW + 4, 14, 17));
         this.shieldBadge.active = false;
-        this.hpText = this.mkLabel("HpText", lx + h.hpBarW + 6, 19, h.pxMain, h.colors.hpText, 96, 0);
+        this.hpText = this.mkLabel("HpText", lx + h.hpBarW + 6, this.rowBase(0, h.pxMain), h.pxMain, h.colors.hpText, 96, 0);
 
-        // R1 中:跨套组合技圆钮(纯展示;字符基线 18 → 圆心 14.5,恰好文本中心 = 圆心)
+        // R1 中:跨套组合技圆钮(纯展示;圆心 = 行心,label 随节点原点走)
         COMBOS.forEach((c, i) => {
             const x = 300 + i * 26;
             const node = makeNode("Combo" + i, this.root);
-            placeRect(node, { x: x - 8, y: 14.5 - 8, w: 16, h: 16 });
+            placeRect(node, this.rowBand(0, x - 8, 16, 16));
             const gfx = node.addComponent(Graphics);
             const ch = label("Ch", node, c.name[0], h.pxCombo, h.colors.comboOffText, { bold: true, hAlign: Label.HorizontalAlign.CENTER });
             this.comboNodes.push({ gfx, ch, on: false });
         });
 
         // R1 右:金币 + 击杀(击杀右缘 = rx - 金币宽 - 12,近似量字)
-        this.goldText = this.mkLabel("GoldText", rx - 110, 19, h.pxMain, h.colors.goldText, 110, 1);
-        this.killsText = this.mkLabel("KillsText", rx - 110, 19, h.pxMain, h.colors.killsText, 110, 1);
+        this.goldText = this.mkLabel("GoldText", rx - 110, this.rowBase(0, h.pxMain), h.pxMain, h.colors.goldText, 110, 1);
+        this.killsText = this.mkLabel("KillsText", rx - 110, this.rowBase(0, h.pxMain), h.pxMain, h.colors.killsText, 110, 1);
 
         // R2 左:经验条 + 等级
-        this.xpBar = this.makeBarNodeIn(this.root, "XpBar", { x: lx, y: 31, w: h.xpBarW, h: h.xpBarH });
-        this.lvText = this.mkLabel("LvText", lx + h.hpBarW + 6, 39, h.pxSub, h.colors.lvText, 70, 0);
+        this.xpBar = this.makeBarNodeIn(this.root, "XpBar", this.rowBand(1, lx, h.xpBarW, h.xpBarH));
+        this.lvText = this.mkLabel("LvText", lx + h.hpBarW + 6, this.rowBase(1, h.pxSub), h.pxSub, h.colors.lvText, 70, 0);
 
         // R2 右:关卡行
-        this.stageText = this.mkLabel("StageText", rx - 325, 39, h.pxSub, h.colors.stageText, 325, 1, true);
+        this.stageText = this.mkLabel("StageText", rx - 325, this.rowBase(1, h.pxSub), h.pxSub, h.colors.stageText, 325, 1, true);
 
         // R3 右:⚡ + 回响 + 星尘 量链(逐段近似量字向左推)
-        this.energyText = this.mkLabel("EnergyText", 0, 58, h.pxMain, h.colors.energyText, 100, 0);
-        this.echoIcon = this.makeIconIn(this.root, "EchoIcon", "icon_echo", { x: 0, y: 47, w: 13, h: 13 });
-        this.echoText = this.mkLabel("EchoText", 0, 58, h.pxMain, h.colors.echoText, 110, 0);
-        this.dustIcon = this.makeIconIn(this.root, "DustIcon", "icon_stardust", { x: 0, y: 47, w: 13, h: 13 });
-        this.dustText = this.mkLabel("DustText", 0, 58, h.pxMain, h.colors.stardustText, 110, 0);
+        this.energyText = this.mkLabel("EnergyText", 0, this.rowBase(2, h.pxMain), h.pxMain, h.colors.energyText, 100, 0);
+        this.echoIcon = this.makeIconIn(this.root, "EchoIcon", "icon_echo", this.rowBand(2, 0, 13, 13));
+        this.echoText = this.mkLabel("EchoText", 0, this.rowBase(2, h.pxMain), h.pxMain, h.colors.echoText, 110, 0);
+        this.dustIcon = this.makeIconIn(this.root, "DustIcon", "icon_stardust", this.rowBand(2, 0, 13, 13));
+        this.dustText = this.mkLabel("DustText", 0, this.rowBase(2, h.pxMain), h.pxMain, h.colors.stardustText, 110, 0);
 
         // R3 左:单选行情条(敌情图标 + 文本)
-        this.tickerIcon = this.makeIconIn(this.root, "TickerIcon", "intel_horde", { x: lx, y: 47, w: 12, h: 12 });
+        this.tickerIcon = this.makeIconIn(this.root, "TickerIcon", "intel_horde", this.rowBand(2, lx, 12, 12));
         this.tickerIcon.active = false;
-        this.tickerText = this.mkLabel("TickerText", lx, 58, h.pxTicker, h.colors.autoOnText, 200, 0);
+        this.tickerText = this.mkLabel("TickerText", lx, this.rowBase(2, h.pxTicker), h.pxTicker, h.colors.autoOnText, 200, 0);
     }
 
     private buildBottomDock(): void {
@@ -352,13 +369,15 @@ export class HudView {
         this.bossBanner.active = false;
         placeRect(this.bossBanner, { x: 0, y: 0, w: DESIGN_W, h: logicalH() });
         this.bossBanner.addComponent(UIOpacity);
-        const frame = this.frames.get("banner_mid_red");
+        const frame = this.frames.get("banner_large_red");
         if (frame) {
-            const spr = makeNode("BannerBg", this.bossBanner);
-            const sp = spr.addComponent(Sprite);
-            sp.spriteFrame = frame;
-            sp.sizeMode = Sprite.SizeMode.CUSTOM;
-            placeRect(spr, { x: DESIGN_W / 2 - 110, y: this.wh * 0.28 - 30, w: 220, h: 40 });
+            sliced(
+                "BannerBg",
+                this.bossBanner,
+                frame,
+                { x: DESIGN_W / 2 - 110, y: this.wh * 0.28 - 30, w: 220, h: 40 },
+                borderOf("banner_large_red", frame.width, frame.height)
+            );
         }
         this.bossBannerText = label("BannerText", this.bossBanner, "", h.pxBanner, h.colors.bannerText, {
             bold: true,
@@ -372,23 +391,24 @@ export class HudView {
         this.guideBanner = makeNode("GuideBanner", this.root);
         this.guideBanner.active = false;
         placeRect(this.guideBanner, { x: GUIDE_BX, y: GUIDE_BY, w: GUIDE_BW, h: GUIDE_BH });
-        const frame = this.frames.get("banner_large_navy_b");
+        const frame = this.frames.get("banner_mid_navy");
         if (frame) {
-            const spr = makeNode("Bg", this.guideBanner);
-            const sp = spr.addComponent(Sprite);
-            sp.spriteFrame = frame;
-            sp.sizeMode = Sprite.SizeMode.CUSTOM;
-            placeRect(spr, { x: 0, y: 0, w: GUIDE_BW, h: GUIDE_BH }, GUIDE_BW, GUIDE_BH);
+            const box = { x: 0, y: 0, w: GUIDE_BW, h: GUIDE_BH };
+            const sp = sliced("Bg", this.guideBanner, frame, box, borderOf("banner_mid_navy", frame.width, frame.height));
+            // sliced 的落位走整屏参照,父盒不是满屏节点 → 再以父盒为参照归位到原点
+            placeRect(sp.node, box, GUIDE_BW, GUIDE_BH);
         } else {
+            // 旧世代 `banner_large_navy_b`(1000×200)在 Cocos 侧退役,这里走代码板。
+            // 两圈线一律实心形状:引擎的 Graphics.stroke 成图带宽恒为 lineWidth − 1.5,1.5px 画不出像素。
             const bg = makeNode("Bg", this.guideBanner);
             const g = bg.addComponent(Graphics);
             g.fillColor = hexToColor("rgba(10,13,20,0.94)");
             g.rect(-GUIDE_BW / 2, -GUIDE_BH / 2, GUIDE_BW, GUIDE_BH);
             g.fill();
-            g.lineWidth = 1.5;
-            g.strokeColor = hexToColor("#4dffc8");
-            g.rect(-GUIDE_BW / 2, -GUIDE_BH / 2, GUIDE_BW, GUIDE_BH);
-            g.stroke();
+            g.fillColor = hexToColor("#4dffc8");
+            strokeRing(g, GUIDE_BW, GUIDE_BH, 1.5);
+            g.rect(-GUIDE_BW / 2 + 3, GUIDE_BH / 2 - 2, GUIDE_BW - 6, 2);
+            g.fill();
         }
         const head = label("Head", this.guideBanner, "新手提示", 11, h.colors.guideHead, { bold: true });
         placeRect(head.node, this.baselineRect(8, 14, 11, 120), GUIDE_BW, GUIDE_BH, 0, 0.5);
@@ -445,7 +465,7 @@ export class HudView {
         const hpTx = lx + h.hpBarW + (p.shield > 0 ? 22 : 6);
         if (hpTx !== this.hpTx) {
             this.hpTx = hpTx;
-            placeRect(this.hpText.node, this.baselineRect(hpTx, 19, h.pxMain, 96), DESIGN_W, logicalH(), 0, 0.5);
+            placeRect(this.hpText.node, this.baselineRect(hpTx, this.rowBase(0, h.pxMain), h.pxMain, 96), DESIGN_W, logicalH(), 0, 0.5);
         }
         bindLabel(this.hpText, this.fitOne(`${Math.ceil(p.hp)} / ${p.maxHp}`, 96, h.pxMain));
 
@@ -481,7 +501,7 @@ export class HudView {
         bindLabel(this.goldText, goldTxt);
         bindLabel(this.killsText, this.fitOne(`击杀 ${sim.kills}`, 110, h.pxMain));
         const goldW = this.approxW(goldTxt, h.pxMain);
-        placeRect(this.killsText.node, this.baselineRect(rx - goldW - 12 - 110, 19, h.pxMain, 110), DESIGN_W, logicalH(), 1, 0.5);
+        placeRect(this.killsText.node, this.baselineRect(rx - goldW - 12 - 110, this.rowBase(0, h.pxMain), h.pxMain, 110), DESIGN_W, logicalH(), 1, 0.5);
 
         // R2:经验条 + 等级 + 关卡行
         const need = xpToNext(p.level);
@@ -512,15 +532,16 @@ export class HudView {
         const wEcho = this.approxW(echoTxt, h.pxMain);
         const chainW = wE + 12 + icW + wEcho + 12 + icW + this.approxW(dustTxt, h.pxMain);
         const cx0 = rx - chainW;
+        const chainBase = this.rowBase(2, h.pxMain);
         bindLabel(this.energyText, eTxt);
-        placeRect(this.energyText.node, this.baselineRect(cx0, 58, h.pxMain, 100), DESIGN_W, logicalH(), 0, 0.5);
+        placeRect(this.energyText.node, this.baselineRect(cx0, chainBase, h.pxMain, 100), DESIGN_W, logicalH(), 0, 0.5);
         bindLabel(this.echoText, echoTxt);
-        placeRect(this.echoIcon, { x: cx0 + wE + 12, y: 47, w: 13, h: 13 }, DESIGN_W, logicalH(), 0, 1);
-        placeRect(this.echoText.node, this.baselineRect(cx0 + wE + 12 + icW, 58, h.pxMain, 110), DESIGN_W, logicalH(), 0, 0.5);
+        placeRect(this.echoIcon, this.rowBand(2, cx0 + wE + 12, 13, 13), DESIGN_W, logicalH(), 0, 1);
+        placeRect(this.echoText.node, this.baselineRect(cx0 + wE + 12 + icW, chainBase, h.pxMain, 110), DESIGN_W, logicalH(), 0, 0.5);
         bindLabel(this.dustText, dustTxt);
         const dustX = cx0 + wE + 12 + icW + wEcho + 12;
-        placeRect(this.dustIcon, { x: dustX, y: 47, w: 13, h: 13 }, DESIGN_W, logicalH(), 0, 1);
-        placeRect(this.dustText.node, this.baselineRect(dustX + icW, 58, h.pxMain, 110), DESIGN_W, logicalH(), 0, 0.5);
+        placeRect(this.dustIcon, this.rowBand(2, dustX, 13, 13), DESIGN_W, logicalH(), 0, 1);
+        placeRect(this.dustText.node, this.baselineRect(dustX + icW, chainBase, h.pxMain, 110), DESIGN_W, logicalH(), 0, 0.5);
 
         // R3 左:单选行情条
         const tickW = Math.max(80, cx0 - 16 - lx);
@@ -577,12 +598,12 @@ export class HudView {
         if (t.isBold !== bold) t.isBold = bold;
         t.color = hexToColor(color);
         bindLabel(t, text);
-        placeRect(t.node, this.baselineRect(textX, 58, px, maxW), DESIGN_W, logicalH(), 0, 0.5);
+        placeRect(t.node, this.baselineRect(textX, this.rowBase(2, px), px, maxW), DESIGN_W, logicalH(), 0, 0.5);
         const showIcon = iconKey !== "" && this.frames.has(iconKey);
         this.tickerIcon.active = showIcon;
         if (showIcon) {
             this.setIcon(this.tickerIcon, iconKey);
-            placeRect(this.tickerIcon, { x: lx, y: 47, w: 12, h: 12 }, DESIGN_W, logicalH(), 0, 1);
+            placeRect(this.tickerIcon, this.rowBand(2, lx, 12, 12), DESIGN_W, logicalH(), 0, 1);
         }
     }
 

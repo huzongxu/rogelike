@@ -365,7 +365,9 @@ function resolveSrc(spec) {
   if (fs.existsSync(spec)) return spec;
   const dir = path.dirname(spec);
   const base = path.basename(spec, path.extname(spec));
-  const cands = fs.readdirSync(dir).filter((f) => f.startsWith(base) && f.toLowerCase().endsWith(".png"));
+  const cands = fs
+    .readdirSync(dir)
+    .filter((f) => f.toLowerCase().endsWith(".png") && (f === path.basename(spec) || (f.startsWith(base + "_") && f.length > base.length + 1)));
   if (!cands.length) throw new Error(`找不到源图: ${spec}`);
   cands.sort();
   return path.join(dir, cands[cands.length - 1]);
@@ -373,19 +375,27 @@ function resolveSrc(spec) {
 
 const KEY_RGB = hexToRgb((cfg.keyout && cfg.keyout.color) || "#ff00ff");
 const KEY_TIGHT = (cfg.keyout && cfg.keyout.keyTolerance) ?? 60;
-/** 生成器水印固定压整幅右下角;归一化到格内坐标,用上方一行镜像填掉 */
+/** 生成器水印固定压整幅右下角;归一化到格内坐标。默认档 `row` 把盒上方紧邻的一行向下拉伸，
+ *  图标这类小件够用；全幅背景上它会拉出一梳竖向拖影，改走 `wmFill` 的 `mirror` / `slide`。 */
 const WM_DEFAULT = [0.55, 0.86, 0.45, 0.14];
 
-function inpaintRect(im, r, wm) {
+function inpaintRect(im, r, wm, fill = "row") {
   const w = r.x1 - r.x0, h = r.y1 - r.y0;
   const x0 = r.x0 + Math.round(w * wm[0]);
   const y0 = r.y0 + Math.round(h * wm[1]);
   const x1 = r.x0 + Math.round(w * (wm[0] + wm[2]));
   const y1 = r.y0 + Math.round(h * (wm[1] + wm[3]));
-  const srcRow = Math.max(r.y0, y0 - 1);
+  const bw = x1 - x0;
+  /** 三种取源都只读盒外（`y0` 之上 / `x0` 之左）的像素，写入不会污染后续读取。
+   *  `mirror` 把盒正上方等高的块逐行镜像下来，盒顶接缝连续；`slide` 取盒左侧同宽的块
+   *  平移过来，保住地面纹理的横向走向，代价是左侧若有醒目物件会被复现一次。 */
   for (let y = y0; y < y1; y++) {
+    const srcY = fill === "mirror" ? Math.max(r.y0, y0 - 1 - (y - y0))
+      : fill === "slide" ? y
+      : Math.max(r.y0, y0 - 1);
     for (let x = x0; x < x1; x++) {
-      const s = at(im, x, srcRow);
+      const srcX = fill === "slide" ? Math.max(r.x0, x - bw) : x;
+      const s = at(im, srcX, srcY);
       im.rgba.set(im.rgba.subarray(s, s + 4), at(im, x, y));
     }
   }
@@ -412,23 +422,24 @@ function cornerMedian(im, r) {
   return [med(rs), med(gs), med(bs), 255];
 }
 
-/** 抠底色:约定品红在容差内够得到实测底色就沿用约定色(已验证的 digits/crest 逐字节不变;贴边板
- *  格边是内容、非品红,洪水播种天然不启动、板保持完整)。够不到(生成器漂移过大)时,仅当实测底色属
- *  品红族(绿道最低且红蓝够亮)才改用它救回漂移的图标格,否则判定格边是内容→退回约定色,板不被吃掉。 */
-function pickKeyColor(im, r) {
+/** 抠底色:声明了 `keyColor` 的格以该色为参照,否则沿用约定品红。参照色在容差内够得到实测底色
+ *  就改用实测值(已验证的 digits/crest 逐字节不变;贴边板格边是内容、非底色,洪水播种天然不启动、
+ *  板保持完整)。够不到时,仅当实测底色属品红族(绿道最低且红蓝够亮)才改用它救回漂移的图标格,
+ *  否则判定格边是内容→退回参照色,板不被吃掉。 */
+function pickKeyColor(im, r, keyRgb) {
   const m = cornerMedian(im, r);
-  if (dist2(m, KEY_RGB) < KEY_TOL * KEY_TOL) return KEY_RGB;
+  if (dist2(m, keyRgb) < KEY_TOL * KEY_TOL) return keyRgb;
   const magentaFamily = m[1] <= Math.min(m[0], m[2]) * 0.6 && Math.max(m[0], m[2]) >= 90;
-  return magentaFamily ? m : KEY_RGB;
+  return magentaFamily ? m : keyRgb;
 }
 
 function processOne(src, spec, sheetRect) {
   const base = decodePNG(fs.readFileSync(src));
   const r = sheetRect || { x0: 0, y0: 0, x1: base.w, y1: base.h };
   const im = { w: base.w, h: base.h, rgba: Buffer.from(base.rgba) };
-  if (spec.wm !== false) inpaintRect(im, r, spec.wm || WM_DEFAULT);
+  if (spec.wm !== false) inpaintRect(im, r, spec.wm || WM_DEFAULT, spec.wmFill || cfg.wmFill || "row");
   if (spec.keyout !== false) {
-    const bg = pickKeyColor(im, r);
+    const bg = pickKeyColor(im, r, spec.keyColor ? hexToRgb(spec.keyColor) : KEY_RGB);
     keyOut(im, r, bg, spec.tolerance ?? KEY_TOL);
     if (spec.keyGlobal) keyGlobalOut(im, r, bg, spec.tolerance ?? KEY_TOL);
     erodeAlpha(im, r, spec.erode ?? KEY_ERODE, spec.legacyErode === true);
@@ -473,7 +484,7 @@ for (const sheet of cfg.sheets || []) {
       };
     }
     const inherit = {};
-    for (const k of ["keyGlobal", "tolerance", "wm"]) if (sheet[k] !== undefined) inherit[k] = sheet[k];
+    for (const k of ["keyGlobal", "tolerance", "keyColor", "wm"]) if (sheet[k] !== undefined) inherit[k] = sheet[k];
     const spec = { ...inherit, ...cell };
     /**
      * `insetPx`：手钉 rects 常把生成器的品红抗锯齿晕一并框进来。晕色（如 #5a0647）离约定品红
@@ -485,7 +496,11 @@ for (const sheet of cfg.sheets || []) {
   });
 }
 for (const one of cfg.singles || []) {
-  jobs.push({ key: one.key, src: resolveSrc(path.resolve(ROOT, one.src)), spec: one, rect: null });
+  /** `rect`：单图源整幅带生成器边框（如四周一圈灰底、中间才是品红场）时，手钉内容框，
+   *  让抠底播种、水印内缩和 alpha bbox 都只在场内跑，不必另存派生源件。 */
+  const q = one.rect;
+  const rect = q ? { x0: q[0], y0: q[1], x1: q[2], y1: q[3] } : null;
+  jobs.push({ key: one.key, src: resolveSrc(path.resolve(ROOT, one.src)), spec: one, rect });
 }
 
 const results = [];

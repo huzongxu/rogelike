@@ -122,7 +122,9 @@
    ],
    "fit": "cover",
    "keyout": false,
-   "cropBBox": false
+   "cropBBox": false,
+   "wm": [0.765, 0.945, 0.235, 0.055],
+   "wmFill": "slide"
   }
  ]
 }

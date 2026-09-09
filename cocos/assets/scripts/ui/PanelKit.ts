@@ -10,7 +10,7 @@
  * 按钮这类容器时把它的尺寸作为 box 传进来(子局部矩形),否则参照系错一档、文字整体平移。
  */
 
-import { Graphics, Node, Sprite, SpriteFrame } from "cc";
+import { Graphics, Node, Sprite, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, logicalH, placeRect, Rect } from "../core/DesignMetrics";
 import { borderOf, viewTable } from "../core/ViewTable";
 import { alignAx, anchorBand, type TextAlign } from "./TextBand";
@@ -31,6 +31,15 @@ function insetFrame(key: string, sf: SpriteFrame, border: number): SpriteFrame {
   c.insetBottom = border;
   insetCache.set(id, c);
   return c;
+}
+
+/**
+ * 兜底子节点只跟随矩形**尺寸**,位置仍留在父节点原点(绘制坐标本就按父中心算)。
+ * 不钉尺寸的话运行时节点盒恒为 100×100,几何探针会把这块假盒计成越界。
+ */
+export function sizeFallback(node: Node, r: Rect): void {
+  const ui = node.getComponent(UITransform) || node.addComponent(UITransform);
+  ui.setContentSize(r.w, r.h);
 }
 
 /**
@@ -82,11 +91,11 @@ export class Plate {
       this.g.fillColor = hexToColor(fill ?? HEX.bgPanel);
       this.g.rect(-r.w / 2, -r.h / 2, r.w, r.h);
       this.g.fill();
-      this.g.lineWidth = 1;
-      this.g.strokeColor = hexToColor(stroke ?? HEX.bgPanelLight);
-      this.g.rect(-r.w / 2, -r.h / 2, r.w, r.h);
-      this.g.stroke();
+      this.g.fillColor = hexToColor(stroke ?? HEX.bgPanelLight);
+      strokeRing(this.g, r.w, r.h, 1);
     }
+    // 兜底层两档都要跟住本块板的盒,否则贴图上屏那一档留着首轮 100×100 的假盒
+    sizeFallback(this.g.node, r);
     placeRect(this.node, r);
     return !!frame;
   }
@@ -133,7 +142,9 @@ export function qualityBox(
   const sp = node.addComponent(Sprite);
   sp.sizeMode = Sprite.SizeMode.CUSTOM;
   sp.type = Sprite.Type.SLICED;
-  const g = node.addComponent(Graphics);
+  // 描边挂**子节点**:2D 批处理每节点只收一个 UIRenderer,同节点的 Sprite 先占住槽位,
+  // 于是关掉的 Sprite 会把这一层环带与暗底一起带走(与 Plate 的 Fallback 同一口径)。
+  const g = makeNode("Fallback", node).addComponent(Graphics);
   const draw = (r: Rect, color: string, topBar = false, frameKey = ""): number => {
     const radius = 4;
     const frame = frameKey ? frames.get(frameKey) : undefined;
@@ -151,20 +162,19 @@ export function qualityBox(
       g.fillColor = hexToColor(QUALITY_FRAME_BG);
       g.roundRect(-r.w / 2, -r.h / 2, r.w, r.h, radius);
       g.fill();
-      g.lineWidth = 1.5;
-      g.strokeColor = hexToColor(color);
-      g.roundRect(-r.w / 2, -r.h / 2, r.w, r.h, radius);
-      g.stroke();
-      g.lineWidth = 1;
-      g.strokeColor = hexToColor(hexA(color, 0.35));
-      g.rect(-r.w / 2 + 2.5, -r.h / 2 + 2.5, r.w - 5, r.h - 5);
-      g.stroke();
+      // 两圈描边走实心环带:引擎的 Graphics.stroke 成图带宽恒为 lineWidth − 1.5,
+      // 1.5px 与 1px 在这里都画不出一个像素(根因与修法见 strokeRing 的注释)。
+      g.fillColor = hexToColor(color);
+      strokeRing(g, r.w, r.h, 1.5);
+      g.fillColor = hexToColor(hexA(color, 0.35));
+      strokeRing(g, r.w - 5, r.h - 5, 1);
       if (topBar) {
         g.fillColor = hexToColor(color);
         g.rect(-r.w / 2 + 3, r.h / 2 - 6, r.w - 6, 3);
         g.fill();
       }
     }
+    sizeFallback(g.node, r);
     placeRect(node, r);
     return skinned ? border : 0;
   };
@@ -190,7 +200,7 @@ export const QUALITY_FRAME_BG = "rgba(0,0,0,0.5)";
  * 上下两条走整宽(含两角),左右两条只占上下边之间:四条拼成环带、互不重叠,
  * 免得半透明描边色在角上被混两遍。
  */
-function strokeRing(g: Graphics, w: number, h: number, lw: number): void {
+export function strokeRing(g: Graphics, w: number, h: number, lw: number): void {
   const hw = w / 2, hh = h / 2, hf = lw / 2;
   g.rect(-hw - hf, hh - hf, w + lw, lw);
   g.rect(-hw - hf, -hh - hf, w + lw, lw);
