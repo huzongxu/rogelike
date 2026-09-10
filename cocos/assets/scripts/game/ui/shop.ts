@@ -37,6 +37,46 @@ export interface ShopRect {
   h: number;
 }
 
+/**
+ * 品质卡框的源图几何,形状与 `viewTable.cardFrame` 一致。本层不得 import 带 `cc` 的
+ * `core/ViewTable`(共享层读不到,同一个数放两边就是两个事实源),故由视图把表值传进来。
+ */
+export interface CardFrameGeom {
+  /** 源图高度(贴图像素) */
+  srcH: number;
+  /** 装饰横带在源图上的起止行(含端点,贴图像素) */
+  ribbon: readonly [number, number];
+}
+
+/** 卡内装饰横带的逻辑行(相对卡顶缘,单位:逻辑 px) */
+export interface CardRibbon {
+  top: number;
+  bottom: number;
+  center: number;
+}
+
+/**
+ * 横带落在九宫格的可拉伸带内,故其屏上行位随节点高线性缩放:
+ * `border + (源行 − border) × (h − 2·border) / (srcH − 2·border)`。
+ * 标定档 h = srcH 时缩放系数为 1,屏上行位与源图行位逐像素重合。
+ */
+export function cardRibbon(h: number, border: number, cf: CardFrameGeom): CardRibbon {
+  const span = Math.max(1, cf.srcH - border * 2);
+  const k = (h - border * 2) / span;
+  const top = border + (cf.ribbon[0] - border) * k;
+  const bottom = border + (cf.ribbon[1] - border) * k;
+  return { top, bottom, center: (top + bottom) / 2 };
+}
+
+/**
+ * 卡内图标边长两档.单位:逻辑 px.依据:图标居中于横带,其底缘要给卡名行让出
+ * 一行 `FS.body`(14),标定卡(208)放 36、短卡收一档到 28,四行文本仍逐档不撞.
+ * 出处:逐屏视觉对标 A2(横带从图标腰上横穿)
+ */
+export function cardIconSize(h: number): number {
+  return h >= 200 ? 36 : 28;
+}
+
 export interface ShopToolBtn extends ShopRect {
   id: "refresh" | "fusion" | "restart" | "home";
   label: string;

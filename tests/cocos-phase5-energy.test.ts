@@ -12,10 +12,11 @@
  *  3. **视图无关**:本文件只吃 cc-free 的 `EnergyModel.ts` 与共享层纯布局;`EnergyView.ts` 与
  *     `GameShell.ts` / `ViewTable.ts` 那三侧 import 了 `cc`,node 不能直载,故只读源码文本。
  *
- * 本屏的几何重点是**两条纵向锚线 + 一条与屏高无关的屏幕角锚**:
- *  - `anchorY = h × 0.3`(横幅 / 标题 / 读数 / 提示四处)与 `btnAnchorY = h × 0.42`
- *    (三枚钮 `+0 / +62 / +118`),于是 996 → 1246 时文字族整体下沉 `Δh × 0.3 = 75`、
- *    按钮族下沉 `Δh × 0.42 = 105`、返回钮纹丝不动,两族之间的空档一起伸缩;
+ * 本屏的几何重点是**一个内容块 + 一条与屏高无关的屏幕角锚**:
+ *  - 文字族(横幅 / 标题 / 读数 / 提示四处)与按钮族(三枚钮 `+0 / +62 / +118`)是一整块,
+ *    块心对齐可落区 `[max(pad + inset, 返回钮底 + inset), h − pad − inset]` 的中线,两族之间
+ *    仍走 `h × 0.42 − h × 0.3` 那道比例差;于是 996 → 1246 时文字族整体下沉 `110`、按钮族
+ *    下沉 `140`(块高本身随族间距长)、返回钮纹丝不动,富余等分成块顶与块底两道留白;
  *  - 三枚钮等高线递减 `52 / 46 / 40`、钮间距恒 10、钮心恒为屏心,纵向基线**全部走 `rowTextY`**
  *    (与死亡 / 通关屏那两枚贴底钮的裸偏移不同口径)。
  *
@@ -67,9 +68,11 @@ import {
   EN_STAT_DY,
   energyAdBtn,
   energyBackBtn,
+  energyBlockHeight,
   energyBtnTop,
   energyCloseBtn,
   energyDiamondBtn,
+  energyFamilyGap,
   energyLayout,
   energyScreenLayout,
   evenDown,
@@ -231,17 +234,22 @@ describe("端间共读同一份共享层", () => {
 describe("996 档几何(逐项对标 Web energyLayout / drawEnergy)", () => {
   const L = laid(H_STD);
 
-  it("两条纵向锚线:比例档 298.8 / 418.32 经 evenDown 落偶数 298 / 418", () => {
+  it("两条纵向锚线:内容块居中落 396 / 516,族间距仍是两比例之差 120", () => {
     expect(EN_ANCHOR_RATIO).toBe(0.3);
     expect(EN_BTN_ANCHOR_RATIO).toBe(0.42);
-    expect(L.anchorY).toBe(298);
-    expect(L.btnAnchorY).toBe(418);
-    expect(L.btnAnchorY).toBe(energyBtnTop(H_STD));
-    // 取偶前的原始档仍是 Web 的两个比例
-    expect(H_STD * EN_ANCHOR_RATIO).toBeCloseTo(298.8, 6);
-    expect(H_STD * EN_BTN_ANCHOR_RATIO).toBeCloseTo(418.32, 6);
+    expect(L.anchorY).toBe(396);
+    expect(L.btnAnchorY).toBe(516);
+    expect(L.btnAnchorY).toBe(energyBtnTop(W, H_STD));
+    // 两条比例档现在只喂「文字族 → 按钮族」那道间距:差值随屏高线性走,996 档取偶落 120
+    expect(energyFamilyGap(H_STD)).toBe(120);
+    expect(L.btnAnchorY - L.anchorY).toBe(energyFamilyGap(H_STD));
     expect(evenDown(H_STD * EN_ANCHOR_RATIO)).toBe(298);
     expect(evenDown(H_STD * EN_BTN_ANCHOR_RATIO)).toBe(418);
+    // 可落区上缘让开返回钮下缘(22 + 44 + 16 = 82);块 [366, 678] 高 312,
+    // 上下两道留白 284 / 286 —— 差的那 2 是块高与可落区富余同为奇数时的取偶让位
+    expect(L.contentBand).toEqual({ x: 16, y: 82, w: 528, h: 882 });
+    expect(L.block).toEqual({ x: 16, y: 366, w: 528, h: 312 });
+    expect(energyBlockHeight(H_STD)).toBe(312);
   });
 
   it("面板盒 = [pad, w−pad] × [pad, h−pad] 且键恒为 panel_dark_corners(Web panelPad 不传专属键)", () => {
@@ -251,21 +259,21 @@ describe("996 档几何(逐项对标 Web energyLayout / drawEnergy)", () => {
     expect(EN_PANEL_NINE).toBe(32);
   });
 
-  it("横幅盒 {170, 268, 220, 40}(a 上方 30,整幅拉伸)", () => {
+  it("横幅盒 {170, 366, 220, 40}(a 上方 30,整幅拉伸)", () => {
     expect(L.banner.x).toBe(W / 2 - EN_BANNER_DX);
     expect(EN_BANNER_DX).toBe(evenDown(EN_BANNER_W / 2));
     expect(EN_BANNER_DX * 2).toBe(EN_BANNER_W);
     expect(EN_BANNER_W).toBe(220);
     expect(EN_BANNER_H).toBe(40);
     expect(EN_BANNER_DY).toBe(30);
-    expect(L.banner.y).toBe(268);
+    expect(L.banner.y).toBe(366);
     expect(L.banner.w).toBe(220);
     expect(L.banner.h).toBe(40);
     expect(L.banner.x).toBe(170);
   });
 
   it("三行文字基线 a / a+34 / a+58,字号 22 / 14 / 13,只有标题粗体", () => {
-    expect([L.title.baseY, L.statLine.baseY, L.hint.baseY]).toEqual([298, 332, 356]);
+    expect([L.title.baseY, L.statLine.baseY, L.hint.baseY]).toEqual([396, 430, 454]);
     expect(EN_STAT_DY).toBe(34);
     expect(EN_HINT_DY).toBe(58);
     expect([L.title.px, L.statLine.px, L.hint.px]).toEqual([22, 14, 13]);
@@ -273,7 +281,7 @@ describe("996 档几何(逐项对标 Web energyLayout / drawEnergy)", () => {
     expect([L.title.x, L.statLine.x, L.hint.x]).toEqual([280, 280, 280]);
   });
 
-  it("三枚钮 {120, 418|480|536, 320} 高 52/46/44,步进 62 与 56", () => {
+  it("三枚钮 {120, 516|578|634, 320} 高 52/46/44,步进 62 与 56", () => {
     expect(EN_BTN_DX).toBe(evenDown(EN_BTN_W / 2));
     expect(EN_BTN_DX * 2).toBe(EN_BTN_W);
     expect(EN_BTN_W).toBe(320);
@@ -283,7 +291,7 @@ describe("996 档几何(逐项对标 Web energyLayout / drawEnergy)", () => {
     expect(EN_DIA_DY).toBe(62);
     expect(EN_CLOSE_DY).toBe(118);
     expect([L.adBtn.x, L.diamondBtn.x, L.closeBtn.x]).toEqual([120, 120, 120]);
-    expect([L.adBtn.y, L.diamondBtn.y, L.closeBtn.y]).toEqual([418, 480, 536]);
+    expect([L.adBtn.y, L.diamondBtn.y, L.closeBtn.y]).toEqual([516, 578, 634]);
     expect([L.adBtn.h, L.diamondBtn.h, L.closeBtn.h]).toEqual([52, 46, 44]);
     expect(L.adToDiamondStep).toBe(62);
     expect(L.diamondToCloseStep).toBe(56);
@@ -297,11 +305,11 @@ describe("996 档几何(逐项对标 Web energyLayout / drawEnergy)", () => {
     expect(L.closeBtn.y - bottom(L.diamondBtn)).toBe(10);
   });
 
-  it("钮内三处基线全走 rowTextY:449 / 507 / 563(Web 四处实参都是 rowTextY)", () => {
+  it("钮内三处基线全走 rowTextY:547 / 605 / 661(Web 四处实参都是 rowTextY)", () => {
     expect(L.adText.baseY).toBe(rowTextY(L.adBtn.y, L.adBtn.h, 14));
     expect(L.diamondText.baseY).toBe(rowTextY(L.diamondBtn.y, L.diamondBtn.h, 13));
     expect(L.closeText.baseY).toBe(rowTextY(L.closeBtn.y, L.closeBtn.h, 14));
-    expect([L.adText.baseY, L.diamondText.baseY, L.closeText.baseY]).toEqual([449, 507, 563]);
+    expect([L.adText.baseY, L.diamondText.baseY, L.closeText.baseY]).toEqual([547, 605, 661]);
     expect([L.adText.px, L.diamondText.px, L.closeText.px]).toEqual([14, 13, 14]);
     expect([L.adText.bold, L.diamondText.bold, L.closeText.bold]).toEqual([true, true, false]);
   });
@@ -339,7 +347,7 @@ describe("996 档几何(逐项对标 Web energyLayout / drawEnergy)", () => {
     expect(energyDiamondBtn(W, H_STD)).toEqual(L.diamondBtn);
     expect(energyCloseBtn(W, H_STD)).toEqual(L.closeBtn);
     expect(energyBackBtn(W)).toEqual(L.backBtn);
-    expect(energyBtnTop(H_STD)).toBe(L.adBtn.y);
+    expect(energyBtnTop(W, H_STD)).toBe(L.adBtn.y);
   });
 });
 
@@ -370,21 +378,24 @@ describe("1246 档几何与跨档性质", () => {
   const A = laid(H_STD);
   const B = laid(H_TALL);
 
-  it("1246 档逐项目标值:锚线 372 / 按钮族顶 522 / 三处基线 553·611·667", () => {
-    expect(B.anchorY).toBe(372);
-    expect(B.banner.y).toBe(342);
-    expect([B.title.baseY, B.statLine.baseY, B.hint.baseY]).toEqual([372, 406, 430]);
-    expect([B.adBtn.y, B.diamondBtn.y, B.closeBtn.y]).toEqual([522, 584, 640]);
-    expect([B.adText.baseY, B.diamondText.baseY, B.closeText.baseY]).toEqual([553, 611, 667]);
+  it("1246 档逐项目标值:锚线 506 / 按钮族顶 656 / 三处基线 687·745·801", () => {
+    expect(B.anchorY).toBe(506);
+    expect(B.banner.y).toBe(476);
+    expect([B.title.baseY, B.statLine.baseY, B.hint.baseY]).toEqual([506, 540, 564]);
+    expect([B.adBtn.y, B.diamondBtn.y, B.closeBtn.y]).toEqual([656, 718, 774]);
+    expect([B.adText.baseY, B.diamondText.baseY, B.closeText.baseY]).toEqual([687, 745, 801]);
     expect(B.panel.h).toBe(1214);
+    // 可落区 [82, 1214] 高 1132、块高 342 → 上下两道留白各 395
+    expect(B.contentBand).toEqual({ x: 16, y: 82, w: 528, h: 1132 });
+    expect(B.block).toEqual({ x: 16, y: 476, w: 528, h: 342 });
   });
 
-  it("两档之间文字族整体下沉 74、按钮族下沉 104、返回钮纹丝不动(两条锚线的比例不同)", () => {
-    expect(B.title.baseY - A.title.baseY).toBe(74);
-    expect(B.hint.baseY - A.hint.baseY).toBe(74);
-    expect(B.banner.y - A.banner.y).toBe(74);
-    expect(B.adBtn.y - A.adBtn.y).toBe(104);
-    expect(B.closeBtn.y - A.closeBtn.y).toBe(104);
+  it("两档之间文字族整体下沉 110、按钮族下沉 140、返回钮纹丝不动(块心对可落区中线,块高含随屏高变长的族间距)", () => {
+    expect(B.title.baseY - A.title.baseY).toBe(110);
+    expect(B.hint.baseY - A.hint.baseY).toBe(110);
+    expect(B.banner.y - A.banner.y).toBe(110);
+    expect(B.adBtn.y - A.adBtn.y).toBe(140);
+    expect(B.closeBtn.y - A.closeBtn.y).toBe(140);
     expect(B.backBtn).toEqual(A.backBtn);
   });
 
@@ -395,10 +406,10 @@ describe("1246 档几何与跨档性质", () => {
     expect(B.closeBtn.y - bottom(B.diamondBtn)).toBe(10);
   });
 
-  it("钮列底缘到屏底的下沉随屏高变大(416 → 562),本屏没有贴底锚", () => {
-    expect(A.btnColumnBottomGap).toBe(416);
-    expect(B.btnColumnBottomGap).toBe(562);
-    expect(B.btnColumnBottomGap - A.btnColumnBottomGap).toBe(146);
+  it("钮列底缘到屏底的下沉 318 / 428,与块顶留白等分富余(本屏没有贴底锚)", () => {
+    expect(A.btnColumnBottomGap).toBe(318);
+    expect(B.btnColumnBottomGap).toBe(428);
+    expect(B.btnColumnBottomGap - A.btnColumnBottomGap).toBe(110);
     expect(bottom(B.closeBtn)).toBeLessThan(B.panel.y + B.panel.h);
     expect(bottom(A.closeBtn)).toBeLessThan(A.panel.y + A.panel.h);
   });
@@ -583,7 +594,8 @@ describe("四片热区(顺序与 Web onEnergyClick 逐条对应)", () => {
     expect(hitEnergy(L, right(L.backBtn) + 1, 39)).toBeNull();
     expect(hitEnergy(L, mid(L.backBtn)[0], 39)?.kind).toBe("back");
     expect(right(L.backBtn)).toBeLessThanOrEqual(W - PAD);
-    expect(L.backBtn.x).toBeGreaterThanOrEqual(bottom(L.adBtn) - L.adBtn.h);
+    // 纵向各走各的基准:返回钮整枚压在内容块顶缘之上(可落区上缘就是按它让位的)
+    expect(bottom(L.backBtn)).toBeLessThanOrEqual(L.block.y);
     expect(L.backBtn.x > right(L.adBtn)).toBe(true);
   });
 

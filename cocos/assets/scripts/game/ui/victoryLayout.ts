@@ -8,15 +8,19 @@
  *  - 页边距 `VI_PAD = 16`、内容宽 `VI_CONTENT_W = 528`、右缘基准 544；Web 的 `ui.pad = 14`
  *    在本屏不再使用，居中文字限宽就是 `VI_CONTENT_W`；
  *  - module = 2（1 art px = 2 逻辑 px）：**坐标与尺寸一律偶数**。屏高先 `evenDown`，锚线
- *    `a = evenDown(hh × 0.3)`，屏心 `cx = evenDown(w / 2)`，于是任何一档屏高都不掉出栅格；
+ *    `a = victoryAnchorY(w, hh)`（内容块居中位，出口末了再 `evenDown` 落回栅格），屏心
+ *    `cx = evenDown(w / 2)`，于是任何一档屏高都不掉出栅格；
  *  - 半宽一律**由宽度推导**（`VI_BANNER_DX = evenDown(VI_BANNER_W / 2)`、两枚钮的 `DX = W / 2`），
  *    不写第二份事实源；钮宽 190 → 220 就是为了让 `cx − DX` 落在偶数上；
  *  - 热区下限 44：双倍钮 34 → 44、钮内文字基线随之从裸 22 走到与其它钮同档的 28；
  *  - **本屏有屏底板**：`panel_dark_corners` 九宫格铺 `[16,16,528,hh−16]`（缺图时由 `Plate`
  *    自己的代码底板兜底，视图不另写形状），返回钮底边就落在这块板的下边 `hh − VI_PAD`；
- *  - **留白只落在一条呼吸缝**：两枚贴底钮是贴底族（随 `hh` 平移）、十一处文字与贴图是锚线族
- *    （随 `a` 平移），两族之间那条缝 `seamAboveButtons` 就是唯一的吸余体，它没有硬上限；
- *    屏内其余偏移全是常量，任何一档屏高都不会把富余挤进行距或钮高。
+ *  - **留白等分成块顶与块底两道缝**：两枚贴底钮是贴底族（随 `hh` 平移）、十一处文字与贴图是
+ *    锚线族，且锚线族就是一整块（块顶 = 立绘顶缘 `a − VI_POSE_DY`，块底 = 关卡框行基线 +
+ *    半行距 `a + VI_BLOCK_BOT_DY`，块高 `VI_BLOCK_H` 与屏高无关）。**块心对齐可落区中线**，
+ *    可落区就是屏底板内缘与双倍钮顶缘之间上下各让一道 `VI_BLOCK_INSET` 的区间，于是屏高富余
+ *    等分成块顶与块底两道留白、面板下半部不再空着；屏内其余偏移全是常量，任何一档屏高都不会
+ *    把富余挤进行距或钮高。
  *
  * 与 Web 同数的部分（几何族结构）：
  *  - **整屏两条锚线族**：横幅 / 标题 / 关卡行 / 星数行 / 首通行 / 券·回响·星尘三行 / 掉落行 /
@@ -119,8 +123,12 @@ export interface VictoryLayout extends VictoryForms {
   panel: ViRect;
   /** 屏底板贴图键 */
   panelKey: string;
-  /** 全屏唯一的纵向锚线（`evenDown(hh × 0.3)`，十一处实参都从它加减） */
+  /** 内容块的纵向锚线（`victoryAnchorY`：块心对可落区中线，十一处实参都从它加减） */
   anchorY: number;
+  /** 内容块的可落区（屏底板内缘与贴底双倍钮顶缘之间，上下各让一道 `VI_BLOCK_INSET`） */
+  contentBand: ViRect;
+  /** 内容块自身矩形（顶 = 立绘顶缘，底 = 关卡框行那族里最低的一件） */
+  block: ViRect;
   /** 标题横幅盒（`a` 上方 34，240×48 = `banner_large_navy_a` 固有 120×24 的精确 2 倍；整幅拉伸，没有缺图回退档） */
   banner: ViRect;
   /** 通关立绘盒（`a` 上方 44，58×92；挂在屏心**右**侧，本屏没有半透明贴图件） */
@@ -170,13 +178,15 @@ export interface VictoryLayout extends VictoryForms {
   menuBottomGap: number;
   /** 两枚贴底钮之间的缝（`menuBtn.y − 双倍钮底缘`，就是列间距档 12） */
   btnStackGap: number;
-  /** 呼吸缝：末行文字基线（`a + VI_FRAME_DY`）到双倍钮顶缘的留白，**本屏唯一的吸余体，无硬上限** */
+  /** 呼吸缝：末行文字基线（`a + VI_FRAME_DY`）到双倍钮顶缘的留白（内容块居中后它与块顶留白等分，**无硬上限**） */
   seamAboveButtons: number;
 }
 
 /* 内联几何常量（一律偶数；偏移列出处见文件头） */
-/** 全屏纵向锚线相对屏高的比例 */
-export const VI_ANCHOR_RATIO = 0.3;
+/** 内容块可落区上下各让出的呼吸位（含义：块缘到屏底板内缘 / 到贴底双倍钮顶缘的最小留白；
+ *  单位：设计 px；依据：与本屏页边距同一把尺，不引入第二个间距事实源；
+ *  出处：`VI_PAD` 与 `victoryDoubleBtn` 的 `hh − VI_DOUBLE_UP`） */
+export const VI_BLOCK_INSET = VI_PAD;
 /** 横幅：宽 / 高 / 半宽（**由宽推导**）/ 相对锚线的上抬 */
 export const VI_BANNER_W = 240;
 export const VI_BANNER_H = 48;
@@ -251,9 +261,34 @@ export const VI_MENU_PX = 15;
 /** 屏底板贴图键（与已落地各屏同一张九宫格） */
 export const VI_PANEL_KEY = "panel_dark_corners";
 
-/** 星数行的顶缘（Web 的 `h * 0.3 + 58 - size + 4`，那个 `+4` 是裸微调） */
-export function victoryStarTop(h: number): number {
-  return h * VI_ANCHOR_RATIO + VI_STAR_DY - VI_STAR_SIZE + VI_STAR_TOP_NUDGE;
+/** 文本末行的半行距（与视图 `Txt` 的 `lineHeight = round(px × 1.25)` 同一档，取偶落回栅格） */
+export const VI_LINE_HALF_DY = evenDown(Math.ceil((VI_FRAME_PX * 1.25) / 2));
+/** 内容块顶缘相对锚线的上抬（块内最高件 = 立绘顶缘，比横幅更高） */
+export const VI_BLOCK_TOP_DY = Math.max(VI_BANNER_DY, VI_POSE_DY);
+/** 内容块底缘相对锚线的下抬（块内最低件 = 关卡框行的基线 + 半行距，前置框盒 216 比它浅） */
+export const VI_BLOCK_BOT_DY = Math.max(VI_FRAME_DY + VI_LINE_HALF_DY, VI_FRAME_BADGE_DY + VI_FRAME_BADGE_SIZE / 2);
+/** 内容块高（本屏内容条数恒定，块高与屏高无关；星数行的枚数只改横向，不改块底） */
+export const VI_BLOCK_H = VI_BLOCK_TOP_DY + VI_BLOCK_BOT_DY;
+
+/** 内容块的可落区（含义：屏底板内缘与贴底双倍钮顶缘之间、上下各让一道呼吸位的纵向区间；
+ *  单位：设计 px；依据：块只能落在这道区间里，富余才会读成留白而不是没画完；
+ *  出处：`VI_PAD` / `VI_BLOCK_INSET` 与 `victoryDoubleBtn`） */
+export function victoryContentBand(w: number, h: number): ViRect {
+  const hh = evenDown(h);
+  const top = VI_PAD + VI_BLOCK_INSET;
+  const bottom = victoryDoubleBtn(w, hh).y - VI_BLOCK_INSET;
+  return { x: VI_PAD, y: top, w: VI_CONTENT_W, h: Math.max(0, bottom - top) };
+}
+
+/** 内容块的纵向居中位（块心对可落区中线，再补回块顶抬量；屏高不够容纳块时贴可落区顶缘） */
+export function victoryAnchorY(w: number, h: number): number {
+  const band = victoryContentBand(w, h);
+  return evenDown(band.y + Math.max(0, band.h - VI_BLOCK_H) / 2 + VI_BLOCK_TOP_DY);
+}
+
+/** 星数行的顶缘（内容块锚线 + `VI_STAR_DY − size + VI_STAR_TOP_NUDGE`，那个 `+4` 是 Web 裸微调） */
+export function victoryStarTop(a: number): number {
+  return a + VI_STAR_DY - VI_STAR_SIZE + VI_STAR_TOP_NUDGE;
 }
 
 /**
@@ -266,7 +301,7 @@ export function victoryStarSlots(w: number, h: number, stars: number): ViRect[] 
   const n = Math.max(0, Math.floor(stars));
   const step = VI_STAR_SIZE + VI_STAR_GAP;
   const totalW = n * step - VI_STAR_GAP;
-  const top = evenDown(victoryStarTop(evenDown(h)));
+  const top = evenDown(victoryStarTop(victoryAnchorY(w, h)));
   const cx = evenDown(w / 2);
   const out: ViRect[] = [];
   for (let i = 0; i < n; i++) out.push({ x: cx - totalW / 2 + i * step, y: top, w: VI_STAR_SIZE, h: VI_STAR_SIZE });
@@ -320,24 +355,28 @@ function line(x: number, baseY: number, maxW: number, px: number, bold: boolean)
  * 整屏几何。`forms` 是星数与双倍态两个入参（= Web 的 `victoryStars` 与 `!doubleClaimed`），
  * 本层不读存档、不查世界、不查关卡表。
  *
- * 纵向全靠三条线：`a = evenDown(hh × 0.3)` 的锚线族、`hh − 116` / `hh − 60` 的贴底族，
- * 以及屏底板 `[16, hh − 16]`。两族之间那条 `seamAboveButtons` 是唯一的吸余体，
- * 于是 996 与 1246 两档之间所有矩形尺寸恒定、位置按族平移，不会掉出 2px 栅格。
+ * 纵向全靠三条线：内容块的居中位 `a = victoryAnchorY(w, hh)`、`hh − 116` / `hh − 60` 的贴底族，
+ * 以及屏底板 `[16, hh − 16]`。块高 `VI_BLOCK_H` 与屏高无关，屏高富余等分成块顶与块底两道留白
+ * （`seamAboveButtons` 量的是块底那道），于是 996 与 1246 两档之间所有矩形尺寸恒定、位置按族
+ * 平移，不会掉出 2px 栅格。
  */
 export function victoryLayout(w: number, h: number, forms: VictoryForms): VictoryLayout {
   const hh = evenDown(h);
   const pad = VI_PAD;
   const maxW = VI_CONTENT_W;
-  const a = evenDown(hh * VI_ANCHOR_RATIO);
+  const a = victoryAnchorY(w, hh);
   const cx = evenDown(w / 2);
   const dbl = victoryDoubleBtn(w, hh);
   const mb = victoryMenuBtn(w, hh);
+  const band = victoryContentBand(w, hh);
   const stars = Math.max(0, Math.floor(forms.stars));
   const step = VI_STAR_SIZE + VI_STAR_GAP;
   return {
     panel: { x: pad, y: pad, w: VI_CONTENT_W, h: hh - pad * 2 },
     panelKey: VI_PANEL_KEY,
     anchorY: a,
+    contentBand: band,
+    block: { x: band.x, y: a - VI_BLOCK_TOP_DY, w: band.w, h: VI_BLOCK_H },
     banner: { x: cx - VI_BANNER_DX, y: a - VI_BANNER_DY, w: VI_BANNER_W, h: VI_BANNER_H },
     pose: { x: cx + VI_POSE_DX, y: a - VI_POSE_DY, w: VI_POSE_W, h: VI_POSE_H },
     title: line(cx, a, maxW, VI_TITLE_PX, true),

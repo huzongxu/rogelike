@@ -18,7 +18,7 @@ import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
-import { Plate, fitOne, placeLine } from "../ui/PanelKit";
+import { Plate, fitOne, placeLine, strokeRing } from "../ui/PanelKit";
 import { pixelNumber } from "../ui/PixelNumber";
 import { theme } from "../game/ui/theme";
 import { hitLeaderboard, type LeaderboardAction, type LeaderboardContent } from "./LeaderboardModel";
@@ -152,13 +152,10 @@ export class LeaderboardView {
     );
   }
 
-  /** 徽标缺图回退的硬边方框:单独一个 Graphics 节点(行板每轮重贴,框要独立留存) */
+  /** 徽标缺图回退的硬边方框:单独一个 Graphics 节点(行板每轮重贴,框要独立留存;带宽走 `strokeRing` 实心环带) */
   private makeRing(i: number): Graphics {
     const node = makeNode("Ring" + i, this.root);
-    const g = node.addComponent(Graphics);
-    g.lineWidth = RING_LINE_W;
-    g.strokeColor = hexToColor(theme.gold);
-    return g;
+    return node.addComponent(Graphics);
   }
 
   setFrames(frames: Map<string, SpriteFrame>): void {
@@ -220,10 +217,8 @@ export class LeaderboardView {
           g.fillColor = hexToColor(p4.lbBackFallbackBg);
           g.rect(-b.w / 2, -b.h / 2, b.w, b.h);
           g.fill();
-          g.lineWidth = RING_LINE_W;
-          g.strokeColor = hexToColor(theme.gold);
-          g.rect(-b.w / 2, -b.h / 2, b.w, b.h);
-          g.stroke();
+          g.fillColor = hexToColor(theme.gold);
+          strokeRing(g, b.w, b.h, RING_LINE_W);
           placeRect(slot.ring.node, b);
           slot.ring.node.active = true;
         }

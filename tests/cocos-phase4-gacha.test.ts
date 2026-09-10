@@ -57,6 +57,7 @@ import {
   GC_PITY_BAR_DY_LEGENDARY,
   GC_PITY_BAR_H,
   GC_PITY_DY,
+  GC_PITY_LABEL_DY_LEGENDARY,
   GC_RES_DY,
   GC_RES_LINE_H,
   GC_RES_MAX,
@@ -346,8 +347,8 @@ describe("屏级矩形(面板铺满内容列,富余由带链吸收)", () => {
     for (const v of [L.singleBtn.x, L.singleBtn.y, L.singleBtn.w, L.singleBtn.h]) expect(v % 2).toBe(0);
   });
 
-  it("面板底 = 整幅内容板(顶缘 pad、底缘 h − pad)+ 空键走代码底板", () => {
-    expect(L.panelKey).toBe("");
+  it("面板底 = 整幅内容板(顶缘 pad、底缘 h − pad)+ 九屏通用的蓝黑板键", () => {
+    expect(L.panelKey).toBe("panel_dark_corners");
     expect(L.panel).toEqual({ x: PAD, y: PAD, w: W - PAD * 2, h: H_STD - PAD * 2 });
     // 件数扫一遍:板底缘恒贴 h − pad(板下不再出现整段未绘制区),行溢出档也不把板拉长
     for (const n of [0, 1, 2, 8, 14, 15, 30]) {
@@ -361,7 +362,8 @@ describe("屏级矩形(面板铺满内容列,富余由带链吸收)", () => {
       const S = gachaLayout(W, H_TALL, ids(n), 0);
       expect(S.panel.y + S.panel.h, `tall n=${n}`).toBe(H_TALL - PAD);
     }
-    // 代码底板的两色就是 Web panel() 的 theme.bgPanel + 金描边(与 confirm 屏的 cfPanelFallback* 同档)
+    // 表里那两色仍是 Web panel() 的 theme.bgPanel + 金描边(两端同值的一档记录);
+    // 本屏可见的外框已改走九屏通用的蓝黑板 plate,代码底板只兜缺图那一档的填充。
     const defs = phase4Defaults();
     expect(defs.gcPanelFallbackBg.toLowerCase()).toBe(String(theme.bgPanel).toLowerCase());
     expect(defs.gcPanelFallbackStroke.toLowerCase()).toBe(String(theme.gold).toLowerCase());
@@ -369,14 +371,14 @@ describe("屏级矩形(面板铺满内容列,富余由带链吸收)", () => {
     expect(GC_PANEL_NINE).toBe(32);
   });
 
-  it("带链把屏高富余摊给内容与带距:板内不留整段空腔,行带至少吃掉一半富余", () => {
+  it("带链把屏高富余摊给带距与板底缝:行贴内容封顶后,空腔只出现在缝里而不是行内", () => {
     for (const h of [H_STD, 1100, H_TALL]) {
       for (const n of [1, 3, 6]) {
         const S = gachaLayout(W, h, ids(n), 0);
         const voidBelow = h - PAD - S.rowsEnd;
         const foot = gachaBands(h, 0, n).foot;
-        // 末行底缘之下的空腔 = 板底缝 + 行带取整零头;单件那一档行高先撞到上限,余量才落到板底
-        expect(voidBelow, `h=${h} n=${n}`).toBeLessThanOrEqual(n === 1 ? 300 : foot + 24);
+        // 行高先撞到内容档(GC_ROW_MAX_H),行带取整零头才落到板底缝 → 每一档都是 foot + 零头
+        expect(voidBelow, `h=${h} n=${n}`).toBeLessThanOrEqual(foot + 24);
         expect(S.rowsEnd, `h=${h} n=${n}`).toBeGreaterThan(S.rowsTop);
         expect(S.rowsEnd, `h=${h} n=${n} 度量式同值`).toBe(lastRowBottom(S));
         expect(S.rowH, `h=${h} n=${n}`).toBeGreaterThanOrEqual(GC_ROW_MIN_H);
@@ -435,29 +437,31 @@ describe("屏级矩形(面板铺满内容列,富余由带链吸收)", () => {
     expect(L.backTextWithIcon.x).toBe(L.backBtn.x + GC_BACK_ICON_DX + L.backIcon.h + (L.backBtn.w - GC_BACK_ICON_DX - L.backIcon.h) / 2);
   });
 
-  it("保底条:从 pad+110 起到 w−pad、高 6;两档顶缘是 pityLabelY 的 +8 / +12", () => {
+  it("保底条:从 pad+110 起到 w−pad、高 6;两档顶缘各贴自己的标签基线 +8", () => {
     expect(L.pityEpicBar.x).toBe(PAD + GC_PITY_BAR_DX);
     expect(L.pityEpicBar.w).toBe(W - PAD * 2 - (PAD + GC_PITY_BAR_DX));
     expect(L.pityEpicBar.h).toBe(GC_PITY_BAR_H);
     expect(L.pityEpicBar.y).toBe(L.pityEpicLabel.baseY + GC_PITY_BAR_DY_EPIC);
-    expect(L.pityLegendBar.y).toBe(L.pityEpicLabel.baseY + GC_PITY_BAR_DY_LEGENDARY);
+    expect(L.pityLegendBar.y).toBe(L.pityLegendLabel.baseY + GC_PITY_BAR_DY_EPIC);
     expect(L.pityLegendBar.x).toBe(L.pityEpicBar.x);
     expect(L.pityLegendBar.w).toBe(L.pityEpicBar.w);
-    expect(L.pityLegendLabel.baseY).toBeGreaterThan(L.pityLegendBar.y + GC_PITY_BAR_H);
+    expect(L.pityLegendLabel.baseY).toBeLessThan(L.pityLegendBar.y);
     expect(L.pityEpicLabel.baseY).toBe(GC_PAD + B.headH + B.btnH + B.ticketDy + B.ticketH + B.pityDy);
     expect(L.pityLegendLabel.baseY).toBe(L.pityEpicLabel.baseY + B.pityBand);
     expect(GC_PITY_BAR_DX).toBe(110);
     expect(GC_PITY_BAR_H).toBe(6);
     expect(GC_PITY_BAR_DY_EPIC).toBe(8);
-    expect(GC_PITY_BAR_DY_LEGENDARY).toBe(12);
+    // 标定档那一加数 = 双保底带 18 + 条相对标签的 8(弹性档随 B.pityBand 走)
+    expect(GC_PITY_LABEL_DY_LEGENDARY).toBe(18);
+    expect(GC_PITY_BAR_DY_LEGENDARY).toBe(GC_PITY_LABEL_DY_LEGENDARY + GC_PITY_BAR_DY_EPIC);
     // 标签列限宽收到条起笔前,不压条
     expect(L.pityEpicLabel.x + L.pityEpicLabel.maxW).toBeLessThan(L.pityEpicBar.x);
     expect(L.pityLegendLabel.x + L.pityLegendLabel.maxW).toBeLessThan(L.pityLegendBar.x);
   });
 
-  it("Web 原样重叠:两条保底条纵向互相压 2px(弹性带只挪标签,不动这两档裸加数)", () => {
-    expect(L.pityBarOverlap).toBe(GC_PITY_BAR_DY_EPIC + GC_PITY_BAR_H - GC_PITY_BAR_DY_LEGENDARY);
-    expect(L.pityBarOverlap).toBe(2);
+  it("两条保底条之间留着净缝:pityBarOverlap 带符号,标定链那一档是 −(双保底带 − 条高)", () => {
+    expect(L.pityBarOverlap).toBe(GC_PITY_BAR_DY_EPIC + GC_PITY_BAR_H - (B.pityBand + GC_PITY_BAR_DY_EPIC));
+    expect(L.pityBarOverlap).toBeLessThan(0);
   });
 
   it("纵线由带链累加推出:每一档顶缘 = 前档底缘 + 该档带高(三档屏高 × nRes 0/5)", () => {
@@ -482,11 +486,11 @@ describe("屏级矩形(面板铺满内容列,富余由带链吸收)", () => {
   });
 
   it("带链绝对锚点(以实测为准):标定档 996 的 gachaBands 逐位写死,链上没有一个数是互相推出来的", () => {
-    expect(gachaBands(996, 0, 3)).toEqual({ pad: 16, headH: 130, btnH: 64, ticketDy: 24, ticketH: 54, pityDy: 28, pityBand: 30, resDy: 34, resLineH: 32, resBand: 32, collDy: 38, rowsDy: 50, rowBand: 440, foot: 40, nRes: 0, gearCount: 3 });
-    expect(gachaBands(996, 5, 3)).toEqual({ pad: 16, headH: 130, btnH: 64, ticketDy: 24, ticketH: 54, pityDy: 28, pityBand: 30, resDy: 34, resLineH: 32, resBand: 160, collDy: 38, rowsDy: 50, rowBand: 312, foot: 40, nRes: 5, gearCount: 3 });
-    expect(gachaBands(996, 0, 1)).toEqual({ pad: 16, headH: 156, btnH: 64, ticketDy: 28, ticketH: 54, pityDy: 34, pityBand: 30, resDy: 40, resLineH: 32, resBand: 32, collDy: 46, rowsDy: 60, rowBand: 168, foot: 252, nRes: 0, gearCount: 1 });
-    // 高屏那一档整条逐位写死:headH / rowsDy / rowBand / foot 一起跟涨
-    expect(gachaBands(1246, 5, 3)).toEqual({ pad: 16, headH: 134, btnH: 64, ticketDy: 28, ticketH: 54, pityDy: 30, pityBand: 30, resDy: 36, resLineH: 32, resBand: 160, collDy: 40, rowsDy: 52, rowBand: 544, foot: 42, nRes: 5, gearCount: 3 });
+    expect(gachaBands(996, 0, 3)).toEqual({ pad: 16, headH: 156, btnH: 64, ticketDy: 28, ticketH: 54, pityDy: 34, pityBand: 30, resDy: 40, resLineH: 32, resBand: 32, collDy: 46, rowsDy: 60, rowBand: 184, foot: 236, nRes: 0, gearCount: 3 });
+    expect(gachaBands(996, 5, 3)).toEqual({ pad: 16, headH: 156, btnH: 64, ticketDy: 28, ticketH: 54, pityDy: 34, pityBand: 30, resDy: 40, resLineH: 32, resBand: 160, collDy: 46, rowsDy: 60, rowBand: 184, foot: 108, nRes: 5, gearCount: 3 });
+    expect(gachaBands(996, 0, 1)).toEqual({ pad: 16, headH: 156, btnH: 64, ticketDy: 28, ticketH: 54, pityDy: 34, pityBand: 30, resDy: 40, resLineH: 32, resBand: 32, collDy: 46, rowsDy: 60, rowBand: 48, foot: 372, nRes: 0, gearCount: 1 });
+    // 高屏那一档整条逐位写死:行带停在内容档,headH / rowsDy / foot 一起跟涨
+    expect(gachaBands(1246, 5, 3)).toEqual({ pad: 16, headH: 176, btnH: 64, ticketDy: 68, ticketH: 54, pityDy: 66, pityBand: 30, resDy: 80, resLineH: 32, resBand: 160, collDy: 86, rowsDy: 100, rowBand: 184, foot: 146, nRes: 5, gearCount: 3 });
   });
 
   it("收藏标签带:标签与加成同基线、加成起笔 pad+170;空态提示下移 24", () => {
@@ -523,18 +527,20 @@ describe("富余吸收矩阵:板铺满、带不空转、件数多时按既有性
     }
   }
 
-  it("件数增加时行带让位:行高单调不增,板底缝始终收在同一量级", () => {
+  it("件数增加时行带让位:行高单调不增,末行之下的空腔就是板底缝加取整零头", () => {
+    // 单件那一档没有行距可摊,spreadRows 每行预留的那一档呼吸量让行高停在热区下限
+    expect(gachaLayout(W, H_STD, ids(1), 0).rowH).toBe(GC_ROW_MIN_H);
     let prevH = Infinity;
-    for (const n of [1, 4, 8, 12]) {
+    for (const n of [2, 4, 8, 12]) {
       const S = gachaLayout(W, H_STD, ids(n), 0);
       expect(S.rows.length).toBe(n);
       expect(S.rowH, `n=${n}`).toBeLessThanOrEqual(prevH);
-      expect(H_STD - PAD - S.rowsEnd, `n=${n}`).toBeLessThanOrEqual(n === 1 ? 300 : gachaBands(H_STD, 0, n).foot + 24);
+      expect(H_STD - PAD - S.rowsEnd, `n=${n}`).toBeLessThanOrEqual(gachaBands(H_STD, 0, n).foot + 24);
       prevH = S.rowH;
     }
   });
 
-  it("行高钳在 44..168、行距 ≤ 20,且 spreadRows 的直算值就是这两档", () => {
+  it("行高钳在 44..48(贴着一行正文的内容档)、行距 ≤ 20,且 spreadRows 的直算值就是这两档", () => {
     for (const n of [1, 2, 3, 6, 10]) {
       for (const h of HS) {
         for (const r of [0, 5]) {
@@ -550,7 +556,7 @@ describe("富余吸收矩阵:板铺满、带不空转、件数多时按既有性
         }
       }
     }
-    expect([GC_ROW_MIN_H, GC_ROW_MAX_H, GC_ROW_GAP_MAX]).toEqual([44, 168, 20]);
+    expect([GC_ROW_MIN_H, GC_ROW_MAX_H, GC_ROW_GAP_MAX]).toEqual([44, 48, 20]);
   });
 
   it("件数多到装不下时行仍照排(本屏不裁不滚的既有性质),越出量随行数线性放大", () => {

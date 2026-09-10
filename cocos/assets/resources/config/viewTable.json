@@ -12,10 +12,9 @@
             "menu_set_plate_selected": 16,
             "menu_title_plate": 16,
             "menu_chip_plate": 16,
-            "btn_primary": 20,
-            "btn_minor": 16,
-            "btn_back": 71,
-            "btn_danger": 16,
+            "btn_primary": 10,
+            "btn_minor": 10,
+            "btn_danger": 10,
             "hud_dock_top": 8,
             "hud_dock_bottom": 8,
             "slot_skill": 12,
@@ -28,6 +27,14 @@
             "panel_dark_corners": 32,
             "banner_mid_navy": 12
         }
+    },
+    "cardFrame": {
+        "$comment": "品质卡框 frame_<品质> 的源图几何:四枚同批出图,横带行位一致。srcH = 源图高(贴图像素),ribbon = 装饰横带的起止行(含端点)。卡内行位按九宫格拉伸比例把它换算成屏上逻辑行。",
+        "srcH": 208,
+        "ribbon": [
+            42,
+            67
+        ]
     },
     "battle": {
         "gridStep": 100,

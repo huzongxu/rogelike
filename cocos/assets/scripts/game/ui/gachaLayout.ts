@@ -22,17 +22,18 @@
  *    里 `find`。id 重复时永远命中第一条匹配,与 Web 同式(本层不去重、不改成按下标);
  *  - 行区**没有硬截断也没有滚动**(gearup 有 14 件截断):件数一多,各档已收到 `min` 仍装不下,
  *    `rowsEnd` 越出视口底缘 —— 这是本屏作为"九屏唯一溢出风险屏"的性质,两端一致,原样保留;
- *  - 面板底是本屏的**整幅内容板**(空键 + phase4 的 `gcPanelFallback*`,与 Web `panel()` 的
- *    theme.bgPanel + 金描边同值)——主菜单面板族那张板的心部带 2×2 墨点,被九宫格拉到本屏的板幅
- *    会放大成块,`panel_dark_corners` 的切深 32 又要比 `pad` 大得多的内容内缩,两者都不适合当整幅底;
+ *  - 面板底是本屏的**整幅内容板**,走 `panel_dark_corners` 九宫格(切深 32)——与融合 / 委托 /
+ *    体力 / 转生四屏同一张板,于是本屏外框与九屏同属深渊蓝黑族;缺图那一档退到
+ *    `phase4.gcPanelFallbackBg` 的代码底板(与 Web `panel()` 的 theme.bgPanel 同值);
  *  - 标题是 `skinHeader("banner_large_purple", "扭蛋机", pad, 36, …, 240, 46)` —— **横幅键 +
  *    显式 240×46**(daily 同参数,与 gearup 的"纯文字无横幅"不同):有图时标题居中于横幅、
  *    基线 `36 − 4`,缺图时左起笔于 `pad`、基线 36;
  *  - 券数走 `iconText("icon_ticket", "✦", …, pad, 60, …, 15)`:图标盒 `(pad, 60 − 15 + 2, 15, 15)`,
  *    文字起笔 `pad + 15 + 4`;缺图时文字回到 `pad` 并前置替代字形「✦」;
- *  - **两条保底条在纵向互相压字**:史诗条顶缘在 `pityLabelY + 8`、高 6(底 250),传奇条顶缘在
- *    `pityLabelY + 12`(底 254),两者重叠 2px;传奇标签基线 `pityLabelY + 18` 就压在传奇条之下。
- *    本层照抄这两个裸加数,`pityBarOverlap` 把该重叠量给出来便于断言,**不在几何层修**;
+ *  - **两条保底条各贴自己的标签**:史诗条顶缘 `pityLabelY + 8`、传奇条顶缘
+ *    `pityLabelY + 双保底带 + 8`,两档同为 6 高,条间净缝 = `双保底带 − 6`(标定档 12)。
+ *    传奇标签基线 `pityLabelY + 双保底带` 落在自己那条条之上,左右两列(标签列限宽收到条起笔前)
+ *    互不相压;`pityBarOverlap` 给出的是这一档**带符号的条间距**(负数 = 两档条之间有缝);
  *  - 换券条 `(pad, ticketY, w − pad×2, 38)` 与三枚钮 `(pad,122,110,48)`、`(pad+120,122,170,48)`、
  *    `(pad+300,122,w−pad×2−300,48)` 同处一行带,广告钮宽度**吃掉剩余**
  *    (所以它是四枚热区里唯一随屏宽变的那枚);
@@ -101,7 +102,7 @@ export interface GachaRowLayout {
 export interface GachaLayout {
   /** 整幅内容板:`(pad, pad, w − pad×2, h − pad×2)`,底缘恒 `h − pad`,富余由列向带链吸收 */
   panel: GcRect;
-  /** 面板贴图键:空串 = 本屏的板走代码底板(填充与描边由 phase4 的 gcPanelFallback* 给) */
+  /** 面板贴图键:本屏与融合 / 委托 / 体力 / 转生同键(`panel_dark_corners`),缺图时视图退到代码底板 */
   panelKey: string;
   /** 标题横幅贴图盒(Web skinHeader 的 `bx = x − 8`、`by = y − h + 10`,那一档比 Web 多让 2 以贴住画布顶缘) */
   headerBanner: GcRect;
@@ -146,7 +147,7 @@ export interface GachaLayout {
   pityLegendLabel: GcTextLine;
   pityEpicBar: GcRect;
   pityLegendBar: GcRect;
-  /** 两条进度条的纵向重叠量(Web 的 8 / 12 两档加高 6 的既有性质,给出来便于断言) */
+  /** 两条进度条的纵向重叠量(带符号:负数 = 两档条之间留着的净缝,标定档 `−(双保底带 − 6)`) */
   pityBarOverlap: number;
 
   /** 「最近抽取:」标签行 */
@@ -206,9 +207,13 @@ export const GC_RES_MAX = 5;
 /** 收藏标签相对最近抽取末行的让位(Web `+ 22`)与行区顶缘再让位(Web `+ 36`) */
 export const GC_COLL_DY = 22;
 export const GC_ROWS_DY = 36;
-/** 行高钳制两档:下限抬到热区 44,上限按像素行板的尺度放大,富余先吃行高 */
+/**
+ * 行高钳制两档:下限抬到热区 44,上限按**行内那一行文字的名义高**给。
+ * 本屏的行只有一行正文(fs.muted 13 → 行盒 20),48 = 20 的块上下各让一档内缩,行框贴着内容长,
+ * 行底不再拖一条空腔;富余从行带退回七段缝与板底缝(见 `gcFlexFill` 的 ①②③)。
+ */
 export const GC_ROW_MIN_H = 44;
-export const GC_ROW_MAX_H = 168;
+export const GC_ROW_MAX_H = 48;
 /** 行距上限(spreadRows 的默认 maxGap 那一档,本屏按网格用到 20) */
 export const GC_ROW_GAP_MAX = 20;
 /** 三枚钮的宽度与横向偏移(Web 的 110 / +120 与 170 / +300) */
@@ -216,12 +221,18 @@ export const GC_SINGLE_W = 110;
 export const GC_TEN_DX = 120;
 export const GC_TEN_W = 170;
 export const GC_AD_DX = 300;
-/** 保底条:标签列右侧让位、条高、两档条顶缘相对标签基线的裸加数、传奇标签的下移 */
+/**
+ * 保底条:标签列右侧让位、条高、条顶缘相对**各自标签基线**的让位(两档条同一把尺,各自坐在
+ * 自己的标签之下,条间净缝 = 双保底带 − 条高)、传奇标签基线的下移。
+ * `GC_PITY_BAR_DY_LEGENDARY` 记的是标定档(pityBand 18 + 8)下传奇条顶缘相对 `pityLabelY` 的
+ * 加数,弹性档由 `B.pityBand` 推导(见 `gachaLayout` 里的 `pityLegendBar`)。
+ */
 export const GC_PITY_BAR_DX = 110;
 export const GC_PITY_BAR_H = 6;
 export const GC_PITY_BAR_DY_EPIC = 8;
-export const GC_PITY_BAR_DY_LEGENDARY = 12;
+/** 传奇标签基线相对 `pityLabelY` 的下移(标定档 = 双保底带 18) */
 export const GC_PITY_LABEL_DY_LEGENDARY = 18;
+export const GC_PITY_BAR_DY_LEGENDARY = GC_PITY_LABEL_DY_LEGENDARY + GC_PITY_BAR_DY_EPIC;
 /** 标题基线 / 券数基线 / 图标边长 / 图标上抬 / 图标与文字的间隙 */
 export const GC_TITLE_BASE_Y = 36;
 export const GC_TICKET_BASE_Y = 60;
@@ -530,7 +541,8 @@ export function gachaLayout(w: number, h: number, ownedIds: readonly number[], r
   const barX = pad + GC_PITY_BAR_DX;
   const barW = rowW - barX;
   const pityEpicBar: GcRect = { x: barX, y: pityLabelY + GC_PITY_BAR_DY_EPIC, w: barW, h: GC_PITY_BAR_H };
-  const pityLegendBar: GcRect = { x: barX, y: pityLabelY + GC_PITY_BAR_DY_LEGENDARY, w: barW, h: GC_PITY_BAR_H };
+  /** 传奇条贴自己的标签基线(`pityLabelY + B.pityBand`),于是两档条之间的净缝 = `B.pityBand − GC_PITY_BAR_H` 恒正 */
+  const pityLegendBar: GcRect = { x: barX, y: pityLabelY + B.pityBand + GC_PITY_BAR_DY_EPIC, w: barW, h: GC_PITY_BAR_H };
 
   const headerBanner: GcRect = { x: pad - GC_BANNER_DX, y: GC_TITLE_BASE_Y - GC_BANNER_H + GC_BANNER_DY, w: GC_BANNER_W, h: GC_BANNER_H };
   const ticketIcon: GcRect = { x: pad, y: GC_TICKET_BASE_Y - GC_ICON_SIZE + GC_ICON_DY, w: GC_ICON_SIZE, h: GC_ICON_SIZE };
@@ -551,9 +563,9 @@ export function gachaLayout(w: number, h: number, ownedIds: readonly number[], r
   return {
     /** 整幅内容板:纵向从页边距铺到 `h − pad`,屏高富余全部由上面那条带链吸收 */
     panel: { x: pad, y: pad, w: rowW, h: rowsBottom - pad },
-    /** 空键 = 走 Plate 的代码底板(本屏的板幅太大,面板族中心的 2×2 墨点会被九宫格放大成块;
-     *  panel_dark_corners 要 32 的内容内缩,本屏内容只内缩 pad)。底色与描边取 phase4 的 gcPanelFallback* */
-    panelKey: "",
+    /** 与融合 / 委托 / 体力 / 转生同一张板:外框归深渊蓝黑族。切深走 `viewTable.nineSlice.keys`
+     *  按贴图键给(本屏内容内缩 pad,与那四屏同档);缺图那一档由视图的代码底板兜住 */
+    panelKey: "panel_dark_corners",
     headerBanner,
     titleWithBanner: { x: headerBanner.x + headerBanner.w / 2, baseY: GC_TITLE_BASE_Y - GC_BANNER_TEXT_DY, maxW: headerBanner.w, px: fs.title, align: "center" },
     titleBare: { x: pad, baseY: GC_TITLE_BASE_Y, maxW: topLimit, px: fs.title, align: "left" },

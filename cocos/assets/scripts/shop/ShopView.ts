@@ -20,7 +20,7 @@ import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
 import { Plate, approxW, fitOne, flatBox, iconNode, placeLine, qualityBox } from "../ui/PanelKit";
 import { HUD_BOT_H, HUD_TOP_H } from "../game/ui/hud";
-import { SHOP_PAD } from "../game/ui/shop";
+import { SHOP_PAD, cardIconSize, cardRibbon } from "../game/ui/shop";
 import type { ShopAction, ShopModel } from "./ShopModel";
 
 /** 坞板缺图回退(与 HudView.dockPlate 同一形态:深色板 + 朝战场一侧的紫色细描边) */
@@ -317,11 +317,20 @@ export class ShopView {
       // 价格行贴卡底:Label 文本盒在基线以下还有 ≈12 逻辑 px 降部,让出量取「既有 14」与「切边带 + 降部」的较大者
       const dyb = Math.max(14, ib + 12);
       const inner = r.w - Math.max(8, ib) * 2;
+      /**
+       * 卡框源图第 42..67 行是一条横贯卡面的装饰带,它落在九宫格的可拉伸带内,
+       * 屏上行位随卡高缩放。图标此前钉在卡顶缘下 14 + dy 处,于是这条带从图标腰上
+       * 横穿过去;改为把带换算成逻辑行后让图标**居中压在带上**,带子读作图标的底座。
+       */
+      const rb = cardRibbon(r.h, ib, viewTable().cardFrame);
+      const iconS = cardIconSize(r.h);
+      const iconTop = r.y + Math.round((rb.center - iconS / 2) / 2) * 2;
+      const iconBottom = iconTop + iconS;
       const iconOn = !v.soldOut && !!v.iconKey && slot.icon.show(v.iconKey);
       slot.icon.node.active = iconOn;
-      if (iconOn) placeRect(slot.icon.node, { x: icx - 18, y: r.y + 14 + dy, w: 36, h: 36 });
+      if (iconOn) placeRect(slot.icon.node, { x: icx - iconS / 2, y: iconTop, w: iconS, h: iconS });
       slot.iconChar.active(!v.soldOut && !iconOn);
-      if (!v.soldOut && !iconOn) slot.iconChar.set(icx, r.y + 38 + dy, 40, FS.section, v.name.slice(0, 1), "center", v.color);
+      if (!v.soldOut && !iconOn) slot.iconChar.set(icx, iconTop + Math.round(iconS / 2) + Math.round(FS.section / 3), 40, FS.section, v.name.slice(0, 1), "center", v.color);
       const sold = v.soldOut;
       slot.name.active(!sold);
       slot.quality.active(!sold);
@@ -341,9 +350,9 @@ export class ShopView {
         return;
       }
       slot.name.bold(true);
-      slot.name.set(icx, r.y + 66 + dy, inner, FS.body, v.name, "center", v.color);
-      slot.quality.set(icx, r.y + 84 + dy, inner, FS.muted, v.qualityName, "center", v.color);
-      slot.sub.set(icx, r.y + 104 + dy, inner, FS.micro, v.sub, "center", "#CFCFCF");
+      slot.name.set(icx, iconBottom + FS.body, inner, FS.body, v.name, "center", v.color);
+      slot.quality.set(icx, iconBottom + FS.body + 18, inner, FS.muted, v.qualityName, "center", v.color);
+      slot.sub.set(icx, iconBottom + FS.body + 38, inner, FS.micro, v.sub, "center", "#CFCFCF");
       slot.price.bold(true);
       slot.price.set(icx, r.y + r.h - dyb, inner, FS.body, v.priceText, "center", v.afford ? HEX.gold : HEX.textMuted);
       if (v.setBadge) slot.setTag.set(r.x + r.w - 8 - dy, r.y + 19 + dy, 44, FS.micro, v.setBadge, "right", v.setBadgeColor ?? HEX.echo);

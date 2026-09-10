@@ -36,7 +36,7 @@ import { HERO_LIST_TOP, HERO_ROW_GAP, HERO_ROW_H, heroSelectLayout } from "@game
 import * as sharedScroll from "@game/ui/scrollList";
 import { allHeroes, applyHeroSelection, heroDef, isHeroReleased, releasedHeroes, type HeroId, type HeroSelection } from "@game/data/heroes";
 import { setDef, type SetId } from "@game/data/sets";
-import { SHOP_BOTTOM, SHOP_CALIBRATION_H, SHOP_ROW_BOTTOM, SHOP_TOP, shopLayoutPure } from "@game/ui/shop";
+import { SHOP_BOTTOM, SHOP_CALIBRATION_H, SHOP_ROW_BOTTOM, SHOP_TOP, cardIconSize, cardRibbon, shopLayoutPure } from "@game/ui/shop";
 import { SHOP_SLOT_CAP, generateEquipment, qualityBasePrice, slotExpandCost, type Equipment } from "@game/data/equipmentGen";
 import { shopCardPrice, shopRefreshPrice } from "@game/data/shop";
 import { DAILY_BOXES, ENERGY_MAX } from "@game/data/daily";
@@ -873,8 +873,10 @@ function shopTextBands(L: ReturnType<typeof shopLayoutPure>): TextRequest[] {
     { at: "底栏推荐", x: pad, baseY: SHOP_BOTTOM + 37, maxW: 238, px: FS.micro, align: "left" },
   ];
   for (const [i, b] of L.toolBtns.entries()) out.push({ at: `工具钮${i}`, x: b.x + b.w / 2, baseY: b.y + 18, maxW: b.w - 12, px: FS.body, align: "center" });
-  /** 卡框走 frame_<品质> 九宫格时吃进的内缩量(viewTable.nineSlice.keys.frame_* = slice × module) */
-  const CARD_BORDER = 16;
+  /** 卡框几何与运行时同源:viewTable.nineSlice.keys.frame_* 给切边带,cardFrame 给装饰横带的源图行位 */
+  const VT = JSON.parse(readFileSync(new URL("../cocos/assets/resources/config/viewTable.json", import.meta.url), "utf8"));
+  const CARD_BORDER: number = VT.nineSlice.keys.frame_common;
+  const CARD_FRAME = VT.cardFrame;
   for (const [i, r] of L.cards.entries()) {
     const icx = r.x + r.w / 2;
     // 与 shop/ShopView.ts 同一口径:行位让出 dy,限宽按内缩量的两倍(内缩量不足 7 时退到 8 的既有一圈)
@@ -882,11 +884,16 @@ function shopTextBands(L: ReturnType<typeof shopLayoutPure>): TextRequest[] {
     const dyb = Math.max(14, CARD_BORDER + 12);
     const inner = r.w - Math.max(8, CARD_BORDER) * 2;
     const box = { x: r.x + CARD_BORDER, y: r.y + CARD_BORDER, w: inner, h: r.h - CARD_BORDER * 2 };
+    // 图标居中压在装饰横带上,卡名起于图标底缘之下,品质 / 效果行沿用既有 18 / 38 行距
+    const rb = cardRibbon(r.h, CARD_BORDER, CARD_FRAME);
+    const iconS = cardIconSize(r.h);
+    const iconTop = r.y + Math.round((rb.center - iconS / 2) / 2) * 2;
+    const iconBottom = iconTop + iconS;
     out.push(
-      { at: `卡${i}图标首字`, x: icx, baseY: r.y + 38 + dy, maxW: 40, px: FS.section, align: "center", box },
-      { at: `卡${i}名`, x: icx, baseY: r.y + 66 + dy, maxW: inner, px: FS.body, align: "center", box },
-      { at: `卡${i}品质`, x: icx, baseY: r.y + 84 + dy, maxW: inner, px: FS.muted, align: "center", box },
-      { at: `卡${i}效果行`, x: icx, baseY: r.y + 104 + dy, maxW: inner, px: FS.micro, align: "center", box },
+      { at: `卡${i}图标首字`, x: icx, baseY: iconTop + Math.round(iconS / 2) + Math.round(FS.section / 3), maxW: 40, px: FS.section, align: "center", box },
+      { at: `卡${i}名`, x: icx, baseY: iconBottom + FS.body, maxW: inner, px: FS.body, align: "center", box },
+      { at: `卡${i}品质`, x: icx, baseY: iconBottom + FS.body + 18, maxW: inner, px: FS.muted, align: "center", box },
+      { at: `卡${i}效果行`, x: icx, baseY: iconBottom + FS.body + 38, maxW: inner, px: FS.micro, align: "center", box },
       { at: `卡${i}价格`, x: icx, baseY: r.y + r.h - dyb, maxW: inner, px: FS.body, align: "center", box },
       { at: `卡${i}套组角标`, x: r.x + r.w - 8 - dy, baseY: r.y + 19 + dy, maxW: 44, px: FS.micro, align: "right", box },
       { at: `卡${i}售罄主行`, x: icx, baseY: r.y + r.h / 2 + 6, maxW: inner, px: FS.section, align: "center", box },

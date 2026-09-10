@@ -30,8 +30,8 @@ import { DESIGN_W, Rect, fullRect, logicalH, placeRect, toDesignSpace } from "..
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
 import type { ViewTable } from "../core/ViewTable";
-import { Plate, fitLines, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
-import { hexA, theme } from "../game/ui/theme";
+import { Plate, fitLines, fitOne, flatBox, iconNode, placeLine, strokeRing } from "../ui/PanelKit";
+import { evenDown, hexA, theme } from "../game/ui/theme";
 import { HERO_SKILL_TEXT_X } from "../game/ui/heroSelectLayout";
 import type { HeroSelectLayout } from "../game/ui/heroSelectLayout";
 import type { Phase3Params } from "../core/ViewTable";
@@ -56,8 +56,15 @@ const SKILL_POOL = 4;
 const LORE_LINES = 3;
 /** 详情立绘缺图时的名字字号 */
 const PORTRAIT_CHAR_PX = FS.display;
-/** 缺图回退的硬边方框线宽(像素档不画圆,圆边在 2px 网格上会抖糊) */
+/** 缺图回退的硬边方框线宽(像素档不画圆角,圆边在 2px 网格上会抖糊) */
 const RING_LINE_W = 2;
+/**
+ * 「不出战」空态那两行的基线步进(含义:详情板里主名 → 副题两行的行距;单位:设计 px;
+ * 依据:沿用本屏翻新前的既有行距档,只换纵向落位、不改行距,于是两行块在 440 高的详情板里
+ * 上下对称;出处:`FS.section` 16 + 一道 10 的偶数缝)。Cocos 侧专属,不进与 Web 共读的
+ * `game/ui/heroSelectLayout.ts`(处置同 `confirm/ConfirmModel.ts`)。
+ */
+const EMPTY_LINE_PITCH = 26;
 
 interface RowSlot {
   node: Node;
@@ -357,16 +364,16 @@ export class HeroSelectView {
       g.fillColor = hexToColor(hexA(det.color, 0.18));
       g.rect(-port.w / 2, -port.h / 2, port.w, port.h);
       g.fill();
-      g.lineWidth = RING_LINE_W;
-      g.strokeColor = hexToColor(hexA(det.color, 0.55));
-      g.rect(-port.w / 2, -port.h / 2, port.w, port.h);
-      g.stroke();
+      g.fillColor = hexToColor(hexA(det.color, 0.55));
+      strokeRing(g, port.w, port.h, RING_LINE_W);
       placeRect(this.detailPortBox, port);
     }
-    this.detailChar.active(!portOn);
-    if (!portOn) {
+    // 立绘缺图档的首字只在**有预览英雄**时上屏：「不出战」既没有立绘也没有兜底方块，
+    // 那一枚替代字形没有承载体，落在那里只会读成残留占位。
+    this.detailChar.active(!portOn && !det.empty);
+    if (!portOn && !det.empty) {
       this.detailChar.bold(true);
-      const ch = det.empty ? "—" : det.name.slice(0, 1);
+      const ch = det.name.slice(0, 1);
       this.detailChar.set(port.x + port.w / 2, port.y + port.h / 2 + PORTRAIT_CHAR_PX / 3, port.w, PORTRAIT_CHAR_PX, ch, "center", det.color, screen);
     }
     const emptyMode = det.empty;
@@ -375,10 +382,13 @@ export class HeroSelectView {
     this.detailLore.active(!emptyMode);
     this.skillLabel.active(!emptyMode);
     if (emptyMode) {
-      // 「不出战」:详情区只留居中两行(Web drawHeroes 的 !preview 分支)
+      // 「不出战」:详情板里只有这两行,把它们作为一个块纵向居中(板心上下对称)。
+      // 块高 = 主名行高 + 行步进,行步进沿用原档的 26,只换纵向落位、不改行距。
+      const blockH = FS.section + EMPTY_LINE_PITCH;
+      const blockTop = d.y + evenDown((d.h - blockH) / 2);
       this.detailName.bold(true);
-      this.detailName.set(d.x + d.w / 2, d.y + 180, d.w - 32, FS.section, det.name, "center", HEX.textSecondary, screen);
-      this.detailTitle.set(d.x + d.w / 2, d.y + 206, d.w - 32, FS.muted, det.title, "center", HEX.textSecondary, screen);
+      this.detailName.set(d.x + d.w / 2, blockTop + FS.section, d.w - 32, FS.section, det.name, "center", HEX.textSecondary, screen);
+      this.detailTitle.set(d.x + d.w / 2, blockTop + blockH, d.w - 32, FS.muted, det.title, "center", HEX.textSecondary, screen);
     } else {
       this.detailName.bold(true);
       this.detailName.set(L.textX, L.nameY, L.loreW, FS.title, det.name, "left", HEX.textPrimary, screen);
@@ -442,10 +452,8 @@ export class HeroSelectView {
       g.fillColor = hexToColor(hexA(v.color, 0.18));
       g.rect(-lp.w / 2, -lp.h / 2, lp.w, lp.h);
       g.fill();
-      g.lineWidth = RING_LINE_W;
-      g.strokeColor = hexToColor(hexA(v.color, 0.55));
-      g.rect(-lp.w / 2, -lp.h / 2, lp.w, lp.h);
-      g.stroke();
+      g.fillColor = hexToColor(hexA(v.color, 0.55));
+      strokeRing(g, lp.w, lp.h, RING_LINE_W);
       placeRect(slot.portBox, lp, box.w, box.h);
       slot.char.bold(true);
       slot.char.set(lp.x + lp.w / 2, lp.y + lp.h / 2 + FS.title / 3, lp.w, FS.title, v.name.slice(0, 1), "center", v.color, box);
@@ -469,10 +477,8 @@ export class HeroSelectView {
       g.fillColor = hexToColor(badgeFill);
       g.rect(-lb.w / 2, -lb.h / 2, lb.w, lb.h);
       g.fill();
-      g.lineWidth = RING_LINE_W;
-      g.strokeColor = hexToColor(badgeStroke);
-      g.rect(-lb.w / 2, -lb.h / 2, lb.w, lb.h);
-      g.stroke();
+      g.fillColor = hexToColor(badgeStroke);
+      strokeRing(g, lb.w, lb.h, RING_LINE_W);
       placeRect(slot.badgeRing, lb, box.w, box.h);
     }
     slot.badgeText.bold(true);

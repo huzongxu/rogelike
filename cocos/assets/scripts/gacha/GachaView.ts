@@ -9,23 +9,22 @@
  * 收藏标签带 + 收藏行(按需增长的对象池) + 右上返回钮 + 整屏 Capture 热区。
  *
  * 贴图分支与 Web 一一对应(八件都在 `ASSET_MANIFEST` 里,"贴图优先、缺图回退代码形状"):
- *  - 面板底是几何层给的**贴内容矩形**,由 `PanelBase`(纯 Graphics)按 phase4 的
- *    `gcPanelFallbackBg` + `gcPanelFallbackStroke` 画(与 Web `panel()` 同值);几何层给空键时
- *    贴图板 `Panel` 整节点收起,给键时代码底垫在贴图板之下;
+ *  - 面板底是几何层给的**整幅内容板**矩形 + `panel_dark_corners` 键(与融合 / 委托 / 体力 /
+ *    转生同一张蓝黑板,九屏外框同族),缺图那一档退到代码底板 `PanelBase`(纯 Graphics),
+ *    填充取 `gcPanelFallbackBg`、细描边取与其余八屏同一档 `phase3.detailStroke`;
  *  - 标题走 `banner_large_purple` **显式 240×46**(与 daily 同参数、与 gearup 的纯文字不同),
  *    缺图时标题从"横幅内居中、基线 32"切到"左起笔于 pad、基线 36"(Web `themePaint.header`);
  *  - 券数走 `icon_ticket`,缺图时文字回到 pad 并前置替代字形「✦」(Web `iconText` 的 fallbackGlyph);
  *  - 单抽钮 `btn_minor`、十连与广告钮 `btn_primary`,都是 Web 的 `can && skinButtonBase(...)`
  *    形状:**禁档传空键**强制走代码底,于是禁档永远拿不到贴图;
  *  - 换券条与收藏行**全是纯代码矩形**(Web 那里就没有贴图),走 `flatBox`;
- *  - 保底条 `bar_progress_blue_b` 走 `iconNode` 的整图拉伸档,有图时用 `gcBarCover` 从
- *    `x + w × frac` 起盖住空缺(= Web `skinBar` 的遮罩法),缺图时换成"暗轨道 + 彩色填充"
- *    两块代码矩形(= Web 的 `!skinBar(...)` 分支),史诗填 `#c8b6ff`、传奇填 `#ffd76a`;
+ *  - 保底条 `bar_progress_blue_b` 只贴**已抽到的那一段**(轨道恒画:整幅暗槽 + 1px 细边,
+ *    缺图档那一段换 `gcBarFillEpic` / `gcBarFillLegend` 的彩色代码填充)——6px 高的整图拉伸
+ *    在 560 宽下只剩两端一小截,轨道改由代码画才读得出"这是一条空的进度轨";
  *  - 返回钮 `btn_back` 叠在恒画的底板之上,文字 x 随贴图在否换档(Web `skinIconButton`)。
  *
- * 一处 Web 原样重叠照抄:两条保底条纵向互相压 2px(史诗条 `pityLabelY + 8` 高 6、传奇条
- * `pityLabelY + 12`),而传奇标签基线 `pityLabelY + 18` 就压在传奇条之下。本文件按 Web 的
- * 绘制顺序建节点(史诗条在前、传奇条在后),于是传奇条盖住史诗条的下沿 —— 与几何层都不做平移。
+ * 两条保底条各贴自己的标签基线(史诗 `pityLabelY + 8`、传奇 `pityLabelY + 双保底带 + 8`,同高 6),
+ * 条间净缝由几何层给(见 `gachaLayout` 的 `pityLegendBar` 与 `pityBarOverlap`)。
  *
  * 行区是本屏唯一"件数无上限"的一段:Web 既不截断也不滚动,`spreadRows` 的两个下限
  * (`rowH ≥ 40`、`gap ≥ 4`)在件数多时兜不住,末行底边越出 `h − pad`。本视图**照画所有行**
@@ -97,11 +96,10 @@ class Txt {
   }
 }
 
-/** 一枚保底条的四件:贴图整图 + 盖空缺的暗罩 + 缺图档的轨道与填充 */
+/** 一枚保底条的三件:恒画的暗槽轨道(最底) + 已达成段的贴图 + 缺图档的彩色填充 */
 interface BarSlot {
-  icon: ReturnType<typeof iconNode>;
-  cover: ReturnType<typeof flatBox>;
   track: ReturnType<typeof flatBox>;
+  icon: ReturnType<typeof iconNode>;
   fill: ReturnType<typeof flatBox>;
 }
 
@@ -204,11 +202,11 @@ export class GachaView {
     );
   }
 
+  /** 轨道先建(同层后建的节点盖前建的),于是贴图段与彩色填充都落在暗槽之上 */
   private makeBar(name: string): BarSlot {
     return {
-      icon: iconNode(name + "Skin", this.root, this.frames, ZERO),
-      cover: flatBox(name + "Cover", this.root),
       track: flatBox(name + "Track", this.root),
+      icon: iconNode(name + "Skin", this.root, this.frames, ZERO),
       fill: flatBox(name + "Fill", this.root),
     };
   }
@@ -220,15 +218,18 @@ export class GachaView {
 
   /** 一帧重排:切屏(refresh)、落账之后与晚到贴图流式加载后各调一次 */
   sync(): void {
+    const p3 = viewTable().phase3;
     const p4 = viewTable().phase4;
     const L = this.hooks.layout();
     const c = this.hooks.content(L);
 
-    // 覆盖底(整屏) + 面板底(贴内容矩形;空键 = 只画代码底板,有键时代码底垫在贴图板之下)
+    // 覆盖底(整屏) + 面板底:几何层给的是九屏通用的 `panel_dark_corners`,外框与融合 / 委托 /
+    // 体力 / 转生同一张蓝黑板。描边环是压在矩形边线**上**的(strokeRing 外扩半个线宽),所以
+    // 代码底板只在没有贴图档出场,垫在贴图板之下会多出一圈外沿。
     this.paintDim(p4.gcDim);
-    this.panelBase.draw(L.panel, p4.gcPanelFallbackBg, p4.gcPanelFallbackStroke);
     this.panel.node.active = !!L.panelKey;
-    if (L.panelKey) this.panel.show(L.panelKey, L.panel, "slice", p4.gcPanelFallbackBg, p4.gcPanelFallbackStroke);
+    if (L.panelKey) this.panel.show(L.panelKey, L.panel, "slice", p4.gcPanelFallbackBg, p3.detailStroke);
+    else this.panelBase.draw(L.panel, p4.gcPanelFallbackBg, p3.detailStroke);
 
     // 标题:横幅优先(两档文字位),缺图回到 themePaint.header 那一档
     const banner = this.banner.show(KEY_BANNER);
@@ -321,23 +322,21 @@ export class GachaView {
     t.set(line.x, line.baseY, line.maxW, line.px, text, "center", on ? onColor : offColor);
   }
 
-  /** 一枚保底条:贴图档画整图 + 盖空缺,缺图档画轨道 + 填充(Web skinBar 的 if / else) */
+  /**
+   * 一枚保底条。轨道**恒画**:整档条宽的一块暗槽(`gcBarCover`)+ 一圈细边
+   * (`gcBarFallbackTrack`),于是 0/10 那一档读起来是一条空轨道,而不是两端一小截加一条虚线。
+   * `bar_progress_blue_b` 只贴已抽到的那一段(缺图档退彩色代码填充,史诗 `gcBarFillEpic` /
+   * 传奇 `gcBarFillLegend`);frac 为 0 时那一段宽为 0,贴图整块收起。
+   */
   private paintBar(bar: BarSlot, track: GcRect, frac: number, fillColor: string): void {
     const p4 = viewTable().phase4;
     const rects = gachaBarRects(track, frac);
+    bar.track.draw(track, p4.gcBarCover, p4.gcBarFallbackTrack);
     const drawn = bar.icon.show(KEY_PITY_BAR);
-    bar.icon.node.active = drawn;
-    bar.track.node.active = !drawn;
+    bar.icon.node.active = drawn && rects.fill.w > 0;
     bar.fill.node.active = !drawn;
-    if (drawn) {
-      placeRect(bar.icon.node, track);
-      bar.cover.node.active = !!rects.cover;
-      if (rects.cover) bar.cover.draw(rects.cover, p4.gcBarCover);
-    } else {
-      bar.cover.node.active = false;
-      bar.track.draw(track, p4.gcBarFallbackTrack);
-      bar.fill.draw(rects.fill, fillColor);
-    }
+    if (bar.icon.node.active) placeRect(bar.icon.node, rects.fill);
+    if (!drawn) bar.fill.draw(rects.fill, fillColor);
   }
 
   /** 一行收藏:纯代码底板两档 + 名字(品质色)/ Lv. 段 / 带入中 */

@@ -432,10 +432,8 @@ export class MenuLayoutView {
     const bandHasPlate = this.showPlate(this.heroBand, "menu_note_plate", L.heroBand, "slice");
     if (!bandHasPlate && this.heroBand.gfx && c.accent) {
       const g = this.heroBand.gfx;
-      g.lineWidth = 1;
-      g.strokeColor = hexToColor(c.accent);
-      g.rect(-L.heroBand.w / 2, -L.heroBand.h / 2, L.heroBand.w, L.heroBand.h);
-      g.stroke();
+      g.fillColor = hexToColor(c.accent);
+      strokeRing(g, L.heroBand.w, L.heroBand.h, 1);
     }
     this.showPlate(this.heroPort, "", L.heroPort, "stretch");
     // 已选出战时那两行套组详情覆盖第 2/3 行(同一批字面量,只是换了落位)

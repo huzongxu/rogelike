@@ -7,7 +7,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { shopLayoutPure, SHOP_TOP, SHOP_BOTTOM, SHOP_ROW_BOTTOM, SHOP_PAD, SHOP_CALIBRATION_H, SHOP_FOOT, type ShopLayoutPure } from "@game/ui/shop";
+import { readFileSync } from "node:fs";
+import { shopLayoutPure, SHOP_TOP, SHOP_BOTTOM, SHOP_ROW_BOTTOM, SHOP_PAD, SHOP_CALIBRATION_H, SHOP_FOOT, cardIconSize, cardRibbon, type ShopLayoutPure } from "@game/ui/shop";
 import { HUD_BOT_H, HUD_TOP_H } from "@game/ui/hud";
 
 const HEIGHTS = [996, 1212, SHOP_CALIBRATION_H + 250];
@@ -209,5 +210,66 @@ describe("商店布局形状语义", () => {
 
   it("同一入参两次调用逐位相同(纯确定,无隐藏态)", () => {
     expect(JSON.stringify(shopLayoutPure(5, 2, 1100))).toBe(JSON.stringify(shopLayoutPure(5, 2, 1100)));
+  });
+});
+
+/**
+ * 卡内几何:装饰横带换算 + 图标两档 + 五行不撞。
+ * 卡框 frame_<品质> 源图第 42..67 行是一条横贯卡面的装饰带,图标要居中压在它上面,
+ * 于是文本整块随图标底缘起排 —— 这一组断言守的就是「居中之后仍逐档不撞」。
+ */
+describe("cardRibbon / cardIconSize", () => {
+  const doc = JSON.parse(readFileSync("cocos/assets/resources/config/viewTable.json", "utf8")) as {
+    cardFrame: { srcH: number; ribbon: [number, number] };
+    nineSlice: { keys: Record<string, number> };
+  };
+  const CF = doc.cardFrame;
+  const BORDER = doc.nineSlice.keys.frame_common;
+  const FS_BODY = 14, Q_DY = 18, S_DY = 38, PRICE_DYB = 28;
+
+  it("标定档逐像素重合源图行位(h = srcH 时缩放系数为 1)", () => {
+    const rb = cardRibbon(CF.srcH, BORDER, CF);
+    expect(rb.top).toBe(CF.ribbon[0]);
+    expect(rb.bottom).toBe(CF.ribbon[1]);
+    expect(rb.center).toBe((CF.ribbon[0] + CF.ribbon[1]) / 2);
+  });
+
+  it("短卡档向内收敛,且始终落在可拉伸带内", () => {
+    for (const h of [152, 160, 176, 208]) {
+      const rb = cardRibbon(h, BORDER, CF);
+      expect(rb.top).toBeGreaterThanOrEqual(BORDER);
+      expect(rb.bottom).toBeLessThanOrEqual(h - BORDER);
+      expect(rb.bottom).toBeGreaterThan(rb.top);
+    }
+    const a = cardRibbon(152, BORDER, CF), b = cardRibbon(208, BORDER, CF);
+    expect(a.center).toBeLessThan(b.center);
+    expect(a.bottom - a.top).toBeLessThan(b.bottom - b.top);
+  });
+
+  it("图标边长两档:标定卡 36、短卡收一档 28", () => {
+    expect(cardIconSize(208)).toBe(36);
+    expect(cardIconSize(200)).toBe(36);
+    expect(cardIconSize(176)).toBe(28);
+    expect(cardIconSize(152)).toBe(28);
+  });
+
+  it("152..208 每一档:图标居中于横带,且图标 / 卡名 / 品质 / 效果 / 价格互不重叠、不越卡底", () => {
+    for (let h = 152; h <= 208; h += 2) {
+      const rb = cardRibbon(h, BORDER, CF);
+      const iconS = cardIconSize(h);
+      const iconTop = Math.round((rb.center - iconS / 2) / 2) * 2;
+      const iconBottom = iconTop + iconS;
+      expect(iconTop).toBeGreaterThanOrEqual(0);
+      expect(rb.center).toBeGreaterThanOrEqual(iconTop);
+      expect(rb.center).toBeLessThanOrEqual(iconBottom);
+      const name = iconBottom + FS_BODY;
+      const quality = name + Q_DY;
+      const sub = name + S_DY;
+      const price = h - PRICE_DYB;
+      expect(quality - name).toBeGreaterThanOrEqual(FS_BODY);
+      expect(sub - quality).toBeGreaterThanOrEqual(12);
+      expect(sub).toBeLessThan(price);
+      expect(price).toBeLessThanOrEqual(h - BORDER);
+    }
   });
 });

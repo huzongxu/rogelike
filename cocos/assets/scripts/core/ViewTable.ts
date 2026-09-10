@@ -11,6 +11,16 @@ export interface ViewTable {
         factor: number;
         keys: Record<string, number>;
     };
+    /**
+     * 品质卡框 `frame_<品质>` 自带的装饰横带。九宫格绘制时横带落在可拉伸带内,
+     * 其在屏上的起止行随节点高变化,故卡内行位必须先按本段把它换算出来。
+     */
+    cardFrame: {
+        /** 源图高度(贴图像素),frame_<品质> 一批同档 */
+        srcH: number;
+        /** 横带在源图上的起止行(含端点,贴图像素) */
+        ribbon: [number, number];
+    };
     battle: {
         /** 地面网格步长(px),对标 Web drawWorld 的 grid=100 */
         gridStep: number;
@@ -1126,6 +1136,7 @@ export const PHASE3_DEFAULTS: Phase3Params = {
 
 export const FALLBACK: ViewTable = {
     nineSlice: { factor: 0.35, keys: {} },
+    cardFrame: { srcH: 208, ribbon: [42, 67] },
     battle: {
         gridStep: 100,
         gridColor: "rgba(255,255,255,0.05)",
@@ -1308,6 +1319,15 @@ export function loadViewTable(): Promise<ViewTable> {
                             : FALLBACK.nineSlice.factor,
                     keys: (raw.nineSlice && raw.nineSlice.keys) || {},
                 },
+                cardFrame: (() => {
+                    const fb: [number, number] = [FALLBACK.cardFrame.ribbon[0], FALLBACK.cardFrame.ribbon[1]];
+                    const srcH = Number(raw.cardFrame && raw.cardFrame.srcH);
+                    const rb = raw.cardFrame ? raw.cardFrame.ribbon : undefined;
+                    if (!(srcH > 0) || !Array.isArray(rb) || rb.length !== 2) return { srcH: FALLBACK.cardFrame.srcH, ribbon: fb };
+                    const a = Number(rb[0]), b = Number(rb[1]);
+                    if (!(a >= 0) || !(b >= a) || !(b <= srcH)) return { srcH: FALLBACK.cardFrame.srcH, ribbon: fb };
+                    return { srcH: Math.floor(srcH), ribbon: [Math.floor(a), Math.floor(b)] as [number, number] };
+                })(),
                 battle: merge(FALLBACK.battle, raw.battle),
                 fx: merge(FALLBACK.fx, raw.fx),
                 joystick: merge(FALLBACK.joystick, raw.joystick),

@@ -2,12 +2,14 @@
  * 体力不足屏纯几何 —— Web `src/game.ts:drawEnergy`(4674-4745) 与 `energyLayout`(4660-4672)、
  * `onEnergyClick`(4746-4781) 的几何部分抽取。
  *
- * 单一出口：绘制与命中判定共读这一份矩形，宿主视图不产任何几何。口径与 Web 逐项同数：
- *  - **本屏有两条纵向锚线**：文字族 `a = h × 0.3`（横幅 / 标题 / 读数行 / 提示行四处从它加减）
- *    与按钮族 `bt = h × 0.42`（三枚纵排钮从它平移：`bt` / `bt + 62` / `bt + 118`）。两族都随
- *    `h` 线性走，于是 996 与 1246 两档之间文字族下沉 75px、按钮族下沉 105px，**两族之间的
- *    空档一起伸缩**；返回钮是**屏幕角锚** `{ x: w − pad − backW, y: 22, w: 72, h: 34 }`，
- *    与屏高无关（与已落地各屏的返回钮同一口径，Web 这里也是裸 22）；
+ * 单一出口：绘制与命中判定共读这一份矩形，宿主视图不产任何几何。
+ *  - **内容块在面板可落区里垂直居中**：块 = 横幅 / 标题 / 读数 / 提示的文字族 + 纵排三枚钮，
+ *    顶缘是横幅顶(`a − EN_BANNER_DY`)、底缘是关闭钮底缘(`bt + EN_CLOSE_DY + EN_CLOSE_H`)。
+ *    块心对齐可落区中线，于是 996 与 1246 两档之间的富余等分成上下两道留白，面板下半部不再
+ *    空着。两族之间的族间距仍按两条比例档之差走(`EN_FAMILY_RATIO_GAP = 0.42 − 0.3`)，
+ *    居中只整体平移，不改一族的内部结构；**返回钮是屏幕角锚**
+ *    `{ x: w − pad − backW, y: 22, w: 72, h: 34 }`，与屏高无关（与已落地各屏的返回钮同一口径，
+ *    Web 这里也是裸 22），可落区上缘按它的下缘让位，内容块永不压到返回钮；
  *  - **本屏有面板底**：Web 先一笔全屏暗底 `rgba(8,10,16,0.92)`，再 `panelPad(g, w, h)`
  *    **不传专属键** —— 就是 `panel_dark_corners` 九宫格铺满 `[pad, w − pad] × [pad, h − pad]`
  *    （Web 的切深实参 32 在 Cocos 侧由 `ViewTable.borderOf` 按图推导，`EN_PANEL_NINE` 与已落地
@@ -71,10 +73,14 @@ export interface EnTextLine {
 
 /** 整屏几何 */
 export interface EnergyLayout {
-  /** 文字族纵向锚线（Web 的 `h * 0.3`，横幅与三行文字都从它加减） */
+  /** 文字族纵向锚线（内容块居中位；横幅与三行文字都从它加减） */
   anchorY: number;
-  /** 按钮族纵向锚线（Web 的 `h * 0.42`，也就是广告钮顶缘） */
+  /** 按钮族纵向锚线（= 广告钮顶缘；与 `anchorY` 同属一个内容块，整体平移，族间距走 `energyFamilyGap`） */
   btnAnchorY: number;
+  /** 内容块的可落区（面板内缘之间，上缘再让开右上角返回钮） */
+  contentBand: EnRect;
+  /** 内容块自身矩形（顶 = 横幅顶缘，底 = 关闭钮底缘） */
+  block: EnRect;
   /** 面板底盒（Web `panelPad` 的 `[pad, w − pad] × [pad, h − pad]`） */
   panel: EnRect;
   /** 面板底贴图键（Web 不传专属键，恒为 `panel_dark_corners`） */
@@ -109,15 +115,18 @@ export interface EnergyLayout {
   adToDiamondStep: number;
   /** 钻石钮顶缘 → 关闭钮顶缘的步进（`EN_CLOSE_DY − EN_DIA_DY`） */
   diamondToCloseStep: number;
-  /** 钮列底缘相对屏底的下沉（关闭钮底边到 `h` 的距离，随屏高线性走） */
+  /** 钮列底缘相对屏底的下沉（关闭钮底边到 `h` 的距离；内容块居中后它与块顶留白等分，不再随屏高线性走） */
   btnColumnBottomGap: number;
 }
 
 /* Web energyLayout / drawEnergy 的内联几何常量 */
-/** 文字族纵向锚线相对屏高的比例 */
+/** 文字族与按钮族的**间距**比例档(含义:两族之比之差;绝对落位不再由它决定,见 `energyAnchorY`) */
 export const EN_ANCHOR_RATIO = 0.3;
-/** 按钮族纵向锚线相对屏高的比例（就是广告钮顶缘） */
+/** 按钮族相对屏高的比例(含义同上,本层只取 `EN_BTN_ANCHOR_RATIO − EN_ANCHOR_RATIO` 这一道差) */
 export const EN_BTN_ANCHOR_RATIO = 0.42;
+/** 内容块可落区上下各让出的呼吸位(含义:块缘到面板内缘 / 到返回钮下缘的最小留白;
+ *  单位:设计 px;依据:与本屏页边距同一把尺,不引入第二个间距事实源;出处:`EN_PAD`) */
+export const EN_BLOCK_INSET = EN_PAD;
 /** 横幅：宽 / 高 / 半宽 / 相对文字锚线的上抬（半宽由宽度推导，不留第二个事实源） */
 export const EN_BANNER_W = 220;
 export const EN_BANNER_H = 40;
@@ -150,24 +159,54 @@ export const EN_BACK_PX = fs.muted;
 /** 钮底板描边宽度（Web 本屏四处都不设 lineWidth，取全项目「描边后复位 1」的约定档） */
 export const EN_BTN_STROKE_W = 1;
 
-/** 按钮族顶缘（广告钮顶缘 = `evenDown(h × 0.42)`；比例档沿用 Web，取偶是像素栅格要求） */
-export function energyBtnTop(h: number): number {
-  return evenDown(h * EN_BTN_ANCHOR_RATIO);
+/** 族间距（含义：文字族锚线 → 按钮族顶缘；单位：设计 px；依据：Web 两族的比例之差随屏高线性走，
+ *  取偶是为了两档屏高都不掉出 2px 栅格；出处：`EN_ANCHOR_RATIO` 与 `EN_BTN_ANCHOR_RATIO`） */
+export function energyFamilyGap(h: number): number {
+  const hh = evenDown(h);
+  return evenDown(hh * EN_BTN_ANCHOR_RATIO) - evenDown(hh * EN_ANCHOR_RATIO);
 }
 
-/** 广告钮矩形（Web 的 `{ x: cx − 160, y: h * 0.42, w: 320, h: 52 }`） */
+/** 内容块的可落区（含义：面板内缘之间、上下各让一道呼吸位，上缘再让开右上角返回钮的下缘；
+ *  单位：设计 px；依据：块只能落在这道区间里，富余才会读成留白而不是没画完；
+ *  出处：`EN_PAD` / `EN_BLOCK_INSET` 与 `energyBackBtn`） */
+export function energyContentBand(w: number, h: number): EnRect {
+  const hh = evenDown(h);
+  const back = energyBackBtn(w);
+  const top = Math.max(EN_PAD + EN_BLOCK_INSET, back.y + back.h + EN_BLOCK_INSET);
+  const bottom = hh - EN_PAD - EN_BLOCK_INSET;
+  return { x: EN_PAD, y: top, w: w - EN_PAD * 2, h: Math.max(0, bottom - top) };
+}
+
+/** 内容块高（顶 = 横幅上抬，底 = 族间距 + 关闭钮顶缘下沉 + 关闭钮高） */
+export function energyBlockHeight(h: number): number {
+  return EN_BANNER_DY + energyFamilyGap(h) + EN_CLOSE_DY + EN_CLOSE_H;
+}
+
+/** 文字族锚线 = 内容块居中位（块心对可落区中线，再补回横幅的上抬；屏高不够容纳块时贴可落区顶缘） */
+export function energyAnchorY(w: number, h: number): number {
+  const band = energyContentBand(w, h);
+  const centered = band.y + Math.max(0, band.h - energyBlockHeight(h)) / 2 + EN_BANNER_DY;
+  return evenDown(centered);
+}
+
+/** 按钮族顶缘（广告钮顶缘 = 内容块居中位 + 族间距） */
+export function energyBtnTop(w: number, h: number): number {
+  return energyAnchorY(w, h) + energyFamilyGap(h);
+}
+
+/** 广告钮矩形（`{ x: cx − 160, y: 按钮族顶缘, w: 320, h: 52 }`） */
 export function energyAdBtn(w: number, h: number): EnRect {
-  return { x: w / 2 - EN_BTN_DX, y: energyBtnTop(h), w: EN_BTN_W, h: EN_AD_H };
+  return { x: w / 2 - EN_BTN_DX, y: energyBtnTop(w, h), w: EN_BTN_W, h: EN_AD_H };
 }
 
 /** 钻石钮矩形（顶缘 = 广告钮顶缘 + 62） */
 export function energyDiamondBtn(w: number, h: number): EnRect {
-  return { x: w / 2 - EN_BTN_DX, y: energyBtnTop(h) + EN_DIA_DY, w: EN_BTN_W, h: EN_DIA_H };
+  return { x: w / 2 - EN_BTN_DX, y: energyBtnTop(w, h) + EN_DIA_DY, w: EN_BTN_W, h: EN_DIA_H };
 }
 
 /** 关闭钮矩形（顶缘 = 广告钮顶缘 + 118） */
 export function energyCloseBtn(w: number, h: number): EnRect {
-  return { x: w / 2 - EN_BTN_DX, y: energyBtnTop(h) + EN_CLOSE_DY, w: EN_BTN_W, h: EN_CLOSE_H };
+  return { x: w / 2 - EN_BTN_DX, y: energyBtnTop(w, h) + EN_CLOSE_DY, w: EN_BTN_W, h: EN_CLOSE_H };
 }
 
 /** 返回钮矩形（页边距走本屏 `EN_PAD`，热区抬到 `ui.touchMin`；命中区与绘制框逐位同一） */
@@ -186,15 +225,18 @@ function line(x: number, baseY: number, maxW: number, px: number, bold: boolean)
 export function energyLayout(w: number, h: number): EnergyLayout {
   const pad = EN_PAD;
   const maxW = w - pad * 2;
-  const a = evenDown(h * EN_ANCHOR_RATIO);
+  const a = energyAnchorY(w, h);
   const cx = w / 2;
   const ad = energyAdBtn(w, h);
   const dia = energyDiamondBtn(w, h);
   const close = energyCloseBtn(w, h);
   const back = energyBackBtn(w);
+  const band = energyContentBand(w, h);
   return {
     anchorY: a,
     btnAnchorY: ad.y,
+    contentBand: band,
+    block: { x: band.x, y: a - EN_BANNER_DY, w: band.w, h: energyBlockHeight(h) },
     panel: { x: pad, y: pad, w: w - pad * 2, h: h - pad * 2 },
     panelKey: "panel_dark_corners",
     panelNine: EN_PANEL_NINE,

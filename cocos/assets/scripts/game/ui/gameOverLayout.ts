@@ -9,7 +9,8 @@
  *  - 页边距 `GO_PAD = 16`、内容宽 `GO_CONTENT_W = 528`、右缘基准 544；Web 的 `ui.pad = 14`
  *    在本屏不再使用，居中文字限宽就是 `GO_CONTENT_W`；
  *  - module = 2（1 art px = 2 逻辑 px）：**坐标与尺寸一律偶数**。屏高先 `evenDown`，锚线
- *    `a = evenDown(hh × 0.3)`，屏心 `cx = evenDown(w / 2)`，于是任何一档屏高都不掉出栅格；
+ *    `a = gameOverAnchorY(w, hh)`（内容块居中位，出口末了再 `evenDown` 落回栅格），屏心
+ *    `cx = evenDown(w / 2)`，于是任何一档屏高都不掉出栅格；
  *  - 半宽一律**由宽度推导**（`GO_BANNER_DX = evenDown(GO_BANNER_W / 2)`、复活与双倍钮的
  *    `DX = W / 2`），不写第二份事实源；
  *  - **三钮行铺满内容带**：Web 的 `118 × 3 + 8 × 2 = 370` 半宽 185 会把 `bx` 推到奇数 95，
@@ -19,10 +20,12 @@
  *    与其它钮同档的 28；三钮行本来就是 44 高，未动；
  *  - **本屏有屏底板**：`panel_dark_corners` 九宫格铺 `[16,16,528,hh−16]`（缺图时由 `Plate`
  *    自己的代码底板兜底，视图不另写形状）；
- *  - **留白只落在一条呼吸缝**：十处内容（横幅 / 立绘 / 标题 / 四行读数 / 复活钮 / 三钮行 /
- *    名次提示）全挂 `a` 族，唯独广告双倍钮贴底（顶缘 `hh − 116`），两族之间那条
- *    `seamAboveButtons` 就是唯一的吸余体，它没有硬上限；屏内其余偏移全是常量，
- *    任何一档屏高都不会把富余挤进行距或钮高。
+ *  - **留白等分成块顶与块底两道缝**：十处内容（横幅 / 立绘 / 标题 / 四行读数 / 复活钮 / 三钮行 /
+ *    名次提示）是一整块，全挂 `a` 族；块顶 = 块内最高件（立绘顶缘 `a − GO_POSE_DY`），块底 =
+ *    最低件（名次提示基线 + 半行距 `a + GO_BLOCK_BOT_DY`）。**块心对齐可落区中线**，可落区就是
+ *    面板内缘与贴底双倍钮顶缘之间上下各让一道 `GO_BLOCK_INSET` 的区间，于是屏高富余等分成块顶
+ *    与块底两道留白，面板下半部不再空着；`seamAboveButtons` 仍量三钮行底缘到双倍钮顶缘那道缝，
+ *    屏内其余偏移全是常量，任何一档屏高都不会把富余挤进行距或钮高。
  *
  * 与 Web 同数的部分（几何族结构）：
  *  - 横幅 `banner_large_red`（art 120×24）绘制盒 **240×48 = 精确 2 倍**，整幅拉伸、没有回退分支；
@@ -94,8 +97,12 @@ export interface GameOverLayout extends GameOverForms {
   panel: GoRect;
   /** 屏底板贴图键 */
   panelKey: string;
-  /** 全屏唯一的纵向锚线（`evenDown(hh × 0.3)`，十处实参都从它加减） */
+  /** 内容块的纵向锚线（`gameOverAnchorY`：块心对可落区中线，十处实参都从它加减） */
   anchorY: number;
+  /** 内容块的可落区（面板内缘与贴底双倍钮顶缘之间，上下各让一道 `GO_BLOCK_INSET`） */
+  contentBand: GoRect;
+  /** 内容块自身矩形（顶 = 立绘顶缘，底 = 名次提示基线 + 半行距） */
+  block: GoRect;
   /** 标题横幅盒（`a` 上方 34，240×48 = `banner_large_red` 固有 120×24 的精确 2 倍；整幅拉伸，没有缺图回退档） */
   banner: GoRect;
   /** 阵亡立绘盒（`a` 上方 44，58×92；挂在屏心**左**侧，整屏唯一带半透明的贴图件） */
@@ -128,13 +135,15 @@ export interface GameOverLayout extends GameOverForms {
   btnRowW: number;
   /** 双倍钮底边相对屏底的下沉（顶缘 `hh − 116` + 高 44 → 底边 `hh − 72`） */
   doubleBottomGap: number;
-  /** 呼吸缝：三钮行底缘到双倍钮顶缘的留白，**本屏唯一的吸余体，无硬上限** */
+  /** 呼吸缝：三钮行底缘到双倍钮顶缘的留白（内容块居中后它与块顶留白等分，**无硬上限**） */
   seamAboveButtons: number;
 }
 
 /* 内联几何常量（一律偶数；偏移列出处见文件头） */
-/** 全屏纵向锚线相对屏高的比例 */
-export const GO_ANCHOR_RATIO = 0.3;
+/** 内容块可落区上下各让出的呼吸位（含义：块缘到面板内缘 / 到贴底双倍钮顶缘的最小留白；
+ *  单位：设计 px；依据：与本屏页边距同一把尺，不引入第二个间距事实源；
+ *  出处：`GO_PAD` 与 `gameOverDoubleBtn` 的 `hh − GO_DOUBLE_UP`） */
+export const GO_BLOCK_INSET = GO_PAD;
 /** 横幅：宽 / 高 / 半宽（**由宽推导**）/ 相对锚线的上抬 */
 export const GO_BANNER_W = 240;
 export const GO_BANNER_H = 48;
@@ -188,19 +197,44 @@ export const GO_POSE_ALPHA = 0.5;
 /** 屏底板贴图键（与已落地各屏同一张九宫格） */
 export const GO_PANEL_KEY = "panel_dark_corners";
 
+/** 文本末行的半行距（与视图 `Txt` 的 `lineHeight = round(px × 1.25)` 同一档，取偶落回栅格） */
+export const GO_LINE_HALF_DY = evenDown(Math.ceil((GO_RANK_PX * 1.25) / 2));
+/** 内容块顶缘相对锚线的上抬（块内最高件 = 立绘顶缘，比横幅更高） */
+export const GO_BLOCK_TOP_DY = Math.max(GO_BANNER_DY, GO_POSE_DY);
+/** 内容块底缘相对锚线的下抬（块内最低件 = 名次提示基线 + 半行距） */
+export const GO_BLOCK_BOT_DY = GO_RANK_DY + GO_LINE_HALF_DY;
+/** 内容块高（本屏内容条数恒定，块高与屏高无关） */
+export const GO_BLOCK_H = GO_BLOCK_TOP_DY + GO_BLOCK_BOT_DY;
+
 /** 三钮行的左起笔（`evenDown(w/2) − btnRowW/2`，本档下就是页边距 16） */
 export function gameOverRowX(w: number): number {
   return evenDown(w / 2) - (GO_BTN_W * 3 + GO_BTN_GAP * 2) / 2;
 }
 
-/** 广告复活钮矩形（`{ x: evenDown(w/2) − 110, y: evenDown(h) × 0.3 取偶 + 124, w: 220, h: 44 }`） */
+/** 广告复活钮矩形（`{ x: evenDown(w/2) − 110, y: 内容块锚线 + 124, w: 220, h: 44 }`） */
 export function gameOverReviveBtn(w: number, h: number): GoRect {
-  return { x: evenDown(w / 2) - GO_REVIVE_DX, y: evenDown(evenDown(h) * GO_ANCHOR_RATIO) + GO_REVIVE_DY, w: GO_REVIVE_W, h: GO_REVIVE_H };
+  return { x: evenDown(w / 2) - GO_REVIVE_DX, y: gameOverAnchorY(w, h) + GO_REVIVE_DY, w: GO_REVIVE_W, h: GO_REVIVE_H };
 }
 
 /** 贴底的广告双倍钮（`{ x: evenDown(w/2) − 110, y: evenDown(h) − 116, w: 220, h: 44 }`） */
 export function gameOverDoubleBtn(w: number, h: number): GoRect {
   return { x: evenDown(w / 2) - GO_DOUBLE_DX, y: evenDown(h) - GO_DOUBLE_UP, w: GO_DOUBLE_W, h: GO_DOUBLE_H };
+}
+
+/** 内容块的可落区（含义：屏底板内缘与贴底双倍钮顶缘之间、上下各让一道呼吸位的纵向区间；
+ *  单位：设计 px；依据：块只能落在这道区间里，富余才会读成留白而不是没画完；
+ *  出处：`GO_PAD` / `GO_BLOCK_INSET` 与 `gameOverDoubleBtn`） */
+export function gameOverContentBand(w: number, h: number): GoRect {
+  const hh = evenDown(h);
+  const top = GO_PAD + GO_BLOCK_INSET;
+  const bottom = gameOverDoubleBtn(w, hh).y - GO_BLOCK_INSET;
+  return { x: GO_PAD, y: top, w: GO_CONTENT_W, h: Math.max(0, bottom - top) };
+}
+
+/** 内容块的纵向居中位（块心对可落区中线，再补回块顶抬量；屏高不够容纳块时贴可落区顶缘） */
+export function gameOverAnchorY(w: number, h: number): number {
+  const band = gameOverContentBand(w, h);
+  return evenDown(band.y + Math.max(0, band.h - GO_BLOCK_H) / 2 + GO_BLOCK_TOP_DY);
 }
 
 function line(x: number, baseY: number, maxW: number, px: number, bold: boolean): GoTextLine {
@@ -211,25 +245,29 @@ function line(x: number, baseY: number, maxW: number, px: number, bold: boolean)
  * 整屏几何。`forms` 是两个形态位（= Web 的 `canRevive()` 与 `!doubleClaimed`），
  * 本层不读存档、不查天赋。
  *
- * 纵向全靠两条线：`a = evenDown(hh × 0.3)` 的锚线族与 `hh − 116` 的贴底族，
- * 以及屏底板 `[16, hh − 16]`。两族之间那条 `seamAboveButtons` 是唯一的吸余体，
- * 于是 996 与 1246 两档之间所有矩形尺寸恒定、位置按族平移，不会掉出 2px 栅格。
+ * 纵向全靠两条线：内容块的居中位 `a = gameOverAnchorY(w, hh)` 与贴底族的 `hh − 116`，
+ * 以及屏底板 `[16, hh − 16]`。块高 `GO_BLOCK_H` 与屏高无关，屏高富余等分成块顶与块底两道
+ * 留白（`seamAboveButtons` 量的是块底那道），于是 996 与 1246 两档之间所有矩形尺寸恒定、
+ * 位置按族平移，不会掉出 2px 栅格。
  */
 export function gameOverLayout(w: number, h: number, forms: GameOverForms): GameOverLayout {
   const hh = evenDown(h);
   const pad = GO_PAD;
   const maxW = GO_CONTENT_W;
-  const a = evenDown(hh * GO_ANCHOR_RATIO);
+  const a = gameOverAnchorY(w, hh);
   const cx = evenDown(w / 2);
   const rb = gameOverReviveBtn(w, hh);
   const dbl = gameOverDoubleBtn(w, hh);
   const bx = gameOverRowX(w);
   const by = a + GO_BTN_DY;
   const step = GO_BTN_W + GO_BTN_GAP;
+  const band = gameOverContentBand(w, hh);
   return {
     panel: { x: pad, y: pad, w: GO_CONTENT_W, h: hh - pad * 2 },
     panelKey: GO_PANEL_KEY,
     anchorY: a,
+    contentBand: band,
+    block: { x: band.x, y: a - GO_BLOCK_TOP_DY, w: band.w, h: GO_BLOCK_H },
     banner: { x: cx - GO_BANNER_DX, y: a - GO_BANNER_DY, w: GO_BANNER_W, h: GO_BANNER_H },
     pose: { x: cx - GO_POSE_DX, y: a - GO_POSE_DY, w: GO_POSE_W, h: GO_POSE_H },
     title: line(cx, a, maxW, GO_TITLE_PX, true),

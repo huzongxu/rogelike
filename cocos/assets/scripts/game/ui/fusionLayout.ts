@@ -6,12 +6,14 @@
  * 单一出口:绘制与命中判定共读这一份矩形,宿主视图不产任何几何。口径与 Web 逐项同数:
  *  - **自底向上**:融合钮底边锚定 `h − pad`(`{ x: w/2 − 110, y: h − pad − 48, w: 220, h: 48 }`),
  *    下方面板区顶缘 `panelY = fuseBtn.y − 180`,装备列表吃剩余 —— 行区预算 `[92, panelY − 12]`,
- *    `spreadRows(n, 92, panelY − 12, 44, 76)` **只传五个实参**,第六个 `maxGap` 走默认 20;
- *    `rowH` 被 `maxH = 76` 封顶、`gap` 被 20 封顶,于是列表短(件数少)时两档设计高(996 / 1246)
- *    下行矩形逐字相同,屏高只把 panelY 与其下的面板区往下推,多出来的高度全部落在末行底边与
- *    panelY 之间的空档里;件数多到把 `floor(avail/n) − 6` 压到 76 以下时行高才开始随屏高变;
- *  - 行 `y = 92 + i × (rowH + gap)`、`x = pad`、`w = w − pad×2`、`h = rowH`,条数 = 装备件数;
- *  - 行内两行基线 `l1 = Math.round(r.y + r.h/2 − 6)`、`l2 = l1 + 19`;选中标记 `[A] ` 起笔
+ *    `spreadRows(n, 100, panelY − 12, 44, 56)` **只传五个实参**,第六个 `maxGap` 走默认 20;
+ *    `rowH` 被 `maxH = 56`(= 行内那两行文字的名义高 + 上下等距的内缩)封顶、`gap` 被 20 封顶,
+ *    于是列表短(件数少)时两档设计高(996 / 1246)下行矩形逐字相同,屏高只把 panelY 与其下的
+ *    面板区往下推,多出来的高度全部落在末行底边与 panelY 之间的空档里;件数多到把
+ *    `floor(avail/n) − 6` 压到 56 以下时行高才开始随屏高变;
+ *  - 行 `y = 100 + i × (rowH + gap)`、`x = pad`、`w = w − pad×2`、`h = rowH`,条数 = 装备件数;
+ *  - 行内两行基线 `l1 = evenDown(r.y + r.h/2 − 8)`、`l2 = l1 + 20`(两行块 40 高居中于行,
+ *    行底不留空腔);选中标记 `[A] ` 起笔
  *    `r.x + 6`,名字起笔 `r.x + 6 + (sel ? 24 : 0)`(选中标记的宽度是**固定让位 24**,不是量字),
  *    摘要行起笔 `r.x + 6`;
  *  - **底部三形态互斥**(Web drawFusion 的提前 return 链):装备 < 2 件 → 只有居中提示一行
@@ -85,9 +87,9 @@ export interface FusionRowLayout {
   index: number;
   /** 行矩形(纯代码底板 + 描边;同时就是本屏的行热区) */
   rect: FuRect;
-  /** 第一行基线(Web 的 `Math.round(r.y + r.h/2 − 6)`) */
+  /** 第一行基线(`evenDown(r.y + r.h/2 − FU_L1_DY)`,两行块居中于行的那一档) */
   l1: number;
-  /** 第二行基线(Web 的 `l1 + 19`) */
+  /** 第二行基线(`l1 + FU_L2_DY`) */
   l2: number;
   /** 选中标记 `[A] `(起笔 `r.x + 6`、基线 l1、fs.body 加粗;未选中那一档不画) */
   selTag: FuTextLine;
@@ -207,13 +209,22 @@ export const FU_PANEL_DY = 196;
 /** 行区顶缘与预算底缘的让位 */
 export const FU_ROWS_Y0 = 100;
 export const FU_ROWS_BOTTOM_DY = 12;
-/** 行高钳制两档(两档取偶;spreadRows 出数后再 evenDown,余量落进 rowsToPanel 那道呼吸缝) */
+/**
+ * 行高钳制两档(两档取偶;spreadRows 出数后再 evenDown,余量落进 rowsToPanel 那道呼吸缝)。
+ * 上限按**两行文字块的名义高**给:名字行盒 23 + 摘要行盒 19、两盒压 1 → 块高 40,加上下各一档
+ * 内缩(8)就是 56 —— 行框贴着内容长,行底不再拖一条空腔;56 仍高于热区下限 44,点得中。
+ */
 export const FU_ROW_MIN_H = 44;
-export const FU_ROW_MAX_H = 76;
+export const FU_ROW_MAX_H = 56;
 /** 行距下限(取偶) */
 export const FU_ROW_MIN_GAP = 4;
-/** 行内两行布局的两个裸加数 */
-export const FU_L1_DY = 6;
+/**
+ * 行内两行布局的两个裸加数。
+ * `FU_L1_DY` 取 8 是把**两行块整体**摆进行内上下等距的那一档:块顶 = `l1 − 11`(14 字阶的
+ * 行盒上伸)、块底 = `l2 + 9`(12 字阶的行盒下伸),于是块高 40、块心 = `l1 + 9`;让块心落在
+ * 行中 `y + h/2` 上就是 `l1 = y + h/2 − 9`,取偶那一档读作 8。
+ */
+export const FU_L1_DY = 8;
 export const FU_L2_DY = 20;
 /** 行内三处偏移:文字起笔内缩(走行板 nineMargin 的 16)/ 选中标记的固定让位 */
 export const FU_ROW_TEXT_DX = 16;
@@ -322,7 +333,7 @@ function hiddenCardLayout(idx: number, x: number, y: number): FusionHiddenCardLa
  * 整屏几何。`eqIds` 是局内装备列表的 id 序列(条数 = 行条数),`forms` 是弹层与三重态两个
  * 形态位,都由宿主投影传入,本层不读存档、不查天赋。
  *
- * 行区预算是 `[92, panelY − 12]`,`spreadRows` 把 `rowH` 钳在 44..76、`gap` 上限 20。
+ * 行区预算是 `[100, panelY − 12]`,`spreadRows` 把 `rowH` 钳在 44..56、`gap` 上限 20。
  * 件数少时 `rowH` 与 `gap` 同时顶到上限,两档设计高下行矩形逐字相同,屏高的差全部落在
  * `rowsToPanel` 这一段空档里;件数多时行高才开始吃预算(数字见 `tests/cocos-phase4-fusion.test.ts`)。
  */

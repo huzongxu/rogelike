@@ -140,7 +140,7 @@ const COMMISSION_TICK_SECONDS = 1;
  * 其余(敌人/玩家/弹道/背景/特效/掉落/召唤物 + 各屏皮)每帧从 frames 读取,晚到只会晚出现
  * 不会永久缺图,故全部挪到 ready 之后流式加载,战斗第一拍那批排在队首
  * (见 `game/data/pixelArt.ts` 的 `BATTLE_FIRST_PAINT_KEYS`)。
- * 分档的理由是枚数而不是字节:ready 前每多 await 一枚 PNG 约多花 13 ms。
+ * 分档的理由是枚数而不是字节:ready 前每多 await 一枚 PNG 约多花 5 ms。
  */
 const HUD_PRELOAD_KEYS = [
     "hud_dock_top",

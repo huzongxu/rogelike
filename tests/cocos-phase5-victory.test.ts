@@ -35,7 +35,10 @@ import { frameQualityForStage } from "@game/data/quality";
 import { starsText } from "@game/data/season";
 import { fs as FS, theme } from "@game/ui/theme";
 import {
-  VI_ANCHOR_RATIO,
+  VI_BLOCK_BOT_DY,
+  VI_BLOCK_H,
+  VI_BLOCK_INSET,
+  VI_BLOCK_TOP_DY,
   VI_BADGE_PX,
   VI_BANNER_DX,
   VI_PAD,
@@ -92,6 +95,7 @@ import {
   VI_TICKET_ICON_DY,
   VI_TICKET_PX,
   VI_TITLE_PX,
+  victoryAnchorY,
   victoryBadgeRect,
   victoryDoubleBtn,
   victoryIconRect,
@@ -249,15 +253,18 @@ describe("端间共读同一份共享层", () => {
 /* ==================== 1. 几何矩阵:两档屏高 × 四格星数 × 两格双倍 ==================== */
 
 describe("屏级矩形(与 Web drawVictory 的内联字面量逐位对应)", () => {
-  it("996 档逐项同 Web:a = 298,横幅 {160,264,240,48},立绘 {412,254,58,92}(挂在屏心右侧)", () => {
+  it("996 档内容块居中:a = 360,横幅 {160,326,240,48},立绘 {412,316,58,92}(挂在屏心右侧)", () => {
     const L = laid(H_STD);
-    expect(L.anchorY).toBe(298);
-    expect(L.banner).toEqual({ x: 160, y: 264, w: 240, h: 48 });
-    expect(L.pose).toEqual({ x: 412, y: 254, w: 58, h: 92 });
+    expect(L.anchorY).toBe(360);
+    expect(L.banner).toEqual({ x: 160, y: 326, w: 240, h: 48 });
+    expect(L.pose).toEqual({ x: 412, y: 316, w: 58, h: 92 });
     expect(L.banner.y).toBe(L.anchorY - VI_BANNER_DY);
     expect(L.pose.x).toBe(W / 2 + VI_POSE_DX);
     // 立绘在横幅右外侧,两档屏高下都不相交
     expect(L.pose.x).toBeGreaterThan(L.banner.x + L.banner.w);
+    // 块 [316, 580] 落在可落区 [32, 864] 正中:上下两道留白各 284
+    expect(L.contentBand).toEqual({ x: 16, y: 32, w: 528, h: 832 });
+    expect(L.block).toEqual({ x: 16, y: 316, w: 528, h: 264 });
   });
 
   it("996 档两枚贴底钮:双倍 {170,880,220,44}、返回 {170,936,220,44},底边分别落 h−72 与 h−16", () => {
@@ -273,10 +280,10 @@ describe("屏级矩形(与 Web drawVictory 的内联字面量逐位对应)", () 
     expect(L.doubleBtn.w).toBe(L.menuBtn.w);
   });
 
-  it("星数行:3 枚 {236|268|300,336,24,24} 整行居中,步进 32、总宽 88", () => {
+  it("星数行:3 枚 {236|268|300,398,24,24} 整行居中,步进 32、总宽 88", () => {
     const L = screen(run(), H_STD).L;
     expect(L.starSlots.map((s) => s.x)).toEqual([236, 268, 300]);
-    expect(L.starSlots[0].y).toBe(336);
+    expect(L.starSlots[0].y).toBe(398);
     expect(L.starSlots.every((s) => s.w === 24 && s.h === 24)).toBe(true);
     expect(L.starStep).toBe(32);
     expect(L.starRowW).toBe(88);
@@ -305,7 +312,7 @@ describe("屏级矩形(与 Web drawVictory 的内联字面量逐位对应)", () 
 
   it("基线族:标题 a、关卡 a+34、星数文本 a+58、首通 a+78、三行奖励 a+104/126/148、掉落 a+170、名次 a+192、框 a+210", () => {
     const L = laid(H_STD);
-    const a = Math.floor((H_STD * VI_ANCHOR_RATIO) / 2) * 2;
+    const a = victoryAnchorY(W, H_STD);
     expect([L.title.baseY, L.stageLine.baseY, L.starText.baseY, L.firstLine.baseY]).toEqual([a, a + 34, a + 58, a + 78]);
     expect([L.ticketLine.baseY, L.echoLine.baseY, L.stardustLine.baseY]).toEqual([a + 104, a + 126, a + 148]);
     expect([L.dropLine.baseY, L.rankLine.baseY, L.frameLineFlat.baseY, L.frameLineLeaked.baseY]).toEqual([a + 170, a + 192, a + 210, a + 210]);
@@ -368,12 +375,13 @@ describe("屏级矩形(与 Web drawVictory 的内联字面量逐位对应)", () 
     }
   });
 
-  it("两档之间:锚线族整体平移 Δh × 0.3 = 74px(取偶档),贴底族整体平移 Δh = 250px", () => {
+  it("两档之间:锚线族按可落区富余的一半位移 = 124px(取偶档),贴底族整体平移 Δh = 250px", () => {
     const A = laid(H_STD);
     const B = laid(H_TALL);
     const dh = H_TALL - H_STD;
-    const evenDownOf = (v: number) => Math.floor(v / 2) * 2;
-    const dAnchor = evenDownOf(H_TALL * VI_ANCHOR_RATIO) - evenDownOf(H_STD * VI_ANCHOR_RATIO);
+    // 块高与屏高无关 → 富余等分两道,锚线斜率 1/2
+    const dAnchor = victoryAnchorY(W, H_TALL) - victoryAnchorY(W, H_STD);
+    expect(dAnchor).toBe(124);
     for (const key of ["banner", "pose", "doubleBtn", "menuBtn"] as const) {
       const dy = B[key].y - A[key].y;
       expect(dy, key + " Δy").toBe(key === "doubleBtn" || key === "menuBtn" ? dh : dAnchor);
@@ -407,7 +415,7 @@ describe("屏级矩形(与 Web drawVictory 的内联字面量逐位对应)", () 
     }
     expect(victoryDoubleBtn(W, H_TALL)).toEqual({ x: 170, y: 1130, w: 220, h: 44 });
     expect(victoryMenuBtn(W, H_TALL)).toEqual({ x: 170, y: 1186, w: 220, h: 44 });
-    expect(laid(H_TALL).frameLineFlat.baseY).toBe(582);
+    expect(laid(H_TALL).frameLineFlat.baseY).toBe(694);
   });
 
   it("两枚热区两两不重叠,且与整屏文字行都不相交(双倍底 924 → 返回顶 936 留 12px 缝)", () => {
@@ -446,7 +454,7 @@ describe("屏级矩形(与 Web drawVictory 的内联字面量逐位对应)", () 
     expect(victoryScreenLayout(W, H_STD, victoryForms(run()))).toEqual(victoryLayout(W, H_STD, victoryForms(run())));
     expect(VI_BTN_STROKE_W).toBe(1);
     expect(VI_STAR_MAX).toBe(3);
-    expect(victoryStarTop(H_STD)).toBeCloseTo(H_STD * 0.3 + 58 - 24 + 4, 6);
+    expect(victoryStarTop(victoryAnchorY(W, H_STD))).toBe(victoryAnchorY(W, H_STD) + 58 - 24 + 4);
     // Web 本屏一次都不设 lineWidth,也不动 globalAlpha(与死亡屏那枚半透明立绘不同)
     const seg = webDrawVictory();
     expect(seg.includes("lineWidth")).toBe(false);
@@ -467,7 +475,9 @@ describe("屏级矩形(与 Web drawVictory 的内联字面量逐位对应)", () 
 
 describe("共享层几何常量逐项", () => {
   it("锚线 / 横幅 / 立绘 / 星数 / 三行奖励 / 两枚钮的每个偏移与字号都与 Web 同数", () => {
-    expect([VI_ANCHOR_RATIO, VI_BANNER_DX, VI_BANNER_W, VI_BANNER_H, VI_BANNER_DY]).toEqual([0.3, 120, 240, 48, 34]);
+    expect([VI_BLOCK_INSET, VI_BANNER_DX, VI_BANNER_W, VI_BANNER_H, VI_BANNER_DY]).toEqual([16, 120, 240, 48, 34]);
+    // 内容块三项:顶 = 立绘抬量,底 = 关卡框行基线 + 半行距,块高与屏高无关
+    expect([VI_BLOCK_TOP_DY, VI_BLOCK_BOT_DY, VI_BLOCK_H]).toEqual([44, 220, 264]);
     expect([VI_POSE_DX, VI_POSE_W, VI_POSE_H, VI_POSE_DY]).toEqual([132, 58, 92, 44]);
     expect([VI_STAGE_DY, VI_STAGE_PX]).toEqual([34, 16]);
     expect([VI_STAR_SIZE, VI_STAR_GAP, VI_STAR_DY, VI_STAR_TOP_NUDGE, VI_STAR_TEXT_PX]).toEqual([24, 8, 58, 4, 20]);
@@ -1039,10 +1049,13 @@ describe("Web 基准的六条反直觉口径已原样带上", () => {
 describe("通关屏的像素栅格重排闸(module=2 / pad 16 / 热区 ≥44 / 呼吸缝)", () => {
   const L996 = victoryScreenLayout(W, H_STD, { stars: 3, canDouble: true });
   const L1246 = victoryScreenLayout(W, H_TALL, { stars: 3, canDouble: true });
-  /** 锚线族的推导式(不读 L,独立算一遍:屏高先取偶,再对 hh×0.3 取偶) */
+  /** 锚线族的推导式(不读 L,按居中律独立算一遍:可落区里放一个 VI_BLOCK_H 高的块,块心对中线,末了取偶) */
   const anchorOf = (h: number) => {
-    const hh = Math.floor(h / 2) * 2;
-    return Math.floor((hh * VI_ANCHOR_RATIO) / 2) * 2;
+    const even = (v: number) => Math.floor(v / 2) * 2;
+    const hh = even(h);
+    const bandTop = cocosVictoryLayout.VI_PAD + VI_BLOCK_INSET;
+    const bandBottom = hh - VI_DOUBLE_UP - VI_BLOCK_INSET;
+    return even(bandTop + (bandBottom - bandTop - VI_BLOCK_H) / 2 + VI_BLOCK_TOP_DY);
   };
 
   it("页边距与内容宽是具名常量,共享层不再引 theme.ui.pad", () => {
@@ -1108,12 +1121,15 @@ describe("通关屏的像素栅格重排闸(module=2 / pad 16 / 热区 ≥44 / �
     }
   });
 
-  it("留白只落在呼吸缝:缝长随屏高走,其余偏移恒为常量", () => {
+  it("留白等分成块顶与块底两道缝:缝长随屏高走,其余偏移恒为常量", () => {
     expect(L996.seamAboveButtons).toBe(L996.doubleBtn.y - (L996.anchorY + VI_FRAME_DY));
-    expect(L996.seamAboveButtons).toBe(372);
-    expect(L1246.seamAboveButtons).toBe(548);
-    // 贴底族走满 Δh、锚线族只走 Δh×0.3 的取偶档,差额全进这条无上限的缝
+    expect(L996.seamAboveButtons).toBe(310);
+    expect(L1246.seamAboveButtons).toBe(436);
+    // 贴底族走满 Δh、锚线族只走富余的一半,差额全进这两道无上限的缝
     expect(L1246.seamAboveButtons - L996.seamAboveButtons).toBe(H_TALL - H_STD - (anchorOf(H_TALL) - anchorOf(H_STD)));
+    // 块顶那道:可落区 [32, 864] / [32, 1114] 里块高恒 264
+    expect(L996.block.y - L996.contentBand.y).toBe(284);
+    expect(L1246.block.y - L1246.contentBand.y).toBe(408);
     expect(L996.btnStackGap).toBe(12);
     expect(L1246.btnStackGap).toBe(12);
     expect(L996.menuBottomGap).toBe(cocosVictoryLayout.VI_PAD);

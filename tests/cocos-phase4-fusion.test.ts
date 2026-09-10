@@ -17,10 +17,10 @@
  * 本屏的重点是**八格几何矩阵**:`h ∈ {996, 1246} × 装备件数 ∈ {2, 6, 7, 8}` 八格各自钉死
  * `rowH` / `gap` / 末行底边 / 空档 / panelY / 融合钮底边,以及横向边界。这些数字按
  * `game/ui/theme.ts:spreadRows` 的真实实现由布局函数实算(每格都同时用 `spreadRows` 直算一遍
- * 对照)。与委托屏不同,这一屏的行区**顶边 92 锚定、预算底缘随屏高走**,`rowH` 被 76 封顶、
- * `gap` 被 20 封顶:件数 ≤ 6 时两档屏高下行矩形逐字相同(差全落在末行与 panelY 之间的空档),
- * 件数 7 / 8 时 996 档的预算开始咬住 `gap`(19)与 `rowH`(75),两档矩形不再相同 —— 矩阵把这个
- * 分界一并锁住。
+ * 对照)。与委托屏不同,这一屏的行区**顶边 100 锚定、预算底缘随屏高走**,`rowH` 被贴着两行正文
+ * 的 `56` 封顶、`gap` 被 20 封顶:件数 ≤ 8 时两档屏高下行矩形逐字相同(差全落在末行与 panelY
+ * 之间的空档),件数 9 / 11 时 996 档的预算开始咬住 `gap`(14)与 `rowH`(50),两档矩形不再相同
+ * —— 矩阵把这个分界一并锁住。
  *
  * 另锁本屏照抄的 Web 口径:必成功 + 自动继承、保底 +1 到 HIDDEN_PITY_N 归零并转三选一暂存
  * (素材已扣、成品未入场、存档不落)、弹层打开时只响应卡片、隐藏词缀装备可点选不可作素材、
@@ -326,8 +326,8 @@ describe("分区纵线(与 Web fusionLayout 同一批裸加数)", () => {
     expect(fusionPanelY(W, H_TALL)).toBe(986);
   });
 
-  it("行区顶缘恒 100,行高钳在 44..76、行距上限走 spreadRows 的默认 maxGap 20", () => {
-    expect([FU_ROWS_Y0, FU_ROW_MIN_H, FU_ROW_MAX_H]).toEqual([100, 44, 76]);
+  it("行区顶缘恒 100,行高钳在 44..56(贴着两行正文)、行距上限走 spreadRows 的默认 maxGap 20", () => {
+    expect([FU_ROWS_Y0, FU_ROW_MIN_H, FU_ROW_MAX_H]).toEqual([100, 44, 56]);
     const L = fusionLayout(W, H_STD, gear(3).map((e) => e.id), NO_FORMS);
     expect(L.rowsTop).toBe(FU_ROWS_Y0);
     // 只传五个实参:第六个 maxGap 走默认 20,显式传 40 会得到另一个 gap
@@ -369,14 +369,14 @@ describe("分区纵线(与 Web fusionLayout 同一批裸加数)", () => {
 describe("八格矩阵:h ∈ {996,1246} × 装备件数 ∈ {2,6,7,8}", () => {
   /** 每格的期望值:`[rowsBottom, rowH, gap, rowsEnd, rowsToPanel, fuseBtn.y, panelY]`(布局函数实算后写死) */
   const CELL: Record<string, [number, number, number, number, number, number, number]> = {
-    "996|2": [724, 76, 20, 272, 464, 932, 736],
-    "996|6": [724, 76, 20, 656, 80, 932, 736],
-    "996|7": [724, 76, 14, 716, 20, 932, 736],
-    "996|8": [724, 72, 6, 718, 18, 932, 736],
-    "1246|2": [974, 76, 20, 272, 714, 1182, 986],
-    "1246|6": [974, 76, 20, 656, 330, 1182, 986],
-    "1246|7": [974, 76, 20, 752, 234, 1182, 986],
-    "1246|8": [974, 76, 20, 848, 138, 1182, 986],
+    "996|2": [724, 56, 20, 232, 504, 932, 736],
+    "996|6": [724, 56, 20, 536, 200, 932, 736],
+    "996|7": [724, 56, 20, 612, 124, 932, 736],
+    "996|8": [724, 56, 20, 688, 48, 932, 736],
+    "1246|2": [974, 56, 20, 232, 754, 1182, 986],
+    "1246|6": [974, 56, 20, 536, 450, 1182, 986],
+    "1246|7": [974, 56, 20, 612, 374, 1182, 986],
+    "1246|8": [974, 56, 20, 688, 298, 1182, 986],
   };
 
   for (const h of [H_STD, H_TALL]) {
@@ -411,8 +411,8 @@ describe("八格矩阵:h ∈ {996,1246} × 装备件数 ∈ {2,6,7,8}", () => {
     }
   }
 
-  it("跨档不变量:件数 ≤ 6 时 rowH 与 gap 同时顶到封顶,两档屏高下行矩形逐字相同", () => {
-    for (const n of [2, 3, 4, 5, 6]) {
+  it("跨档不变量:件数 ≤ 8 时 rowH 与 gap 同时顶到封顶,两档屏高下行矩形逐字相同", () => {
+    for (const n of [2, 3, 4, 5, 6, 7, 8]) {
       const ids = gear(n).map((e) => e.id);
       const a = fusionLayout(W, H_STD, ids, NO_FORMS);
       const b = fusionLayout(W, H_TALL, ids, NO_FORMS);
@@ -422,21 +422,21 @@ describe("八格矩阵:h ∈ {996,1246} × 装备件数 ∈ {2,6,7,8}", () => {
     }
   });
 
-  it("跨档分界:件数 7 / 8 时 996 档的预算咬住 gap 与 rowH,两档矩形不再相同", () => {
-    const ids7 = gear(7).map((e) => e.id);
-    const a7 = fusionLayout(W, H_STD, ids7, NO_FORMS);
-    const b7 = fusionLayout(W, H_TALL, ids7, NO_FORMS);
-    expect([a7.rowH, a7.rowGap]).toEqual([76, 14]);
-    expect([b7.rowH, b7.rowGap]).toEqual([76, 20]);
-    expect(a7.rowsEnd).toBe(716);
-    expect(b7.rowsEnd).toBe(752);
-    const ids8 = gear(8).map((e) => e.id);
-    const a8 = fusionLayout(W, H_STD, ids8, NO_FORMS);
-    const b8 = fusionLayout(W, H_TALL, ids8, NO_FORMS);
-    expect([a8.rowH, a8.rowGap]).toEqual([72, 6]);
-    expect([b8.rowH, b8.rowGap]).toEqual([76, 20]);
-    expect(a8.rowsEnd).toBeLessThanOrEqual(a8.rowsBottom);
-    expect(b8.rowsEnd).toBeLessThanOrEqual(b8.rowsBottom);
+  it("跨档分界:件数 9 / 11 时 996 档的预算咬住 gap 与 rowH,两档矩形不再相同", () => {
+    const ids9 = gear(9).map((e) => e.id);
+    const a9 = fusionLayout(W, H_STD, ids9, NO_FORMS);
+    const b9 = fusionLayout(W, H_TALL, ids9, NO_FORMS);
+    expect([a9.rowH, a9.rowGap]).toEqual([56, 14]);
+    expect([b9.rowH, b9.rowGap]).toEqual([56, 20]);
+    expect(a9.rowsEnd).toBe(716);
+    expect(b9.rowsEnd).toBe(764);
+    const ids11 = gear(11).map((e) => e.id);
+    const a11 = fusionLayout(W, H_STD, ids11, NO_FORMS);
+    const b11 = fusionLayout(W, H_TALL, ids11, NO_FORMS);
+    expect([a11.rowH, a11.rowGap]).toEqual([50, 6]);
+    expect([b11.rowH, b11.rowGap]).toEqual([56, 20]);
+    expect(a11.rowsEnd).toBeLessThanOrEqual(a11.rowsBottom);
+    expect(b11.rowsEnd).toBeLessThanOrEqual(b11.rowsBottom);
   });
 
   it("屏高的差落在哪:融合钮与面板区底边锚定 h,件数少时空档全吃在末行与 panelY 之间", () => {
@@ -491,8 +491,8 @@ describe("八格矩阵:h ∈ {996,1246} × 装备件数 ∈ {2,6,7,8}", () => {
 /* ==================== 3. 装备行的两行布局 ==================== */
 
 describe("装备行(两行布局 + 名字两档起笔)", () => {
-  it("两行基线 l1 = evenDown(y + h/2 − 6)、l2 = l1 + 20", () => {
-    expect([FU_L1_DY, FU_L2_DY]).toEqual([6, 20]);
+  it("两行基线 l1 = evenDown(y + h/2 − 8)、l2 = l1 + 20(两行块上下等距地进行)", () => {
+    expect([FU_L1_DY, FU_L2_DY]).toEqual([8, 20]);
     const L = fusionLayout(W, H_STD, gear(3).map((e) => e.id), NO_FORMS);
     for (const r of L.rows) {
       expect(r.l1).toBe(evenDown(r.rect.y + r.rect.h / 2 - FU_L1_DY));
@@ -505,8 +505,11 @@ describe("装备行(两行布局 + 名字两档起笔)", () => {
       expect(r.l1).toBeGreaterThan(r.rect.y);
       expect(r.l2).toBeLessThan(bottom(r.rect));
     }
-    expect(L.rows[0].l1).toBe(132);
-    expect(L.rows[0].l2).toBe(152);
+    expect(L.rows[0].l1).toBe(120);
+    expect(L.rows[0].l2).toBe(140);
+    // 行顶到首行基线 20、末行基线到行底 16:两行块(块高 40)在 56 高的行里上下不留空腔
+    expect(L.rows[0].l1 - L.rows[0].rect.y).toBe(20);
+    expect(bottom(L.rows[0].rect) - L.rows[0].l2).toBe(16);
   });
 
   it("三处起笔:标记与摘要在 r.x + 16,名字选中档右移固定 24(不是量字)", () => {

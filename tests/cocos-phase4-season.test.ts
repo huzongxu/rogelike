@@ -16,10 +16,11 @@
  *
  * 本屏的几何重点是**四格矩阵**:`h ∈ {996, 1246} × 摘要形态 ∈ {上屏, 收起}`。与已落地八屏不同,
  * 这一屏**一次都不调 `spreadRows`**(内容条数恒为徽标 + 横幅 + 标题 + 四行摘要 + 一枚钮),
- * 纵向只有两条锚线:`anchorY = h × 0.28` 与 `by = h − 78`。于是两档屏高之间**每个矩形都按 h 线性
- * 位移**,而形态位不改变任何矩形(四行摘要的矩形恒算,只是整支 `active` 起落)—— 矩阵把这两条
- * 不变量都锁住。贴底钮底边落在 `h − 34` 而非 `h − pad`,钮内文字基线是裸偏移 `+28`
- * (同档实参下 `rowTextY` 会给 `+27`),两处都是 Web 原样。
+ * 纵向只有两条锚线:内容块的居中位(块心对可落区 `[面板内缘, 贴底钮顶缘 − 16]` 的中线)与
+ * `by = h − 78`。于是两档屏高之间锚线族以斜率 1/2 位移(可落区的富余上下各吃一半)、贴底族
+ * 照屏高走;形态位不改任何盒形,只按块高差的一半挪动居中位(四行摘要的矩形恒算,收起那一支
+ * 只是整支 `active` 起落)—— 矩阵把这些不变量都锁住。贴底钮底边落在 `h − 34` 而非 `h − pad`,
+ * 钮内文字基线是裸偏移 `+28`(同档实参下 `rowTextY` 会给 `+27`),两处都是 Web 原样。
  *
  * 另锁本屏照抄的 Web 口径:写入发生在进屏前(贴底钮那一下不落盘)、离线跨多赛季只留最近一次
  * 摘要且那一轮分数与星尘都是 0、摘要形态位在 Web 侧恒真(绘制层的防御分支)、整屏只有
@@ -35,7 +36,9 @@ import { seasonTheme } from "@game/data/seasonSets";
 import { STAGES } from "@game/data/stages";
 import { fs as FS, rowTextY } from "@game/ui/theme";
 import {
-  SE_ANCHOR_RATIO,
+  SE_BLOCK_INSET,
+  SE_BLOCK_TOP_DY,
+  SE_LINE_HALF_DY,
   SE_BANNER_DY,
   SE_BANNER_H,
   SE_BANNER_W,
@@ -62,6 +65,8 @@ import {
   SE_THEME_DY,
   SE_THEME_PX,
   SE_TITLE_PX,
+  seasonAnchorY,
+  seasonBlockBottomDy,
   seasonCloseBtn,
   seasonLayout,
   seasonScreenLayout,
@@ -184,42 +189,42 @@ describe("端间共读同一份共享层与本屏要用到的表事实", () => {
 /* ==================== 1. 四格几何矩阵 ==================== */
 
 describe("四格几何矩阵(h ∈ {996,1246} × 摘要形态 ∈ {上屏,收起})", () => {
-  /* 期望值由 seasonLayout(560, h, summary) 实算得出后写死 */
-  const MATRIX: Record<number, { anchor: number; emblemY: number; bannerY: number; base: number[]; btnY: number; btnText: number }> = {
+  /* 期望值由 seasonLayout(560, h, summary) 实算得出后写死。
+     摘要上屏那两格块高 `SE_BLOCK_TOP_DY + SE_NOTE_DY + SE_LINE_HALF_DY = 220`,
+     摘要收起那两格块高 `SE_BLOCK_TOP_DY + (SE_BANNER_H − SE_BANNER_DY) = 108`;
+     两者都按「块心对可落区 `[32, closeBtn.y − 16]` 中线」居中,于是收起档反而更低。 */
+  const MATRIX: Record<number, Record<"on" | "off", { anchor: number; emblemY: number; bannerY: number; base: number[]; btnY: number; btnText: number }>> = {
     996: {
-      anchor: 278,
-      emblemY: 182,
-      bannerY: 246,
-      base: [312, 340, 364, 392],
-      btnY: 918,
-      btnText: 946,
+      on: { anchor: 452, emblemY: 356, bannerY: 420, base: [486, 514, 538, 566], btnY: 918, btnText: 946 },
+      off: { anchor: 508, emblemY: 412, bannerY: 476, base: [542, 570, 594, 622], btnY: 918, btnText: 946 },
     },
     1246: {
-      anchor: 348,
-      emblemY: 252,
-      bannerY: 316,
-      base: [382, 410, 434, 462],
-      btnY: 1168,
-      btnText: 1196,
+      on: { anchor: 578, emblemY: 482, bannerY: 546, base: [612, 640, 664, 692], btnY: 1168, btnText: 1196 },
+      off: { anchor: 634, emblemY: 538, bannerY: 602, base: [668, 696, 720, 748], btnY: 1168, btnText: 1196 },
     },
   };
 
   for (const h of [H_STD, H_TALL]) {
-    const M = MATRIX[h];
-    it(`h=${h}:锚线与五处盒位对标 Web 的 h × 0.28 取偶档 / h − 78`, () => {
-      for (const s of [true, false]) {
+    for (const s of [true, false]) {
+      const M = MATRIX[h][s ? "on" : "off"];
+      it(`h=${h} 摘要${s ? "上屏" : "收起"}:锚线是内容块居中位,五处盒位与贴底钮 h − 78 各对一档`, () => {
         const L = laid(h, s);
         expect(L.anchorY).toBe(M.anchor);
-        expect(L.anchorY).toBe(Math.floor((h * SE_ANCHOR_RATIO) / 2) * 2);
+        // 锚线 = 可落区顶 + 上下等分的富余 + 块顶抬量(出口与本屏实算同一函数)
+        expect(L.anchorY).toBe(seasonAnchorY(W, h, s));
+        // 上下两道留白等分:富余为奇数时相差 2(取偶让给下道),这是栅格档的既定让位
+        expect(Math.abs(L.block.y - L.contentBand.y - (L.contentBand.y + L.contentBand.h - (L.block.y + L.block.h)))).toBeLessThanOrEqual(2);
         expect(L.emblem).toEqual({ x: 256, y: M.emblemY, w: SE_EMBLEM_SIZE, h: SE_EMBLEM_H });
         expect(L.banner).toEqual({ x: 100, y: M.bannerY, w: SE_BANNER_W, h: SE_BANNER_H });
         expect(L.closeBtn).toEqual({ x: 170, y: M.btnY, w: SE_BTN_W, h: SE_BTN_H });
         expect(L.title.baseY).toBe(M.anchor);
         expect([L.themeLine.baseY, L.scoreLine.baseY, L.dustLine.baseY, L.noteLine.baseY].map((n) => +n.toFixed(10))).toEqual(M.base.map((n) => +n.toFixed(10)));
         expect(L.closeText.baseY).toBe(M.btnText);
-      }
-    });
+      });
+    }
+  }
 
+  for (const h of [H_STD, H_TALL]) {
     it(`h=${h}:横向盒位与屏高无关(半宽常量就是唯一实参)`, () => {
       const L = laid(h, true);
       expect(L.emblem.x).toBe(W / 2 - SE_EMBLEM_DX);
@@ -238,28 +243,46 @@ describe("四格几何矩阵(h ∈ {996,1246} × 摘要形态 ∈ {上屏,收起
     });
   }
 
-  it("两档之间每个矩形都按 h 线性位移(本屏没有随屏高摊开的行区)", () => {
-    const a = laid(H_STD, true);
-    const b = laid(H_TALL, true);
+  it("两档之间锚线族按 h 的一半位移(可落区的富余上下各吃一半),贴底族照屏高走", () => {
     const dH = H_TALL - H_STD;
-    expect(b.anchorY - a.anchorY).toBe(70);
-    expect(b.emblem.y - a.emblem.y).toBe(70);
-    expect(b.banner.y - a.banner.y).toBe(70);
-    expect(b.themeLine.baseY - a.themeLine.baseY).toBe(70);
-    expect(b.noteLine.baseY - a.noteLine.baseY).toBe(70);
-    expect(b.closeBtn.y - a.closeBtn.y).toBe(dH);
-    expect(b.closeText.baseY - a.closeText.baseY).toBe(dH);
-    expect(bottom(b.closeBtn) - bottom(a.closeBtn)).toBe(dH);
+    // 块高与屏高无关,富余等分到块顶与块底 → 锚线斜率 1/2;250 的屏高差摊出 125,取偶落 126
+    const dAnchor = 126;
+    for (const s of [true, false]) {
+      const a = laid(H_STD, s);
+      const b = laid(H_TALL, s);
+      expect(b.anchorY - a.anchorY, "anchor " + s).toBe(dAnchor);
+      expect(b.emblem.y - a.emblem.y).toBe(dAnchor);
+      expect(b.banner.y - a.banner.y).toBe(dAnchor);
+      expect(b.themeLine.baseY - a.themeLine.baseY).toBe(dAnchor);
+      expect(b.noteLine.baseY - a.noteLine.baseY).toBe(dAnchor);
+      expect(b.closeBtn.y - a.closeBtn.y).toBe(dH);
+      expect(b.closeText.baseY - a.closeText.baseY).toBe(dH);
+      expect(bottom(b.closeBtn) - bottom(a.closeBtn)).toBe(dH);
+    }
   });
 
-  it("摘要形态位不改变任何矩形:四行恒算,只有整支 active 起落", () => {
+  it("摘要形态位只挪内容块的居中位:四行相对锚线的偏移恒算,块底抬量按档收放", () => {
     const on = laid(H_STD, true);
     const off = laid(H_STD, false);
     expect(on.summary).toBe(true);
     expect(off.summary).toBe(false);
-    for (const k of ["emblem", "banner", "closeBtn", "title", "themeLine", "scoreLine", "dustLine", "noteLine", "closeText"] as const) {
-      expect(off[k]).toEqual(on[k]);
+    // 四行摘要恒算:与锚线的相对偏移在两档形态下逐位同数(收起只是整支 active 起落)
+    for (const k of ["themeLine", "scoreLine", "dustLine", "noteLine"] as const) {
+      expect(off[k].baseY - off.anchorY).toBe(on[k].baseY - on.anchorY);
+      expect(off[k].x).toBe(on[k].x);
+      expect(off[k].maxW).toBe(on[k].maxW);
+      expect(off[k].px).toBe(on[k].px);
     }
+    // 徽标 / 横幅 / 两枚钮与标题的盒形、限宽、字号恒等,只有纵向落位随块高平移
+    expect([off.emblem.x, off.emblem.w, off.emblem.h]).toEqual([on.emblem.x, on.emblem.w, on.emblem.h]);
+    expect([off.banner.x, off.banner.w, off.banner.h]).toEqual([on.banner.x, on.banner.w, on.banner.h]);
+    expect(off.closeBtn).toEqual(on.closeBtn);
+    expect([off.title.x, off.title.maxW, off.title.px]).toEqual([on.title.x, on.title.maxW, on.title.px]);
+    expect(off.closeText).toEqual(on.closeText);
+    // 居中位差 = 两档块高差的一半(块底抬量 220 → 108,于是整块下移 56)
+    expect(off.anchorY - on.anchorY).toBe((seasonBlockBottomDy(true) - seasonBlockBottomDy(false)) / 2);
+    expect(on.block.h).toBe(SE_BLOCK_TOP_DY + seasonBlockBottomDy(true));
+    expect(off.block.h).toBe(SE_BLOCK_TOP_DY + seasonBlockBottomDy(false));
     expect(on.summaryDys).toEqual([SE_THEME_DY, SE_SCORE_DY, SE_DUST_DY, SE_NOTE_DY]);
     expect(on.summaryDys).toHaveLength(SE_SUMMARY_LINES);
   });
@@ -661,7 +684,12 @@ describe("Web 字面量与本屏表常量的同数关系", () => {
       expect(web.includes(`h * 0.28 + ${dy})`), String(dy)).toBe(true);
     }
     expect([SE_THEME_DY, SE_SCORE_DY, SE_DUST_DY, SE_NOTE_DY]).toEqual([34, 62, 86, 114]);
-    expect(SE_ANCHOR_RATIO).toBe(0.28);
+    // 内容块居中三项:呼吸位与页边距同档,块顶 = 徽标抬量,块底 = 末行基线 + 半行距
+    expect(SE_BLOCK_INSET).toBe(16);
+    expect(SE_BLOCK_TOP_DY).toBe(96);
+    expect(SE_LINE_HALF_DY).toBe(10);
+    expect(seasonBlockBottomDy(true)).toBe(124);
+    expect(seasonBlockBottomDy(false)).toBe(12);
   });
 
   it("本屏没有任何 Date.now / 随机源消费点(时序全在宿主那一层)", () => {
