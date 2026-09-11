@@ -693,6 +693,48 @@ export interface Phase4Params {
     cfCancelFallbackBg: string;
     cfCancelFallbackStroke: string;
     cfCancelText: string;
+
+    /* ---------- 升级三选一弹层(批次 A · A2 新屏;本屏没有 Web 基准,配色取主题令牌与已落地各屏同档) ---------- */
+    /** 全屏暗底:与融合屏三选一弹层同档(同为"覆盖在一张屏之上的取舍弹层") */
+    lvDim: string;
+    /** 盒底垫 panel_dark_corners 缺图回退(与二次确认弹层同一支:theme.bgPanel 填充 + 金描边) */
+    lvPanelFallbackBg: string;
+    lvPanelFallbackStroke: string;
+    /** 标题横幅 banner_mid_navy 缺图回退(与二次确认弹层同一支:平面深蓝底 + 1px 细金描边) */
+    lvBannerFallbackBg: string;
+    lvBannerFallbackStroke: string;
+    /** 标题「升级!选择一张」theme.gold(粗体 fs.section) */
+    lvTitle: string;
+    /** 读数行(金币 / 重随价 / 隐藏保底进度),与二次确认弹层正文同档 */
+    lvReadout: string;
+    /** 底部提示行 theme.textSecondary */
+    lvHint: string;
+    /** 卡内词条描述行,与二次确认弹层正文同档 */
+    lvCardDesc: string;
+    /** 卡内「数值差」一行 theme.gold:读成"这一手涨了多少" */
+    lvCardDelta: string;
+    /** 卡内状态标签常态 theme.textSecondary */
+    lvCardTag: string;
+    /** 命中隐藏词条时的高亮档 = quality 主表 hidden 档的 #4dffc8(同一支色,不另写一份) */
+    lvCardTagHidden: string;
+    /** 已锁定档 theme.gold(与锁定钮同色,读成"这一格被我留住了") */
+    lvCardTagLocked: string;
+    /** 选它钮 theme.actionPrimaryBg 填充 + actionPrimary 描边与文字(正向主操作档) */
+    lvPickBg: string;
+    lvPickStroke: string;
+    lvPickText: string;
+    /** 重随钮 #2A3D55 填充 + 半透明白描边(次要操作档,与 btn_minor 缺图回退同值) */
+    lvRerollBg: string;
+    lvRerollStroke: string;
+    lvRerollText: string;
+    /** 锁定钮 #3A3320 填充 + 金描边与金文字(与体力屏钻石钮同档) */
+    lvLockBg: string;
+    lvLockStroke: string;
+    lvLockText: string;
+    /** 三枚钮共用的一套禁态配色(与体力屏"广告用尽 / 钻石不足"同一档:暗底 + 淡描边 + 灰字) */
+    lvBtnOffBg: string;
+    lvBtnOffStroke: string;
+    lvBtnTextOff: string;
 }
 
 export const PHASE4_DEFAULTS: Phase4Params = {
@@ -1049,6 +1091,33 @@ export const PHASE4_DEFAULTS: Phase4Params = {
     cfCancelFallbackBg: "#2A3D55",
     cfCancelFallbackStroke: "rgba(255,255,255,0.3)",
     cfCancelText: "#8F9BB3",
+
+    /* 升级三选一弹层(暗底与融合屏三选一弹层同档;盒/横幅回退与二次确认弹层同档;三枚钮取主题令牌) */
+    lvDim: "rgba(4,6,10,0.92)",
+    lvPanelFallbackBg: "rgba(19,24,38,0.92)",
+    lvPanelFallbackStroke: "#FFD76A",
+    lvBannerFallbackBg: "rgba(18,24,44,0.88)",
+    lvBannerFallbackStroke: "rgba(255,215,106,0.35)",
+    lvTitle: "#FFD76A",
+    lvReadout: "#CFD6E2",
+    lvHint: "#8F9BB3",
+    lvCardDesc: "#CFD6E2",
+    lvCardDelta: "#FFD76A",
+    lvCardTag: "#8F9BB3",
+    lvCardTagHidden: "#4DFFC8",
+    lvCardTagLocked: "#FFD76A",
+    lvPickBg: "#1D3D2E",
+    lvPickStroke: "#4DFFC8",
+    lvPickText: "#4DFFC8",
+    lvRerollBg: "#2A3D55",
+    lvRerollStroke: "rgba(255,255,255,0.3)",
+    lvRerollText: "#CFCFCF",
+    lvLockBg: "#3A3320",
+    lvLockStroke: "#FFD76A",
+    lvLockText: "#FFD76A",
+    lvBtnOffBg: "#1A1F2A",
+    lvBtnOffStroke: "rgba(255,255,255,0.15)",
+    lvBtnTextOff: "#5A6A80",
 };
 
 /** 含义:Phase 3 三屏的呈现参数.单位:不透明度 0~255 / 尺寸设计 px / 颜色为 CSS 串 */

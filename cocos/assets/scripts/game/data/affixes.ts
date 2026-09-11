@@ -3,7 +3,12 @@
  * 数据与策划案 3.3 词缀库一一对应;隐藏词缀/彩虹品质由词缀融合系统产生(后续迭代)。
  */
 
-export type TriggerType = "pulse" | "kill" | "hurt" | "move" | "hit" | "combo";
+/**
+ * 触发器类型。前 6 个是常规池(`randomTriggers` 会发);
+ * `crit` / `elite` 是**隐藏触发器**,只从单卡重随的隐藏通道产出(见 ./reroll 的 HIDDEN_TRIGGERS),
+ * 不进常规刷卡与三选一,以免与"隐藏品质仅融合产出"的稀有度模型打架。
+ */
+export type TriggerType = "pulse" | "kill" | "hurt" | "move" | "hit" | "combo" | "crit" | "elite";
 export type EffectType =
   | "knife"
   | "nova"
@@ -19,7 +24,11 @@ export type EffectType =
   | "magma_trail"
   | "spirit_wolves"
   | "haunt_crown";
-export type ModifierType = "chain" | "explode" | "split" | "lifesteal" | "pierce" | "haste" | "power" | "duration";
+/**
+ * 修饰器类型。前 8 个是常规池(`randomModifiers` 会发);
+ * `echo` / `condemned` 是**隐藏修饰器**,同样只走重随的隐藏通道(见 ./reroll 的 HIDDEN_MODIFIERS)。
+ */
+export type ModifierType = "chain" | "explode" | "split" | "lifesteal" | "pierce" | "haste" | "power" | "duration" | "echo" | "condemned";
 
 /** 隐藏词缀(策划案 5.3:仅通过词缀融合获得,彩虹品质) */
 export type HiddenAffixType = "death_barrage" | "supernova" | "necromancer" | "death_trail";
@@ -39,11 +48,23 @@ export const TRIGGERS: readonly TriggerDef[] = [
   { type: "move", name: "移动触发", desc: "移动距离超过 X 米后触发" },
   { type: "hit", name: "受击触发", desc: "被敌人击中时触发" },
   { type: "combo", name: "连杀触发", desc: "连续击杀 X 个敌人后触发" },
+  // ↓ 隐藏触发器(只走重随,见 ./reroll)
+  { type: "crit", name: "暴击触发", desc: "造成暴击时触发" },
+  { type: "elite", name: "猎首触发", desc: "击杀精英或首领时触发" },
 ];
 
 export function triggerDef(type: TriggerType): TriggerDef {
   return TRIGGERS.find((t) => t.type === type)!;
 }
+
+/**
+ * 隐藏触发器归属(唯一出处):只从单卡重随的隐藏通道产出,见 ./reroll。
+ * 不进常规生成池,也不进图鉴与转生屏「定向搜索」—— 否则开局就能白选,稀有度模型直接垮。
+ */
+export const HIDDEN_TRIGGER_TYPES: readonly TriggerType[] = ["crit", "elite"];
+
+/** 常规触发器定义(图鉴分母、定向搜索钮序列都读这一份) */
+export const NORMAL_TRIGGER_DEFS: readonly TriggerDef[] = TRIGGERS.filter((t) => !HIDDEN_TRIGGER_TYPES.includes(t.type));
 
 /** 触发器的数值参数(装备实例持有,由品质/等级随机) */
 export interface TriggerParams {
@@ -163,11 +184,20 @@ export const MODIFIERS: readonly ModifierDef[] = [
   { type: "haste", name: "加速", desc: "触发器间隔缩短 X%" },
   { type: "power", name: "增幅", desc: "效果伤害提升 X%" },
   { type: "duration", name: "持续", desc: "效果持续时间延长 X 秒" },
+  // ↓ 隐藏修饰器(只走重随,见 ./reroll)
+  { type: "echo", name: "回响", desc: "效果在 X 秒后以 Y% 伤害再触发一次" },
+  { type: "condemned", name: "送葬", desc: "对生命低于 X% 的敌人伤害提升 Y%" },
 ];
 
 export function modifierDef(type: ModifierType): ModifierDef {
   return MODIFIERS.find((m) => m.type === type)!;
 }
+
+/** 隐藏修饰器归属(唯一出处):同隐藏触发器,只走重随通道,不进图鉴 */
+export const HIDDEN_MODIFIER_TYPES: readonly ModifierType[] = ["echo", "condemned"];
+
+/** 常规修饰器定义(图鉴分母读这一份) */
+export const NORMAL_MODIFIER_DEFS: readonly ModifierDef[] = MODIFIERS.filter((m) => !HIDDEN_MODIFIER_TYPES.includes(m.type));
 
 export interface ModifierParams {
   /** chain: 额外弹射目标数 */
@@ -188,6 +218,14 @@ export interface ModifierParams {
   pct3?: number;
   /** duration: 延长秒数 */
   sec?: number;
+  /** echo(隐藏): 二次触发的延迟秒数 */
+  echoSec?: number;
+  /** echo(隐藏): 二次触发的伤害系数(0-1,乘在原效果伤害上) */
+  echoMult?: number;
+  /** condemned(隐藏): 残血阈值 0-1(目标 hp/maxHp 低于此值才增伤) */
+  condemnHp?: number;
+  /** condemned(隐藏): 增伤倍率(1.45 = +45%) */
+  condemnMult?: number;
 }
 
 export interface ModifierInstance {

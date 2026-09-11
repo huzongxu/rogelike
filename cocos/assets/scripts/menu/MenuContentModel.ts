@@ -49,7 +49,7 @@ export interface MenuRowContent {
   /** 头像徽章资产键(品质框);null = 走代码圆/方块回退 */
   badgeKey: string | null;
   badgeText: string;
-  /** 当前可挑战 → 用高亮行板 */
+  /** 当前可挑战（选中指针或未通关的首道解锁关）；只作内容事实，行板高亮读 `unlocked` */
   current: boolean;
   /** 该行是否显示补星钮(决定右列避让与 makeupRect) */
   makeup: boolean;

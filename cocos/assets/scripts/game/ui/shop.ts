@@ -101,6 +101,8 @@ export interface ShopLayoutPure {
   /** 占位行几何(委托方按实际武器数截取并附 id) */
   weaponRows: ShopRect[];
   destroyRects: ShopRect[];
+  /** 强化钮几何(与 destroyRects 同高,位于其左侧;武器行内第二颗钮) */
+  upgradeRects: ShopRect[];
   /** 进化标题条顶缘 */
   mergeLabelY: number;
   mergeStartY: number;
@@ -272,6 +274,8 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
   const rawBh = clamp(splitW.rowH - 4, 30, 56);
   const bh = (splitW.rowH - rawBh) % 4 === 0 ? rawBh : rawBh - 2;
   const destroyRects: ShopRect[] = weaponRows.map((r) => ({ x: SHOP_PAD + CONTENT_W - 60, y: r.y + (r.h - bh) / 2, w: 60, h: bh }));
+  /* 强化钮:销毁钮左侧、同高,两钮之间留 4px 缝;宽 108 是为了放下"40→45 · 24金"这种带数值差的文案 */
+  const upgradeRects: ShopRect[] = weaponRows.map((r) => ({ x: SHOP_PAD + CONTENT_W - 172, y: r.y + (r.h - bh) / 2, w: 108, h: bh }));
 
   const mergeLabelY = weaponRows[nW - 1].y + weaponRows[nW - 1].h + gapWM.v;
   const mergeStartY = mergeLabelY + mHead.v + gapMRows.v;
@@ -294,6 +298,7 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
     weaponBandH: nW * splitW.rowH + (nW - 1) * splitW.gap,
     weaponRows,
     destroyRects,
+    upgradeRects,
     mergeLabelY,
     mergeStartY,
     mergeRowH: splitM.rowH,

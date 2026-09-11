@@ -15,14 +15,17 @@
 import { SHOP_ROW_BOTTOM, shopLayoutPure, type ShopLayoutPure, type ShopRect, type ShopToolBtn } from "../game/ui/shop";
 import {
   SHOP_SLOT_CAP,
+  UPGRADE_MAIN_KEYS,
+  canUpgrade,
   generateEquipment,
   generateSetEquipment,
   qualityBasePrice,
-  slotExpandCost,
   thornPairOffer,
+  upgradeCost,
+  upgradeEquipment,
   type Equipment,
 } from "../game/data/equipmentGen";
-import { DESTROY_REFUND_RATE, DUPLICATE_OFFER_CHANCE, MERGE_FEE_MULT, SET_OFFER_BIAS, shopCardPrice, shopRefreshPrice } from "../game/data/shop";
+import { DESTROY_REFUND_RATE, DUPLICATE_OFFER_CHANCE, MERGE_FEE_MULT, RUN_AD_SLOT_LIMIT, SET_OFFER_BIAS, shopCardPrice, shopRefreshPrice } from "../game/data/shop";
 import { QUALITY_MAX_LEVEL, qualityDef, qualityPowerRatio, qualityUpgrade, type Quality } from "../game/data/quality";
 import { isSetPiece, setDef } from "../game/data/sets";
 import type { SetId } from "../game/data/sets";
@@ -103,6 +106,14 @@ export interface ShopWeaponView {
   destroyText: string;
   /** 销毁可回收的金币数(文案已含在 destroyText 里,此项供测试与提示复用) */
   refund: number;
+  /** 行内强化钮文案:含价格与"强化后主数值"预览(变化要一眼看见,不靠玩家自己算) */
+  upgradeText: string;
+  /** 强化所需金币(取自共享层 upgradeCost;不可强化时为 0) */
+  upgradeCost: number;
+  /** 是否还能强化(未达该品质的等级上限) */
+  canUpgrade: boolean;
+  /** 金币是否够这一次强化 */
+  affordUpgrade: boolean;
 }
 
 export interface ShopMergeView {
@@ -168,6 +179,7 @@ export type ShopAction =
   | { kind: "card"; index: number }
   | { kind: "weapon"; id: number }
   | { kind: "destroy"; id: number }
+  | { kind: "upgrade"; id: number }
   | { kind: "merge"; sample: Equipment }
   | { kind: "next" };
 
@@ -201,8 +213,14 @@ export class ShopModel {
     return shopRefreshPrice(this.w.chapter(), this.refreshes);
   }
 
-  slotPrice(): number {
-    return slotExpandCost(this.w.runSlotBonus());
+  /** 本局还能用广告开几个槽:受"局上限"与"总槽上限"双重钳制 */
+  adSlotLeft(): number {
+    return Math.max(0, Math.min(RUN_AD_SLOT_LIMIT - this.w.runSlotBonus(), SHOP_SLOT_CAP - this.w.slots()));
+  }
+
+  /** 槽位是否已到总上限(到了就与广告无关,纯没地方放) */
+  slotMaxed(): boolean {
+    return this.w.slots() >= SHOP_SLOT_CAP;
   }
 
   /** 场上武器行(≤8 件,与 shopLayoutPure 的行数上限同口径) */
@@ -281,12 +299,13 @@ export class ShopModel {
     return Math.max(0, this.w.slots() - this.w.equipment.length);
   }
 
-  /** 槽位 +1(金币出口):未达总上限且金币足够才可购 */
-  buySlot(): boolean {
-    if (this.w.slots() >= SHOP_SLOT_CAP) return false;
-    const price = this.slotPrice();
-    if (this.w.gold() < price) return false;
-    this.w.setGold(this.w.gold() - price);
+  /**
+   * 广告开槽的**入账半边**:宿主看完广告后回调本方法,它只在两个上限内加一格。
+   * 模型不碰广告也不碰金币 —— 广告走宿主侧唯一的 `watchAd` 闸门(见 GameShell),
+   * 广告没看完 / 无库存时宿主就不调本方法,槽位不落地、也**不回退成金币价**(避免同一格出现两种价)。
+   */
+  grantSlotByAd(): boolean {
+    if (this.adSlotLeft() <= 0) return false;
     this.w.addRunSlot();
     return true;
   }
@@ -299,6 +318,22 @@ export class ShopModel {
     this.w.setGold(this.w.gold() + Math.round(qualityBasePrice(eq.quality) * DESTROY_REFUND_RATE));
     this.w.equipment.splice(idx, 1);
     if (this.selectedWeaponId === id) this.selectedWeaponId = null;
+    return true;
+  }
+
+  /**
+   * 场内强化(金币深出口):等级 +1,数值按共享层成长系数放大。
+   * 价格与上限都问共享层(`upgradeCost` / `canUpgrade`),本文件不算任何强化数值。
+   * 原地改数组里那个对象 —— 词缀引擎持同一引用,与 `merge` 同纪律,不重新赋值。
+   * 不调 `recordEquipment`:等级提升不产生新的卡牌身份(那件在购入时已登记图鉴);`merge` 要调是因为品质变了。
+   */
+  upgradeWeapon(id: number): boolean {
+    const eq = this.w.equipment.find((e) => e.id === id);
+    if (!eq || !canUpgrade(eq)) return false;
+    const cost = upgradeCost(eq);
+    if (this.w.gold() < cost) return false;
+    this.w.setGold(this.w.gold() - cost);
+    upgradeEquipment(eq);
     return true;
   }
 
@@ -344,8 +379,9 @@ export class ShopModel {
   /* ================= 点击判定 ================= */
 
   /**
-   * 热区顺序对标 Web `onShopClick`:工具钮 → 槽位 → 三卡 → 武器行(销毁优先) → 进化 → 下一章。
-   * 空态占位行不产热区(没有可操作的武器),销毁钮在行内优先于整行。
+   * 热区顺序对标 Web `onShopClick`:工具钮 → 槽位 → 三卡 → 武器行 → 进化 → 下一章。
+   * 武器行内优先级:强化 > 销毁 > 整行点选。强化钮是本批新增的场内出口,Web 冻结基准里没有对应物,
+   * 其余顺序与 Web 一致。空态占位行不产热区(没有可操作的武器)。
    */
   hitTest(x: number, y: number, screenH?: number): ShopAction | null {
     const L = this.layout(screenH);
@@ -360,6 +396,8 @@ export class ShopModel {
     for (let i = 0; i < eqs.length; i++) {
       const r = L.weaponRows[i];
       if (!r || !rectHit(r, x, y)) continue;
+      const u = L.upgradeRects[i];
+      if (u && rectHit(u, x, y)) return { kind: "upgrade", id: eqs[i].id };
       const d = L.destroyRects[i];
       if (d && rectHit(d, x, y)) return { kind: "destroy", id: eqs[i].id };
       return { kind: "weapon", id: eqs[i].id };
@@ -435,13 +473,24 @@ export class ShopModel {
       tools,
       cards,
       slotBtn: {
-        text: slotMaxed ? `槽位已满 ${w.slots()}/${SHOP_SLOT_CAP}` : `槽位+1 → ${w.slots() + 1} · ${this.slotPrice()}金`,
-        enabled: !slotMaxed && gold >= this.slotPrice(),
+        text: slotMaxed
+          ? `槽位已满 ${w.slots()}/${SHOP_SLOT_CAP}`
+          : this.adSlotLeft() > 0
+            ? `看广告开槽 → ${w.slots() + 1}(本局剩 ${this.adSlotLeft()} 次)`
+            : `本局广告开槽已用完(${RUN_AD_SLOT_LIMIT}/${RUN_AD_SLOT_LIMIT})`,
+        // 不再看金币:这颗钮已经不走金币通道,金币不足不该让它变灰
+        enabled: !slotMaxed && this.adSlotLeft() > 0,
       },
-      weaponHeader: { title: "武器管理(点选 · 销毁)", right: this.freeSlots() > 0 ? `空槽 ${this.freeSlots()}` : "槽已满,销毁武器腾槽" },
+      weaponHeader: { title: "武器管理(点选 · 强化 · 销毁)", right: this.freeSlots() > 0 ? `空槽 ${this.freeSlots()}` : "槽已满,销毁武器腾槽" },
       weapons: eqs.map((eq) => {
         const q = qualityDef(eq.quality);
         const maxLv = QUALITY_MAX_LEVEL[eq.quality];
+        const upgradable = canUpgrade(eq);
+        const cost = upgradable ? upgradeCost(eq) : 0;
+        // 强化后的主数值:复制一份走共享层同一函数,本文件不重算成长系数
+        const preview = upgradable ? upgradeEquipment(cloneAsOffer(eq, -1)) : null;
+        const now = upgradable ? mainValueOf(eq) : null;
+        const next = preview ? mainValueOf(preview) : null;
         return {
           id: eq.id,
           name: eq.effect.def.name + (this.selectedWeaponId === eq.id ? " ✓" : ""),
@@ -451,6 +500,10 @@ export class ShopModel {
           selected: this.selectedWeaponId === eq.id,
           destroyText: "销毁",
           refund: Math.round(qualityBasePrice(eq.quality) * DESTROY_REFUND_RATE),
+          upgradeText: !upgradable ? "已满级" : now != null && next != null ? `${now}→${next} · ${cost}金` : `强化 ${cost}金`,
+          upgradeCost: cost,
+          canUpgrade: upgradable,
+          affordUpgrade: upgradable && gold >= cost,
         };
       }),
       weaponEmpty: eqs.length === 0 ? "还没有武器,先从商店购买吧" : null,
@@ -468,6 +521,16 @@ export class ShopModel {
       nextText: `▶ 开始第 ${w.chapter() + 1} 章`,
     };
   }
+}
+
+/** 展示用主数值:按共享层的键序取第一个存在的数值(伤害/秒伤/治疗/护盾);无则 null */
+function mainValueOf(eq: Equipment): number | null {
+  const p = eq.effect.params as unknown as Record<string, unknown>;
+  for (const k of UPGRADE_MAIN_KEYS) {
+    const v = p[k];
+    if (typeof v === "number") return v;
+  }
+  return null;
 }
 
 /** 把已持有的卡复制成一份商店货(同款补位援助):新的负 id,避免与场上件撞号 */

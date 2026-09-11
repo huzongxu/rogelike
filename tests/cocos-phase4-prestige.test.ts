@@ -22,7 +22,8 @@
  *
  * 另锁本屏照抄的 Web 口径:**没有返回路径**(五段热区里没有 backBtn,唯一离开出口是重开一局)、
  * 「开始新轮回」不结算死亡故不产写入意图、`affordable` 三个条件缺一不可、买入守卫用
- * `routeOf(id)` 所属系而非当前页签、页签态与开局配置都是不入档的瞬时态、图鉴四个分母全部取表长、
+ * `routeOf(id)` 所属系而非当前页签、页签态与开局配置都是不入档的瞬时态、图鉴四个分母取常规池表长
+ * (隐藏词条只走重随通道,不进图鉴也不进定向搜索钮序列)、
  * 命中的五段顺序与热区外无兜底、十八条文案逐字。
  */
 
@@ -30,7 +31,20 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 
 /* ---------- 共享层(Web 与 Cocos 共用的单一事实源) ---------- */
-import { EFFECTS, MODIFIERS, TRIGGERS, effectDef, triggerDef, type EffectType, type TriggerType } from "@game/data/affixes";
+import {
+  EFFECTS,
+  HIDDEN_MODIFIER_TYPES,
+  HIDDEN_TRIGGER_TYPES,
+  MODIFIERS,
+  NORMAL_MODIFIER_DEFS,
+  NORMAL_TRIGGER_DEFS,
+  TRIGGERS,
+  effectDef,
+  modifierDef,
+  triggerDef,
+  type EffectType,
+  type TriggerType,
+} from "@game/data/affixes";
 import { ENEMY_DEFS } from "@game/data/enemies";
 import { SEASON_MONSTERS } from "@game/data/seasonMonsters";
 import { ALL_TALENTS, BUILDER_ROUTE, CONQUEROR_ROUTE, EFFICIENT_ROUTE, isTierUnlocked, routeCost, routeOf, talentOf, type TalentId } from "@game/data/talents";
@@ -263,35 +277,46 @@ describe("端间共读同一份共享层与本屏要用到的表事实", () => {
     expect(chain.reduce((s, id) => s + talentOf(id).cost, 0)).toBe(45);
   });
 
-  it("图鉴四个分母全部取表长:6 / 14 / 8 / 基线怪 + 赛季变体", () => {
+  it("图鉴四个分母取常规池表长:6 / 14 / 8 / 基线怪 + 赛季变体(隐藏词条不进图鉴)", () => {
     const t = prestigeCollectionTotalsLocal();
-    expect(t.triggers).toBe(TRIGGERS.length);
+    expect(t.triggers).toBe(NORMAL_TRIGGER_DEFS.length);
     expect(t.effects).toBe(EFFECTS.length);
-    expect(t.modifiers).toBe(MODIFIERS.length);
+    expect(t.modifiers).toBe(NORMAL_MODIFIER_DEFS.length);
     expect(t.enemies).toBe(Object.keys(ENEMY_DEFS).length + SEASON_MONSTERS.length);
-    expect(TRIGGERS.length).toBe(6);
+    expect(NORMAL_TRIGGER_DEFS.length).toBe(6);
     expect(EFFECTS.length).toBe(14);
-    expect(MODIFIERS.length).toBe(8);
+    expect(NORMAL_MODIFIER_DEFS.length).toBe(8);
     expect(Object.keys(ENEMY_DEFS).length).toBe(14);
     expect(SEASON_MONSTERS.length).toBe(120);
     expect(t.enemies).toBe(134);
   });
 
-  it("两个钮序列与页签三系的成员恰好覆盖两张表(不多不少不换序)", () => {
-    expect(PT_TRIGGER_TYPES).toEqual(TRIGGERS.map((d) => d.type));
+  it("隐藏词条只走重随通道:定义表比常规池多出的恰好是隐藏那几条,且不出现在定向搜索钮序列里", () => {
+    expect(TRIGGERS.length).toBe(NORMAL_TRIGGER_DEFS.length + HIDDEN_TRIGGER_TYPES.length);
+    expect(MODIFIERS.length).toBe(NORMAL_MODIFIER_DEFS.length + HIDDEN_MODIFIER_TYPES.length);
+    expect(HIDDEN_TRIGGER_TYPES).toEqual(["crit", "elite"]);
+    expect(HIDDEN_MODIFIER_TYPES).toEqual(["echo", "condemned"]);
+    expect(TRIGGERS.length).toBe(8);
+    expect(MODIFIERS.length).toBe(10);
+    for (const h of HIDDEN_TRIGGER_TYPES) expect(PT_TRIGGER_TYPES.includes(h), `${h} 不该可被开局白选`).toBe(false);
+    for (const d of NORMAL_TRIGGER_DEFS) expect(triggerDef(d.type).name.length, `${d.type} 缺显示名`).toBeGreaterThan(0);
+  });
+
+  it("两个钮序列恰好覆盖常规池两张表(不多不少不换序;隐藏触发器不在钮序列里)", () => {
+    expect(PT_TRIGGER_TYPES).toEqual(NORMAL_TRIGGER_DEFS.map((d) => d.type));
     expect(PT_EFFECT_TYPES).toHaveLength(8);
     expect(new Set(PT_EFFECT_TYPES).size).toBe(8);
     for (const t of PT_EFFECT_TYPES) expect(EFFECTS.some((e) => e.type === t)).toBe(true);
-    for (const t of PT_TRIGGER_TYPES) expect(TRIGGERS.some((e) => e.type === t)).toBe(true);
+    for (const t of PT_TRIGGER_TYPES) expect(NORMAL_TRIGGER_DEFS.some((e) => e.type === t)).toBe(true);
   });
 });
 
-/** 与模型同一分母口径的本地取数(测试要独立于模型的返回值再走一遍表长) */
+/** 与模型同一分母口径的本地取数(测试要独立于模型的返回值再走一遍常规池表长) */
 function prestigeCollectionTotalsLocal() {
   return {
-    triggers: TRIGGERS.length,
+    triggers: NORMAL_TRIGGER_DEFS.length,
     effects: EFFECTS.length,
-    modifiers: MODIFIERS.length,
+    modifiers: NORMAL_MODIFIER_DEFS.length,
     enemies: Object.keys(ENEMY_DEFS).length + SEASON_MONSTERS.length,
   };
 }
@@ -809,6 +834,21 @@ describe("屏级文案逐字(对标 Web drawPrestige 的 fillText 实参)", () =
     expect(c1.collText).toBe("图鉴:触发器 6/6 · 效果 14/14 · 修饰器 8/8 · 敌方 134/134");
     const c2 = buildPrestigeContent(save({ collection: collection(0, 3, 5, 9) }), "builder", cfg(), L);
     expect(c2.collText).toBe("图鉴:触发器 0/6 · 效果 3/14 · 修饰器 5/8 · 敌方 9/134");
+  });
+
+  it("图鉴分子排除隐藏词条:重随发现的隐藏词条进了存档,计数也不越过分母", () => {
+    const full = collection(6, 14, 8, 134);
+    const withHidden = {
+      triggers: [...full.triggers, ...HIDDEN_TRIGGER_TYPES.map((t) => triggerDef(t).name)],
+      effects: full.effects,
+      modifiers: [...full.modifiers, ...HIDDEN_MODIFIER_TYPES.map((m) => modifierDef(m).name)],
+      enemies: full.enemies,
+    };
+    // 先证明数据确实进了存档,否则"没越界"可能只是因为没写进去
+    expect(withHidden.triggers).toHaveLength(6 + HIDDEN_TRIGGER_TYPES.length);
+    expect(withHidden.modifiers).toHaveLength(8 + HIDDEN_MODIFIER_TYPES.length);
+    const c = buildPrestigeContent(save({ collection: withHidden }), "builder", cfg(), L);
+    expect(c.collText).toBe("图鉴:触发器 6/6 · 效果 14/14 · 修饰器 8/8 · 敌方 134/134");
   });
 
   it("页签标签与路线名同源:PT_TAB_DEFS 那三串就是 Web 用的三串", () => {

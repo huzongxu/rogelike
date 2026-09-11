@@ -91,6 +91,7 @@ interface WeaponSlot {
   icon: ReturnType<typeof iconNode>;
   name: Txt;
   sub: Txt;
+  upgrade: { plate: Plate; text: Txt };
   destroy: { plate: Plate; text: Txt };
 }
 
@@ -202,6 +203,7 @@ export class ShopView {
         icon: iconNode("WeaponIcon" + i, this.root, frames, { x: 0, y: 0, w: 24, h: 24 }),
         name: new Txt("WeaponName" + i, this.root),
         sub: new Txt("WeaponSub" + i, this.root),
+        upgrade: { plate: new Plate("WeaponUpgrade" + i, this.root, frames), text: new Txt("WeaponUpgradeText" + i, this.root) },
         destroy: { plate: new Plate("WeaponDestroy" + i, this.root, frames), text: new Txt("WeaponDestroyText" + i, this.root) },
       });
     }
@@ -375,9 +377,16 @@ export class ShopView {
     this.weapons.forEach((slot, i) => {
       const r = L.weaponRows[i];
       const v = c.weapons[i];
-      slot.frame.node.active = !!r && !!v;
-      slot.destroy.plate.node.active = !!r && !!v;
-      slot.destroy.text.active(!!r && !!v);
+      /** 八槽固定复用：本槽没有位就把**全部七件**一起收起，否则从多变少时旧行会叠在进化区与空态占位上 */
+      const on = !!r && !!v;
+      slot.frame.node.active = on;
+      slot.icon.node.active = on;
+      slot.name.active(on);
+      slot.sub.active(on);
+      slot.upgrade.plate.node.active = on;
+      slot.upgrade.text.active(on);
+      slot.destroy.plate.node.active = on;
+      slot.destroy.text.active(on);
       if (!r || !v) return;
       slot.frame.draw(r, v.color);
       const icy = r.y + r.h / 2;
@@ -386,7 +395,11 @@ export class ShopView {
       if (iconOn) placeRect(slot.icon.node, { x: r.x + 6, y: icy - 12, w: 24, h: 24 });
       slot.name.bold(true);
       slot.name.set(iconOn ? r.x + 38 : r.x + 10, icy + FS.muted / 3, 200, FS.muted, v.name, "left", v.color);
-      slot.sub.set(r.x + 246, icy + FS.micro / 3, 130, FS.micro, v.sub, "left", HEX.textSecondary);
+      /* 副标列宽 106:右缘 368,与强化钮左缘 372 留 4px 缝 */
+      slot.sub.set(r.x + 246, icy + FS.micro / 3, 106, FS.micro, v.sub, "left", HEX.textSecondary);
+      const u = L.upgradeRects[i];
+      slot.upgrade.plate.show("btn_minor", u, "slice", p3.buttonDisabledBg, p3.buttonDisabledStroke);
+      slot.upgrade.text.set(u.x + u.w / 2, u.y + u.h / 2 + FS.micro / 3, u.w - 6, FS.micro, v.upgradeText, "center", v.affordUpgrade ? HEX.actionPrimary : HEX.textMuted);
       const d = L.destroyRects[i];
       slot.destroy.plate.show("btn_danger", d, "slice", p3.buttonDisabledBg, p3.buttonDisabledStroke);
       slot.destroy.text.set(d.x + d.w / 2, d.y + d.h / 2 + FS.micro / 3, d.w - 6, FS.micro, v.destroyText, "center", HEX.actionDanger);

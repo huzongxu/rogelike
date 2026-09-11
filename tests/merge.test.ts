@@ -3,6 +3,9 @@
  */
 
 import { describe, it, expect } from "vitest";
+import { vec2 } from "@game/core/math";
+import { emptySave } from "../cocos/assets/scripts/core/SaveModel";
+import { BattleSim } from "../cocos/assets/scripts/battle/BattleSim";
 import {
   qualityUpgrade,
   qualityPowerRatio,
@@ -13,6 +16,7 @@ import {
   type Equipment,
 } from "@game/data/equipmentGen";
 import { makeTrigger, makeEffect, makeModifier } from "@game/data/affixes";
+import { MERGE_FEE_MULT } from "@game/data/shop";
 
 function mk(name: string, quality: Equipment["quality"], id: number, mods: Equipment["modifiers"] = []): Equipment {
   return {
@@ -31,7 +35,7 @@ function typeKey(eq: Equipment): string {
   return eq.effect.def.type + "|" + eq.quality;
 }
 
-/** 复刻 game.mergeGroups 的纯逻辑(按类型键,阈值 2) */
+/** 复刻 game.mergeGroups 的纯逻辑(按类型键,阈值 2,且仍有上一档可升) */
 function mergeGroups(equipment: Equipment[]) {
   const map = new Map<string, { name: string; quality: Equipment["quality"]; count: number; sample: Equipment }>();
   for (const eq of equipment) {
@@ -40,7 +44,7 @@ function mergeGroups(equipment: Equipment[]) {
     if (g) g.count += 1;
     else map.set(key, { name: eq.effect.def.name, quality: eq.quality, count: 1, sample: eq });
   }
-  return [...map.values()].filter((g) => g.count >= 2).slice(0, 4);
+  return [...map.values()].filter((g) => g.count >= 2 && qualityUpgrade(g.quality) !== null).slice(0, 4);
 }
 
 /** 构造指定触发器的装备(护盾生成场景:同效果同品质但触发器不同) */
@@ -94,6 +98,15 @@ describe("进化检测(2 张同款保底)", () => {
     expect(mergeGroups([a, b])).toHaveLength(0);
   });
 
+  it("隐藏档 2 张/3 张 → 不成组(终止档无可升上一档,挂出来是死点击)", () => {
+    expect(mergeGroups([mk("x", "hidden", 1), mk("x", "hidden", 2)])).toHaveLength(0);
+    expect(mergeGroups([mk("x", "hidden", 1), mk("x", "hidden", 2), mk("x", "hidden", 3)])).toHaveLength(0);
+  });
+
+  it("传奇档仍可进化到隐藏(终止档只卡隐藏自己)", () => {
+    expect(mergeGroups([mk("x", "legendary", 1), mk("x", "legendary", 2)]).map((g) => g.quality)).toEqual(["legendary"]);
+  });
+
   it("品质升级路径:common→rare→epic→legendary→hidden", () => {
     expect(qualityUpgrade("common")).toBe("rare");
     expect(qualityUpgrade("rare")).toBe("epic");
@@ -130,5 +143,32 @@ describe("强化(数值增长,金币出口)", () => {
     expect(qualityBasePrice("rare")).toBe(30);
     expect(qualityBasePrice("epic")).toBe(60);
     expect(qualityBasePrice("legendary")).toBe(120);
+  });
+});
+
+describe("共享层 mergeGroups:只有仍可升档的组才进商店进化列表", () => {
+  /** 活世界只读装备数组,不开局也能取到 sim.world */
+  function worldWith(equipment: Equipment[]) {
+    const sim = new BattleSim({
+      save: emptySave(),
+      input: { isMoving: false, moveDir: vec2(0, 0) },
+      worldH: 996,
+      persist: () => {},
+      callbacks: { onDamage: () => {}, onDeath: () => {}, onVictory: () => {}, onChapterShop: () => {} },
+    });
+    sim.player.equipment.push(...equipment);
+    return sim.world;
+  }
+
+  it("2 张隐藏 → 空列表(进化行不再挂出「升品 400金」)", () => {
+    const w = worldWith([mk("x", "hidden", 1), mk("x", "hidden", 2)]);
+    expect(w.mergeGroups()).toHaveLength(0);
+  });
+
+  it("2 张传奇 → 成组,补位费仍是品质基础价 ×2", () => {
+    const w = worldWith([mk("x", "legendary", 1), mk("x", "legendary", 2)]);
+    const groups = w.mergeGroups();
+    expect(groups).toHaveLength(1);
+    expect(qualityBasePrice(groups[0].quality) * MERGE_FEE_MULT).toBe(240);
   });
 });

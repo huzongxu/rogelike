@@ -37,8 +37,8 @@ import * as sharedScroll from "@game/ui/scrollList";
 import { allHeroes, applyHeroSelection, heroDef, isHeroReleased, releasedHeroes, type HeroId, type HeroSelection } from "@game/data/heroes";
 import { setDef, type SetId } from "@game/data/sets";
 import { SHOP_BOTTOM, SHOP_CALIBRATION_H, SHOP_ROW_BOTTOM, SHOP_TOP, cardIconSize, cardRibbon, shopLayoutPure } from "@game/ui/shop";
-import { SHOP_SLOT_CAP, generateEquipment, qualityBasePrice, slotExpandCost, type Equipment } from "@game/data/equipmentGen";
-import { shopCardPrice, shopRefreshPrice } from "@game/data/shop";
+import { SHOP_SLOT_CAP, generateEquipment, qualityBasePrice, type Equipment } from "@game/data/equipmentGen";
+import { RUN_AD_SLOT_LIMIT, shopCardPrice, shopRefreshPrice } from "@game/data/shop";
 import { DAILY_BOXES, ENERGY_MAX } from "@game/data/daily";
 import { COMMISSION_READY_HOURS, type CommissionState } from "@game/data/commissions";
 import { STAGES } from "@game/data/stages";
@@ -485,7 +485,7 @@ function cloneAs(src: Equipment, id: number): Equipment {
 }
 
 describe("商店账本(纯逻辑输入 → 输出)", () => {
-  it("卡价随本局已购递增:15 → 17 → 19(章节 1、common 基础价 15)", () => {
+  it("卡价随本局已购递增:16 → 19 → 21(章节 1、common 基础价 15;A4 重标后)", () => {
     const { world, st } = makeWorld({ gold: 100000 });
     const m = new ShopModel(world, () => 0.99);
     const prices: number[] = [];
@@ -495,9 +495,11 @@ describe("商店账本(纯逻辑输入 → 输出)", () => {
       prices.push(m.priceOf(card));
       expect(m.buy(0)).toBe(true);
     }
-    expect(prices).toEqual([15, 17, 19]);
+    expect(prices).toEqual([16, 19, 21]);
+    // 字面量与曲线函数同源:下次重标只需改表,这条会指出新阶梯该是多少
+    expect(prices).toEqual([0, 1, 2].map((b) => shopCardPrice(15, b, 1)));
     expect(st.totalBought).toBe(3);
-    expect(st.gold).toBe(100000 - 15 - 17 - 19);
+    expect(st.gold).toBe(100000 - 16 - 19 - 21);
     expect(st.equipment).toHaveLength(3);
     expect(st.recorded).toHaveLength(3);
     expect(m.priceOf(generateEquipment(3, "common"))).toBe(shopCardPrice(qualityBasePrice("common"), 3, 1));
@@ -521,27 +523,51 @@ describe("商店账本(纯逻辑输入 → 输出)", () => {
     expect(c.cards.filter((x) => !x.soldOut)).toHaveLength(2);
   });
 
-  it("槽位闸门与扩容:满槽买不了卡;槽位价 100 → 230 → 529 → 1217,到 8 封顶", () => {
+  it("槽位闸门与广告扩容:满槽买不了卡;开槽不花金币,本局 2 次封顶,总上限仍是 8", () => {
     const eqs = Array.from({ length: 6 }, () => generateEquipment(3, "common"));
-    const { world, st } = makeWorld({ gold: 100000, baseSlots: 4, equipment: eqs });
+    const { world, st } = makeWorld({ gold: 0, baseSlots: 6, equipment: eqs });
     const m = new ShopModel(world, () => 0.99);
     m.offers = [generateEquipment(3, "common"), null, null];
     expect(m.freeSlots()).toBe(0);
     expect(m.buy(0)).toBe(false);
     expect(m.content().cards[0].afford).toBe(false);
     expect(m.content().weaponHeader.right).toBe("槽已满,销毁武器腾槽");
-    const seen: number[] = [];
-    for (let i = 0; i < 4; i++) {
-      seen.push(m.slotPrice());
-      expect(m.buySlot()).toBe(true);
-    }
-    expect(seen).toEqual([100, 230, 529, 1217]);
-    expect(seen).toEqual([0, 1, 2, 3].map((n) => slotExpandCost(n)));
-    expect(st.gold).toBe(100000 - 100 - 230 - 529 - 1217);
-    expect(st.runSlotBonus).toBe(4);
-    expect(m.freeSlots()).toBe(SHOP_SLOT_CAP - 6);
-    expect(m.buy(0)).toBe(true);
-    expect(m.buySlot()).toBe(false); // 4 + 4 = 8 = 总上限,不再可售
+    // 金币为 0 也照样能开槽:这颗钮已经不走金币通道
+    expect(m.adSlotLeft()).toBe(RUN_AD_SLOT_LIMIT);
+    expect(m.content().slotBtn.enabled).toBe(true);
+    expect(m.content().slotBtn.text).not.toContain("金");
+    expect(m.grantSlotByAd()).toBe(true);
+    expect(m.grantSlotByAd()).toBe(true);
+    expect(st.runSlotBonus).toBe(2);
+    expect(st.gold, "开槽一分金币都不该动").toBe(0);
+    expect(world.slots()).toBe(SHOP_SLOT_CAP);
+    expect(m.adSlotLeft()).toBe(0);
+    expect(m.grantSlotByAd()).toBe(false);
+    // 6 基础槽 + 2 次广告正好撞到总上限:两个限制同时到,文案优先说"已满"(无天赋玩家的常态路径)
+    expect(m.slotMaxed()).toBe(true);
+    expect(m.content().slotBtn).toEqual({ text: `槽位已满 ${SHOP_SLOT_CAP}/${SHOP_SLOT_CAP}`, enabled: false });
+    expect(m.freeSlots()).toBe(2);
+    expect(m.buy(0)).toBe(false); // 仍买不起:金币 0,与槽位无关
+  });
+
+  it("广告次数用完但槽位还没满:文案走「本局已用完」而不是「槽位已满」", () => {
+    const { world, st } = makeWorld({ gold: 0, baseSlots: 4, runSlotBonus: 0 });
+    const m = new ShopModel(world);
+    expect(m.grantSlotByAd()).toBe(true);
+    expect(m.grantSlotByAd()).toBe(true);
+    expect(world.slots()).toBe(6); // 4 + 2,离总上限 8 还差两格
+    expect(m.slotMaxed()).toBe(false);
+    expect(m.adSlotLeft()).toBe(0);
+    expect(st.gold).toBe(0);
+    expect(m.content().slotBtn).toEqual({ text: `本局广告开槽已用完(${RUN_AD_SLOT_LIMIT}/${RUN_AD_SLOT_LIMIT})`, enabled: false });
+  });
+
+  it("天赋槽已占满总上限时:广告开槽直接不可用,文案走「槽位已满」而不是「次数用完」", () => {
+    const { world } = makeWorld({ baseSlots: SHOP_SLOT_CAP, runSlotBonus: 0, gold: 100000 });
+    const m = new ShopModel(world);
+    expect(m.slotMaxed()).toBe(true);
+    expect(m.adSlotLeft()).toBe(0);
+    expect(m.grantSlotByAd()).toBe(false);
     expect(m.content().slotBtn).toEqual({ text: `槽位已满 ${SHOP_SLOT_CAP}/${SHOP_SLOT_CAP}`, enabled: false });
   });
 

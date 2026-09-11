@@ -118,6 +118,8 @@ import {
     type ConfirmFrame,
     type ConfirmRequest,
 } from "./confirm/ConfirmModel";
+import { LevelUpView } from "./levelup/LevelUpView";
+import { LevelUpModel, type LevelUpAction, type LevelUpWorld } from "./levelup/LevelUpModel";
 import { approxW } from "./ui/PanelKit";
 import type { TripleMode } from "./game/data/fusion";
 import type { Equipment } from "./game/data/equipmentGen";
@@ -387,6 +389,19 @@ export class GameShell extends Component {
      * 初值用空正文(量字函数因此一次都不会被调到),真值由 `syncConfirm` 覆写。
      */
     private confirmFrame: ConfirmFrame = confirmScreenLayout(DESIGN_W, logicalH(), "", approxW);
+    /**
+     * 升级三选一弹层(批次 A · A2)—— **宿主持有的瞬时态,不入档**。三件:
+     *  ① 与二次确认弹层同款**不挂路由**:节点挂在 `Overlay` 常驻层上,开层时顶到末位压过懒建的 toast;
+     *  ② 它开着就把战斗停住 —— 弹层不挂路由,`router.blocksPlay()` 看不到它,故主循环里另设一道同位闸门;
+     *  ③ 一次击杀可能连升多级(`Player.addXp` 内部是 while 循环却只返回 boolean),
+     *     所以按级数排队,一轮弹三张、选完还有余量就再弹一轮(设计口径「每级触发一次」)。
+     * **本屏没有广告位**:重随走局内金币,所以本层不调 `watchAd`,也不新增任何 `adPending` 闸门。
+     */
+    private levelUpView: LevelUpView | null = null;
+    /** 三张卡 / 重随阶梯 / 隐藏保底计数 / 锁定项的账本(cc-free,几何转调共享层 levelUpLayout) */
+    private levelUpModel: LevelUpModel | null = null;
+    /** 还没弹出去的升级次数(选完一轮减 1,归零即恢复战斗) */
+    private levelUpPending = 0;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
     /** 赛季切片同样被 `tickSeason` 逐帧读,故与 heroSlice 同性质地复用同一枚对象 */
@@ -458,7 +473,7 @@ export class GameShell extends Component {
         if (!this.node) return;
         this.buildLayers();
         this.ready = true;
-        this.router.show("battle");
+        this.router.show("menu");
         // 其余世界美术后台流式加载:每帧从 frames 读取,到位即自动换上(语义 = Web assets.beginLoad())
         this.loadFrames(restFrameKeys()).then(() => {
             // 背景与视图贴图就绪态都是一次性读取,流到位后补刷一次
@@ -481,6 +496,7 @@ export class GameShell extends Component {
             this.victoryView?.setFrames(this.frames);
             this.energyView?.setFrames(this.frames);
             this.confirmView?.setFrames(this.frames);
+            this.levelUpView?.setFrames(this.frames);
             if (this.router.current === "heroes") this.heroesView?.sync();
             if (this.router.current === "leaderboard") this.leaderboardView?.sync();
             if (this.router.current === "daily") this.dailyView?.sync();
@@ -496,6 +512,7 @@ export class GameShell extends Component {
             if (this.router.current === "energy") this.energyView?.sync();
             // 弹层不挂路由:开着就补排一次(贴图就绪态随之变化)
             if (this.confirm) this.syncConfirm();
+            if (this.levelUpModel?.visible) this.syncLevelUp();
             this.refreshMenu();
         });
     }
@@ -522,6 +539,9 @@ export class GameShell extends Component {
         // 二次确认弹层挂在 Overlay 常驻层上(与 toast 同一条通路):它不属于任何一张屏,
         // 覆盖在所有屏之上且不随切屏消失(Web render() 的最后一步)
         this.buildConfirmLayer();
+        // 升级三选一弹层同样挂在 Overlay 常驻层上,且建在二次确认弹层之后:
+        // 兄弟序更靠后 → 渲染与触摸派发都压在它之上(两层不会同时开,顺序只为确定性)
+        this.buildLevelUpLayer();
     }
 
     /** 屏幕注册表:每屏一个节点 + 一个 refresh 回调(路由切屏时即刷新实时数值) */
@@ -602,12 +622,15 @@ export class GameShell extends Component {
                 onVictory: (info) => this.openVictory(info),
                 // 章末 → 弹章间商店屏(买完/关闭后回到战斗并继续下一章)
                 onChapterShop: () => this.openShop(),
+                // 升级 → 弹升级三选一(批次 A · A2):弹层是覆盖层,不切屏,战斗由主循环那道闸门停住
+                onLevelUp: (levels) => this.onLevelUp(levels),
             },
         });
         this.joystick.onToggleAuto = () => this.sim.toggleAuto();
         this.hudView.onSkipGuide = () => this.sim.skipGuide();
-        // 开局:主线第 1 关(体力不足回落无限关),背景随模式切换
-        if (!this.sim.startStage(1)) this.sim.startEndless();
+        // 开局不在这里：三个入口（菜单选关 / 菜单无限关 / restartRun）都走 requestStage /
+        // requestEndless 这一对漏斗，成功才进 enterBattleRun() 切战斗屏。启动落主城，
+        // 此处若预跑一局，在城里也会照打钱掉血。
         this.resetGameOverTransients();
         this.refreshBackdrop();
     }
@@ -909,8 +932,21 @@ export class GameShell extends Component {
                 }
                 break;
             case "slot":
-                if (!m.buySlot()) this.toast("金币不足或槽位已满");
-                break;
+                // 局内槽位改广告解锁(口径见 docs/DESIGN-SEASON-FEEL.md P1:每局 2 次、开局重置)。
+                // 广告只走 watchAd 那一道闸门,本屏不自建 pending 标志。
+                if (m.adSlotLeft() <= 0) {
+                    this.toast(m.slotMaxed() ? "槽位已满" : "本局广告开槽次数已用完");
+                    break;
+                }
+                this.watchAd(
+                    () => {
+                        // 广告是异步回调:switch 末尾那次 sync 早已跑完,落地后要自己补一次
+                        if (this.shopModel?.grantSlotByAd()) this.toast("槽位 +1");
+                        this.shopView?.sync();
+                    },
+                    () => this.toast("广告未看完,槽位未开")
+                );
+                return;
             case "card":
                 if (!m.buy(a.index)) this.toast(sim && m.freeSlots() <= 0 ? "槽位已满,先销毁一件" : "金币不足");
                 break;
@@ -919,6 +955,13 @@ export class GameShell extends Component {
                 break;
             case "destroy":
                 m.destroy(a.id);
+                break;
+            case "upgrade":
+                if (!m.upgradeWeapon(a.id)) {
+                    // 失败原因读视图数据那一行,宿主不重算价格与上限
+                    const row = m.content().weapons.find((wv) => wv.id === a.id);
+                    this.toast(row && !row.canUpgrade ? "这件已到品质上限,先进化升档" : "金币不足,强化不了");
+                }
                 break;
             case "merge":
                 if (!m.merge(a.sample)) this.toast("金币不足,升不了品");
@@ -2176,6 +2219,11 @@ export class GameShell extends Component {
      */
     private enterBattleRun(): void {
         this.resetGameOverTransients();
+        // 升级三选一的本局复位:排队计数归零,模型层的锁定项与两支重随计数一并清掉
+        // (锁定是"本局内跨弹层记忆",不跨局),再补排一次把可能还开着的弹层收起
+        this.levelUpPending = 0;
+        this.levelUpModel?.resetRun();
+        this.syncLevelUp();
         this.refreshBackdrop();
         this.router.show("battle");
     }
@@ -2313,6 +2361,123 @@ export class GameShell extends Component {
         if (this.save().energy !== before) this.syncEnergy();
     }
 
+    /* ================= 升级三选一弹层(覆盖层,不挂路由) ================= */
+
+    /**
+     * 弹层装配 —— 批次 A · A2 的新屏(需求 F9:升级时能选保留哪个 / 重新随机,重随有概率出隐藏词条)。
+     * 三层分工与二次确认弹层同构:几何在共享层 `game/ui/levelUpLayout.ts`(盒 / 横幅 / 三张卡 /
+     * 每卡三枚钮,坐标与宽高一律取偶、横向落在内容列 `[16, 544]`),账本与内容与命中在 cc-free 的
+     * `levelup/LevelUpModel.ts`,节点在 `levelup/LevelUpView.ts`,本文件只接线。
+     *
+     * 与二次确认弹层不同的两处:
+     *  ① **它有写入意图,但写的全是局内态**:新卡按引用 `push` 进 `sim.player.equipment`
+     *     (词缀引擎 `BattleContext` 持同一批数组,不得重新赋值)、强化卡**原地**升级场上那件、
+     *     金币经 `sim.gold` / `sim.world.gold` 与商店屏共用同一份账 —— 一个存档字段都不落,
+     *     所以本节没有 `commit*`、也没有 `persist()`;
+     *  ② **它开着就把战斗停住**:弹层不挂路由,`router.blocksPlay()` 看不到它,故主循环里另设一道
+     *     同位闸门(见 `update()`),选完即恢复。
+     *
+     * **本屏没有广告位**:重随的花费是局内金币,价格走 `rerollPrice(本章已重随次数)` 那张表,
+     * 于是本节不调 `watchAd`,也不新增任何 `adPending` 闸门(全仓那道闸门仍只有 `watchAd` 首行一处)。
+     */
+    private buildLevelUpLayer(): void {
+        const sim = this.sim;
+        if (!sim) return;
+        const parent = this.overlay ?? this.worldLayer;
+        /** 战场侧账本:与商店屏同一份金币、同一个装备数组引用(开局时世界层会换掉数组实例,故走 getter) */
+        const world: LevelUpWorld = {
+            get equipment() {
+                return sim.player.equipment;
+            },
+            gold: () => sim.gold,
+            setGold: (v) => {
+                sim.world.gold = v;
+            },
+            slots: () => sim.player.slots,
+            chapter: () => sim.chapter,
+            highestStage: () => sim.save.highestStage,
+            ownedTalents: () => sim.save.ownedTalents,
+            selectedSet: () => sim.save.selectedSet ?? null,
+            recordEquipment: (eq) => sim.world.recordEquipment(eq),
+        };
+        const model = new LevelUpModel(world);
+        this.levelUpModel = model;
+        this.levelUpView = new LevelUpView(parent, this.frames, {
+            layout: () => model.layout(DESIGN_W, logicalH()),
+            content: () => model.content(),
+            onAction: (a) => this.onLevelUpAction(a),
+        });
+        this.syncLevelUp();
+    }
+
+    /**
+     * 世界层报上来的升级(`BattleWorldHost.onLevelUp`)。一次击杀可能连升多级
+     * (`Player.addXp` 内部是 while 循环却只返回 boolean),故按级数排队:第一轮立刻弹出去,
+     * 其余等这一轮选完再弹(设计口径「每级触发一次三选一」)。
+     */
+    private onLevelUp(levels: number): void {
+        if (levels <= 0) return;
+        this.levelUpPending += levels;
+        if (!this.levelUpModel?.visible) this.openLevelUp();
+    }
+
+    /** 弹一轮:只在战斗屏上弹,且不与二次确认弹层叠(两层都开着时点击派发会含糊) */
+    private openLevelUp(): void {
+        const m = this.levelUpModel;
+        if (!m || this.levelUpPending <= 0 || m.visible) return;
+        if (this.router.current !== "battle" || this.confirm) return;
+        m.open();
+        this.syncLevelUp();
+    }
+
+    /** 一帧重排:开层、重随换卡面、锁定换标签与晚到贴图流式加载后各调一次 */
+    private syncLevelUp(): void {
+        const m = this.levelUpModel;
+        const v = this.levelUpView;
+        if (!m || !v) return;
+        v.root.active = m.visible;
+        if (!m.visible) return;
+        // 与二次确认弹层同一处置:toast 节点是懒建的,先建出来就会压在弹层之上,
+        // 故每次开层都把弹层顶到 Overlay 末位(渲染与触摸派发都按兄弟序,一并跟上)
+        const parent = v.root.parent;
+        if (parent) v.root.setSiblingIndex(parent.children.length - 1);
+        v.sync();
+    }
+
+    /**
+     * 热区 → 玩法。九片钮(三张卡 × 选它 / 重随 / 锁定)共用这一个出口,守卫全在模型层:
+     *  - **选它**:模型原地改局内装备数组(新卡 `push` 并登记图鉴、强化卡就地升一级且不重复登记),
+     *    弹层随之关掉;队列还有余量就接着弹下一轮,归零才恢复战斗;
+     *  - **重随**:锁定卡不进重随池、金币不足时模型**一个状态都不改**(不扣钱、不重随、不动阶梯与
+     *    保底计数),宿主只补一句轻提示;
+     *  - **锁定**:最多 1 张,本局内跨弹层记忆,被锁的卡下一轮必再出现。
+     * 三支都不看广告,也一个存档字段都不落。
+     */
+    private onLevelUpAction(a: LevelUpAction): void {
+        const m = this.levelUpModel;
+        if (!m || !m.visible) return;
+        if (a.kind === "reroll") {
+            if (!m.reroll(a.index)) this.toast(m.lockedIndex === a.index ? "锁定的卡不能重随" : "金币不足,重随不了");
+            this.syncLevelUp();
+            return;
+        }
+        if (a.kind === "lock") {
+            m.toggleLock(a.index);
+            this.syncLevelUp();
+            return;
+        }
+        const r = m.pick(a.index);
+        if (!r.ok) {
+            this.toast(r.reason === "slots" ? "槽位已满,选不了新卡" : "这件已不在场上");
+            this.syncLevelUp();
+            return;
+        }
+        this.levelUpPending = Math.max(0, this.levelUpPending - 1);
+        this.syncLevelUp();
+        // 连升多级:选完这一轮还有余量就接着弹(弹层不关到底,战斗也就一直停着)
+        if (this.levelUpPending > 0) this.openLevelUp();
+    }
+
     /* ================= 二次确认弹层(覆盖层,不挂路由) ================= */
 
     /**
@@ -2401,6 +2566,14 @@ export class GameShell extends Component {
         }
         // 赛季到期翻页:与每日重置同一条口,任何状态下都跑,所以同样排在路由闸门之前
         this.tickSeason();
+        // 升级队列自愈:升级与章末转场可能撞在同一帧(击杀先跑、章末 onChapterShop 后跑),
+        // 那一轮弹层会被 openLevelUp 的"只在战斗屏上弹"守卫挡掉、余量卡在队列里;
+        // 有了这一句,回到战斗屏的下一帧自己接着弹,不必在 closeShop 里另开一条通路。
+        if (this.levelUpPending > 0 && !this.levelUpModel?.visible) this.openLevelUp();
+        // 升级三选一弹层开着 → 战斗停住:弹层不挂路由,路由闸门 blocksPlay() 看不到它,
+        // 故在这里另设一道同位闸门(排在每日重置与赛季翻页之后,那两支任何状态下都要跑);
+        // 选完一轮且队列归零,visible 落回 false,下一帧自然恢复推进
+        if (this.levelUpModel?.visible) return;
         if (this.router.blocksPlay()) return;
         const step = Math.min(dt, viewTable().battle.maxFrameDt);
         this.joystick.update();

@@ -150,12 +150,12 @@ describe("战斗编排层行为指纹", () => {
   it("3000 帧推进与基线一致", () => {
     expect(h.digest.join("\n")).toMatchInlineSnapshot(`
       "t0000 ch=1 ct=0 k=0 gold=0 en=0 pr=0 gm=0 cl=0 mn=0 hp=100 lv=1 px=0,0 eh=811c9dc5 ph=811c9dc5
-      f500 ch=1 ct=83 k=5 gold=10 en=1 pr=32 gm=2 cl=0 mn=0 hp=100 lv=1 px=30,150 eh=9728ac69 ph=97c302b7
-      f1000 ch=1 ct=167 k=7 gold=16 en=5 pr=32 gm=1 cl=0 mn=0 hp=100 lv=1 px=30,272 eh=9230fafc ph=7105672d
-      f1500 ch=1 ct=250 k=14 gold=32 en=3 pr=32 gm=1 cl=0 mn=0 hp=100 lv=1 px=30,80 eh=98d3c914 ph=adf48f09
-      f2000 ch=1 ct=333 k=17 gold=38 en=6 pr=32 gm=1 cl=0 mn=0 hp=92 lv=1 px=30,80 eh=cf4e65eb ph=45dffa4d
-      f2500 ch=1 ct=417 k=22 gold=48 en=6 pr=32 gm=1 cl=0 mn=0 hp=92 lv=1 px=530,108 eh=9f1da37e ph=fea4a4b3
-      f3000 ch=1 ct=500 k=30 gold=60 en=4 pr=31 gm=4 cl=0 mn=0 hp=92 lv=1 px=530,80 eh=dca85186 ph=b6732a25"
+      f500 ch=1 ct=83 k=5 gold=5 en=1 pr=32 gm=2 cl=0 mn=0 hp=100 lv=1 px=30,150 eh=9728ac69 ph=97c302b7
+      f1000 ch=1 ct=167 k=7 gold=8 en=5 pr=32 gm=1 cl=0 mn=0 hp=100 lv=1 px=30,272 eh=9230fafc ph=7105672d
+      f1500 ch=1 ct=250 k=14 gold=16 en=3 pr=32 gm=1 cl=0 mn=0 hp=100 lv=2 px=30,80 eh=98d3c914 ph=adf48f09
+      f2000 ch=1 ct=333 k=17 gold=19 en=6 pr=32 gm=1 cl=0 mn=0 hp=92 lv=2 px=30,80 eh=cf4e65eb ph=45dffa4d
+      f2500 ch=1 ct=417 k=22 gold=24 en=6 pr=32 gm=1 cl=0 mn=0 hp=92 lv=2 px=530,108 eh=9f1da37e ph=fea4a4b3
+      f3000 ch=1 ct=500 k=30 gold=30 en=4 pr=31 gm=4 cl=0 mn=0 hp=100 lv=3 px=530,80 eh=dca85186 ph=b6732a25"
     `);
   });
 

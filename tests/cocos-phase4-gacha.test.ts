@@ -1705,8 +1705,9 @@ describe("Web 基准的反直觉口径已原样带上", () => {
     const shell = readFileSync(new URL("../cocos/assets/scripts/GameShell.ts", import.meta.url), "utf8");
     // Web 的 doGacha / doGachaAd 各调一次 recordEquipment → Cocos 侧由宿主逐件走同一条口
     expect((web.match(/this\.recordEquipment\(/g) ?? []).length).toBe(2);
-    // 这条口在宿主侧有两处消费者(章间商店 + 本屏),扭蛋落账段内恰好一处
-    expect((shell.match(/world\.recordEquipment\(eq\)/g) ?? []).length).toBe(2);
+    // 这条口在宿主侧有三处消费者(章间商店 ShopWorld / 扭蛋落账 / 升级三选一 LevelUpWorld),
+    // 扭蛋落账段内恰好一处
+    expect((shell.match(/world\.recordEquipment\(eq\)/g) ?? []).length).toBe(3);
     const commit = shell.slice(shell.indexOf("private commitGachaClaim"), shell.indexOf("/* ================= 转生与天赋屏"));
     expect((commit.match(/world\.recordEquipment\(eq\)/g) ?? []).length).toBe(1);
   });

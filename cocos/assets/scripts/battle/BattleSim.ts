@@ -67,6 +67,12 @@ export interface BattleCallbacks {
     onVictory(info: VictoryInfo): void;
     /** 章节打满 → 章间商店(商店屏 Phase 3;宿主可暂时直接 nextChapter 跳过) */
     onChapterShop(): void;
+    /**
+     * 玩家升级 → 宿主弹升级三选一(批次 A · A2)。与 `onChapterShop` 的差别:那一支要切屏,
+     * 本支不切屏也不改路由(弹层是覆盖层),所以本层一个转场动作都不做,只把连升级数原样转上去。
+     * 可选是为了不牵动既有假宿主与测试里的 callbacks 字面量。
+     */
+    onLevelUp?(levels: number): void;
 }
 
 export interface BattleSimOptions {
@@ -159,6 +165,8 @@ export class BattleSim {
             onChapterShop: () => this.cb.onChapterShop(),
             onStageCleared: () => this.victory(),
             onStageFailed: () => this.onDeath(),
+            // 升级三选一(批次 A · A2):世界层只报级数,弹层与"弹层开着就停住战斗"那道闸门都在宿主
+            onLevelUp: (levels) => this.cb.onLevelUp?.(levels),
         };
         this.world = new BattleWorld<FxLayerData>({ inputs, host, fxLayer: this.fxLayer });
     }

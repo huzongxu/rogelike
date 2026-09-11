@@ -17,7 +17,8 @@ import type { Projectile } from "../entities/projectile";
 import { spawnProjectile } from "../entities/projectile";
 import type { Cloud, Minion } from "../entities/objects";
 import { spawnCloud, spawnMinion } from "../entities/objects";
-import type { Equipment } from "../data/equipmentGen";
+import { echoSpecOf, type Equipment } from "../data/equipmentGen";
+import { CRIT_TRIGGER_CD } from "../data/combat";
 import type { EffectInstance, EffectType } from "../data/affixes";
 import { qualityDef, QUALITY_HASTE_CAP, QUALITY_BONUS_CONVERSION } from "../data/quality";
 import { SET_BONUSES, SET_PIECE_TIERS, type SetBonusState } from "../data/sets";
@@ -68,6 +69,12 @@ interface TriggerState {
   moveAccum: number;
   hurtCd: number;
   hitCd: number;
+  /** 隐藏触发器「暴击触发」的冷却(秒);常量见 ../data/combat 的 CRIT_TRIGGER_CD */
+  critCd: number;
+  /** 隐藏修饰器「回响」:剩余延迟秒数(>0 = 有一次二次触发在排队) */
+  echoTimer: number;
+  /** 隐藏修饰器「回响」:排队那次的伤害系数 */
+  echoMult: number;
 }
 
 interface EffStats {
@@ -91,11 +98,13 @@ export class EquipmentEngine {
   private thornHealCd = 0;
   /** 最近一次击杀的敌人位置(亡灵冠冕唤出亡影的落点;null = 退化为玩家位置) */
   private lastKillPos: Vec2 | null = null;
+  /** 隐藏修饰器「回响」的伤害缩放:`fire` 施放期间置为该次系数、结束复位 1,`statsOf` 读它 */
+  private dmgScale = 1;
 
   private stateOf(eq: Equipment): TriggerState {
     let s = this.states.get(eq.id);
     if (!s) {
-      s = { pulseTimer: 0, pulseInterval: 0, comboCount: 0, comboWindowTimer: 0, moveAccum: 0, hurtCd: 0, hitCd: 0 };
+      s = { pulseTimer: 0, pulseInterval: 0, comboCount: 0, comboWindowTimer: 0, moveAccum: 0, hurtCd: 0, hitCd: 0, critCd: 0, echoTimer: 0, echoMult: 1 };
       this.states.set(eq.id, s);
     }
     return s;
@@ -113,7 +122,7 @@ export class EquipmentEngine {
     return { left: Math.max(0, st.pulseInterval - st.pulseTimer), interval: st.pulseInterval };
   }
 
-  /** 帧驱动更新:周期脉冲 / 移动累积 */
+  /** 帧驱动更新:周期脉冲 / 移动累积 / 暴击冷却 / 回响延迟 */
   update(ctx: BattleContext, dt: number): void {
     for (const eq of ctx.player.equipment) {
       const st = this.stateOf(eq);
@@ -124,7 +133,18 @@ export class EquipmentEngine {
       }
       if (st.hurtCd > 0) st.hurtCd -= dt;
       if (st.hitCd > 0) st.hitCd -= dt;
+      if (st.critCd > 0) st.critCd -= dt;
       if (this.thornHealCd > 0) this.thornHealCd -= dt;
+
+      // 隐藏修饰器「回响」:延迟到期后按排队系数再放一次;isEcho=true 使其不再排队,防无限回响
+      if (st.echoTimer > 0) {
+        st.echoTimer -= dt;
+        if (st.echoTimer <= 0) {
+          const m = st.echoMult;
+          st.echoMult = 1;
+          this.fire(eq, ctx, m, true);
+        }
+      }
 
       const moveDist = ctx.player.movedThisFrame;
       for (const tr of eq.triggers) {
@@ -164,6 +184,9 @@ export class EquipmentEngine {
             st.comboCount = 0;
             this.fire(eq, ctx);
           }
+        } else if (tr.def.type === "elite" && (enemy.isElite || enemy.kind === "boss")) {
+          // 隐藏触发器「猎首」:精英与首领稀少,故不给概率也不给冷却
+          this.fire(eq, ctx);
         }
       }
     }
@@ -188,6 +211,20 @@ export class EquipmentEngine {
         });
         ctx.projectiles.push(p);
       }
+    }
+  }
+
+  /**
+   * 事件:玩家造成暴击(隐藏触发器「暴击触发」)。
+   * 冷却走 `CRIT_TRIGGER_CD`,与受击触发同口径 —— 高频暴击下不刷屏,但每次暴击都有反馈机会。
+   */
+  onCrit(ctx: BattleContext): void {
+    for (const eq of ctx.player.equipment) {
+      if (!eq.triggers.some((tr) => tr.def.type === "crit")) continue;
+      const st = this.stateOf(eq);
+      if (st.critCd > 0) continue;
+      st.critCd = CRIT_TRIGGER_CD;
+      this.fire(eq, ctx);
     }
   }
 
@@ -227,10 +264,22 @@ export class EquipmentEngine {
 
   /* ---------- 效果执行 ---------- */
 
-  private fire(eq: Equipment, ctx: BattleContext): void {
+  private fire(eq: Equipment, ctx: BattleContext, dmgScale = 1, isEcho = false): void {
+    // 隐藏修饰器「回响」:本次施放排队一次延迟二次触发(isEcho 的那次不再排队,防无限回响)
+    if (!isEcho) {
+      const spec = echoSpecOf(eq);
+      if (spec && spec.sec > 0) {
+        const st = this.stateOf(eq);
+        st.echoTimer = spec.sec;
+        st.echoMult = spec.mult;
+      }
+    }
+    // 回响那次的伤害缩放:经 statsOf 作用于本次施放的全部伤害出口,施放结束即复位
+    this.dmgScale = dmgScale;
     // 隐藏词缀(仅融合产出):替换常规效果执行
     if (eq.hiddenAffix) {
       this.castHidden(eq, ctx);
+      this.dmgScale = 1;
       return;
     }
     const s = this.statsOf(eq, ctx);
@@ -279,6 +328,7 @@ export class EquipmentEngine {
         this.castHauntCrown(eq, eff, s, ctx);
         break;
     }
+    this.dmgScale = 1;
   }
 
   /** 冰锥(极北冰脉):追踪高伤单体,转向率 params.homing(rad/s);分裂修饰器加发数 */
@@ -805,6 +855,8 @@ export class EquipmentEngine {
     if (co?.barrage_storm) s.haste = Math.min(QUALITY_HASTE_CAP, s.haste + COMBO_VALUES.barrage_storm.haste); // 弹幕风暴:全装备触发间隔 -20%(质变级,乘算品质射速)
     if (co?.abyss_rift) s.durationBonus += COMBO_VALUES.abyss_rift.durationSec; // 深渊裂隙:效果持续 +2 秒(落点回血池机制保留)
     if (co?.thorn_aura) s.healMult = (s.healMult ?? 1) * COMBO_VALUES.thorn_aura.healMult; // 荆棘光环:回复量 ×1.3(30% 反弹机制保留)
+    // 隐藏修饰器「回响」:二次触发那一次整体按系数缩放(放在最后,覆盖上面所有乘区)
+    if (this.dmgScale !== 1) s.power *= this.dmgScale;
     return s;
   }
 

@@ -201,7 +201,12 @@ describe("宿主接线:六个放弃/开局入口都要结算在前", () => {
     // 开局漏斗自己不含结算:体力不足挂起的那次开局在领完体力后重跑漏斗,重跑不该再结一次
     const funnel = src.slice(src.indexOf("private requestStage("), src.indexOf("private openEnergy()"));
     expect(funnel.includes("sim.settlePendingRun();")).toBe(false);
-    // boot 那一处开局不需要结算(刚启动时挂起标记必为假),别顺手加进去
-    expect(src.indexOf("if (!this.sim.startStage(1)) this.sim.startEndless();")).toBeGreaterThan(0);
+    // 启动期不预跑一局:开局只由 requestStage / requestEndless 这一对漏斗触发，
+    // 于是「停在主城时后台还在打钱掉血」这一类不可能出现（原 boot 开局那处的两条意图都在此守住）
+    const battleBuild = src.slice(src.indexOf("private buildBattle("), src.indexOf("private refreshBackdrop("));
+    expect(battleBuild.includes("new BattleSim("), "切到的确实是建战斗层那一段(防切片空过)").toBe(true);
+    expect(battleBuild.includes("this.sim.startStage(1)"), "buildBattle 不再自动开主线第 1 关").toBe(false);
+    expect(battleBuild.includes("this.sim.startEndless()"), "buildBattle 不再回落无限关").toBe(false);
+    expect(battleBuild.includes("sim.settlePendingRun();"), "buildBattle 不含结算").toBe(false);
   });
 });

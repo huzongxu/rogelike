@@ -47,6 +47,12 @@ export const LEVELUP_HEAL_PCT = 0.2;
 /** 接触伤害判定间隔(秒):同一敌人贴身后每 0.8s 结算一次,防每帧咬人 */
 export const CONTACT_HIT_CD = 0.8;
 
+/**
+ * 隐藏触发器「暴击触发」的冷却(秒):防高频暴击把效果刷成连发,口径与受击触发一致。
+ * 受击触发那条 0.7s 仍内联在引擎里(冻结基准,不在本次改动面),本常量只服务新增的暴击触发。
+ */
+export const CRIT_TRIGGER_CD = 0.7;
+
 /** 连杀窗口(秒):3 秒无新击杀断连 */
 export const COMBO_WINDOW = 3;
 /** 每 10 连杀触发一次狂潮 */
@@ -67,12 +73,16 @@ export const THORN_HEAL_PCT = 0.02;
 
 /* ---------- 击杀掉落(场内金币经济;替代经验宝石) ---------- */
 
-/** 金币换算:击杀掉落金币 = 敌人金币基数 × 2(每日天赋「淘金」另乘倍率) */
-export const GOLD_PER_XP = 2;
-/** Boss 击杀固定掉 60 金(不走上式, bosses 是主要金币节点) */
-export const BOSS_GOLD = 60;
-/** 精英死亡掉落的金币堆数(普通敌人 1 堆) */
-export const ELITE_GEM_COUNT = 8;
+/**
+ * 金币换算:击杀掉落金币 = 敌人金币基数 × 本值(每日天赋「淘金」另乘倍率)。
+ * 2 → 1(A4 重标):出口侧补齐了场内强化与升级重随两个深出口后,产出侧砍半,
+ * 让"每章末余额"回到"够买一张卡、但买不光货架"的区间。依据见 docs/DESIGN-SEASON-FEEL.md A4。
+ */
+export const GOLD_PER_XP = 1;
+/** Boss 击杀固定掉 45 金(不走上式,bosses 是主要金币节点);A4 由 60 下调,与产出侧同比例 */
+export const BOSS_GOLD = 45;
+/** 精英死亡掉落的金币堆数(普通敌人 1 堆);A4 由 8 下调 —— 精英章原本是单章产出的尖峰 */
+export const ELITE_GEM_COUNT = 6;
 /** 金币掉落散布半径(±px,围绕尸体) */
 export const DROP_SCATTER = 10;
 

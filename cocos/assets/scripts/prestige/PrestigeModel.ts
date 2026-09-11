@@ -47,7 +47,18 @@
  *    与 4372(点击写入)三处,「首次升级必定出现的触发器」这条玩法未实装。本层同样只管开关本身。
  */
 
-import { EFFECTS, MODIFIERS, TRIGGERS, effectDef, triggerDef, type EffectType, type TriggerType } from "../game/data/affixes";
+import {
+  EFFECTS,
+  HIDDEN_MODIFIER_TYPES,
+  HIDDEN_TRIGGER_TYPES,
+  NORMAL_MODIFIER_DEFS,
+  NORMAL_TRIGGER_DEFS,
+  effectDef,
+  modifierDef,
+  triggerDef,
+  type EffectType,
+  type TriggerType,
+} from "../game/data/affixes";
 import { ENEMY_DEFS } from "../game/data/enemies";
 import { SEASON_MONSTERS } from "../game/data/seasonMonsters";
 import { BUILDER_ROUTE, CONQUEROR_ROUTE, EFFICIENT_ROUTE, isTierUnlocked, routeCost, routeOf, talentOf, type TalentId, type TalentNode } from "../game/data/talents";
@@ -185,9 +196,33 @@ export function prestigeBlocks(save: PrestigeSaveView): { hasBlueprint: boolean;
   return { hasBlueprint: prestigeOwns(save.ownedTalents, "blueprint"), hasTargetedSearch: prestigeOwns(save.ownedTalents, "targeted_search") };
 }
 
-/** 图鉴四个分母:触发器 / 效果 / 修饰器 / 敌方(基线怪 + 赛季变体) */
+/**
+ * 图鉴四个分母:触发器 / 效果 / 修饰器 / 敌方(基线怪 + 赛季变体)。
+ * 触发器与修饰器只数**常规池** —— 隐藏词条(`crit`/`elite`/`echo`/`condemned`)只从单卡重随产出,
+ * 进图鉴等于把答案先摊给玩家。
+ */
 export function prestigeCollectionTotals(): { triggers: number; effects: number; modifiers: number; enemies: number } {
-  return { triggers: TRIGGERS.length, effects: EFFECTS.length, modifiers: MODIFIERS.length, enemies: Object.keys(ENEMY_DEFS).length + SEASON_MONSTERS.length };
+  return {
+    triggers: NORMAL_TRIGGER_DEFS.length,
+    effects: EFFECTS.length,
+    modifiers: NORMAL_MODIFIER_DEFS.length,
+    enemies: Object.keys(ENEMY_DEFS).length + SEASON_MONSTERS.length,
+  };
+}
+
+/**
+ * 隐藏词条的显示名(从定义表取,不写死中文字面量)。
+ * `save.collection` 收的是"见过的一切",重随发现的隐藏词条也会进去;而图鉴分母
+ * `prestigeCollectionTotals()` 只数常规池 —— 分子不排除它们就会出现「触发器 7/6」。
+ */
+const HIDDEN_AFFIX_NAMES: ReadonlySet<string> = new Set([
+  ...HIDDEN_TRIGGER_TYPES.map((t) => triggerDef(t).name),
+  ...HIDDEN_MODIFIER_TYPES.map((m) => modifierDef(m).name),
+]);
+
+/** 图鉴分子:已发现数,排除隐藏词条(与只数常规池的分母同口径) */
+function countDiscovered(names: readonly string[]): number {
+  return names.filter((n) => !HIDDEN_AFFIX_NAMES.has(n)).length;
 }
 
 /** 存档 + 页签态 + 开局配置 + 一帧几何 → 一屏文案(行序与限宽都与 layout 同源) */
@@ -202,7 +237,7 @@ export function buildPrestigeContent(save: PrestigeSaveView, route: PtRouteKey, 
     echoText: `回响点数 ${save.points}(已用 ${save.points - avail})`,
     availText: `可支配 ${avail}`,
     routeText: `${prestigeRouteName(route)}路线(${routeCost(nodes)}点)· 击败更多敌人获得回响点数`,
-    collText: `图鉴:触发器 ${col.triggers.length}/${total.triggers} · 效果 ${col.effects.length}/${total.effects} · 修饰器 ${col.modifiers.length}/${total.modifiers} · 敌方 ${col.enemies.length}/${total.enemies}`,
+    collText: `图鉴:触发器 ${countDiscovered(col.triggers)}/${total.triggers} · 效果 ${countDiscovered(col.effects)}/${total.effects} · 修饰器 ${countDiscovered(col.modifiers)}/${total.modifiers} · 敌方 ${col.enemies.length}/${total.enemies}`,
     tabs: PT_TAB_DEFS.map((t) => ({ route: t.route, label: t.label, selected: route === t.route })),
     ownedText: "已拥有",
     rows: L.rows.map((row) => {

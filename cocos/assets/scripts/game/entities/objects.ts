@@ -162,6 +162,26 @@ export function spawnGem(pos: Vec2, value: number): Gem {
   };
 }
 
+/**
+ * 金币堆溢出:把超额的堆并进**离玩家最近的那一堆** —— 金额守恒,堆数仍受 cap 约束。
+ * 旧行为是 `splice` 掉最早的堆,等于玩家看不见的钱静默蒸发;金币压力应当来自取舍,不该来自蒸发。
+ * 提为纯函数是为了能单测"守恒"与"并入的是最近那堆"这两条(battleWorld 里没法直接构造溢出)。
+ */
+export function mergeGemOverflow(gems: Gem[], cap: number, playerPos: Vec2): void {
+  if (gems.length <= cap) return;
+  const merged = gems.splice(0, gems.length - cap);
+  let target = gems[0];
+  let best = Infinity;
+  for (const g of gems) {
+    const d = (g.pos.x - playerPos.x) ** 2 + (g.pos.y - playerPos.y) ** 2;
+    if (d < best) {
+      best = d;
+      target = g;
+    }
+  }
+  for (const g of merged) target.value += g.value;
+}
+
 /* ---------- 障碍物(策划案 V3 §6 / DESIGN-S4 §3):石柱挡路 + 毒池 DoT ---------- */
 
 export interface Obstacle {

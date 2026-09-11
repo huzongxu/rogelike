@@ -353,7 +353,7 @@ export class MenuLayoutView {
       const n = this.ensureRow(r.id);
       // 逐行状态:未解锁整行减淡(对标 Web 未解锁行 globalAlpha),通关行轻微减淡
       n.op.opacity = !content || content.unlocked ? 255 : content.cleared ? p3.menuRowClearedAlpha : p3.menuRowLockedAlpha;
-      this.showPlate(n.plate, content?.current ? m.currentRowPlate : "menu_row_plate", r, "slice");
+      this.showPlate(n.plate, content?.unlocked ? m.currentRowPlate : "menu_row_plate", r, "slice");
       const cy = r.y + r.h / 2;
       /* 序号牌:chip 族小板 + 像素数字(20 逻辑 px 档的小徽记会抖糊,已由本牌接替) */
       const badgeBox: Rect = { x: r.x + L.rowMargin + L.d.badgeOffX - L.d.badgeSize / 2, y: cy - L.d.badgeSize / 2, w: L.d.badgeSize, h: L.d.badgeSize };

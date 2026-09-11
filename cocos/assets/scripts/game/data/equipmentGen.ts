@@ -11,6 +11,8 @@ import {
   type ModifierType,
   type TriggerInstance,
   type TriggerType,
+  NORMAL_MODIFIER_DEFS,
+  NORMAL_TRIGGER_DEFS,
   effectDef,
   makeEffect,
   makeModifier,
@@ -30,6 +32,7 @@ import {
 // 品质策划数值的对外 API 保持从本模块导出(历史导入路径兼容;数值本体在 ./quality)
 export { qualityWeightsForLevel, qualityUpgrade, qualityPowerRatio, QUALITY_MAX_LEVEL };
 import { pick, rand, randInt, pickWeighted } from "../core/math";
+import { AFFINITY_WEIGHT, HIDDEN_MODIFIERS, HIDDEN_TRIGGERS, REROLL_HIDDEN, SKILL_AFFINITY } from "./reroll";
 import { hiddenAffixDef } from "./fusion";
 import { setDef, type SetId } from "./sets";
 
@@ -60,10 +63,16 @@ export function randomQuality(level: number, rareBonus = 0): Quality {
   return pickWeighted(qualityWeightsForLevel(level, rareBonus));
 }
 
+/**
+ * 常规触发器池(刷卡 / 三选一 / 套组生成都从这里取),由 ./affixes 的常规定义视图派生。
+ * 隐藏触发器 `crit` / `elite` **不在内** —— 它们只走重随通道。
+ */
+export const NORMAL_TRIGGERS: readonly TriggerType[] = NORMAL_TRIGGER_DEFS.map((d) => d.type);
+
 function randomTriggers(q: Quality, level: number): TriggerInstance[] {
   const n = qualityDef(q).triggers;
   // 受击触发参与"荆棘反伤回血流"(受击+回血联动),保留在池中
-  const types = shuffle<TriggerType>(["pulse", "kill", "hurt", "move", "hit", "combo"]);
+  const types = shuffle<TriggerType>([...NORMAL_TRIGGERS]);
   const out: TriggerInstance[] = [];
   for (let i = 0; i < n; i++) {
     const t = types[i % types.length];
@@ -91,6 +100,11 @@ function triggerParams(t: TriggerType, level: number): Record<string, number> {
       return {};
     case "combo":
       return { count: randInt(3, 6), window: 2 };
+    // 隐藏触发器(只走重随):不带随机参数,节奏由引擎侧冷却控制(见 combat.ts 的 CRIT_TRIGGER_CD)
+    case "crit":
+      return {};
+    case "elite":
+      return {};
   }
 }
 
@@ -146,9 +160,14 @@ function effectParams(e: EffectType, level: number): Record<string, number> {
   }
 }
 
+/**
+ * 常规修饰器池,由 ./affixes 的常规定义视图派生。隐藏修饰器 `echo` / `condemned` **不在内** —— 只走重随通道。
+ */
+export const NORMAL_MODIFIERS: readonly ModifierType[] = NORMAL_MODIFIER_DEFS.map((d) => d.type);
+
 function randomModifiers(q: Quality, level: number): ModifierInstance[] {
   const n = qualityDef(q).modifiers;
-  const types = shuffle<ModifierType>(["chain", "explode", "split", "lifesteal", "pierce", "haste", "power", "duration"]);
+  const types = shuffle<ModifierType>([...NORMAL_MODIFIERS]);
   const out: ModifierInstance[] = [];
   for (let i = 0; i < n; i++) {
     const t = types[i % types.length];
@@ -156,6 +175,14 @@ function randomModifiers(q: Quality, level: number): ModifierInstance[] {
   }
   return out;
 }
+
+/** 隐藏修饰器数值(只走重随通道;池定义见 ./reroll)—— 单一出处,勿在引擎或视图里另写一份 */
+export const HIDDEN_MODIFIER_VALUES = {
+  /** 回响:0.35s 后以 50% 伤害再触发一次 */
+  echo: { echoSec: 0.35, echoMult: 0.5 },
+  /** 送葬:目标生命低于 30% 时伤害 ×1.45 */
+  condemned: { condemnHp: 0.3, condemnMult: 1.45 },
+} as const;
 
 function modifierParams(m: ModifierType, level: number): Record<string, number> {
   switch (m) {
@@ -175,6 +202,10 @@ function modifierParams(m: ModifierType, level: number): Record<string, number> 
       return { pct3: round2(0.15 + level * 0.006) };
     case "duration":
       return { sec: randInt(1, 3) };
+    case "echo":
+      return { ...HIDDEN_MODIFIER_VALUES.echo };
+    case "condemned":
+      return { ...HIDDEN_MODIFIER_VALUES.condemned };
   }
 }
 
@@ -216,6 +247,9 @@ export function generateSetEquipment(setId: SetId, level: number, rareBonus = 0,
   return { id: ++uid, level, quality: q, name, triggers, effect, modifiers };
 }
 
+/** 等级放大的主数值键(强化与商店预览共用一份;勿在视图层再抄一遍) */
+export const UPGRADE_MAIN_KEYS = ["damage", "dps", "heal", "amount"] as const;
+
 /**
  * 强化已有装备:等级 +1,伤害/秒伤/治疗/护盾按成长比例提升,范围小幅成长。
  * 这是"攻击效果拿得到强化"的核心:让玩家现有的攻击持续变强,而不是只给新装备。
@@ -225,7 +259,7 @@ export function upgradeEquipment(eq: Equipment): Equipment {
   const gNew = 1 + eq.level * EQUIPMENT_LEVEL_GROWTH;
   const ratio = gNew / gOld;
   const p = eq.effect.params;
-  for (const k of ["damage", "dps", "heal", "amount"] as const) {
+  for (const k of UPGRADE_MAIN_KEYS) {
     if (typeof p[k] === "number") p[k] = Math.round(p[k] * ratio);
   }
   if (typeof p.radius === "number") p.radius = Math.round(p.radius * 1.03);
@@ -251,6 +285,27 @@ export function equipmentHasHeal(eq: Equipment): boolean {
 /** 装备是否有荆棘触发(受击/受伤) */
 export function equipmentHasThornTrigger(eq: Equipment): boolean {
   return eq.triggers.some((t) => t.def.type === "hurt" || t.def.type === "hit");
+}
+
+/**
+ * 隐藏修饰器「送葬」:目标生命比例低于阈值时增伤(多条叠乘);无此修饰器 → 1。
+ * 之所以放在结算侧而不是 `statsOf`:它依赖**目标当前血量**,而 statsOf 拿不到目标。
+ */
+export function condemnedMultOf(eq: Equipment, targetHpFrac: number): number {
+  let mult = 1;
+  for (const m of eq.modifiers) {
+    if (m.def.type !== "condemned") continue;
+    if (targetHpFrac < (m.params.condemnHp ?? 0)) mult *= m.params.condemnMult ?? 1;
+  }
+  return mult;
+}
+
+/** 隐藏修饰器「回响」:延迟二次触发的规格(秒 + 伤害系数);无此修饰器 → null */
+export function echoSpecOf(eq: Equipment): { sec: number; mult: number } | null {
+  for (const m of eq.modifiers) {
+    if (m.def.type === "echo") return { sec: m.params.echoSec ?? 0, mult: m.params.echoMult ?? 0 };
+  }
+  return null;
 }
 
 export function buildHasHeal(list: readonly Equipment[]): boolean {
@@ -323,11 +378,81 @@ export function generateEquipmentWithTrigger(level: number, triggerType: Trigger
   return eq;
 }
 
-/** 词缀重铸:重新随机一件装备的修饰器(数量/品质不变) */
+/** 词缀重铸:只重随修饰器(数量/品质不变)。商店侧的单卡重随走下面的 `rerollCard`,本函数留给"只换修饰器"的窄口径 */
 export function reforgeEquipment(eq: Equipment): Equipment {
   eq.modifiers = randomModifiers(eq.quality, eq.level);
   eq.name = buildName(eq.triggers, eq.effect, eq.modifiers);
   return eq;
+}
+
+/** 重随结果:命中隐藏与否、以及命中了哪几条(供 UI 高亮与测试断言) */
+export interface RerollResult {
+  eq: Equipment;
+  hidden: boolean;
+  hiddenTriggers: TriggerType[];
+  hiddenModifiers: ModifierType[];
+}
+
+export interface RerollOpts {
+  /** 注入随机源(缺省 Math.random);概率与保底都靠它复现 */
+  roll?: () => number;
+  /** 本局连续未出隐藏的重随次数(出货后调用方清零);达 REROLL_HIDDEN.pity 必出 */
+  hiddenDryStreak?: number;
+  /** 出战套组:其声明的触发器/修饰器一并进亲和池(英雄特色) */
+  setId?: SetId | null;
+}
+
+/** 亲和加权抽一条并移出池(不放回,避免同卡出现两条相同词条) */
+function drawAffine<T>(pool: T[], affine: ReadonlySet<T>, roll: () => number): T {
+  const chosen = pickWeighted(
+    pool.map((value) => ({ value, weight: affine.has(value) ? AFFINITY_WEIGHT : 1 })),
+    roll
+  );
+  pool.splice(pool.indexOf(chosen), 1);
+  return chosen;
+}
+
+/**
+ * 单卡重随(需求 F9):重随触发器与修饰器,**效果 / 品质 / 等级都不变** ——
+ * 玩家点的是"这张卡的词条",效果若跟着变会让人觉得点错了卡。
+ *
+ * 亲和:效果自身的 `SKILL_AFFINITY` 与出战套组声明的词条,权重 ×`AFFINITY_WEIGHT`;非亲和项仍可能出,保留构筑意外。
+ * 隐藏:`REROLL_HIDDEN.chance` 命中,或本局连续未出达 `pity` 次必出;命中时首条触发器取自 `HIDDEN_TRIGGERS`、
+ * 首条修饰器取自 `HIDDEN_MODIFIERS`(该品质没有修饰器槽时只给触发器)。
+ */
+export function rerollCard(eq: Equipment, opts: RerollOpts = {}): RerollResult {
+  const roll = opts.roll ?? Math.random;
+  const q = qualityDef(eq.quality);
+  const aff = SKILL_AFFINITY[eq.effect.def.type];
+  const set = opts.setId ? setDef(opts.setId) : null;
+  const affTriggers = new Set<TriggerType>([...aff.triggers, ...(set?.triggers ?? [])]);
+  const affModifiers = new Set<ModifierType>([...aff.modifiers, ...(set?.modifiers ?? [])]);
+
+  const streak = Math.max(0, opts.hiddenDryStreak ?? 0);
+  const hidden = roll() < REROLL_HIDDEN.chance || streak + 1 >= REROLL_HIDDEN.pity;
+
+  const hiddenTriggers: TriggerType[] = [];
+  const hiddenModifiers: ModifierType[] = [];
+  const tPool = [...NORMAL_TRIGGERS];
+  const mPool = [...NORMAL_MODIFIERS];
+
+  const triggers: TriggerInstance[] = [];
+  for (let i = 0; i < q.triggers; i++) {
+    const t = hidden && i === 0 ? pickWeighted(HIDDEN_TRIGGERS.map((value) => ({ value, weight: 1 })), roll) : drawAffine(tPool, affTriggers, roll);
+    if (hidden && i === 0) hiddenTriggers.push(t);
+    triggers.push(makeTrigger(t, triggerParams(t, eq.level)));
+  }
+  const modifiers: ModifierInstance[] = [];
+  for (let i = 0; i < q.modifiers; i++) {
+    const m = hidden && i === 0 ? pickWeighted(HIDDEN_MODIFIERS.map((value) => ({ value, weight: 1 })), roll) : drawAffine(mPool, affModifiers, roll);
+    if (hidden && i === 0) hiddenModifiers.push(m);
+    modifiers.push(makeModifier(m, modifierParams(m, eq.level)));
+  }
+
+  eq.triggers = triggers;
+  eq.modifiers = modifiers;
+  eq.name = buildName(eq.triggers, eq.effect, eq.modifiers);
+  return { eq, hidden, hiddenTriggers, hiddenModifiers };
 }
 
 /** 按类型与等级构造效果实例(完美蓝图/初始武器用) */
@@ -569,6 +694,10 @@ export function describeTrigger(t: TriggerInstance): string {
       return `被敌人击中时触发`;
     case "combo":
       return `连杀 ${p.count} 个后触发`;
+    case "crit":
+      return `造成暴击时触发`;
+    case "elite":
+      return `击杀精英或首领时触发`;
   }
 }
 
@@ -625,6 +754,10 @@ export function describeModifier(m: ModifierInstance): string {
       return `伤害 +${Math.round((p.pct3 ?? 0) * 100)}%`;
     case "duration":
       return `持续 +${p.sec}s`;
+    case "echo":
+      return `${p.echoSec}s 后回响一次(${Math.round((p.echoMult ?? 0) * 100)}% 伤害)`;
+    case "condemned":
+      return `对生命低于 ${Math.round((p.condemnHp ?? 0) * 100)}% 的敌人伤害 +${Math.round(((p.condemnMult ?? 1) - 1) * 100)}%`;
   }
 }
 

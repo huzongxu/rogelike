@@ -54,6 +54,7 @@ import {
   rollChapterObstacles,
   pushOutOfPillar,
   isInPool,
+  mergeGemOverflow,
   spawnBurnPool,
   tickObstacleTtl,
   OBSTACLE,
@@ -105,8 +106,8 @@ import {
 import { setBonusState, setDef, type SetId } from "../data/sets";
 import { comboStates } from "../data/combos";
 import { setMutation } from "../data/seasonSets";
-import { buildHasThorn, buildHasHeal, equipmentHasThornTrigger, makeSetStarterEquipment, type Equipment } from "../data/equipmentGen";
-import { type Quality } from "../data/quality";
+import { buildHasThorn, buildHasHeal, condemnedMultOf, equipmentHasThornTrigger, makeSetStarterEquipment, type Equipment } from "../data/equipmentGen";
+import { qualityUpgrade, type Quality } from "../data/quality";
 import {
   cdrScaleFor,
   critFor,
@@ -124,8 +125,8 @@ import {
 import { hexA } from "../ui/theme";
 import { battleBandY } from "../ui/hud";
 
-/** 实体上限(保证小游戏性能;弹幕 420 = 组合技分裂子弹 + 品质高频标定值) */
-export const LIMITS = { enemies: 340, projectiles: 420, clouds: 44, minions: 24, gems: 300 };
+/** 实体上限(保证小游戏性能;弹幕 420 = 组合技分裂子弹 + 品质高频标定值;金币堆 420 与"溢出不丢钱"的并入逻辑配套) */
+export const LIMITS = { enemies: 340, projectiles: 420, clouds: 44, minions: 24, gems: 420 };
 
 /** 伤害飘字上限(同屏超出即淘汰最早一枚) */
 const DMG_NUM_CAP = 200;
@@ -267,6 +268,12 @@ export interface BattleWorldHost {
   onBossSpawned?(): void
   /** Boss 已被击杀(纯通知) */
   onBossDead?(): void
+  /**
+   * 玩家升级(纯通知):`levels` 是这一下连升的级数 —— `Player.addXp` 内部是 while 循环,
+   * 一次击杀吃下一大笔经验时可能跨多级,而它只返回一个 boolean,故级数由调用侧比对前后等级得出。
+   * 升级三选一弹层、弹层的开关与"弹层开着就停住战斗"那道闸门全部归宿主(世界层不暂停自己)。
+   */
+  onLevelUp?(levels: number): void
 }
 
 export interface BattleWorldOptions<F extends FxBridge> {
@@ -1221,6 +1228,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     if (critRate > 0 && Math.random() < critRate) {
       mult *= crit.mult;
       this.spawnDmg(e.pos, 0, "#ff2d8f"); // 暴击标记(伤害数字上方)
+      this.engine.onCrit(this.ctx); // 隐藏触发器「暴击触发」
     }
     if (this.owns("elemental") && this.isElementalEffect(source)) {
       mult *= elementalMultFor(this.inputs.ownedTalents());
@@ -1229,6 +1237,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     if (this.isThornBuild() && equipmentHasThornTrigger(source)) {
       mult *= 1.5;
     }
+    // 隐藏修饰器「送葬」:对残血目标增伤;依赖目标当前血量,故只能在结算侧乘(引擎的 statsOf 拿不到目标)
+    mult *= condemnedMultOf(source, e.hp / e.maxHp);
     dmg = Math.round(dmg * mult);
     if (dmg <= 0) return;
     // 反伤领域:敌人受击时反弹固定比例伤害(反射者自带比例不叠加)
@@ -1330,7 +1340,13 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     for (let i = 0; i < gemCount; i++) {
       this.gems.push(spawnGem(vec2(e.pos.x + rand(-DROP_SCATTER, DROP_SCATTER), e.pos.y + rand(-DROP_SCATTER, DROP_SCATTER)), goldValue));
     }
-    if (this.gems.length > LIMITS.gems) this.gems.splice(0, this.gems.length - LIMITS.gems);
+    // 溢出不再丢钱:超额堆并入离玩家最近的一堆(金额守恒),逻辑见 entities/objects 的 mergeGemOverflow
+    mergeGemOverflow(this.gems, LIMITS.gems, this.player.pos);
+    // 经验入口(A 批自带最小版):击杀即入账,升级 → 宿主弹三选一。经验曲线参数原样不动。
+    // addXp 自己会扣经验、抬等级、并按 LEVELUP_HEAL_PCT 回一口血(封顶 maxHp),故这里不重复施加
+    // 任何成长或回血;它内部是 while 循环却只返回 boolean,连升级数由前后等级之差得出。
+    const lvBefore = this.player.level;
+    if (this.player.addXp(e.def.xp)) this.host.onLevelUp?.(this.player.level - lvBefore);
     this.engine.onKill(this.ctx, e, { fromSplit, source });
   }
 
@@ -1356,7 +1372,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     return eq.effect.def.type + "|" + eq.quality;
   }
 
-  /** 商店三合一升品:可合并的卡组(同名同品质 ≥2;2 张保底 + 金币,3 张免费) */
+  /** 商店三合一升品:可合并的卡组(同名同品质 ≥2;2 张保底 + 金币,3 张免费)。
+   *  还有上一档可升才算组:隐藏是终止档,挂出来就是一行点不动的死点击。 */
   mergeGroups(): { name: string; quality: Quality; count: number; sample: Equipment }[] {
     const map = new Map<string, { name: string; quality: Quality; count: number; sample: Equipment }>();
     for (const eq of this.player.equipment) {
@@ -1365,7 +1382,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       if (g) g.count += 1;
       else map.set(key, { name: eq.effect.def.name, quality: eq.quality, count: 1, sample: eq });
     }
-    return Array.from(map.values()).filter((g) => g.count >= 2).slice(0, 4);
+    return Array.from(map.values()).filter((g) => g.count >= 2 && qualityUpgrade(g.quality) !== null).slice(0, 4);
   }
 
   /** 新装备入图鉴 */

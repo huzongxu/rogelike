@@ -7,10 +7,13 @@
 
 /** 商店卡价曲线:价格 = 品质基础价 × (1 + 本局已购 × perPurchase) × (1 + 章节 × perChapter) */
 export const SHOP_PRICE_CURVE = {
-  /** 本局每已购 1 张卡,后续卡价 +12%(局内金币出口节奏,防囤币扫货) */
-  perPurchase: 0.12,
-  /** 每章 +3%(局内通胀,随进程卡价自然上移) */
-  perChapter: 0.03,
+  /**
+   * 本局每已购 1 张卡,后续卡价 +18%(A4 由 12% 上调)。
+   * 与产出侧砍半同批:让"囤币一次扫光货架"变成"每章都得取舍买哪张"。
+   */
+  perPurchase: 0.18,
+  /** 每章 +5%(局内通胀,随进程卡价自然上移;A4 由 3% 上调,依据见 docs/DESIGN-SEASON-FEEL.md A4) */
+  perChapter: 0.05,
 } as const;
 
 /** 手动刷新价曲线:成本 = (base + 章节 × perChapter) × growth^本章已刷次数 */
@@ -25,6 +28,15 @@ export const SHOP_REFRESH_CURVE = {
 
 /** 进化补位费倍率:2 张合 1 需付 品质基础价 × 本值;3 张满组合成免费(保留"凑满"奖励感) */
 export const MERGE_FEE_MULT = 2;
+
+/**
+ * 本局广告开槽上限(对应第 7、8 槽)。口径见 docs/DESIGN-SEASON-FEEL.md 的 P1 裁定:
+ * 只设**局上限**、不设日上限 —— 计数就挂在 `runSlotBonus` 上,开局归零即自动重置。
+ *
+ * 金币开槽通道在 Cocos 侧退役(金币出口由场内强化接过去);共享层的 `slotExpandCost` 不删,
+ * 因为冻结的 Web 基准 `src/game.ts:969` 仍在消费它。
+ */
+export const RUN_AD_SLOT_LIMIT = 2;
 /** 销毁回收比率:返还 品质基础价 × 本值(50%,与 quality 主表 basePrice 备注口径一致) */
 export const DESTROY_REFUND_RATE = 0.5;
 /** "合成可达成"援助概率:把一张商店卡替换为玩家已持有卡的同款(同效果+同品质),便于凑 3 张升品 */
