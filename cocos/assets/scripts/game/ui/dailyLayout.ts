@@ -99,6 +99,8 @@ export interface DailyLayout {
   boxRows: DailyRowLayout[];
   talentRows: DailyRowLayout[];
   makeUpRow: DailyRowGeom;
+  /** v5:补领行右侧的金面钮盒(btn_gold 九宫格,状态文案居中压在钮上) */
+  makeUpCta: DailyRect;
   /** 宝箱行与天赋行未领态的底板档位(已领态走代码形状,不消费它) */
   rowPlate: DailyPlate;
   /** 补领行可补领态的底板档位(不可补领走代码形状,不消费它) */
@@ -157,9 +159,20 @@ export const DL_LABEL_DY = 16;
 /** 行高钳制档(spreadRows 的 minH/maxH 实参;两档都是偶数) */
 export const DL_ROW_MIN_H = 46;
 export const DL_ROW_MAX_H = 92;
+/** v4「深渊铭刻」行高上限(示意图:七行几乎摊满行区,行距收到 spreadRows 的下限) */
+export const DL_V4_ROW_MAX_H = 120;
+
+/** 几何入参(可选):v4 打开时行高按 DL_V4_ROW_MAX_H 封顶,其余几何不变 */
+export interface DailyLayoutOpts {
+  v4?: boolean;
+}
 /** 行内名字/描述起笔偏移与右对齐状态的右缘内缩(= `btn_minor` 的九宫切边带厚 16) */
 export const DL_NAME_DX = 16;
 export const DL_STATUS_INSET = 16;
+/** v5 补领金钮:宽 / 高 / 右缘内缩 */
+export const DL_CTA_W = 128;
+export const DL_CTA_H = 36;
+export const DL_CTA_INSET = 8;
 /** 两行文本的基线:l1 = evenDown(y + h/2 − 4),l2 = l1 + 18(固定行距,不走 spreadRows) */
 export const DL_LINE1_DY = 4;
 export const DL_LINE_SPACING = 18;
@@ -209,12 +222,12 @@ function rowGeom(rect: DailyRect): DailyRowGeom {
  * 缺失/空数组即 0 条,行数随之变成 `DAILY_BOXES.length + 1`),
  * 屏高收 `h`(行区在 `[listTop + labelH, evenDown(h) − pad]` 内摊开,996 与 1246 两档都成立)。
  */
-export function dailyLayout(w: number, h: number, talentIds: readonly string[] = []): DailyLayout {
+export function dailyLayout(w: number, h: number, talentIds: readonly string[] = [], opts: DailyLayoutOpts = {}): DailyLayout {
   const hh = evenDown(h);
   const pad = DL_PAD;
   const rowW = w - pad * 2;
   const rowCount = DAILY_BOXES.length + talentIds.length + 1;
-  const spread = spreadRows(rowCount, 0, hh - pad - DL_LIST_TOP - DL_LABEL_H * 2, DL_ROW_MIN_H, DL_ROW_MAX_H);
+  const spread = spreadRows(rowCount, 0, hh - pad - DL_LIST_TOP - DL_LABEL_H * 2, DL_ROW_MIN_H, opts.v4 ? DL_V4_ROW_MAX_H : DL_ROW_MAX_H);
   const rowH = evenDown(spread.rowH);
   const gap = evenDown(spread.gap);
   let y = DL_LIST_TOP + DL_LABEL_H;
@@ -237,6 +250,12 @@ export function dailyLayout(w: number, h: number, talentIds: readonly string[] =
   /* 补领行贴底：底边落 `hh − pad`，与天赋末行之间那条缝就是本屏唯一的吸余体 */
   const makeUpRow = rowGeom({ x: pad, y: hh - pad - rowH, w: rowW, h: rowH });
   const seamAboveMakeUp = makeUpRow.rect.y - y;
+  const makeUpCta: DailyRect = {
+    x: makeUpRow.rect.x + makeUpRow.rect.w - DL_CTA_INSET - DL_CTA_W,
+    y: makeUpRow.rect.y + evenDown((rowH - DL_CTA_H) / 2),
+    w: DL_CTA_W,
+    h: DL_CTA_H,
+  };
 
   const backBtn = dailyBackBtn(w);
   const headerPlate = dailyHeaderPlate();
@@ -249,6 +268,7 @@ export function dailyLayout(w: number, h: number, talentIds: readonly string[] =
     boxRows,
     talentRows,
     makeUpRow,
+    makeUpCta,
     rowPlate: { ...DL_ROW_PLATE },
     makeUpPlate: { ...DL_MAKEUP_PLATE },
     boxLabelY,

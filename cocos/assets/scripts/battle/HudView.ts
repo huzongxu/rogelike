@@ -14,7 +14,7 @@ import { Graphics, Label, Node, Sprite, SpriteFrame, UIOpacity } from "cc";
 import { DESIGN_W, logicalH, placeRect, Rect } from "../core/DesignMetrics";
 import { viewTable, borderOf } from "../core/ViewTable";
 import { bindLabel, hexToColor, label, makeNode, sliced, solidRect } from "../ui/Widgets";
-import { HUD_TOP_H, HUD_BOT_H, HUD_PAD, pickTicker, equipRowLayout, barFillW } from "../game/ui/hud";
+import { HUD_TOP_H, HUD_BOT_H, HUD_BOT_H_V4, HUD_PAD, pickTicker, equipGridLayout, barFillW } from "../game/ui/hud";
 import { strokeRing } from "../ui/PanelKit";
 import { hexA } from "../game/ui/theme";
 import { clamp } from "../game/core/math";
@@ -42,6 +42,8 @@ export class HudView {
     readonly root: Node;
     private frames: Map<string, SpriteFrame>;
     private wh: number;
+    /** 底坞高:v4 双排坞 96,旧档 48(几何常量都在共享层 hud.ts) */
+    private botH: number;
 
     /* 顶坞 */
     private hpBar: Graphics;
@@ -97,6 +99,7 @@ export class HudView {
     constructor(parent: Node, frames: Map<string, SpriteFrame>, wh: number) {
         this.frames = frames;
         this.wh = wh;
+        this.botH = viewTable().phase3.hudV4 ? HUD_BOT_H_V4 : HUD_BOT_H;
         this.root = makeNode("Hud", parent);
         placeRect(this.root, { x: 0, y: 0, w: DESIGN_W, h: logicalH() });
         this.buildRestZone();
@@ -110,6 +113,11 @@ export class HudView {
 
     /** 基线 y → 文本节点矩形(视觉中心 ≈ 基线 - 0.35×字号;行高 1.25×,与 label() 同源) */
     private baselineRect(x: number, b: number, px: number, w: number): Rect {
+        // v4:盒高放到 1.5×字号(中心不动 = 基线 − 0.35×字号),CLAMP 才不会把 1.3× 行高的字形上下削掉
+        if (viewTable().phase3.hudV4) {
+            const hh = Math.round(px * 1.5);
+            return { x, y: b - px * 0.35 - hh / 2, w, h: hh };
+        }
         return { x, y: b - px * 0.975, w, h: px * 1.25 };
     }
 
@@ -135,7 +143,7 @@ export class HudView {
         let w = 0;
         for (const ch of text) {
             if (ch === " ") w += px * h.spaceWidth;
-            else if (ch.charCodeAt(0) > 0x2e7f) w += px;
+            else if (ch.charCodeAt(0) > 0x2e7f || ch === "…") w += px;
             else w += px * h.asciiWidth;
         }
         return w;
@@ -166,8 +174,23 @@ export class HudView {
 
     private mkLabelIn(parent: Node, name: string, x: number, baselineY: number, px: number, color: string, maxW: number, ax: number, bold = false): Label {
         const lb = label(name, parent, "", px, color, { bold });
+        this.styleV4(lb, ax);
         placeRect(lb.node, this.baselineRect(x, baselineY, px, maxW), DESIGN_W, logicalH(), ax, 0.5);
         return lb;
+    }
+
+    /**
+     * v4 文字口径:节点 = 盒(CLAMP 不改尺寸),垂直居中、水平随锚点;文字视觉中线严格对齐盒中线
+     * (盒中心仍 = 基线 − 0.35×字号,与旧模型同心,只是不再让 NONE 溢出把盒改成字形包络)。
+     * 与主菜单 / 商店 / 英雄屏的 fitBox / Txt.box 同一修法。
+     */
+    private styleV4(lb: Label, ax: number): void {
+        if (!viewTable().phase3.hudV4) return;
+        lb.overflow = Label.Overflow.CLAMP;
+        lb.enableWrapText = false;
+        lb.verticalAlign = Label.VerticalAlign.CENTER;
+        lb.horizontalAlign = ax >= 0.75 ? Label.HorizontalAlign.RIGHT : ax <= 0.25 ? Label.HorizontalAlign.LEFT : Label.HorizontalAlign.CENTER;
+        lb.lineHeight = Math.round(lb.fontSize * 1.3);
     }
 
     private mkLabel(name: string, x: number, baselineY: number, px: number, color: string, maxW: number, ax: number, bold = false): Label {
@@ -338,9 +361,11 @@ export class HudView {
 
     private buildBottomDock(): void {
         const h = viewTable().hud;
-        const dy = this.wh - HUD_BOT_H;
+        const dy0 = this.wh - this.botH;
         const rx = DESIGN_W - HUD_PAD;
-        this.dockPlate("BottomDock", "hud_dock_bottom", { x: 0, y: dy, w: DESIGN_W, h: HUD_BOT_H }, true);
+        this.dockPlate("BottomDock", "hud_dock_bottom", { x: 0, y: dy0, w: DESIGN_W, h: this.botH }, true);
+        // 右簇的纵向落位按旧 48 坞标定;坞变高时整簇在坞内居中(偏移 = 增高量的一半)
+        const dy = dy0 + (this.botH - HUD_BOT_H) / 2;
 
         // 右簇:Boss 血条组
         const bx = rx - h.bossBarW;
@@ -481,11 +506,18 @@ export class HudView {
                 slot.on = on;
                 const g = slot.gfx;
                 g.clear();
+                const v4 = viewTable().phase3.hudV4;
                 if (on) {
                     g.fillColor = hexToColor(c.color);
-                    g.circle(0, 0, 8);
+                    if (v4) g.rect(-8, -8, 16, 16);
+                    else g.circle(0, 0, 8);
                     g.fill();
                     slot.ch.color = hexToColor(h.colors.comboOnText);
+                } else if (v4) {
+                    // 方形铁环(实心环带,与 strokeRing 同口径;Graphics.stroke 的 1.5px 在此画不出像素)
+                    g.fillColor = hexToColor(h.colors.comboOffStroke);
+                    strokeRing(g, 16, 16, 1);
+                    slot.ch.color = hexToColor(h.colors.comboOffText);
                 } else {
                     g.lineWidth = 1.5;
                     g.strokeColor = hexToColor(h.colors.comboOffStroke);
@@ -609,7 +641,7 @@ export class HudView {
 
     private syncBottomDock(sim: BattleSim): void {
         const h = viewTable().hud;
-        const dy = this.wh - HUD_BOT_H;
+        const dy = this.wh - this.botH;
         const bossEnt = sim.enemies.find((e) => e.kind === "boss" && e.hp > 0);
         const boss = !!bossEnt;
         this.bossGroup.active = boss;
@@ -635,12 +667,12 @@ export class HudView {
         }
 
         // 装备横排:布局签名变化时整体重建;每帧只刷 CD 条与文字
-        const rightW = boss ? 260 : 190;
+        const rightW = boss ? 260 : viewTable().phase3.hudV4 ? 136 : 190;
         const zoneW = DESIGN_W - HUD_PAD * 2 - rightW - 8;
         const eqs = sim.player.equipment;
-        const L = equipRowLayout(eqs.length, boss, zoneW);
+        const L = equipGridLayout(eqs.length, boss, zoneW, this.botH, viewTable().phase3.hudV4 ? 2 : 1);
         const sig =
-            `${boss ? 1 : 0}|${L.shown}|${L.cardW}|${L.chip ? L.hidden : 0}|` +
+            `${boss ? 1 : 0}|${L.shown}|${L.rows}|${L.cardW}|${L.chip ? L.hidden : 0}|${this.frames.has("hud_card_frame") ? 1 : 0}|` +
             eqs.slice(0, L.shown).map((e) => `${e.id}:${e.quality}:${e.effect.def.type}`).join(",");
         if (sig !== this.cardSig) {
             this.cardSig = sig;
@@ -681,26 +713,39 @@ export class HudView {
     private rebuildCards(sim: BattleSim, boss: boolean, dy: number): void {
         const h = viewTable().hud;
         const lx = HUD_PAD;
-        const cy = dy + 6;
-        const cardH = 36;
-        const rightW = boss ? 260 : 190;
+        const rightW = boss ? 260 : viewTable().phase3.hudV4 ? 136 : 190;
         const zoneW = DESIGN_W - HUD_PAD * 2 - rightW - 8;
         const eqs = sim.player.equipment;
-        const L = equipRowLayout(eqs.length, boss, zoneW);
+        // v4:两排网格(张数 ≤ 每排上限单排、否则双排,满 8 / 6 之外收 +N);旧档 rowsMax=1 即原横排口径
+        const L = equipGridLayout(eqs.length, boss, zoneW, this.botH, viewTable().phase3.hudV4 ? 2 : 1);
+        const cy = dy + L.y0;
+        const cardH = L.cardH;
         this.cardsRoot.removeAllChildren();
         this.cardCd = [];
         this.cardName = [];
         this.cardSub = [];
-        let ex = lx;
+        // 网格落位:第 i 张 → 列 i % cols、排 floor(i / cols);芯片跟在末排末张之后
+        const cellX = (col: number) => lx + col * (L.cardW + L.gap);
+        const cellY = (row: number) => cy + row * (L.cardH + L.rowGap);
         for (let i = 0; i < L.shown; i++) {
             const eq = eqs[i];
             if (!eq) break;
             const q = qualityDef(eq.quality);
             const card = makeNode("Card" + i, this.cardsRoot);
-            placeRect(card, { x: ex, y: cy, w: L.cardW, h: cardH }, DESIGN_W, logicalH());
+            placeRect(card, { x: cellX(i % L.cols), y: cellY(Math.floor(i / L.cols)), w: L.cardW, h: cardH }, DESIGN_W, logicalH());
             // 品质框:圆角暗底 + 品质色描边 + 内发光描边(卡片局部坐标 = 中心原点)
             const bg = makeNode("Bg", card);
             const g = bg.addComponent(Graphics);
+            const cardFrame = viewTable().phase3.hudV4 ? this.frames.get("hud_card_frame") : undefined;
+            if (cardFrame) {
+                // v4:暗石面 + 铁框(九宫格,透明心,按品质色乘性染色 —— 36 高的卡放不下额外的品质线,
+                // 首版那道 2px 顶线正压在卡名字形上;染框让品质语义落在框上,与旧版「品质色描边」同位)
+                g.fillColor = hexToColor("rgba(11,14,20,0.82)");
+                g.rect(-L.cardW / 2, -cardH / 2, L.cardW, cardH);
+                g.fill();
+                const fr = sliced("Frame", card, cardFrame, { x: 0, y: 0, w: L.cardW, h: cardH }, borderOf("hud_card_frame", cardFrame.width, cardFrame.height), q.color);
+                placeRect(fr.node, { x: 0, y: 0, w: L.cardW, h: cardH }, L.cardW, cardH);
+            } else {
             g.fillColor = hexToColor(h.colors.cardBg);
             g.roundRect(-L.cardW / 2, -cardH / 2, L.cardW, cardH, 4);
             g.fill();
@@ -712,6 +757,7 @@ export class HudView {
             g.strokeColor = hexToColor(hexA(q.color, 0.35));
             g.rect(-L.cardW / 2 + 2.5, -cardH / 2 + 2.5, L.cardW - 5, cardH - 5);
             g.stroke();
+            }
             // 技能槽底板:slot_skill 九宫格,垫在效果图标之下(图标盒 5,6,24x24 → 槽 3,4,28x28 同中心)
             const socket = this.frames.get("slot_skill");
             if (socket) {
@@ -742,24 +788,27 @@ export class HudView {
             }
             // 名称/副行(boss 收拢为仅名单行,基线 cy+22;平时 cy+15 / cy+30)
             const name = label("Name", card, "", h.pxCard, q.color, { bold: true });
+            this.styleV4(name, 0);
             placeRect(name.node, this.baselineRect(33, boss ? 22 : 15, h.pxCard, L.cardW - 38), L.cardW, cardH, 0, 0.5);
             this.cardName.push(name);
             if (boss) {
                 this.cardSub.push(name); // boss 单行:副行指向名称,bindLabel 幂等
             } else {
                 const sub = label("Sub", card, "", h.pxCardSub, h.colors.cardSubText, {});
+                this.styleV4(sub, 0);
                 placeRect(sub.node, this.baselineRect(33, 30, h.pxCardSub, L.cardW - 38), L.cardW, cardH, 0, 0.5);
                 this.cardSub.push(sub);
             }
             // 脉冲 CD 条(每帧重绘;槽位 = 卡底 3px)
             const cdNode = makeNode("Cd", card);
             this.cardCd.push(cdNode.addComponent(Graphics));
-            ex += L.cardW + L.gap;
         }
-        // 折叠芯片(+N)
+        // 折叠芯片(+N):末排末张之后
         this.chipNode.active = L.chip;
         if (L.chip) {
-            placeRect(this.chipNode, { x: ex, y: cy, w: L.chipW, h: cardH }, DESIGN_W, logicalH());
+            const lastRow = L.shown > 0 ? Math.floor((L.shown - 1) / L.cols) : 0;
+            const lastCount = L.shown - lastRow * L.cols;
+            placeRect(this.chipNode, { x: cellX(lastCount), y: cellY(lastRow), w: L.chipW, h: cardH }, DESIGN_W, logicalH());
             const g = this.chipNode.getComponent(Graphics)!;
             g.clear();
             g.fillColor = hexToColor(h.colors.chipBg);

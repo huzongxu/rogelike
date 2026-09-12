@@ -746,8 +746,12 @@ describe("主菜单内容模型(解锁 / 减淡档位 / 红点 / 实时数值)",
     expect(c.rows[1].badgeKey).toBe("avatar_common");
     expect(c.rows[3].badgeKey).toBe("avatar_rare");
     expect(c.rows[3].unlocked).toBe(false);
-    expect(c.rows[3].desc).toBe("打到第3关第10章解锁 · 已到第9章 · 20 章 · Boss");
-    expect(c.rows[0].desc).toBe("第一次直面尸潮 · 20 章 · Boss");
+    // v4 版式:左列恒为关卡描述,解锁条件挪到右下行(tail2),desc 仍是三段整串
+    expect(c.rows[3].sub).toBe("时间扭曲,反伤弥漫");
+    expect(c.rows[3].tail2).toBe("打到第3关第10章解锁 · 已到第9章");
+    expect(c.rows[3].desc).toBe("时间扭曲,反伤弥漫 · 20 章 · Boss · 打到第3关第10章解锁 · 已到第9章");
+    expect(c.rows[0].desc).toBe("第一次直面尸潮 · 20 章 · Boss · 已通关");
+    expect(c.rows[0].tail2).toBe("已通关");
     expect(starsGlyphs(0)).toBe("☆☆☆");
     expect(starsGlyphs(9)).toBe("★★★");
     expect(c.rows[0].badgeText).toBe("1");
@@ -786,7 +790,8 @@ describe("主菜单内容模型(解锁 / 减淡档位 / 红点 / 实时数值)",
   it("赛季行 / 展示带 / 入口标签随存档走", () => {
     const c = content(menuSave());
     expect(c.title).toBe("回响深渊");
-    expect(c.sectionText).toBe("主线关卡 · 通关解锁");
+    expect(c.sectionText).toBe("主线关卡 · 通关解锁下一关");
+    expect(c.sectionHint).toBe("7 关 × 20 章 · 关底深渊领主");
     expect(c.endlessText).toBe("♾ 无限关 · 爽模式");
     expect(c.seasonLine.startsWith("赛季 S1")).toBe(true);
     expect(c.seasonLine).toContain("第 4/14 天");

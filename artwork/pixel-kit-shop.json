@@ -89,6 +89,8 @@
    "cells": [
     {
      "key": "frame_common",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "artH": 104,
      "slice": 8,
      "fit": "stretch",
@@ -98,6 +100,8 @@
     },
     {
      "key": "frame_rare",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "artH": 104,
      "slice": 8,
      "fit": "stretch",
@@ -107,6 +111,8 @@
     },
     {
      "key": "frame_epic",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "artH": 104,
      "slice": 8,
      "fit": "stretch",
@@ -116,6 +122,8 @@
     },
     {
      "key": "frame_legendary",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "artH": 104,
      "slice": 8,
      "fit": "stretch",
@@ -125,6 +133,8 @@
     },
     {
      "key": "frame_hidden",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "artH": 104,
      "slice": 8,
      "fit": "stretch",

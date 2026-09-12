@@ -79,6 +79,10 @@ export interface SeasonLayout {
   emblem: SeRect;
   /** 标题横幅盒(`anchorY` 上方 32,362×44 = `banner_mid_bronze` 固有 181×22 的 2 倍) */
   banner: SeRect;
+  /** v4 宽绸带盒(与 banner 同心) */
+  ribbon: SeRect;
+  /** v4 大徽记盒(居中,底缘在绸带之上) */
+  emblemV4: SeRect;
   /** 标题「赛季结算」有横幅那一档(居中于 `anchorY`,落在横幅带内) */
   title: SeTextLine;
   /** 标题缺图那一档:左起笔于页边距,基线同一处 */
@@ -116,6 +120,12 @@ export const SE_BANNER_W = 362;
 export const SE_BANNER_DX = evenDown(SE_BANNER_W / 2);
 export const SE_BANNER_H = 44;
 export const SE_BANNER_DY = 32;
+/** v4「深渊铭刻」:宽绸带(ribbon_dark 整图,与旧横幅同心)与大徽记(energy_emblem 200×212 等比缩到 140×148,底缘压在绸带顶缘上 8) */
+export const SE_RIBBON_W = 320;
+export const SE_RIBBON_H = 56;
+export const SE_EMBLEM_V4_W = 140;
+export const SE_EMBLEM_V4_H = 148;
+export const SE_EMBLEM_V4_GAP = 8;
 /** 摘要四行相对锚线的基线偏移 */
 export const SE_THEME_DY = 34;
 export const SE_SCORE_DY = 62;
@@ -212,6 +222,8 @@ export function seasonLayout(w: number, h: number, summary: boolean): SeasonLayo
     block: { x: band.x, y: anchorY - SE_BLOCK_TOP_DY, w: band.w, h: blockH },
     emblem: { x: cx - SE_EMBLEM_DX, y: anchorY - SE_EMBLEM_DY, w: SE_EMBLEM_SIZE, h: SE_EMBLEM_H },
     banner: { x: cx - SE_BANNER_DX, y: anchorY - SE_BANNER_DY, w: SE_BANNER_W, h: SE_BANNER_H },
+    ribbon: { x: cx - evenDown(SE_RIBBON_W / 2), y: anchorY - SE_BANNER_DY - evenDown((SE_RIBBON_H - SE_BANNER_H) / 2), w: SE_RIBBON_W, h: SE_RIBBON_H },
+    emblemV4: { x: cx - evenDown(SE_EMBLEM_V4_W / 2), y: anchorY - SE_BANNER_DY - evenDown((SE_RIBBON_H - SE_BANNER_H) / 2) - SE_EMBLEM_V4_GAP - SE_EMBLEM_V4_H, w: SE_EMBLEM_V4_W, h: SE_EMBLEM_V4_H },
     title: line(cx, anchorY, maxW, SE_TITLE_PX, true),
     titleBare: { x: pad, baseY: anchorY, maxW: evenDown(cx - pad - 10), px: SE_TITLE_PX, align: "left", bold: true },
     themeLine: line(cx, anchorY + SE_THEME_DY, maxW, SE_THEME_PX, false),

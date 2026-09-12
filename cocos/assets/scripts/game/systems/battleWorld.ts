@@ -123,7 +123,7 @@ import {
   type TalentId,
 } from "../data/talents";
 import { hexA } from "../ui/theme";
-import { battleBandY } from "../ui/hud";
+import { HUD_BOT_H, battleBandY } from "../ui/hud";
 
 /** 实体上限(保证小游戏性能;弹幕 420 = 组合技分裂子弹 + 品质高频标定值;金币堆 420 与"溢出不丢钱"的并入逻辑配套) */
 export const LIMITS = { enemies: 340, projectiles: 420, clouds: 44, minions: 24, gems: 420 };
@@ -250,6 +250,8 @@ export interface BattleRunInputs {
 export interface BattleWorldHost {
   /** 战场标定高(竞技场带 = battleBandY(wh)) */
   worldHeight(): number
+  /** 底坞高(可选;v4 双排坞 96,缺省 HUD_BOT_H):竞技场带下缘随之上收 */
+  bottomDockH?(): number
   /** 移动输入 */
   readonly input: MoveInput
   /** 特效原语桥(宿主持有实例;本层只发请求 + tick) */
@@ -427,7 +429,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
 
   /** 本章竞技场:宽 560 标定;纵向收窄到上下坞之间(战场高每章现取宿主,坞高变化时 arena 随之变化) */
   chapterArena(): ArenaRect {
-    const band = battleBandY(this.host.worldHeight());
+    const band = battleBandY(this.host.worldHeight(), this.host.bottomDockH ? this.host.bottomDockH() : HUD_BOT_H);
     return { x0: 0, y0: band.y0, x1: 560, y1: band.y1 };
   }
 

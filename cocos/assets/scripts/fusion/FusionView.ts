@@ -41,7 +41,9 @@ import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
-import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
+import { TB_ICON, TB_TITLE_DX, TB_TITLE_X } from "../game/ui/titleBand";
+import { ROW_ICON_SHIFT, rowIconRect } from "../game/ui/rowIcon";
+import { Plate, fitOne, flatBox, iconNode, placeLine, boxPlace } from "../ui/PanelKit";
 import {
   FU_CARD_STROKE_W,
   FU_FUSE_STROKE_W,
@@ -86,6 +88,10 @@ class Txt {
       this.lb.color = hexToColor(color);
     }
     bindLabel(this.lb, fitOne(text, maxW, px));
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, x, baseY, maxW, px, align);
+      return;
+    }
     placeLine(this.lb.node, x, baseY, maxW, px, align);
   }
 
@@ -105,6 +111,10 @@ class Txt {
 /** 一件装备行的一件:纯代码底板 + 选中标记 + 名字 + 摘要行 */
 interface RowSlot {
   base: ReturnType<typeof flatBox>;
+  /** v4:铁框行板(选中 → 金框) */
+  plate: Plate;
+  /** v5:行左品质徽记 */
+  icon: Plate;
   selTag: Txt;
   name: Txt;
   sub: Txt;
@@ -149,6 +159,10 @@ export class FusionView {
 
   private dim: Node;
   private panel: Plate;
+  /** v4:通栏 64 高的顶带(menu_title_plate,随赛季主色铁框),压在面板与横幅之上 */
+  private band: Plate;
+  /** v5:顶带左端的圆徽记(素材表 emblem_a_N) */
+  private bandIcon: Plate;
   private banner: ReturnType<typeof iconNode>;
   private title: Txt;
   private stardustIcon: ReturnType<typeof iconNode>;
@@ -182,6 +196,8 @@ export class FusionView {
     this.dim = makeNode("Dim", this.root);
     this.dim.addComponent(Graphics);
     this.panel = new Plate("Panel", this.root, frames);
+    this.band = new Plate("BandV4", this.root, frames);
+    this.bandIcon = new Plate("BandIconV5", this.root, frames);
 
     // 节点创建顺序 = Web drawFusion 的绘制顺序(横幅 → 标题 → 星尘 → 返回钮 → 行 → 底部),弹层最后
     this.banner = iconNode("HeaderBanner", this.root, frames, ZERO);
@@ -239,7 +255,7 @@ export class FusionView {
   }
 
   private makeRowSlot(name: string): RowSlot {
-    return { base: flatBox(name + "Base", this.rowsNode), selTag: new Txt(name + "SelTag", this.rowsNode), name: new Txt(name + "Name", this.rowsNode), sub: new Txt(name + "Sub", this.rowsNode) };
+    return { base: flatBox(name + "Base", this.rowsNode), plate: new Plate(name + "Plate", this.rowsNode, this.frames), icon: new Plate(name + "Icon", this.rowsNode, this.frames), selTag: new Txt(name + "SelTag", this.rowsNode), name: new Txt(name + "Name", this.rowsNode), sub: new Txt(name + "Sub", this.rowsNode) };
   }
 
   /** 行槽按需增长(件数 = 局内装备列表长度,Web 不截断;只增不减,多余的槽收起) */
@@ -270,6 +286,18 @@ export class FusionView {
     const tl = banner ? L.titleOnBanner : L.title;
     this.title.set(tl.x, tl.baseY, tl.maxW, tl.px, c.title, tl.align, p4.fuTitle);
     setTextOutline(this.title.lb, banner ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
+    // v4 顶带:通栏 64 高,标题金 16 左起;横幅收起
+    this.band.setActive(p3.restV4);
+    this.bandIcon.setActive(p3.restV4);
+    if (p3.restV4) {
+      this.band.show("menu_title_plate", { x: 0, y: 0, w: DESIGN_W, h: 64 }, "slice", p3.detailBg, p3.detailStroke);
+      this.bandIcon.show("emblem_a_10", TB_ICON, "stretch");
+      this.banner.show("");
+      placeRect(this.banner.node, ZERO);
+      setTextOutline(this.title.lb, 0, HEX.bgDeep);
+      this.title.bold(true);
+      this.title.set(TB_TITLE_X, 26, L.backBtn.x - 28 - TB_TITLE_DX, 16, c.title, "left", HEX.gold);
+    }
 
     // 星尘读数:iconText 两档(有图右移、缺图前置替代字形),不加粗(Web 只设一次 F(fs.body))
     this.paintIconText(L, c, p4);
@@ -336,22 +364,31 @@ export class FusionView {
     const selFill = rc.sel === "A" ? p4.fuRowSelAFill : rc.sel === "B" ? p4.fuRowSelBFill : p4.fuRowSelCFill;
     slot.base.node.active = true;
     slot.base.draw(row.rect, rc.sel ? selFill : p4.fuRowFill, rc.sel ? rc.qualityColor : p4.fuRowStroke, rc.sel ? FU_ROW_SEL_STROKE_W : 1);
+    const v4 = viewTable().phase3.restV4;
+    slot.plate.setActive(v4);
+    if (v4) slot.plate.show(rc.sel ? "menu_row_plate_current" : "menu_row_plate", row.rect, "slice");
+    // v5:行左品质徽记,三段文字整体右移(几何来自共享层 rowIcon)
+    slot.icon.setActive(v4);
+    if (v4) slot.icon.show(`emblem_${rc.quality}`, rowIconRect(row.rect), "stretch");
+    const dx = v4 ? ROW_ICON_SHIFT : 0;
     slot.selTag.active(!!rc.sel);
     if (rc.sel) {
       slot.selTag.bold(true);
-      slot.selTag.set(row.selTag.x, row.selTag.baseY, row.selTag.maxW, row.selTag.px, `[${rc.sel}] `, "left", selColor);
+      slot.selTag.set(row.selTag.x + dx, row.selTag.baseY, row.selTag.maxW, row.selTag.px, `[${rc.sel}] `, "left", selColor);
     }
     const name = rc.sel ? row.nameWithTag : row.nameBare;
     slot.name.active(true);
     slot.name.bold(true);
-    slot.name.set(name.x, name.baseY, name.maxW, name.px, rc.nameText, "left", rc.sel ? selColor : rc.disabled ? p4.fuRowNameDisabled : rc.qualityColor);
+    slot.name.set(name.x + dx, name.baseY, name.maxW - dx, name.px, rc.nameText, "left", rc.sel ? selColor : rc.disabled ? p4.fuRowNameDisabled : rc.qualityColor);
     slot.sub.active(true);
     slot.sub.bold(false);
-    slot.sub.set(row.sub.x, row.sub.baseY, row.sub.maxW, row.sub.px, rc.subText, "left", p4.fuRowSub);
+    slot.sub.set(row.sub.x + dx, row.sub.baseY, row.sub.maxW - dx, row.sub.px, rc.subText, "left", p4.fuRowSub);
   }
 
   private hideRow(slot: RowSlot): void {
     slot.base.node.active = false;
+    slot.plate.setActive(false);
+    slot.icon.setActive(false);
     slot.selTag.active(false);
     slot.name.active(false);
     slot.sub.active(false);

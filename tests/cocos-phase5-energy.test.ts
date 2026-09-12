@@ -761,8 +761,9 @@ describe("三层分工的源码纪律", () => {
 
   it("三枚钮的贴图档与 Web 同一条写法:可用档才试 btn_primary", () => {
     const view = codeOf(fileSource("../cocos/assets/scripts/energy/EnergyView.ts"));
-    expect(view.includes('c.canAd ? KEY_PRIMARY : ""')).toBe(true);
-    expect(view.includes('c.canDiamond ? KEY_PRIMARY : ""')).toBe(true);
+    // v5 起可用档的键按 restV4 在 btn_purple / btn_blue 与 KEY_PRIMARY 间切,但「可用档才试贴图、禁档短路成空键」这条写法不变
+    expect(/c\.canAd \? \((p3\.restV4 \? "btn_purple" : )?KEY_PRIMARY\) : ""|c\.canAd \? KEY_PRIMARY : ""/.test(view)).toBe(true);
+    expect(/c\.canDiamond \? \((p3\.restV4 \? "btn_blue" : )?KEY_PRIMARY\) : ""|c\.canDiamond \? KEY_PRIMARY : ""/.test(view)).toBe(true);
     expect(webDrawEnergy().includes('skinButtonBase(g, this.assets, "btn_primary"')).toBe(true);
   });
 });

@@ -192,6 +192,8 @@ export class ShopModel {
   refreshes = 0;
   /** 武器管理里点选的那件(仅影响选中框与文案,不改战场) */
   selectedWeaponId: number | null = null;
+  /** v4「深渊铭刻」版式(宿主按 viewTable.phase3.shopV4 打开;draw 与 hitTest 共读本开关) */
+  v4 = false;
 
   constructor(world: ShopWorld, rand: () => number = Math.random) {
     this.w = world;
@@ -234,7 +236,7 @@ export class ShopModel {
 
   /** 纯几何 + 身份:行数由实际持有量决定,纵向由本帧逻辑屏高决定,视图只按数组落位 */
   layout(screenH?: number): ShopLayoutPure {
-    return shopLayoutPure(this.weapons().length, this.merges().length, screenH);
+    return shopLayoutPure(this.weapons().length, this.merges().length, screenH, this.v4 ? { v4: true, slotCount: this.w.slots() } : undefined);
   }
 
   /* ================= 操作 ================= */

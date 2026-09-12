@@ -1,0 +1,385 @@
+{
+ "$comment": "v6:用户第二批示意图素材表(artwork/ref-v6/sheet.png,白底;线稿 wire.png / 实体 mock.png 同目录)切件出图,口径同 v5。",
+ "module": 1,
+ "export": 1,
+ "palette": [
+  "#05070c",
+  "#0b0e14",
+  "#121826",
+  "#1a2233",
+  "#232e44",
+  "#2a3548",
+  "#38465e",
+  "#4a5a76",
+  "#62738f",
+  "#8391a8",
+  "#a9b4c4",
+  "#c8cdd6",
+  "#e8ecf4",
+  "#0e3b36",
+  "#17624f",
+  "#2e9e7f",
+  "#4dffc8",
+  "#0d3f3c",
+  "#17706a",
+  "#26a69a",
+  "#6fe0d4",
+  "#3f4a12",
+  "#6b7a1c",
+  "#a3b833",
+  "#d4e86a",
+  "#2b1f47",
+  "#4b3a7a",
+  "#8a6fd1",
+  "#c8b6ff",
+  "#4a4258",
+  "#7d6b8f",
+  "#b0a0c0",
+  "#4a3410",
+  "#8a6220",
+  "#d9a63c",
+  "#ffd76a",
+  "#3a2216",
+  "#6b4028",
+  "#b06a4a",
+  "#d69a70",
+  "#ff9a70",
+  "#3a1218",
+  "#7a1f2a",
+  "#a8202a",
+  "#c0374a",
+  "#e05040",
+  "#ff2d2d",
+  "#ff5a6e",
+  "#ff2d8f",
+  "#ff8fc0",
+  "#10294a",
+  "#1f4e8a",
+  "#2f7fd1",
+  "#4aa3ff",
+  "#7fd0ff",
+  "#a8e4ff"
+ ],
+ "quant": {
+  "distance": "lab"
+ },
+ "keyout": {
+  "color": "#ffffff",
+  "tolerance": 70,
+  "erode": 1,
+  "keyTolerance": 60
+ },
+ "singles": [
+  {
+   "key": "btn_tab",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    677,
+    30,
+    784,
+    83
+   ],
+   "art": [
+    88,
+    44
+   ],
+   "slice": 12,
+   "erase": [
+    0.15,
+    0.22,
+    0.7,
+    0.56
+   ],
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "btn_iron",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    1170,
+    22,
+    1303,
+    87
+   ],
+   "art": [
+    104,
+    52
+   ],
+   "slice": 12,
+   "erase": [
+    0.15,
+    0.22,
+    0.7,
+    0.56
+   ],
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "chip_eff",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    1664,
+    14,
+    1790,
+    95
+   ],
+   "art": [
+    84,
+    54
+   ],
+   "slice": 14,
+   "erase": [
+    0.12,
+    0.15,
+    0.76,
+    0.7
+   ],
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "btn_wide",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    1354,
+    136,
+    1571,
+    201
+   ],
+   "art": [
+    160,
+    48
+   ],
+   "slice": 14,
+   "erase": [
+    0.15,
+    0.22,
+    0.7,
+    0.56
+   ],
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "row_thin",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    2077,
+    770,
+    2326,
+    809
+   ],
+   "art": [
+    160,
+    26
+   ],
+   "slice": 8,
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "card_tall",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    1074,
+    703,
+    1344,
+    1235
+   ],
+   "art": [
+    136,
+    268
+   ],
+   "slice": 20,
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "lv_emblem_1",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    1736,
+    1262,
+    1977,
+    1514
+   ],
+   "art": [
+    96,
+    96
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "lv_emblem_2",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    2014,
+    1291,
+    2142,
+    1473
+   ],
+   "art": [
+    96,
+    96
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "lv_emblem_3",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    2178,
+    1284,
+    2308,
+    1487
+   ],
+   "art": [
+    96,
+    96
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "shop_art_1",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    38,
+    319,
+    215,
+    519
+   ],
+   "art": [
+    80,
+    88
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "shop_art_2",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    255,
+    323,
+    398,
+    519
+   ],
+   "art": [
+    80,
+    88
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "shop_art_3",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    428,
+    332,
+    573,
+    500
+   ],
+   "art": [
+    80,
+    88
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "scene_menu_top",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    40,
+    711,
+    641,
+    945
+   ],
+   "art": [
+    560,
+    64
+   ],
+   "fit": "cover",
+   "fillBox": true,
+   "cropBBox": false,
+   "keyout": false,
+   "wm": false
+  },
+  {
+   "key": "scene_castle",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    38,
+    985,
+    634,
+    1225
+   ],
+   "art": [
+    516,
+    208
+   ],
+   "fit": "cover",
+   "fillBox": true,
+   "cropBBox": false,
+   "keyout": false,
+   "wm": false,
+   "extendTop": 220,
+   "extendBand": 40
+  },
+  {
+   "key": "scene_castle_strip",
+   "src": "artwork/ref-v6/sheet.png",
+   "rect": [
+    38,
+    985,
+    634,
+    1225
+   ],
+   "art": [
+    528,
+    112
+   ],
+   "fit": "cover",
+   "fillBox": true,
+   "cropBBox": false,
+   "keyout": false,
+   "wm": false
+  }
+ ]
+}

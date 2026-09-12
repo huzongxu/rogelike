@@ -85,6 +85,8 @@
    "cells": [
     {
      "key": "banner_title_gold_c",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       122,
       21
@@ -97,6 +99,8 @@
     },
     {
      "key": "banner_title_iron",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "artH": 21,
      "fit": "stretch",
      "fillBox": true,
@@ -106,6 +110,8 @@
     },
     {
      "key": "banner_purple_cosmic",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "artH": 23,
      "fit": "stretch",
      "fillBox": true,
@@ -115,6 +121,8 @@
     },
     {
      "key": "banner_mid_blue",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "artH": 20,
      "fit": "stretch",
      "fillBox": true,
@@ -124,6 +132,8 @@
     },
     {
      "key": "banner_mid_bronze",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "artH": 22,
      "fit": "stretch",
      "fillBox": true,
@@ -168,6 +178,8 @@
    "cells": [
     {
      "key": "banner_mid_black",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       110,
       20
@@ -180,6 +192,8 @@
     },
     {
      "key": "banner_mid_navy",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       248,
       37
@@ -194,6 +208,8 @@
     },
     {
      "key": "banner_large_navy_a",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       120,
       24
@@ -206,6 +222,8 @@
     },
     {
      "key": "banner_large_red",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       120,
       24
@@ -246,6 +264,8 @@
    "cells": [
     {
      "key": "bar_progress_teal",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       100,
       4
@@ -288,6 +308,8 @@
    "cells": [
     {
      "key": "tabs_talent_three",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       264,
       15

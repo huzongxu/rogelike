@@ -62,6 +62,8 @@ export interface LvCardLayout {
   idx: number;
   /** 卡框矩形(品质框,走 `ui/PanelKit.qualityBox`) */
   rect: LvRect;
+  /** v6 卡中徽记盒 */
+  emblem: LvRect;
   /** `史诗 · Lv.5`(卡内左上,fs.micro) */
   quality: LvTextLine;
   /** 卡名(`buildName` 的产出,fs.body 粗) */
@@ -148,6 +150,12 @@ export const LV_DESC_LINE = 18;
 export const LV_DESC_MAX_LINES = 8;
 export const LV_DELTA_DY = 216;
 export const LV_TAG_DY = 238;
+/** v6:卡中徽记水印(96 见方,顶缘落卡顶 104;压在描述文字之下) */
+export const LV_EMBLEM_S = 96;
+export const LV_EMBLEM_DY = 104;
+/** 徽记枚数(素材表给了 3 枚,按卡位循环)与水印不透明度(0..255) */
+export const LV_EMBLEM_N = 3;
+export const LV_EMBLEM_ALPHA = 120;
 /** 卡内每行的折行字符预算:CJK 一字 ≈ 1×px(与 `ui/PanelKit.approxW` 同档),故 = 限宽 / 字号 */
 export const LV_DESC_CHARS = Math.floor(LV_CARD_TEXT_MAX_W / fs.micro);
 
@@ -238,6 +246,7 @@ export function levelUpCardLayout(b: LvRect, idx: number): LvCardLayout {
   return {
     idx,
     rect,
+    emblem: { x: rect.x + evenDown((LV_CARD_W - LV_EMBLEM_S) / 2), y: rect.y + LV_EMBLEM_DY, w: LV_EMBLEM_S, h: LV_EMBLEM_S },
     quality: left(tx, rect.y + LV_QUALITY_DY, LV_CARD_TEXT_MAX_W, LV_QUALITY_PX, false),
     name: left(tx, rect.y + LV_NAME_DY, LV_CARD_TEXT_MAX_W, LV_NAME_PX, true),
     descLines,

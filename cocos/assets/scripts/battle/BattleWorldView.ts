@@ -9,12 +9,13 @@
  * 一次性换算,战场根节点顶对齐、锁高 worldH()。
  */
 
-import { Graphics, Node, NodePool, Sprite, SpriteFrame, UIOpacity, UITransform } from "cc";
+import { Graphics, Node, NodePool, Rect, Sprite, SpriteFrame, UIOpacity, UITransform } from "cc";
 import { DESIGN_W, logicalH, fullRect, coverRect, placeRect } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { hexToColor, makeNode } from "../ui/Widgets";
 import { HUD_TOP_H } from "../game/ui/hud";
 import { clamp } from "../game/core/math";
+import { animCellRect, animCellSize, animCol, animDir, attackDuration } from "../game/ui/spriteAnim";
 import type { Enemy } from "../game/entities/enemy";
 import type { Projectile } from "../game/entities/projectile";
 import type { Cloud, Gem, Minion, Obstacle } from "../game/entities/objects";
@@ -44,6 +45,44 @@ export class BattleWorldView {
     readonly floatTextNode: Node;
 
     private frames: Map<string, SpriteFrame>;
+    /** 玩家朝向记忆:上一帧 x 与当前翻转符号(基线件面朝右) */
+    private playerLastX = 0;
+    private playerFaceSx = 1;
+    /**
+     * 序列帧图集(anim_<key>,行 = 朝向、列 = 帧,见 game/ui/spriteAnim):子帧按 `key#row#col` 懒建缓存,
+     * 与整图 SpriteFrame 共用一张 NEAREST 纹理。命中图集的单位不再走翻转 + 小跳步的单帧路径。
+     */
+    private animCells = new Map<string, SpriteFrame>();
+    /** 敌人动画状态:上一帧的接触冷却(冷却被重置 = 咬到玩家 = 起一次攻击动画)与攻击起始时刻 */
+    private enemyAnim = new Map<number, { lastCd: number; attackT: number }>();
+    /** 玩家动画状态:上一帧位置 / 弹体与特效计数(新增 = 施放 = 起攻击动画)/ 朝向 / 攻击起始时刻 */
+    private playerAnim = { lastY: 0, lastProj: 0, lastFx: 0, dx: 0, dy: 1, attackT: -1 };
+
+    /** 第一个在图集里有的键(整图 SpriteFrame 已加载且尺寸能按 7×5 整除) */
+    private animKeyOf(keys: readonly string[]): string | null {
+        for (const k of keys) {
+            const sf = this.frames.get(k);
+            if (sf && animCellSize(sf.width, sf.height)) return k;
+        }
+        return null;
+    }
+
+    /** 图集子帧(懒建);图集缺失或布局不整除返回 undefined,调用方回退单帧 */
+    private animCell(key: string, row: number, col: number): SpriteFrame | undefined {
+        const id = `${key}#${row}#${col}`;
+        const hit = this.animCells.get(id);
+        if (hit) return hit;
+        const base = this.frames.get(key);
+        if (!base || !base.texture) return undefined;
+        const cell = animCellSize(base.width, base.height);
+        if (!cell) return undefined;
+        const r = animCellRect(row, col, cell.w, cell.h);
+        const sf = new SpriteFrame();
+        sf.texture = base.texture;
+        sf.rect = new Rect(base.rect.x + r.x, base.rect.y + r.y, r.w, r.h);
+        this.animCells.set(id, sf);
+        return sf;
+    }
     private cover: Sprite | null = null;
     private coverNode: Node;
     private dimNode: Node;
@@ -440,12 +479,34 @@ export class BattleWorldView {
             }
             const r = e.def.radius;
             const spr = Math.round(r * t.enemySpriteScale * 10) / 10;
-            this.placeWorld(n, e.pos.x, e.pos.y, spr, spr);
+            // 序列帧优先:anim_monster_<variantId> → anim_enemy_<kind>;命中则按朝向选行、按状态选列
+            const vkey = e.def.variantId ? `monster_${e.def.variantId}` : "";
+            const animKey = this.animKeyOf(vkey !== "" ? [`anim_${vkey}`, `anim_enemy_${e.kind}`] : [`anim_enemy_${e.kind}`]);
+            let st = this.enemyAnim.get(e.id);
+            if (!st) { st = { lastCd: e.hitCooldown, attackT: -1 }; this.enemyAnim.set(e.id, st); }
+            // 接触冷却被重置(变大)= 这一帧咬到了玩家;冲锋中持续按攻击帧播
+            if (e.hitCooldown > st.lastCd + 1e-6 || e.skillState?.skillDashing) st.attackT = sim.elapsed;
+            st.lastCd = e.hitCooldown;
+            // 行走起伏只给单帧件:|sin| 抬升成小跳步,相位按 speed/72 缩放(迅捷步频高、石巨步频低),id 错相不齐步
+            const bob = !animKey && t.enemyBobPx > 0
+                ? Math.abs(Math.sin(sim.elapsed * t.enemyBobRate * (e.def.speed / 72) + e.id * 1.7)) * t.enemyBobPx
+                : 0;
+            this.placeWorld(n, e.pos.x, e.pos.y - bob, spr, spr);
             n.getComponent(UIOpacity)!.opacity = e.hidden ? Math.round(t.hiddenAlpha * 255) : 255;
 
-            // 贴图优先:monster_<variantId> → enemy_<kind> → 代码圆
-            const vkey = e.def.variantId ? `monster_${e.def.variantId}` : "";
-            const frame = (vkey !== "" ? this.frames.get(vkey) : undefined) ?? this.frames.get(`enemy_${e.kind}`);
+            // 贴图优先:序列帧 → monster_<variantId> → enemy_<kind> → 代码圆
+            let frame: SpriteFrame | undefined;
+            let sx = e.facing.x < 0 ? -1 : 1;
+            if (animKey) {
+                const d = animDir(e.facing.x, e.facing.y);
+                const attacking = st.attackT >= 0 && sim.elapsed - st.attackT < attackDuration(t.animAttackFps);
+                const col = attacking
+                    ? animCol("attack", sim.elapsed - st.attackT, t.animAttackFps)
+                    : animCol("walk", sim.elapsed * (e.def.speed / 72) + e.id * 0.37, t.animWalkFps);
+                frame = this.animCell(animKey, d.row, col);
+                sx = d.flip ? -1 : 1;
+            }
+            if (!frame) frame = (vkey !== "" ? this.frames.get(vkey) : undefined) ?? this.frames.get(`enemy_${e.kind}`);
             const sprNode = n.getChildByName("Spr")!;
             const fillNode = n.getChildByName("Fill")!;
             sprNode.active = !!frame;
@@ -455,6 +516,8 @@ export class BattleWorldView {
                 if (sp.spriteFrame !== frame) sp.spriteFrame = frame;
                 const ui = sprNode.getComponent(UITransform) || sprNode.addComponent(UITransform);
                 ui.setContentSize(spr, spr);
+                // 单帧件按朝向水平翻转(基线件面朝右);序列帧按 spriteAnim 的镜像位
+                if (sprNode.scale.x !== sx) sprNode.setScale(sx, 1, 1);
             } else {
                 const sig = `fill|${e.def.color}|${r}`;
                 if (this.sigs.get(fillNode) !== sig) {
@@ -511,6 +574,7 @@ export class BattleWorldView {
         this.enemyNodes.forEach((n, id) => {
             if (alive.has(id)) return;
             this.enemyNodes.delete(id);
+            this.enemyAnim.delete(id);
             this.recycleEnemy(n);
         });
     }
@@ -614,7 +678,43 @@ export class BattleWorldView {
         const radius = 16; // PLAYER_BASE.radius(碰撞圆半径,数据表值;贴图边长 = ×playerSpriteScale)
         const s = radius * t.playerSpriteScale;
         this.placeWorld(n, p.pos.x, p.pos.y, s, s);
-        const frame = this.frames.get("player");
+        // 出战英雄专属战斗件 player_<heroId>,缺图回退通用 player;序列帧 anim_player_<heroId> → anim_player 优先
+        const hero = sim.save.selectedHero;
+        const pa = this.playerAnim;
+        // 朝向:移动时按本帧位移;静止时朝最近敌人;都没有则保持
+        const mdx = p.pos.x - this.playerLastX, mdy = p.pos.y - pa.lastY;
+        const moving = Math.abs(mdx) > 0.01 || Math.abs(mdy) > 0.01;
+        if (moving) { pa.dx = mdx; pa.dy = mdy; }
+        // 施放检测:弹体或特效数量比上一帧多 = 本帧出手;攻击朝向取最近敌人
+        if (sim.projectiles.length > pa.lastProj || sim.fx.length > pa.lastFx) {
+            pa.attackT = sim.elapsed;
+            let best: { x: number; y: number } | null = null, bd = Infinity;
+            for (const e of sim.enemies) {
+                if (e.hidden) continue;
+                const d = (e.pos.x - p.pos.x) ** 2 + (e.pos.y - p.pos.y) ** 2;
+                if (d < bd) { bd = d; best = e.pos; }
+            }
+            if (best) { pa.dx = best.x - p.pos.x; pa.dy = best.y - p.pos.y; }
+        }
+        pa.lastProj = sim.projectiles.length;
+        pa.lastFx = sim.fx.length;
+        if (p.pos.x < this.playerLastX - 0.01) this.playerFaceSx = -1;
+        else if (p.pos.x > this.playerLastX + 0.01) this.playerFaceSx = 1;
+        this.playerLastX = p.pos.x;
+        pa.lastY = p.pos.y;
+        let frame: SpriteFrame | undefined;
+        let faceSx = this.playerFaceSx;
+        const animKey = this.animKeyOf(hero ? [`anim_player_${hero}`, "anim_player"] : ["anim_player"]);
+        if (animKey) {
+            const d = animDir(pa.dx, pa.dy);
+            const attacking = pa.attackT >= 0 && sim.elapsed - pa.attackT < attackDuration(t.animAttackFps);
+            const col = attacking
+                ? animCol("attack", sim.elapsed - pa.attackT, t.animAttackFps)
+                : animCol(moving ? "walk" : "idle", sim.elapsed, t.animWalkFps);
+            frame = this.animCell(animKey, d.row, col);
+            faceSx = d.flip ? -1 : 1;
+        }
+        if (!frame) frame = (hero ? this.frames.get(`player_${hero}`) : undefined) ?? this.frames.get("player");
         const sprNode = n.getChildByName("Spr")!;
         const fillNode = n.getChildByName("Fill")!;
         sprNode.active = !!frame;
@@ -624,6 +724,7 @@ export class BattleWorldView {
             if (sp.spriteFrame !== frame) sp.spriteFrame = frame;
             const ui = sprNode.getComponent(UITransform) || sprNode.addComponent(UITransform);
             ui.setContentSize(s, s);
+            if (sprNode.scale.x !== faceSx) sprNode.setScale(faceSx, 1, 1);
         } else {
             const sig = "p|fill";
             if (this.sigs.get(fillNode) !== sig) {

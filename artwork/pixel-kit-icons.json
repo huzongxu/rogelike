@@ -39,9 +39,9 @@
         [796, 539, 1364, 970]
       ],
       "cells": [
-        { "key": "intel_armor", "art": [12, 12] },
-        { "key": "intel_mutant", "art": [12, 12] },
-        { "key": "intel_elite", "art": [12, 12] }
+        { "key": "intel_armor", "frozen": true, "frozenBy": "pixel-kit-chrome.json", "art": [12, 12] },
+        { "key": "intel_mutant", "frozen": true, "frozenBy": "pixel-kit-chrome.json", "art": [12, 12] },
+        { "key": "intel_elite", "frozen": true, "frozenBy": "pixel-kit-chrome.json", "art": [12, 12] }
       ]
     },
     {
@@ -49,12 +49,12 @@
       "grid": { "cols": 3, "rows": 2 },
       "inset": 0.04,
       "cells": [
-        { "key": "icon_set_barrage", "art": [18, 18] },
-        { "key": "icon_set_ember", "art": [18, 18] },
-        { "key": "icon_set_frost", "art": [18, 18] },
-        { "key": "icon_set_magma", "art": [18, 18] },
-        { "key": "icon_set_phantom", "art": [18, 18] },
-        { "key": "icon_set_thorn", "art": [18, 18] }
+        { "key": "icon_set_barrage", "frozen": true, "frozenBy": "pixel-kit-chrome.json", "art": [18, 18] },
+        { "key": "icon_set_ember", "frozen": true, "frozenBy": "pixel-kit-chrome.json", "art": [18, 18] },
+        { "key": "icon_set_frost", "frozen": true, "frozenBy": "pixel-kit-chrome.json", "art": [18, 18] },
+        { "key": "icon_set_magma", "frozen": true, "frozenBy": "pixel-kit-chrome.json", "art": [18, 18] },
+        { "key": "icon_set_phantom", "frozen": true, "frozenBy": "pixel-kit-chrome.json", "art": [18, 18] },
+        { "key": "icon_set_thorn", "frozen": true, "frozenBy": "pixel-kit-chrome.json", "art": [18, 18] }
       ]
     },
     {
@@ -129,6 +129,8 @@
   "singles": [
     {
       "key": "intel_horde",
+      "frozen": true,
+      "frozenBy": "pixel-kit-chrome.json",
       "src": "vibe_images/px_single_intel_horde.png",
       "art": [12, 12],
       "rect": [376, 168, 1159, 813],
@@ -140,6 +142,8 @@
     { "key": "card_soldout", "src": "vibe_images/px_single_card_soldout.png", "art": [78, 78] },
     {
       "key": "btn_danger",
+      "frozen": true,
+      "frozenBy": "pixel-kit-chrome.json",
       "src": "vibe_images/px_single_btn_danger.png",
       "artH": 20,
       "slice": 8,
@@ -149,6 +153,8 @@
     },
     {
       "key": "menu_row_plate_current",
+      "frozen": true,
+      "frozenBy": "pixel-kit-chrome.json",
       "src": "vibe_images/px_single_menu_row_plate_current.png",
       "artH": 24,
       "slice": 8,

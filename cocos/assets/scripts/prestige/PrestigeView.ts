@@ -35,7 +35,9 @@ import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
-import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
+import { TB_ICON, TB_TITLE_DX, TB_TITLE_X } from "../game/ui/titleBand";
+import { ROW_ICON_SHIFT, rowIconRect } from "../game/ui/rowIcon";
+import { Plate, fitOne, flatBox, iconNode, placeLine, boxPlace } from "../ui/PanelKit";
 import { PT_START_STROKE_W, type PrestigeChoiceLayout, type PrestigeLayout, type PrestigeRowLayout, type PtRect, type PtTextLine } from "../game/ui/prestigeLayout";
 import { hitPrestige, type PrestigeAction, type PrestigeChoiceContent, type PrestigeContent, type PrestigeRowContent } from "./PrestigeModel";
 
@@ -43,6 +45,8 @@ import { hitPrestige, type PrestigeAction, type PrestigeChoiceContent, type Pres
 const KEY_BANNER = "banner_purple_cosmic";
 const KEY_POSE = "player_pose_5";
 const KEY_TABS_STRIP = "tabs_talent_three";
+/** v5 行徽记枚数(素材表给了 11 枚圆徽记) */
+const PT_EMBLEM_N = 11;
 const KEY_CHECK = "mark_check_green";
 
 /** 贴图收起时的零位盒(与 GachaView / GearUpView 的图标位同款处置:缺图就不占位) */
@@ -74,6 +78,10 @@ class Txt {
       this.lb.color = hexToColor(color);
     }
     bindLabel(this.lb, fitOne(text, maxW, px));
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, x, baseY, maxW, px, align);
+      return;
+    }
     placeLine(this.lb.node, x, baseY, maxW, px, align);
   }
 
@@ -93,6 +101,8 @@ class Txt {
 /** 三系页签的一件:整条贴图之下的一枚代码覆盖层 + 居中题字 */
 interface TabSlot {
   base: ReturnType<typeof flatBox>;
+  /** v5:选中金面 / 未选铁框 */
+  plate: Plate;
   text: Txt;
 }
 
@@ -110,6 +120,10 @@ interface ChoiceGroup {
 /** 节点行的一件:纯代码底板 + 名称 + 右列两档(价格串 / 「已拥有」文字 + 勾选标记) + 描述 */
 interface RowSlot {
   base: ReturnType<typeof flatBox>;
+  /** v4:铁框行板 */
+  plate: Plate;
+  /** v5:行左圆徽记(emblem_a_N 循环) */
+  icon: Plate;
   name: Txt;
   cost: Txt;
   ownedText: Txt;
@@ -132,6 +146,10 @@ export class PrestigeView {
 
   private dim: Node;
   private panel: Plate;
+  /** v4:通栏 64 高的顶带(menu_title_plate,随赛季主色铁框),压在面板与横幅之上 */
+  private band: Plate;
+  /** v5:顶带左端的圆徽记(素材表 emblem_a_N) */
+  private bandIcon: Plate;
   private banner: ReturnType<typeof iconNode>;
   private title: Txt;
   private pose: ReturnType<typeof iconNode>;
@@ -158,6 +176,8 @@ export class PrestigeView {
     this.dim = makeNode("Dim", this.root);
     this.dim.addComponent(Graphics);
     this.panel = new Plate("Panel", this.root, frames);
+    this.band = new Plate("BandV4", this.root, frames);
+    this.bandIcon = new Plate("BandIconV5", this.root, frames);
 
     // 节点创建顺序 = Web drawPrestige 的绘制顺序(横幅 → 标题 → 立绘 → 四行 → 页签 → 行 → 配置块 → 开始钮)
     this.banner = iconNode("HeaderBanner", this.root, frames, ZERO);
@@ -168,7 +188,7 @@ export class PrestigeView {
     this.routeLine = new Txt("RouteLine", this.root);
     this.collLine = new Txt("CollLine", this.root);
     this.tabsStrip = iconNode("TabsStrip", this.root, frames, ZERO);
-    for (let i = 0; i < 3; i++) this.tabs.push({ base: flatBox("Tab" + i, this.root), text: new Txt("Tab" + i + "Text", this.root) });
+    for (let i = 0; i < 3; i++) this.tabs.push({ base: flatBox("Tab" + i, this.root), plate: new Plate("Tab" + i + "Plate", this.root, frames), text: new Txt("Tab" + i + "Text", this.root) });
 
     this.rowsNode = makeNode("Rows", this.root);
 
@@ -221,9 +241,22 @@ export class PrestigeView {
     const tt = banner ? L.titleWithBanner : L.titleBare;
     this.title.set(tt.x, tt.baseY, tt.maxW, tt.px, c.title, tt.align, banner ? HEX.gold : p4.ptTitle);
     setTextOutline(this.title.lb, banner ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
+    // v4 顶带:通栏 64 高,标题金 16 左起;横幅收起
+    this.band.setActive(p3.restV4);
+    this.bandIcon.setActive(p3.restV4);
+    if (p3.restV4) {
+      this.band.show("menu_title_plate", { x: 0, y: 0, w: DESIGN_W, h: 64 }, "slice", p3.detailBg, p3.detailStroke);
+      this.bandIcon.show("emblem_a_5", TB_ICON, "stretch");
+      this.banner.show("");
+      placeRect(this.banner.node, ZERO);
+      setTextOutline(this.title.lb, 0, HEX.bgDeep);
+      this.title.bold(true);
+      this.title.set(TB_TITLE_X, 26, 400 - TB_TITLE_DX, 16, c.title, "left", HEX.gold);
+    }
 
     // 头部小立绘:固定坐标的一笔,无回退分支;画在四行文字之前(Web 的覆盖顺序)
-    const pose = this.pose.show(KEY_POSE);
+    const pose = !p3.restV4 && this.pose.show(KEY_POSE);
+    if (p3.restV4) this.pose.show("");
     placeRect(this.pose.node, pose ? L.pose : ZERO);
 
     // 头部四行:回响点数 / 可支配 / 路线 / 图鉴
@@ -246,6 +279,8 @@ export class PrestigeView {
       if (!tab || !tc) continue;
       const sel = tc.selected;
       slot.base.draw(tab.rect, sel ? p4.ptTabSelFill : p4.ptTabFill, sel ? p4.ptTabSelStroke : p4.ptTabStroke);
+      slot.plate.setActive(p3.restV4);
+      if (p3.restV4) slot.plate.show(sel ? "btn_gold" : "menu_chip_plate", tab.rect, "slice");
       slot.text.bold(true);
       slot.text.set(tab.text.x, tab.text.baseY, tab.text.maxW, tab.text.px, tc.label, "center", sel ? p4.ptTabTextSel : p4.ptTabText);
     }
@@ -300,9 +335,16 @@ export class PrestigeView {
     const p4 = viewTable().phase4;
     slot.base.node.active = true;
     slot.base.draw(row.rect, rc.owned ? p4.ptRowOwnedFill : p4.ptRowFill, rc.owned ? p4.ptRowOwnedStroke : p4.ptRowStroke);
+    const v4 = viewTable().phase3.restV4;
+    slot.plate.setActive(v4);
+    if (v4) slot.plate.show("menu_row_plate", row.rect, "slice");
+    // v5:行左圆徽记,名字与描述整体右移(几何来自共享层 rowIcon)
+    slot.icon.setActive(v4);
+    if (v4) slot.icon.show(`emblem_a_${(row.index % PT_EMBLEM_N) + 1}`, rowIconRect(row.rect), "stretch");
+    const dx = v4 ? ROW_ICON_SHIFT : 0;
     slot.name.active(true);
     slot.name.bold(true);
-    slot.name.set(row.name.x, row.name.baseY, row.name.maxW, row.name.px, rc.name, "left", rc.owned ? p4.ptRowNameOwned : p4.ptRowName);
+    slot.name.set(row.name.x + dx, row.name.baseY, row.name.maxW - dx, row.name.px, rc.name, "left", rc.owned ? p4.ptRowNameOwned : p4.ptRowName);
     // 右列两档互斥:已拥有走「勾选标记 + 已拥有」,否则走价格串
     slot.ownedText.active(rc.owned);
     slot.cost.active(!rc.owned);
@@ -318,12 +360,14 @@ export class PrestigeView {
     }
     slot.desc.active(true);
     slot.desc.bold(false);
-    slot.desc.set(row.desc.x, row.desc.baseY, row.desc.maxW, row.desc.px, rc.desc, "left", p4.ptDesc);
+    slot.desc.set(row.desc.x + dx, row.desc.baseY, row.desc.maxW - dx, row.desc.px, rc.desc, "left", p4.ptDesc);
   }
 
   /** 收起一行(池长超过当前系行数的空槽) */
   private hideRow(slot: RowSlot): void {
+    slot.icon.setActive(false);
     slot.base.node.active = false;
+    slot.plate.setActive(false);
     slot.name.active(false);
     slot.cost.active(false);
     slot.ownedText.active(false);
@@ -337,6 +381,8 @@ export class PrestigeView {
       const i = this.rowSlots.length;
       this.rowSlots.push({
         base: flatBox("Node" + i + "Base", this.rowsNode),
+        plate: new Plate("Node" + i + "Plate", this.rowsNode, this.frames),
+        icon: new Plate("Node" + i + "Icon", this.rowsNode, this.frames),
         name: new Txt("Node" + i + "Name", this.rowsNode),
         cost: new Txt("Node" + i + "Cost", this.rowsNode),
         ownedText: new Txt("Node" + i + "Owned", this.rowsNode),

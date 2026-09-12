@@ -19,7 +19,7 @@
 
 import { DAILY_BOXES, DAILY_TALENT_FREE, dailyBoxOf, dailyTalentOf, todayKey } from "../game/data/daily";
 import { makeUpReward, splitEcho } from "../game/data/stages";
-import { dailyLayout, type DailyLayout, type DailyRect } from "../game/ui/dailyLayout";
+import { dailyLayout, type DailyLayout, type DailyRect, type DailyLayoutOpts } from "../game/ui/dailyLayout";
 
 /** 本屏要读的存档字段(SaveModel 结构上天然兼容;`dailyTalents` 允许缺失,按 0 条处理) */
 export interface DailySaveView {
@@ -189,6 +189,6 @@ export function dailyClaim(save: DailySaveView, a: DailyAction, now: number = Da
 }
 
 /** 整屏几何的单一出口(视图经宿主钩子调它;天赋条数取存档,缺失按 0 条) */
-export function dailyScreenLayout(w: number, h: number, save: Pick<DailySaveView, "dailyTalents">): DailyLayout {
-  return dailyLayout(w, h, save.dailyTalents ?? []);
+export function dailyScreenLayout(w: number, h: number, save: Pick<DailySaveView, "dailyTalents">, opts: DailyLayoutOpts = {}): DailyLayout {
+  return dailyLayout(w, h, save.dailyTalents ?? [], opts);
 }

@@ -105,6 +105,10 @@ export interface GameOverLayout extends GameOverForms {
   block: GoRect;
   /** 标题横幅盒（`a` 上方 34，240×48 = `banner_large_red` 固有 120×24 的精确 2 倍；整幅拉伸，没有缺图回退档） */
   banner: GoRect;
+  /** v5 场景立绘盒(绸带之上) */
+  scene: GoRect;
+  /** v5 宽绸带盒(ribbon_dark 整图,与 banner 同心) */
+  ribbon: GoRect;
   /** 阵亡立绘盒（`a` 上方 44，58×92；挂在屏心**左**侧，整屏唯一带半透明的贴图件） */
   pose: GoRect;
   /** 「阵亡」 */
@@ -145,6 +149,13 @@ export interface GameOverLayout extends GameOverForms {
  *  出处：`GO_PAD` 与 `gameOverDoubleBtn` 的 `hh − GO_DOUBLE_UP`） */
 export const GO_BLOCK_INSET = GO_PAD;
 /** 横幅：宽 / 高 / 半宽（**由宽推导**）/ 相对锚线的上抬 */
+/** v5 场景立绘(gameover_scene 300×246):居中压在标题绸带之上,底缘与绸带顶缘留 8 */
+export const GO_SCENE_W = 380;
+export const GO_SCENE_H = 308;
+/** v5 宽绸带(ribbon_dark 整图):与旧横幅同心,320×56 */
+export const GO_RIBBON_W = 320;
+export const GO_RIBBON_H = 56;
+
 export const GO_BANNER_W = 240;
 export const GO_BANNER_H = 48;
 export const GO_BANNER_DX = evenDown(GO_BANNER_W / 2);
@@ -269,6 +280,8 @@ export function gameOverLayout(w: number, h: number, forms: GameOverForms): Game
     contentBand: band,
     block: { x: band.x, y: a - GO_BLOCK_TOP_DY, w: band.w, h: GO_BLOCK_H },
     banner: { x: cx - GO_BANNER_DX, y: a - GO_BANNER_DY, w: GO_BANNER_W, h: GO_BANNER_H },
+    ribbon: { x: cx - evenDown(GO_RIBBON_W / 2), y: a - GO_BANNER_DY - evenDown((GO_RIBBON_H - GO_BANNER_H) / 2), w: GO_RIBBON_W, h: GO_RIBBON_H },
+    scene: { x: cx - evenDown(GO_SCENE_W / 2), y: a - GO_BANNER_DY - 8 - GO_SCENE_H, w: GO_SCENE_W, h: GO_SCENE_H },
     pose: { x: cx - GO_POSE_DX, y: a - GO_POSE_DY, w: GO_POSE_W, h: GO_POSE_H },
     title: line(cx, a, maxW, GO_TITLE_PX, true),
     timeLine: line(cx, a + GO_TIME_DY, maxW, GO_TIME_PX, false),

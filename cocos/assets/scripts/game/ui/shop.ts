@@ -82,6 +82,19 @@ export interface ShopToolBtn extends ShopRect {
   label: string;
 }
 
+/**
+ * v4「深渊铭刻」版式开关(Cocos 侧由 viewTable.phase3.shopV4 打开;Web 冻结基准不传 = 旧版式)。
+ * - 工具钮 / 槽位钮收到 40..44 高、卡带恒 208(最满形态收 176)、分区标题 22 高;
+ * - 武器行按**槽位数**铺满(空槽画占位行),行高 34..56,富余不再把行撑成大块;
+ * - 卡带与槽位钮之间留一条说明行(套组链 / 推荐 / 卡价提示从顶信息条挪到这里);
+ * - 仍有富余时落到末行与底坞之间(gapBottom),不撑行、不撑钮。
+ */
+export interface ShopLayoutOpts {
+  v4: boolean;
+  /** 当前总槽位数(v4:武器行数 = max(持有数, 槽位数),空槽也占一行) */
+  slotCount?: number;
+}
+
 export interface ShopLayoutPure {
   /** 本帧屏高:几何的唯一纵向输入 */
   screenH: number;
@@ -117,6 +130,8 @@ export interface ShopLayoutPure {
   /** 几何占位行数(0 件 → 1 行空态) */
   nW: number;
   nM: number;
+  /** v4:卡带与槽位钮之间的说明行顶缘(行高 16;左套组链 / 推荐,右卡价提示);旧版式为 null */
+  captionY: number | null;
 }
 
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v));
@@ -194,6 +209,12 @@ function flexFill(slots: FlexSlot[], total: number): number {
   return target - sum(slots);
 }
 
+/** v4:行距恒 gap,行高吃满剩余(偶数),零头回带距 */
+function rowSplitFixedGap(band: number, n: number, minH: number, gap: number): { rowH: number; gap: number; left: number } {
+  const rowH = Math.max(even(minH), even(Math.floor((band - (n - 1) * gap) / n)));
+  return { rowH, gap, left: Math.max(0, even(band - (n * rowH + (n - 1) * gap))) };
+}
+
 /** 行带 → 行高 + 行距:行距按带高比例取 4..12,行高吃满剩余(偶数);返回取整零头 */
 function rowSplit(band: number, n: number, minH: number): { rowH: number; gap: number; left: number } {
   const gap = clamp(even(Math.floor(band / (n * 10))), 4, 12);
@@ -207,8 +228,9 @@ function rowSplit(band: number, n: number, minH: number): { rowH: number; gap: n
  * @param weaponCount 实际武器数(0 → 1 行空态占位,上限 8 = 槽位上限)
  * @param mergeCount 实际可进化组数(0 → 1 行空态占位,上限 4)
  */
-export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH: number = SHOP_CALIBRATION_H): ShopLayoutPure {
-  const nW = clamp(weaponCount, 1, 8);
+export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH: number = SHOP_CALIBRATION_H, opts?: ShopLayoutOpts): ShopLayoutPure {
+  const v4 = !!opts?.v4;
+  const nW = clamp(v4 ? Math.max(weaponCount, opts?.slotCount ?? 0) : weaponCount, 1, 8);
   const nM = clamp(mergeCount, 1, 4);
   const N = nW + nM;
   const h = Math.max(SHOP_CALIBRATION_H, evenDown(screenH));
@@ -219,7 +241,24 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
   const cardBase = N >= 10 ? 160 : N >= 6 ? 176 : 208;
   const HEAD = 30;
 
-  const slots: FlexSlot[] = [
+  const slots: FlexSlot[] = v4 ? [
+    /* 钮与带距全部 max = 标定值:富余只进行带(到 56 / 48 的天花板)与末行 → 底坞那一档,钮永不被撑高 */
+    flex(10, 8, 10, 0), // ① 顶坞 → 工具钮行
+    flex(40, 40, 40, 0), // ② 工具钮行高
+    flex(10, 8, 10, 0), // ③ 工具行 → 卡带
+    flex(208, 176, 208, 0), // ④ 三张可购卡(v4 恒 208,只在最满形态下收到 176)
+    flex(24, 22, 24, 0), // ⑤ 卡带 → 槽位钮(说明行落在这一档)
+    flex(40, 40, 40, 0), // ⑥ 槽位钮
+    flex(12, 10, 12, 0), // ⑦ 槽位钮 → 武器标题
+    flex(22, 22, 22, 0), // ⑧ 武器标题行
+    flex(6, 6, 6, 0), // ⑨ 标题 → 首行
+    flex(nW * 52 + (nW - 1) * 6, nW * 34 + (nW - 1) * 6, nW * 56 + (nW - 1) * 6, 2), // ⑩ 武器行带(空槽也占行;行距恒 6)
+    flex(12, 10, 12, 0), // ⑪ 武器行带 → 进化标题
+    flex(22, 22, 22, 0), // ⑫ 进化标题行
+    flex(6, 6, 6, 0), // ⑬ 标题 → 首行
+    flex(nM * 44 + (nM - 1) * 6, nM * 32 + (nM - 1) * 6, nM * 48 + (nM - 1) * 6, 2), // ⑭ 进化行带(行距恒 6)
+    flex(SHOP_FOOT, 4, 400, 1, 400), // ⑮ 末行 → 底坞:富余的唯一落点
+  ] : [
     flex(8, 6, 36, 0.5), // ① 顶坞 → 工具钮行
     flex(48, 44, 64, 0.8), // ② 工具钮行高(44 = 热区下限)
     flex(10, 6, 56, 1.2), // ③ 工具行 → 卡带
@@ -241,8 +280,8 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
 
   const [gapTool, toolH, gapCards, cardBand, gapSlot, slotH, gapWHead, wHead, gapWRows, bandW, gapWM, mHead, gapMRows, bandM, gapBottom] = slots;
 
-  const splitW = rowSplit(bandW.v, nW, 34);
-  const splitM = rowSplit(bandM.v, nM, 32);
+  const splitW = v4 ? rowSplitFixedGap(bandW.v, nW, 34, 6) : rowSplit(bandW.v, nW, 34);
+  const splitM = v4 ? rowSplitFixedGap(bandM.v, nM, 32, 6) : rowSplit(bandM.v, nM, 32);
   /* 行带取整剩下的偶数零头回到就近的带距:总高一分不丢 */
   gapWM.v += bandW.v - (nW * splitW.rowH + (nW - 1) * splitW.gap);
   gapBottom.v += bandM.v - (nM * splitM.rowH + (nM - 1) * splitM.gap);
@@ -283,6 +322,8 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
   for (let i = 0; i < nM; i++) merges.push({ x: SHOP_PAD, y: mergeStartY + i * (splitM.rowH + splitM.gap), w: CONTENT_W, h: splitM.rowH });
 
   const nextBtn: ShopRect = { x: 264, y: dockTop + 2, w: 280, h: 44 };
+  /* v4 说明行(16 高):居中落在卡带与槽位钮之间那一档(该档最少 22 高) */
+  const captionY = v4 ? even(cardsY + cardBand.v + Math.round((gapSlot.v - 16) / 2)) : null;
 
   return {
     screenH: h,
@@ -309,5 +350,6 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
     contentBottom,
     nW,
     nM,
+    captionY,
   };
 }

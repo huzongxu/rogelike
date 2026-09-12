@@ -12,6 +12,7 @@
 
 import { type Vec2 } from "../game/core/math";
 import { BattleWorld, type BattleRunInputs, type BattleWorldHost, type MoveInput } from "../game/systems/battleWorld";
+import { HUD_BOT_H } from "../game/ui/hud";
 import { Onboarding } from "../game/systems/onboarding";
 import { FxLayerData } from "./FxCore";
 import type { SaveModel } from "../core/SaveModel";
@@ -80,6 +81,8 @@ export interface BattleSimOptions {
     input: MoveInput;
     /** 战场标定高(worldH,顶部原点;竞技场带 = battleBandY(wh),宿主从 DesignMetrics 注入) */
     worldH: number;
+    /** 底坞高(v4 双排坞 96;缺省 HUD_BOT_H):竞技场带下缘 = worldH − 它 */
+    bottomDockH?: number;
     persist: (save: SaveModel) => void;
     callbacks: BattleCallbacks;
     /** FX 数据层容量(viewTable.fx 注入;缺省 = Web 硬上限 520/40) */
@@ -104,6 +107,10 @@ export class BattleSim {
     readonly guide = new Onboarding();
 
     private wh: number;
+
+    /** 底坞高(竞技场带下缘 = wh − 它) */
+
+    bottomDockH: number;
     private persistFn: (save: SaveModel) => void;
     private cb: BattleCallbacks;
 
@@ -116,6 +123,7 @@ export class BattleSim {
     constructor(opts: BattleSimOptions) {
         this.save = opts.save;
         this.wh = opts.worldH;
+        this.bottomDockH = opts.bottomDockH ?? HUD_BOT_H;
         this.persistFn = opts.persist;
         this.cb = opts.callbacks;
         this.fxLayer.setCaps(opts.fxMaxParticles ?? 520, opts.fxMaxRings ?? 40);
@@ -158,6 +166,7 @@ export class BattleSim {
         /** 战场事件回报:入账与转场留在本层 */
         const host: BattleWorldHost = {
             worldHeight: () => sim.wh,
+            bottomDockH: () => sim.bottomDockH,
             input: opts.input,
             fx: this.fxLayer,
             onDamage: (d) => this.cb.onDamage(d.pos, d.value, d.color),

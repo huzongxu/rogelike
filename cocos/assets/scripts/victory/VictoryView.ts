@@ -39,7 +39,7 @@ import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
-import { Plate, approxW, fitOne, iconNode, placeLine } from "../ui/PanelKit";
+import { Plate, approxW, fitOne, iconNode, placeLine, boxPlace } from "../ui/PanelKit";
 import {
   VI_BADGE_PX,
   VI_STAR_MAX,
@@ -97,6 +97,10 @@ class Txt {
       this.lb.isBold = t.bold;
     }
     bindLabel(this.lb, fitOne(text, t.maxW, t.px));
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, t.x, t.baseY, t.maxW, t.px, t.align);
+      return;
+    }
     placeLine(this.lb.node, t.x, t.baseY, t.maxW, t.px, t.align);
   }
 
@@ -133,6 +137,8 @@ export class VictoryView {
   /** 屏底板：`panel_dark_corners` 九宫格，缺图退代码底板（`ui/PanelKit.Plate` 自带兜底子节点） */
   private panel: Plate;
   private pose: ReturnType<typeof iconNode>;
+  /** v5:绸带之上的场景立绘 */
+  private scene: ReturnType<typeof iconNode>;
   private banner: ReturnType<typeof iconNode>;
   private title: Txt;
   /** 关卡行（Web 的 `if (st)`，无尽局没有） */
@@ -175,6 +181,7 @@ export class VictoryView {
     // 节点创建顺序 = Web drawVictory 的绘制顺序（先 banner 再 pose，与死亡屏同笔序；
     // 本屏立绘挂在屏心右侧 [412,470]，与横幅 [160,400] 两档屏高下都不相交）
     this.banner = iconNode("HeaderBanner", this.root, frames, ZERO);
+    this.scene = iconNode("Scene", this.root, frames, ZERO);
     this.pose = iconNode("Pose", this.root, frames, ZERO);
     this.title = new Txt("Title", this.root);
     this.stage = new Txt("StageLine", this.root);
@@ -268,9 +275,15 @@ export class VictoryView {
     this.panel.show(L.panelKey, L.panel, "slice", HEX.bgPanel, HEX.bgPanelLight);
 
     // 横幅与立绘：整幅拉伸、没有缺图回退档（缺图收成零位盒，文字照落位）
-    const banner = this.banner.show(KEY_BANNER);
-    placeRect(this.banner.node, banner ? L.banner : ZERO);
-    const pose = this.pose.show(KEY_POSE);
+    const v4 = viewTable().phase3.restV4;
+    const banner = this.banner.show(v4 ? "ribbon_dark" : KEY_BANNER);
+    placeRect(this.banner.node, banner ? (v4 ? L.ribbon : L.banner) : ZERO);
+    // v5:场景立绘压在绸带之上,小立绘收起(场景已含人物与场地)
+    const scene = v4 && this.scene.show("victory_scene");
+    placeRect(this.scene.node, scene ? L.scene : ZERO);
+    if (!v4) this.scene.show("");
+    const pose = !v4 && this.pose.show(KEY_POSE);
+    if (v4) this.pose.show("");
     placeRect(this.pose.node, pose ? L.pose : ZERO);
 
     // 标题压在绸带带心上：带心亮度跨 5~6 档，单色字到不了对比 → 走共享描边出口，缺图那一档关掉

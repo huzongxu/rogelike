@@ -1223,7 +1223,8 @@ function phase4Defaults(): Record<string, string> {
 
 /** Web 侧扭蛋屏的源码段(openGacha / gachaLevel / doGacha / doGachaAd / gachaLayout / drawGacha / onGachaClick) */
 function webGachaSource(): string {
-  const src = readFileSync(new URL("../src/game.ts", import.meta.url), "utf8");
+  // 统一成 LF:core.autocrlf=true 的检出是 CRLF,下面几条断言里嵌着换行的多行片段
+  const src = readFileSync(new URL("../src/game.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
   const from = src.indexOf("private openGacha(): void {");
   const to = src.indexOf("/* ---------- 胜利结算 ---------- */");
   expect(from).toBeGreaterThan(-1);

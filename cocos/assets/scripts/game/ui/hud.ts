@@ -6,6 +6,8 @@
 
 export const HUD_TOP_H = 64;
 export const HUD_BOT_H = 48;
+/** v4 底坞:高度翻倍,装备卡两排(平时 2×4、Boss 2×3),超出仍收 +N 芯片 */
+export const HUD_BOT_H_V4 = 96;
 export const HUD_PAD = 10;
 
 /** 坞板资产比例 == 显示比例(560/64、560/48),绘制端直接等比拉伸,零变形 */
@@ -13,8 +15,8 @@ export const DOCK_TOP_ASPECT = 1120 / 128; // 8.75
 export const DOCK_BOT_ASPECT = 1120 / 96; // ≈11.667
 
 /** 战场活动带:两坞之间的纵向区间(实体钳制边界,不得越上下栏) */
-export function battleBandY(wh: number): { y0: number; y1: number } {
-  return { y0: HUD_TOP_H, y1: wh - HUD_BOT_H };
+export function battleBandY(wh: number, botH: number = HUD_BOT_H): { y0: number; y1: number } {
+  return { y0: HUD_TOP_H, y1: wh - botH };
 }
 
 export type TickerKind = "combo" | "commission" | "intel" | "env" | "thorn" | "auto";
@@ -58,6 +60,42 @@ export function equipRowLayout(n: number, boss: boolean, zoneW: number): EquipRo
   const avail = zoneW - (chip ? chipW + gap : 0) - gap * Math.max(0, shown - 1);
   const cardW = shown > 0 ? Math.min(168, Math.max(64, Math.floor(avail / shown))) : 0;
   return { shown, hidden, cardW, cardH: 36, gap, chip, chipW };
+}
+
+export interface EquipGridLayout extends EquipRowLayout {
+  /** 每排列数(单排档 = 实画张数,双排档 = 满列数) */
+  cols: number;
+  /** 排数(1 或 2) */
+  rows: number;
+  /** 排间距 */
+  rowGap: number;
+  /** 首排顶缘相对坞顶的偏移(网格整体在坞内垂直居中,偶数) */
+  y0: number;
+}
+
+/**
+ * 底坞装备网格(v4):张数 ≤ 每排上限(平时 4 / Boss 3)时单排,多于上限时两排;
+ * 两排满(8 / 6)之外的收进 +N 芯片(芯片跟在末排末张之后,占位计入该排宽度)。
+ * `rowsMax = 1` 时退化成 equipRowLayout 的口径(旧坞 48 高:y0 = 6)。
+ */
+export function equipGridLayout(n: number, boss: boolean, zoneW: number, dockH: number, rowsMax: number = 2): EquipGridLayout {
+  const perRow = boss ? 3 : 4;
+  const gap = 6;
+  const rowGap = 6;
+  const chipW = 30;
+  const cardH = 36;
+  const count = Math.max(0, n);
+  const rows = count <= perRow ? 1 : Math.max(1, Math.min(rowsMax, 2));
+  const cap = perRow * rows;
+  const shown = Math.min(count, cap);
+  const chip = count > cap;
+  const hidden = count - shown;
+  const cols = rows === 1 ? shown : perRow;
+  const avail = zoneW - (chip ? chipW + gap : 0) - gap * Math.max(0, cols - 1);
+  const cardW = cols > 0 ? Math.min(168, Math.max(64, Math.floor(avail / cols))) : 0;
+  const gridH = rows * cardH + (rows - 1) * rowGap;
+  const y0 = Math.max(0, Math.floor((dockH - gridH) / 4) * 2);
+  return { shown, hidden, cardW, cardH, gap, chip, chipW, cols, rows, rowGap, y0 };
 }
 
 /** 胶囊条填充宽:frac 钳制 0..1;>0 时最小宽 = h 保胶囊头完整 */

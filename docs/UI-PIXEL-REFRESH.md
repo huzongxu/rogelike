@@ -639,3 +639,386 @@ remaining **7** = 批 D 的 `bg_stage_2` … `bg_stage_7` 与 `bg_outside`，dra
 `node .probe/oldgen-box-summarize.mjs old` 输出 **0 行**，同口径的像素档为 115 行逐键绘制盒；
 `node .probe/oldgen-inventory2.mjs` 的 drawn / manifestOnly / orphan 三路同为 0。画面与计数两条
 判据在此一致。
+
+## 14. 界面 chrome 程序化重出
+
+§13 收口后 Cocos 侧 158 枚贴图全是像素档，但逐屏接触表目视有两处短板：**chrome 太素**——
+行板 / 按钮 / 面板底 / 双坞 / 胶囊条基本是「深色平板 + 一圈细边」，与单位、立绘、背景不在一个
+精细档；**小图标读不出形**——入口 16×16、敌情 12×12、套组 18×18 是 AI 源图缩到 art 档后的
+残影。本节把这两族改为**代码逐像素绘制**，不再依赖生图源件。
+
+### 14.1 范围与产物
+
+| 族 | 键 | 张数 | 画法 |
+| --- | --- | --- | --- |
+| 行板 / 筹码 / 分区条 | `menu_row_plate`（别名 5 键）`menu_set_plate_selected`（别名 `menu_title_plate`）`menu_row_plate_current` | 9 | 斜面板 + 角铆钉（钢 / 翠 / 金三族） |
+| 按钮 | `btn_primary` `btn_minor` `btn_danger` | 3 | 斜面板，切 2px 圆角；翠 / 钢 / 赤三族 |
+| 战斗 HUD | `hud_dock_top` `hud_dock_bottom` `slot_skill` `bar_capsule` | 4 | 坞面朝战场一侧亮唇；技能槽为内凹井 |
+| 面板底 | `panel_dark_corners` | 1 | 四角三层钢带 L 形托架 + 翠色菱形宝石 |
+| 弹层横幅 | `banner_mid_navy` | 1 | 九宫格斜面板，四角倒角 7px |
+| 品质卡框 | `frame_common` … `frame_hidden` | 5 | 铁质斜面板 + 品质横带（行位 42..67 不变） |
+| 绸带横幅（整图拉伸） | `banner_title_gold_b/c` `banner_title_iron` `banner_large_navy_a/red/purple` `banner_purple_cosmic` `banner_mid_blue/bronze/black` | 10 | 三阶主体 + 顶亮线 + 折入暗档 + 燕尾缺口 |
+| 进度条填充 | `bar_progress_blue_b` `bar_progress_purple` `bar_progress_teal` | 3 | 逐行三阶 |
+| 页签条 | `tabs_talent_three` | 1 | 三枚等宽小斜面板 |
+| 位图 | `btn_back` · 入口 ×6 · 敌情 ×4 · 套组 ×6 | 17 | 字符画（`scripts/lib/pixel-bitmaps.mjs`） |
+
+合计 **54 张**（48 主键 + 6 别名），全部同名覆盖：PNG 尺寸与既有贴图逐张相等，
+`viewTable.nineSlice.keys` 一字未改，`PIXEL_ART_KEYS` 已含全部键，视图层零改动。
+
+### 14.2 生成器与规格
+
+```
+node scripts/pixel-chrome.mjs [--config=artwork/pixel-kit-chrome.json] [--out=dir] [--only=k1,k2] [--contact=path.png] [--dry] [--force]
+```
+
+- 规格 `artwork/pixel-kit-chrome.json`：`singles[]` 每格一键，`kind` ∈ plate / cardFrame / ribbon / bar / tabs / bitmap。
+  plate 的 `top / left / bottom / right` 是**从边缘向内逐像素的颜色序列**，用尽即落到 `face`；
+  颜色只写 `scripts/lib/pixel-draw.mjs:PAL` 的 33 色名（§2 同一张表，不引入新色）。
+- 斜面板算法：每像素取到四边的最短距离 d，按「上 → 左 → 下 → 右」优先序选边，颜色 = 该边序列[d]。
+  上 / 左受光、下 / 右阴影，四角自然成 45° 拼缝；铆钉、托架、倒角都只落在角块内。
+- **九宫格自检**：生成后 `checkNineSlice()` 断言上下带逐行恒色、左右带逐列恒色、中块单色
+  （卡框放宽为中块逐行恒色，横带行位由 `viewTable.cardFrame` 换算），违例即不写盘、退出非零。
+  这条替代了 §3 里 `flattenSlices()` 的事后平整：形状从一开始就按 SLICED 拉伸要求画。
+- **尺寸闸**：输出与既有 png 尺寸不等时拒绝写入（`--force` 才覆盖）——切边表是按尺寸定的。
+- 文件名保留 `pixel-kit` 前缀，`scripts/sync-cocos.mjs` 因此继续把这批键算作 Cocos 独占（实测保护 125 条，
+  连跑两遍第二遍零拷贝）；它**不是** `pixel-kit.mjs` 的输入。旧规格里被接管的 48 个格子已打
+  `"frozen": true, "frozenBy": "pixel-kit-chrome.json"`，重跑生图管线会跳过它们、不回滚这批贴图。
+
+### 14.3 守卫与验收
+
+`tests/pixel-chrome.test.ts` 三条账：规格 ↔ 入库 png 逐字节一致（生成器重跑到临时目录比对，
+同时锁确定性与「未手改」）；只用 33 色、alpha 非 0 即 255；九宫格件的 `inset` 与
+`viewTable.nineSlice.keys` 逐键相等且小于短边一半。
+
+接触表 `.probe/px/chrome-contact.png`（`--contact=` 产出，gitignored）。五道门 2026-09-11 在 Cocos 3.8.8 上跑绿：
+`npm test` 64 文件 / 3253 用例、`npm run build`、`npm run build:cocos`（1 min 57 s）、`npm run smoke:cocos` 7/7、
+`npm run typecheck:cocos` 0 条。实机截图走无头 Edge + CDP 按 canvas 盒逐屏抓 17 张（`.probe/px/shot-<key>.png`，560×996），
+主菜单 / 商店 / 战斗 / 扭蛋 / 通行证 / 每日 / 委托 / 轮回 / 通关 / 死亡 / 确认弹层目视：斜面板与铆钉在位、九宫格拉伸无条纹、
+燕尾横幅两端完整、卡框品质横带行位不变、无品红假色。注意 `smoke:cocos` 与截图探针要在 PowerShell 里起：Git Bash 沙箱下
+无头 Edge 会 code=0 立刻退出。
+
+### 14.4 赛季主色与角饰收口（2026-09-11 二轮）
+
+实机回看发现两处「文字压图」：`panel_dark_corners` 首版把 32px 切边带画满托架，而各屏内容从屏边 14~16px 起排、
+面板本身落在 16px，装饰整条压在标题与图标之下（装备升级 / 融合 / 扭蛋三屏最明显）。收口为：
+
+- **面板底只保留 3px 斜面 + 12px 小角饰**（两臂 9px、2px 厚的 L 形 + 3×3 菱形宝石），切边带其余部分平涂 face。
+  角饰与内容不再相交：内容最早从面板相对 −2px 起、纵向 ≥20px，角饰止于 12px。
+- **赛季主色**：`menu_title_plate` / `menu_set_plate_selected`（同图）与 `panel_dark_corners` 的边饰改随赛季主题换色，
+  主题表 `seasonAccents.themes` 与 `game/data/seasonSets.ts` 的 `THEMES` 同序（回响苏醒 紫 / 永冻深渊 冰蓝 / 熔火回响 金 / 幽冥潮汐 深紫），
+  格子里用 `A1/A2/A3` 占位由 `withAccent()` 代入。主题 0 落基名文件，主题 1..3 落 `<key>_t<n>.png`（共 9 枚新文件，`textures/` 158 → 167）。
+  运行时只有一处选文件：`GameShell.loadFrames()` 按 `seasonThemeIndex(sim.save.seasonId)` 调 `pixelArt.ts:seasonSkinFile()`，
+  frames 仍以**基名**登记，视图、`viewTable.nineSlice.keys`、`PIXEL_ART_KEYS` 全部只认基名，零改动。赛季在会话中途翻页时，
+  换色在下次启动生效。
+- 各屏标题横幅（`banner_large_purple` 等）保持屏别配色，不随赛季；主按钮翠色是动作语义（`HEX.actionPrimary`），
+  当前关卡行金色是状态语义，两者也不随赛季。
+
+守卫补三条（`tests/pixel-chrome.test.ts`）：`SEASON_ACCENT_KEYS` 与规格里 `seasonAccent` 键集相等；`seasonSkinFile()` 对四个主题
+都指向已入库文件、主题 0 与非变体键原名返回；同一键四个主题贴图两两不同。实机：`.probe/shot.mjs` 支持 `SEASON=<n>` 先写存档再导航，
+S1 / S2 / S3 主菜单标题板分别为紫 / 冰蓝 / 金边，smoke 7/7（167 枚源↔产物对齐）。
+
+## 15. 主菜单「深渊铭刻」落地（2026-09-11 三轮）
+
+方向经四版示意确认（`.probe/px/mock-menu-1..5.png`，gitignored）：铁骨金铆钉框、各关真实战场窗景铺满行框、
+金字给标题 / 货币 / 当前关、翠色是「回响」语义（主按钮 / 选中 / 已通关）。落地原则不变：几何全部沿用
+`menuLayoutPure()`，热区一寸不动；变化只在贴图与 `MenuLayoutView` 的三处接线。
+
+### 15.1 贴图（artwork/pixel-kit-chrome.json）
+
+| 键 | kind | 说明 |
+| --- | --- | --- |
+| `menu_row_plate` | frame · iron | **透明心**铁框 + 暗金铆钉；不再与 chip 族同图 |
+| `menu_row_plate_current` | frame · gold | 透明心金框 + `gold1` 内晕 |
+| `menu_chip_plate`（别名 note / strip / set） | frame · iron + face | 铁框 + `navy0` 平面 |
+| `menu_title_plate` / `menu_set_plate_selected` | frame · iron + face | 铆钉走赛季主色（§14.4 变体机制不变） |
+| `menu_section_strip` | plate | 薄暗带，上缘 `slate1` 一线 |
+| `btn_primary` | frame · gold + face | 金框 + `teal0` 面 + `teal1` 内晕 |
+| `btn_minor` | frame · iron + face | 铁框 + `navy2` 面 |
+| `menu_row_medal` / `menu_row_medal_cur` | medal | 40×40 圆勋章，铁环 / 金环；序号仍是 `pxnum_*` |
+| `menu_port_frame` | frame · bone | 56×56 透明心骸骨白框，`teal1` 内晕 |
+| `menu_scene_1` … `menu_scene_7` | sceneCrop | 从 `bg_stage_N` 裁 528×76（x 16..544，各关 y 见规格），压左深右浅暗罩后量化回背景批 56 色表 |
+
+`frame` 的颜色只按「到最近边的距离」定，四带逐行 / 逐列恒色，铆钉只钉角块；透明心让视图先画的窗景 / 立绘透出来。
+新键 10 枚进 `pixelArt.ts:MENU_V4_KEYS`（SIMPLE，贴图像素 = 逻辑 px），`textures/` 167 → 177。
+`menu_scene_*` 在 1212 档行高 96 时被 SIMPLE 纵向拉到 1.26×，最近邻会出不等高行——已知取舍，
+高屏档如需严格等比再出一档 528×96。
+
+### 15.2 视图接线（cocos/assets/scripts/menu/MenuLayoutView.ts）
+
+- 每行多一枚 `Scene` Plate，建在行框之前（同父后建者在上），`stretch` 铺满行矩形；缺图整块不画。
+- 序号牌改 `menu_row_medal(_cur)` 整图件，`content.current` 选金环；缺图退回 `menu_chip_plate` 方板。
+- 当前可挑战关的行名走 `HEX.gold`。
+- 英雄带像框：先铺 `hero_<id>` 立绘（`MenuContent.heroPortraitKey`，未选英雄为 null 留暗底），再压 `menu_port_frame`。
+
+### 15.3 验收
+
+五道门绿：`npm test` 64 文件全绿（两条 300 s 真模拟与生成器复现测试在慢机上超 5 s 默认时限，已给 60 s）、
+`build` / `build:cocos` / `smoke:cocos` 7/7（177 枚源↔产物对齐）/ `typecheck:cocos` 0 条。
+实机与 v4 示意并排：`.probe/px/compare-menu.png`——行框 / 窗景 / 勋章 / 主按钮 / 像框逐项对上，
+差异只剩标题带仍是 528×56 的板而非示意里的通栏顶栏（几何未动，属刻意保留）。
+
+### 15.4 直接复刻 v4 示意（同日四轮）
+
+用户拍板「直接复刻 V4 设计」。几何差异全部收进 **Cocos 独有的覆盖段** `viewTable.menu.layout { origin, deco }`：
+`MenuLayoutView.computeLayout()` 先取 `snapshotMenuLayout()` 再 `Object.assign` 这两张表进 `menuLayoutPure()`；
+共享层 `layoutMenu.ts` 默认表、Web 冻结基准与 `tests/menu-layout.test.ts` 的 996 基线一律不动。
+
+| 带 | 示意几何（已复刻） |
+| --- | --- |
+| 标题带 | 通栏 560×46（`banInset 16`），纹章 36 @ (14,5)，标题 22px @ x 58；右侧两行右对齐：赛季行 / 能量行（能量板不再画） |
+| 货币筹码 | y 56 · 30 高 · 三枚 126 宽间 10（`chipX1..3 = 16` 左挂到 x 16），图标 20，**金色 14px 系统字**（`chipPixelDigits=false`）；幻影榜 126 宽右靠 544 |
+| 入口 | y 96 · 34 高 · 六枚 84 宽间 4 |
+| 分区 | 透明占位条（`menu_section_strip` 全透明），左 12px 灰字「主线关卡 · 通关解锁下一关」+ 右提示「7 关 × 20 章 · 关底深渊领主」 |
+| 关卡行 | y 152 起 · 78 高 · 行距 6；勋章 40 @ 左 14；名 16px @ x 82；描述 12px；右上「N 章 · Boss」（解锁金 / 锁定灰）；右下 解锁条件 / 「已通关」（翠） |
+| 主按钮 | y 752 · 528×56 · 18px |
+| 英雄带 | y 824 · 高 140 · 像框 100（`menu_port_frame` 重出 100×100）· 钮 120×44 · 底缘留 32 |
+| 字阶 | body 16 / sub 12；锁定行整行减淡 140 → 200（`phase3.menuRowLockedAlpha`） |
+
+内容口径随版式调整（`MenuContentModel`）：行左列恒为关卡描述，解锁条件挪到新字段 `tail2`（右下行），
+`tail` 去掉前导「·」，`desc` 仍是三段整串；新增 `sectionHint`。`tests/cocos-phase3.test.ts` 的两条文案对账已同步。
+`MenuPresentationParams` 新增 `chipPixelDigits / chipTextPx / chipTextColor / endlessPx / layout`，`ViewTable` 对 `layout` 段逐字段只收数值。
+`menu_scene_1..7` 重出为 528×78（与行高 1:1）。
+
+实机取证：`.probe/shot.mjs` 现在等 `shell.frames.size ≥ 160` 再拍——ready 后贴图是后台流式加载，早拍会拍到缺图回退档
+（曾因此误判为「贴图全丢」）。`.probe/px/compare-menu.png` 左右逐带对上；五道门复跑全绿（177 枚源↔产物）。
+
+### 15.5 文字对齐收口（2026-09-11 三轮）
+
+实机放大回看有三处与 v4 示意不符：标题带里「回响深渊」与右侧两行没落在带中线、货币筹码里的数字偏上、
+英雄带第二行长句压到「更换英雄」钮下面。根因是这几处仍走 `placeLine()` 的基线估算（`baselineLift` 0.82
+× 字号），系统字体的实际出墨与估算差 2~4 px，且 `placeLine` 只有单行语义、没有换行与裁切。
+
+收口为 `MenuLayoutView.fitBox()`：节点尺寸 = 盒，`Overflow.CLAMP`，水平 / 垂直对齐交给 Label 自己，
+文字视觉中线严格对齐盒中线；`wrap=true` 时启用自动换行，超出盒高的行被裁掉、不溢出框外。改的落点：
+
+- 标题带：标题盒 = 带全高垂直居中；赛季行与体力钻石行各占半带高、右对齐、各自居中。
+- 货币筹码：数字盒 = 图标右侧到板尾的带，左对齐 + 垂直居中（`chipPixelDigits=false` 的文本档）。
+- 英雄带：只上三行短句（名 / 套组一句 / 初始武器），长版 `noteLines` 不再上屏、留给 Web 对账；
+  说明块自动换行、限两行、宽度止于按钮左侧 `heroPadX`；名 + 说明整块在带内垂直居中，未选英雄同款。
+
+`placeLine()` 与 `anchorBand` 不动：其余屏与 Web 基准仍走原口径，本轮只改主菜单这一屏的三处。
+
+## 16. 章间商店 v4「深渊铭刻」
+
+主菜单 v4 定稿后,第二屏按同一语言重排。开关是 `viewTable.phase3.shopV4`(Cocos 独有;Web 冻结基准不读),
+关掉即逐字回到旧版式 —— 几何、皮、文字三层都走「新分支 + 旧分支原样保留」。
+
+### 16.1 几何(`game/ui/shop.ts`)
+
+`shopLayoutPure(weaponCount, mergeCount, screenH, opts?)` 多了第四实参 `ShopLayoutOpts { v4, slotCount }`;
+不传即旧版式,`shopLayoutPure.length` 仍为 2,旧网格与锚点测试逐位不变。v4 换了一张弹性表:
+
+| 档 | 旧版式 | v4 |
+| --- | --- | --- |
+| 工具钮 / 槽位钮 | 44..64,吃富余 | 恒 40 |
+| 三张卡 | 160 / 176 / 208 按行数三档 | 恒 208,最满形态收 176 |
+| 分区标题 | 26..44 的横幅板 | 恒 22,无板,金字 + 右灰字 + 1px 分隔线 |
+| 武器行 | 行数 = 持有数,行高 34..172 | 行数 = max(持有, 槽位),空槽画占位行;行高 34..56,行距恒 6 |
+| 进化行 | 32..172 | 32..48,行距恒 6 |
+| 富余落点 | 行高与带距 | 行带到天花板后,只落到末行 → 底坞那一档 |
+| 说明行 | 顶信息条第三行 | 卡带与槽位钮之间 16 高一行(`captionY`) |
+
+`ShopModel.v4` 由宿主按表打开,`layout()` 把 `slotCount = world.slots()` 一并传入,draw 与 hitTest 仍同源;
+空槽行没有武器,hitTest 天然不产热区。
+
+### 16.2 皮与文字(`shop/ShopView.ts`)
+
+- 顶信息条两行:标题(金 16)| 金币图标 20 + 数字(金 16);敌情(12)| 槽位(12)。套组链 / 推荐 / 卡价提示挪到说明行。
+- 武器行:暗石面(`rgba(11,14,20,.78)`)+ `menu_row_plate` 铁框(选中 → `menu_row_plate_current` 金框)+ 左侧 4px 品质竖条;
+  名 14 品质色、副标 12 灰;强化 / 销毁两钮文字盒内居中。空槽行:面 + 细描边 + 居中「空槽 · 买卡填入」。
+- 进化行同款铁框;0 组时占位行同空槽样式。
+- 底操作条:两行预告各占 20 高盒;「开始下一章」金框翠面 + 翠字 15。
+- `btn_danger` 换成铁框红面(v4 全局同一语言;确认弹层的确认钮随之换皮)。
+- 文字全部走 `Txt.box()`:盒内对齐 + CLAMP + 关掉自动换行(同 §15.5 的修法;首版漏关换行,底坞预告被折成两行裁掉上半截)。
+
+### 16.3 守卫与验收
+
+`tests/shop-layout.test.ts` 新增 v4 网格:三档屏高 × 槽位 4/6/8 × 持有 0..槽位 × 进化 0..4,断言行数 = max(持有, 槽位)、
+块间零重叠、末行不过底坞、钮 40..44、卡 176..208、行高 34..56 / 32..48、说明行落在卡带与槽位钮之间;另钉 6 槽 1 件 0 组
+的标定锚点(工具 74/40、卡 124/208、槽位钮 356/40、6 行 × 56)。不传 opts 与传 undefined 逐位相同。
+实机:`.probe/shot.mjs` 的 `shop` / `shop2`(后者预置 400 金并买两张)两态截图目视。
+
+## 17. 出战英雄 v4「深渊铭刻」
+
+开关 `viewTable.phase3.heroesV4`(Cocos 独有;关掉逐字回旧版式)。几何**一处未动**:`game/ui/heroSelectLayout.ts`
+与 `hero-select-layout.test.ts` 原样;只改视图 `heroes/HeroSelectView.ts` 的皮与文字落位。
+
+- 顶带:紫横幅换成通栏 64 高的 `menu_title_plate`(随赛季主色的铁框),标题金 16 + 副题灰 12 两行左对齐,
+  返回钮落在带内右侧(热区矩形不变)。
+- 英雄行:暗石面 + `menu_row_plate` 铁框;预览行换 `menu_row_plate_current` 金框(旧版是翠色选中板);
+  已解锁行左侧一条 4px 英雄主色竖条;名 15 粗、副题 12;徽章文字盒内居中(当前出战 = 金字「出战」)。
+- 详情板:立绘外加骸骨白像框(暗底 + 2px 环,有无立绘都画);名 22 金、称号 13 主色、正文 13 灰自动换行
+  (盒高到立绘底,超出裁掉);技能四行暗石面 + 铁框,胶囊仍是代码硬边块,词缀名 14 粗 / 说明 12 灰。
+- 底部:确定钮金框翠面 + 翠字 15;「不出战」「返回」13 灰。
+- 文字全部走 `Txt.box()`(盒内对齐 + CLAMP,单行关换行、正文开换行),与 §15.5 / §16.2 同一修法。
+
+探针:`.probe/shot.mjs` 的 `heroes` 键改为经宿主 `openHeroes()` 进屏(直接切路由会绕过 `model.open()`,
+预选英雄不进详情面板 —— 那是探针口径问题,不是屏的问题);`HERO=vera` 预置出战英雄可抓到满详情态。
+
+## 18. 战斗 HUD v4「深渊铭刻」
+
+第四屏。双坞的几何常量(顶 64 / 底 48 / 战场活动带)是刷怪与实体钳制的锚点,一格不动;本轮只换皮与文字口径,
+开关 `viewTable.phase3.hudV4`。
+
+- **贴图**(`artwork/pixel-kit-chrome.json`,同名覆盖、尺寸不变):`hud_dock_top` / `hud_dock_bottom` 改铁框暗面
+  (frame kind,glow navy1);`bar_capsule` 改铁框暗面(血条 12 高时切边钳到 5,只露 ink / steel / steel / ink 四环);
+  `slot_skill` 改铁框 + 暗金铆钉;新增 `hud_card_frame`(64×36,切边 8,透明心)——底坞装备卡的框。
+  新键登记进 `NINE_SLICE_KEYS` 与 `viewTable.nineSlice.keys`(8),走流式加载,卡签名带上它的就绪态,晚到触发一次重建。
+- **装备卡**:暗石面 + 铁框(按品质色乘性染色,`sliced(..., tint)`),替代圆角品质描边;36 高的卡放不下额外的品质线,首版那道 2px 顶线正压在卡名字形上,已撤。技能槽底板与效果图标位置不变。
+- **文字**:`mkLabelIn` 统一走 `styleV4()`——CLAMP、垂直居中、水平随锚点;`baselineRect` 在 v4 下盒高放到 1.5×字号
+  (中心仍 = 基线 − 0.35×字号),否则 1.3× 行高的字形会被盒上下削掉(首版实测卡名被切顶)。
+- **组合技钮**:像素档不画圆,三枚改方钮(实心填色 / 铁环),位置与字号不变。
+- 验收:`.probe/shot.mjs` 的 `battle`(1 卡)与 `battle2`(预置 400 金、买三张卡后进下一章,4 卡)两态。
+  `sim.gold` 是只读 getter,探针要写 `sim.world.gold`。
+- **装备卡区加宽**:v4 非 Boss 时右簇收到 136(章节条 `hud.chapterBarW` 170 → 120),卡区 342 → 396,4 卡时每卡 94、
+  文字带 56,四字效果名整字落下;近似量字 `approxW` 把「…」按 CJK 全宽计(首版按 ASCII 0.55 计,截出的省略号再被 CLAMP 切掉半个)。
+
+## 19. 扭蛋机 v4「深渊铭刻」
+
+第五屏。开关 `viewTable.phase3.gachaV4`,与商店同法:共享层 `gachaLayout()` 加第五实参 `opts?: { v4 }`,
+不传逐位等于旧版式(旧带链、旧锚点测试一字不动);`gachaLayoutV4()` 是一条独立的纵向骨架:
+
+| 带 | 几何 |
+| --- | --- |
+| 顶带 | 0..64 通栏 `menu_title_plate`(随赛季主色铁框):标题金 16 / 券数图标 20 + 金 14 / 返回钮 (w−88, 10, 72, 44) |
+| 三枚钮 | y 76、高 44:单抽 110(`btn_minor`)/ 十连 170 / 广告余宽(`btn_primary`) |
+| 换券条 | y 130、高 40,暗石面 + 发丝描边 |
+| 保底 | 两行 196 / 224,标签左起、条 8 高从 pad+110 到右缘 |
+| 最近抽取 | 分区标题(金字 + 发丝线)244..266,行 22 一行 |
+| 收藏 | 分区标题(左标题 / 右翠色加成)+ 铁框行 44..56、行距 4..8(`spreadRows`),选中 → 金框 `menu_row_plate_current` |
+
+`panelKey` 为空:v4 不铺整幅面板,顶带 + 分区 + 铁框行自成骨架。命中仍读同一份 `L`(返回钮位随顶带上移到 y 10)。
+视图 `syncV4()` 整段接管,文字全部走 `Txt.box()`;`Txt` 的水平对齐收成 `hAlign()` 一个写入点(R5 纪律测试计数
+`lb.horizontalAlign =` 恒为 1)。件数多到装不下时行仍照排、越出底缘,是本屏两端一致的既有性质。
+验收:`.probe/shot.mjs` 的 `gacha`(空)与 `gacha2`(预置 40 券 12 钻,十连 + 单抽后 13 件)两态。
+
+## 20. 其余十二屏 v4「深渊铭刻」(一次收口)
+
+通行证 / 每日 / 委托 / 幻影榜 / 体力 / 装备升级 / 融合 / 轮回天赋 / 通关 / 阵亡 / 确认弹层 / 升级三选一,
+开关 `viewTable.phase3.restV4`。这批屏的几何(共享层 `*Layout.ts`)一律不动,只做三件事:
+
+1. **文字口径**:`ui/PanelKit.boxPlace()` —— 节点 = 盒(宽 maxW、高 1.5×字号),CLAMP、垂直居中、不换行,
+   盒中心 = 基线 − 0.35×字号(与 `placeLine` 的视觉中心同点),水平按对齐由 x 反推盒左缘。各屏 `Txt.set`
+   在开关为真时改走它,否则照旧 `placeLine`;水平对齐仍只在 `Txt` 内写一次(通行证 / 装备升级 / 升级三选一 /
+   通关 / 扭蛋的 R5 纪律测试计数 `placeLine(` 与 `lb.horizontalAlign =` 恒为 1,未动)。
+2. **顶带**:有标题的八屏(通行证 / 每日 / 委托 / 幻影榜 / 体力 / 装备升级 / 融合 / 轮回)加通栏 64 高的
+   `menu_title_plate`(随赛季主色铁框),标题金 16 左起、返回钮留在带内原位;旧横幅与头部小立绘收起。
+   屏底板 `panel_dark_corners` 保留,顶带压在它之上(角饰落在带下,不再与标题相撞)。
+3. **铁框行**:通行证档位行 / 委托区域行 / 融合装备行 / 轮回天赋行加 `menu_row_plate`(可领 / 选中 → `menu_row_plate_current` 金框),
+   每日未领行与幻影榜玩家行把既有 Plate 的键换成同一族。装备升级行仍是品质框(qualityBox),结算两屏与两枚弹层
+   本就是 v4 绸带 / `banner_mid_navy` 铁框,只换文字口径。
+
+验收:`.probe/shot.mjs` 的 pass / daily / commission / prestige / leaderboard / energy / gearup2(预置十连后
+的收藏)/ fusion2(预置三张卡)/ victory / gameover / confirm 十一态。
+
+## 21. v5「素材表接管」:通行证 / 每日 / 委托 / 幻影榜 / 体力 / 通关 / 阵亡按示意图翻新
+
+输入是两张白底 AI 素材表(`artwork/ref-v5/11-11.png` 对应示意图 `11.png`:通行证 / 每日 / 委托 / 轮回 / 幻影榜 / 体力 + 底栏;
+`22-22.png` 对应 `22.png`:装备升级 / 融合 / 通关 / 阵亡 / 奇遇商店 / 体力)。件里烘着的文案一律抹掉,只取图形。
+
+**切件**:`scripts/sheet-slice.mjs <sheet> <outDir>` —— 白底连通域(RGB ≥235 视为底)→ 外接框,`--gap` 内的同行件合并,
+按阅读序编号,落 `parts.json` + 带编号的 `contact.png`;人工对号后把坐标写进规格。
+
+**出图**:`artwork/pixel-kit-v5.json`(57 件,`node scripts/pixel-kit.mjs --config=artwork/pixel-kit-v5.json`)。
+新增原语 `erase = [nx, ny, nw, nh]`:按格框比例圈出文字区,整块填成圈外 1px 环的众数色 —— 文字在面上、金线角饰在环外,
+抹字发生在抠底与重采样之前,缩图后不留残影。调色板取背景批 56 档;`export=1`。
+
+| 族 | 键 | 备注 |
+|---|---|---|
+| 接管的 chrome 键 | `btn_primary` 166×30 / `btn_minor` 68×30 / `menu_row_plate` 184×40 / `menu_row_plate_current` 216×40 / `panel_dark_corners` 128×132 / `entry_*` 24×24 | 从 `pixel-kit-chrome.json` 移走;切边沿用 `viewTable.nineSlice.keys` 现值。`menu_note/strip/set_plate` 三个别名留给程序化 72×48 `menu_chip_plate`(筹码撑不起 16 切边的 184 板) |
+| 新 chrome | `btn_gold` 112×30 / `btn_purple` 138×30 / `btn_blue` 140×30 | 切边 10,已入 `nineSlice.keys` 与 `NINE_SLICE_KEYS` |
+| 横幅 | `pass_progress_banner` 480×58(双箭头带)/ `ribbon_dark` 240×48 | 整图拉伸 |
+| 图标 | `pass_tier_1..5` 40 / `daily_box_wood|silver|gold` 40 / `daily_talent_1..3` 36 / `comm_region_1..6` 44 / `comm_scene_1..5` 440×56(cover,不抠底)/ `rank_medal_1..11` 36 / `energy_emblem` 200×212 / `victory_scene` 320×246 / `gameover_scene` 300×246 / `emblem_common|rare|epic|legendary|hidden` 40 | 等比 contain;品质徽记暂未接线 |
+
+赛季变体:`panel_dark_corners` 改由素材表出图后不再有 `_t1..3`,`SEASON_ACCENT_KEYS` 收成 `menu_title_plate` / `menu_set_plate_selected` 两键。
+
+**接线**(全部走 `phase3.restV4` 开关,几何来自共享层):
+- 行图标共享几何 `game/ui/rowIcon.ts`:`rowIconRect(rect)` = 行左 12 起 40 方、垂直居中,`ROW_ICON_SHIFT = 44` 把行内文字整体右移、maxW 同减;
+  `rowSceneRect(rect)` = 行内缩 6 的风景带。通行证行 `pass_tier_N`、每日行宝箱 / `daily_talent_(i%3)+1`、委托行 `comm_scene_(i%5)+1` + `comm_region_N`。
+- 通行证激活行:`pass_progress_banner` 整图拉伸替换九宫格板。
+- 幻影榜:每行 `rank_medal_(i+1)` 落在既有 `badge` 盒(行左 16 起),品质框徽标让位;行槽改成先建行板再建勋章(同级节点按创建序绘制,勋章才压得住铁框)。
+- 体力:`energyLayout.emblem`(200×212,居中压在顶带之下)挂 `energy_emblem`;广告钮 `btn_purple` / 钻石钮 `btn_blue`(禁档仍短路成空键)/ 关闭钮 `btn_gold` 九宫格(旧档纯代码矩形隐藏)。
+- 通关 / 阵亡:`victoryLayout.scene` / `gameOverLayout.scene`(320×246 / 300×246,绸带之上)挂场景立绘,绸带换 `ribbon_dark`,小立绘收起。
+
+测试改动:`pixel-chrome.test` 的「非变体键原名返回」例子由 `btn_primary` 改 `btn_back`(前者已不是 chrome 键);
+能量屏源码纪律测试放行 `c.canAd ? (p3.restV4 ? "btn_purple" : KEY_PRIMARY) : ""` 形态(可用档才试贴图这条不变)。
+验收:`.probe/shot.mjs` 的 pass / daily / commission / leaderboard / energy / victory / gameover / menu 八态,64 文件 3888 测试全绿,smoke 7/7。
+
+### 21.1 第二轮:逐屏对齐示意图缺项
+
+- **行板透明心**:`pixel-kit.mjs` 新增 `hole = n`(art 盒四边内缩 n 之内 alpha 清零),`menu_row_plate` / `menu_row_plate_current` 取 6。
+  第一轮的素材表行板是实心面,把主界面关卡行框下的战场窗景整块盖掉了(v4 的「行框透明心」前提),透心后恢复;
+  委托行也因此能在框下铺 `menu_scene_(i%7)+1` 战场裁条(示意图的行内风景;素材表本身没有风景件,先前的 `comm_scene_*` 只是暗板,已删)。
+- **顶带徽记**:共享层 `game/ui/titleBand.ts`(`TB_ICON` 12,14,36×36;`TB_TITLE_X = 60`),八个带顶带的屏各挂一枚素材表圆徽记 `emblem_a_N`(通行证 3 / 每日 4 / 委托 1 / 幻影榜 8 / 体力 2 / 轮回 5 / 装备升级 9 / 融合 10),标题右移 44;体力屏经 `energyLayout.enV4Title` / `EN_V4_ICON` 间接读。
+- **每日**:首行图标换药水 `daily_potion`(示意图「水晶酒」);补领行可领时右侧压一枚 `btn_gold`(几何 `dailyLayout.makeUpCta` 128×36,右缘内缩 8),状态文案改为居中压在钮上。
+- **委托**:开始钮 `btn_gold` 九宫格(旧档纯代码矩形隐藏);五枚倍率档位加铁框 `menu_chip_plate`(选中金框 `menu_row_plate_current`)。
+- **轮回**:行左 `emblem_a_(i%11)+1`、文字右移 44;页签选中 `btn_gold` / 未选 `menu_chip_plate`。
+- **装备升级 / 融合**:行左品质徽记 `emblem_<quality>`(融合模型的行内容补 `quality` 键),文字右移 44。
+- **章间商店**:v4 卡面换宝箱 `shop_chest_gold|purple|blue`(64 见方,按品质框分档:传奇/隐藏金、史诗紫、其余蓝),小图标与首字回退让位。
+- **主界面入口**:六枚 `entry_*` 改从素材表格子取 46×48 的图标区出 32×32(原 24×24 偏糊)。
+
+验收:pass / daily / commission / leaderboard / energy / prestige / gearup2 / fusion2 / shop / menu 十态重抓,64 文件 3888 测试全绿,smoke 7/7。
+
+### 21.2 第三轮:通关 / 阵亡 / 确认弹层补齐
+
+- 通关 / 阵亡:场景立绘改从素材表格子内缩 12 源像素取图(去掉素材自带的蓝边框),放大到 400×302 / 380×308,
+  顶缘仍落在绸带之上 8;绸带换 v5 宽盒 `ribbon`(320×56,与旧 240×48 横幅同心),旧横幅几何与常量不动(测试钉住)。
+- 确认弹层:v4 下标题带走各屏同族的铁框顶带 `menu_title_plate`,确认钮换 `btn_gold`,取消钮仍 `btn_minor`;
+  几何、回退色与模型层的键(`bannerKey` / `okKey` / `cancelKey`)都不变,只在视图按开关换键。
+
+验收:victory / gameover / confirm 三态重抓,64 文件 3888 测试全绿,smoke 7/7。
+
+### 21.3 第四轮:通行证 / 每日行区按示意图摊满
+
+示意图里两屏的列表行几乎摊满行区、行距只留一道缝;旧口径(通行证 rowH ≤ 96、gap ≤ 60,每日 rowH ≤ 92)把
+余量都吐给了行距,屏上是「窄行 + 宽缝」。几何函数加可选入参 `opts.v4`(`passLayout` / `passScreenLayout` /
+`dailyLayout` / `dailyScreenLayout`),打开时通行证走 `PS_V4_ROW_MAX_H = 120` / `PS_V4_ROW_MAX_GAP = 12`,
+每日走 `DL_V4_ROW_MAX_H = 120`;默认口径一字不改(Web 冻结基线与既有测试都照旧),宿主按 `phase3.restV4` 传。
+
+### 21.4 第五轮:赛季结算屏与提示条进 v4
+
+- 赛季结算屏:此前整屏未进 v4(小徽标 + 青铜横幅 + 纯代码钮)。`seasonLayout` 加 `ribbon`(320×56,与旧横幅同心)
+  与 `emblemV4`(`energy_emblem` 等比 140×148,底缘压在绸带之上 8)两个盒;视图按 `phase3.restV4` 换 `ribbon_dark` / `energy_emblem`,
+  贴底钮换 `btn_gold` 九宫格(旧档纯代码矩形隐藏),七行文字改走 `boxPlace`。旧几何、旧键常量与探针断言(`summaryVisible`)不变。
+- 提示条(toast):v4 下直角暗底 + `menu_row_plate_current` 金框(透明心),与 toastNode 同起落;旧档仍是胶囊。
+- 探针新增 `toast` / `levelup` 两态(`.probe/shot.mjs`)。
+
+## 22. v6「第二批素材表」:主界面 / 商店 / 装备升级 / 委托 / 出战英雄 / 扭蛋 / 升级三选一
+
+输入是第二批三张图(`artwork/ref-v6/`:线稿 `wire.png`、实体示意 `mock.png`、白底素材表 `sheet.png`)。示意图的整屏比例
+不是手机档,按用户要求只取风格与件,几何仍走各屏共享层(560 × 996..1246);切件用 `scripts/sheet-slice.mjs`(99 件),
+规格 `artwork/pixel-kit-v6.json`(14 件),口径同 v5(erase 抹字、hole 不用、56 色表、export 1)。
+
+| 键 | 来源件 | 用处 |
+|---|---|---|
+| `btn_tab` 88×44 / 12 | 顶部页签小钮(开启) | 主界面六枚入口钮 |
+| `btn_iron` 104×52 / 12 | 返回 / 购买 族铁框钮 | 商店工具钮、升级三选一三钮(可用档) |
+| `chip_eff` 84×54 / 14 | x1 600/秒 档位板 | 委托五枚倍率档位(选中仍金框) |
+| `btn_wide` 160×48 / 14 | 开始第2退 宽钮 | 主界面无限关钮 |
+| `row_thin` 160×26 / 8 | 细行板 | 扭蛋收藏行(选中仍金框) |
+| `card_tall` 136×268 / 20 | 高卡板 | 升级三选一卡底;品质框退成纯描边(空键),不再叠亮顶带的 `frame_<quality>` |
+| `lv_emblem_1..3` 96 | 药水 / 绿盾 / 红徽 | 升级卡中水印(`levelUpLayout.emblem`,UIOpacity 120,压在描述文字之下) |
+| `shop_art_1..3` 80×88 | 水晶球 / 十字 / 魔典 | 商店卡面按槽位取,缺图退品质宝箱 |
+| `scene_menu_top` 560×64 / `scene_castle` 528×112 | 两幅横景(去掉素材自带边框,cover 裁条) | 主界面标题带与英雄带框下窗景;出战英雄详情面板框内(`heroDetailInner`,内缩 6) |
+
+探针 `.probe/shot.mjs` 的贴图就位阈值由 160 提到 230(全集 239 张,早拍会拍到缺图回退)。
+验收:menu / shop2 / gearup2 / commission / heroes / battle2 / gacha2 / levelup 八态,64 文件 3888 测试全绿,smoke 7/7。
+
+### 22.1 修正:出战英雄窗景比例、战斗底坞翻倍双排
+
+- 出战英雄详情窗景先前整幅拉伸进 528×440 的面板,失衡。`scene_castle` 改出整幅 528×212(源图比例),
+  `heroSelectLayout.heroDetailScene(d)` 在框内盒里等比 contain、贴底居中;主界面英雄带另用 `scene_castle_strip`(528×112 cover 横条)。
+- 战斗底坞 v4 高度翻倍 `HUD_BOT_H_V4 = 96`(旧 `HUD_BOT_H = 48` 不动:商店底坞与 Web 冻结基线仍用它)。
+  装备卡改双排网格 `equipGridLayout(n, boss, zoneW, dockH, rowsMax)`:张数 ≤ 每排上限(平时 4 / Boss 3)单排,
+  多于上限两排,满 8 / 6 之外收 +N 芯片(芯片跟在末排末张之后,占位计入该排宽度);网格在坞内垂直居中取偶,
+  `rowsMax = 1` 即旧横排口径(测试钉住二者一致)。右簇(Boss 血条 / 章节进度)按增高量的一半下移居中。
+- 竞技场带跟着坞高上收:`battleBandY(wh, botH)` 加第二实参,`BattleWorldHost.bottomDockH?()` 由 `BattleSim` 转宿主给的
+  `BattleSimOptions.bottomDockH`(`GameShell` 按 `phase3.hudV4` 传 96);缺省仍是 48,Web 与既有测试不受影响。
+- 探针新增 `battle8`(刷 4 轮商店买满,看双排与 +N)。
+
+### 22.2 城堡窗景扩图填满详情面板
+
+`pixel-kit.mjs` 新增 `extendTop = n`(配 `extendBand`):art 之上再长 n 行,新行 = 顶带两侧(各 1/4 宽,避开塔尖光柱)
+天色与 art 顶行(横向 13 格盒滤)按 t³ 渐混,顶部再暗 25%;量化在扩图之后跑,过渡色落回色表。`scene_castle` 由此出
+516×208 + 220 = 516×428,与详情面板框内盒(528×440 内缩 6)同比例,整幅铺满、城堡贴底居中(`heroDetailScene` 常量随之改)。
+第一版用「顶带纵向拉伸」扩图,塔尖与光柱被拉成竖条纹,已换成上述渐混。

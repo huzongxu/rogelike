@@ -14,7 +14,7 @@ import {
   pickTicker,
   equipRowLayout,
   barFillW,
-  type TickerFlags,
+  type TickerFlags, equipGridLayout, HUD_BOT_H_V4,
 } from "@game/ui/hud";
 import { PLAYER_BASE } from "@game/entities/player";
 
@@ -106,6 +106,46 @@ describe("equipRowLayout 底坞装备横排", () => {
 
   it("64 保底:窄区不缩到不可读", () => {
     expect(equipRowLayout(4, false, 200).cardW).toBe(64);
+  });
+});
+
+describe("equipGridLayout v4 双排网格(坞高 96)", () => {
+  const zoneW = 560 - HUD_PAD * 2 - 136 - 8;
+  it("张数 ≤ 每排上限 → 单排且与旧横排同口径;超上限 → 两排;满 8 / 6 之外收 +N", () => {
+    for (const boss of [false, true]) {
+      const perRow = boss ? 3 : 4;
+      for (let n = 0; n <= 12; n++) {
+        const L = equipGridLayout(n, boss, zoneW, HUD_BOT_H_V4);
+        const rows = n <= perRow ? 1 : 2;
+        expect(L.rows).toBe(rows);
+        expect(L.shown).toBe(Math.min(n, perRow * rows));
+        expect(L.chip).toBe(n > perRow * 2);
+        expect(L.hidden).toBe(n - L.shown);
+        expect(L.cols).toBe(rows === 1 ? L.shown : perRow);
+        // 网格连芯片都落在左区之内、纵向落在坞内且居中取偶
+        const rowW = L.cols * L.cardW + Math.max(0, L.cols - 1) * L.gap + (L.chip ? L.chipW + L.gap : 0);
+        if (L.cardW > 64) expect(rowW).toBeLessThanOrEqual(zoneW);
+        const gridH = rows * L.cardH + (rows - 1) * L.rowGap;
+        expect(L.y0 % 2).toBe(0);
+        expect(L.y0 + gridH).toBeLessThanOrEqual(HUD_BOT_H_V4);
+        if (n === 0) expect(L.cardW).toBe(0);
+      }
+    }
+  });
+  it("rowsMax = 1 退化成旧横排:同张数下 shown / chip / cardW 与 equipRowLayout 一致,y0 = 6", () => {
+    for (const boss of [false, true]) {
+      for (let n = 0; n <= 8; n++) {
+        const a = equipRowLayout(n, boss, zoneW);
+        const b = equipGridLayout(n, boss, zoneW, HUD_BOT_H, 1);
+        expect([b.shown, b.chip, b.hidden, b.cardW]).toEqual([a.shown, a.chip, a.hidden, a.cardW]);
+        expect(b.y0).toBe(6);
+      }
+    }
+  });
+  it("竞技场带随底坞高上收:battleBandY(996, 96).y1 = 900,缺省仍是 948", () => {
+    expect(battleBandY(996, HUD_BOT_H_V4).y1).toBe(900);
+    expect(battleBandY(996).y1).toBe(948);
+    expect(HUD_BOT_H_V4).toBe(HUD_BOT_H * 2);
   });
 });
 

@@ -10,7 +10,7 @@
  * 按钮这类容器时把它的尺寸作为 box 传进来(子局部矩形),否则参照系错一档、文字整体平移。
  */
 
-import { Graphics, Node, Sprite, SpriteFrame, UITransform } from "cc";
+import { Graphics, Label, Node, Sprite, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, logicalH, placeRect, Rect } from "../core/DesignMetrics";
 import { borderOf, viewTable } from "../core/ViewTable";
 import { alignAx, anchorBand, type TextAlign } from "./TextBand";
@@ -55,6 +55,23 @@ export function sizeFallback(node: Node, r: Rect): void {
  */
 export function placeLine(node: Node, x: number, baseY: number, maxW: number, px: number, align: TextAlign = "left", box?: { w: number; h: number }): void {
   placeRect(node, anchorBand(x, baseY, maxW, px, align, viewTable().menu.baselineLift), box?.w ?? DESIGN_W, box?.h ?? logicalH(), alignAx(align), 1);
+}
+
+/**
+ * v4「深渊铭刻」文字落位:节点 = 盒(宽 maxW、高 1.5×字号),Overflow.CLAMP、垂直居中、不换行;
+ * 盒中心 = 基线 − 0.35×字号(与 placeLine/anchorBand 的视觉中心同点),水平按 align 由 x 反推盒左缘
+ * (起笔 / 中心 / 末笔 —— 与 fillText 的 x 语义一致)。水平对齐由调用方的 Txt 自己设(各屏纪律测试
+ * 只允许一处 `lb.horizontalAlign =`),本函数不碰。各屏 Txt.set 在表开关为真时走这里,否则走 placeLine。
+ */
+export function boxPlace(lb: Label, x: number, baseY: number, maxW: number, px: number, align: TextAlign): void {
+  const hh = Math.round(px * 1.5);
+  const bx = align === "center" ? x - maxW / 2 : align === "right" ? x - maxW : x;
+  if (lb.overflow !== Label.Overflow.CLAMP) lb.overflow = Label.Overflow.CLAMP;
+  if (lb.enableWrapText) lb.enableWrapText = false;
+  if (lb.verticalAlign !== Label.VerticalAlign.CENTER) lb.verticalAlign = Label.VerticalAlign.CENTER;
+  const lh = Math.round(px * 1.3);
+  if (lb.lineHeight !== lh) lb.lineHeight = lh;
+  placeRect(lb.node, { x: bx, y: baseY - px * 0.35 - hh / 2, w: maxW, h: hh });
 }
 
 /** 一块可热换的底板:有图走贴图(九宫格或整图),缺图走暗底 + 描边 */

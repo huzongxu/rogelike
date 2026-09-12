@@ -52,6 +52,8 @@
    "cells": [
     {
      "key": "entry_forge",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       16,
       16
@@ -59,6 +61,8 @@
     },
     {
      "key": "entry_gacha",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       16,
       16
@@ -66,6 +70,8 @@
     },
     {
      "key": "entry_gearup",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       16,
       16
@@ -73,6 +79,8 @@
     },
     {
      "key": "entry_pass",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       16,
       16
@@ -80,6 +88,8 @@
     },
     {
      "key": "entry_quests",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       16,
       16
@@ -87,6 +97,8 @@
     },
     {
      "key": "entry_talents",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       16,
       16
@@ -104,6 +116,8 @@
    "cells": [
     {
      "key": "menu_row_plate",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "keys": [
       "menu_note_plate",
       "menu_strip_plate",
@@ -118,6 +132,8 @@
     },
     {
      "key": "menu_set_plate_selected",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "keys": [
       "menu_title_plate"
      ],
@@ -128,6 +144,8 @@
     },
     {
      "key": "btn_primary",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "artH": 28,
      "slice": 10,
      "export": 2,
@@ -136,6 +154,8 @@
     },
     {
      "key": "btn_minor",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "artH": 20,
      "slice": 8,
      "export": 2,

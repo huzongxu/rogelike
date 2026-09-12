@@ -38,7 +38,9 @@ import { Graphics, Label, Node, SpriteFrame, UIOpacity, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
-import { Plate, fitOne, flatBox, iconNode, placeLine, qualityBox } from "../ui/PanelKit";
+import { TB_ICON, TB_TITLE_DX, TB_TITLE_X } from "../game/ui/titleBand";
+import { ROW_ICON_SHIFT, rowIconRect } from "../game/ui/rowIcon";
+import { Plate, fitOne, flatBox, iconNode, placeLine, qualityBox, boxPlace } from "../ui/PanelKit";
 import { GEAR_UPGRADE_MAX } from "../game/data/daily";
 import { GU_ROWS_MAX, type GearUpLayout, type GearUpRowLayout, type GuRect } from "../game/ui/gearUpLayout";
 import { hitGearUp, type GearUpAction, type GearUpContent, type GearUpRowContent } from "./GearUpModel";
@@ -83,6 +85,10 @@ class Txt {
       this.lb.color = hexToColor(color);
     }
     bindLabel(this.lb, fitOne(text, maxW, px));
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, x, baseY, maxW, px, align);
+      return;
+    }
     placeLine(this.lb.node, x, baseY, maxW, px, align);
   }
 
@@ -106,6 +112,8 @@ interface StarSlot {
 /** 一个装备行的节点槽:品质框 + 两行左对齐文本 + GEAR_UPGRADE_MAX 颗徽记 + 升级钮与钮文 */
 interface RowSlot {
   frame: ReturnType<typeof qualityBox>;
+  /** v5:行左品质徽记(emblem_<quality>) */
+  icon: Plate;
   name: Txt;
   desc: Txt;
   stars: StarSlot[];
@@ -127,6 +135,10 @@ export class GearUpView {
 
   private dim: Node;
   private panel: Plate;
+  /** v4:通栏 64 高的顶带(menu_title_plate,随赛季主色铁框),压在面板与横幅之上 */
+  private band: Plate;
+  /** v5:顶带左端的圆徽记(素材表 emblem_a_N) */
+  private bandIcon: Plate;
   private title: Txt;
   private subtitle: Txt;
   private stardust: Txt;
@@ -145,6 +157,8 @@ export class GearUpView {
     this.dim = makeNode("Dim", this.root);
     this.dim.addComponent(Graphics);
     this.panel = new Plate("Panel", this.root, frames);
+    this.band = new Plate("BandV4", this.root, frames);
+    this.bandIcon = new Plate("BandIconV5", this.root, frames);
     // 头部两带的三条文本按 A 带→B 带顺序建节点(星尘在返回钮之前,两带纵向错开故互不遮挡)
     this.title = new Txt("Title", this.root);
     this.subtitle = new Txt("Subtitle", this.root);
@@ -177,6 +191,7 @@ export class GearUpView {
     for (let s = 0; s < GEAR_UPGRADE_MAX; s++) stars.push({ icon: iconNode(name + "Star" + s, this.root, this.frames, ZERO), glyph: new Txt(name + "StarGlyph" + s, this.root) });
     return {
       frame: qualityBox(name + "Frame", this.root, this.frames),
+      icon: new Plate(name + "Icon", this.root, this.frames),
       name: new Txt(name + "Name", this.root),
       desc: new Txt(name + "Desc", this.root),
       stars,
@@ -204,6 +219,14 @@ export class GearUpView {
     // 头部三线:标题加粗 gold / 副标题 muted / 星尘右对齐 stardust(本屏没有横幅贴图)
     this.title.bold(true);
     this.title.set(L.title.x, L.title.baseY, L.title.maxW, L.title.px, c.title, "left", p4.guTitle);
+    // v4 顶带:通栏 64 高,标题金 16 左起(本屏原本没有横幅)
+    this.band.setActive(p3.restV4);
+    this.bandIcon.setActive(p3.restV4);
+    if (p3.restV4) {
+      this.band.show("menu_title_plate", { x: 0, y: 0, w: DESIGN_W, h: 64 }, "slice", p3.detailBg, p3.detailStroke);
+      this.bandIcon.show("emblem_a_9", TB_ICON, "stretch");
+      this.title.set(TB_TITLE_X, 26, L.backBtn.x - 28 - TB_TITLE_DX, 16, c.title, "left", HEX.gold);
+    }
     this.subtitle.bold(false);
     this.subtitle.set(L.subtitle.x, L.subtitle.baseY, L.subtitle.maxW, L.subtitle.px, c.subtitle, "left", p4.guSubtitle);
     this.stardust.bold(true);
@@ -242,13 +265,18 @@ export class GearUpView {
     slot.frame.node.active = true;
     // Web 的 drawQualityFrame 本屏不传 topBar(那一项只有商店卡用)
     slot.frame.draw(row.rect, rc.color);
+    // v5:行左品质徽记,名字与描述整体右移(几何来自共享层 rowIcon)
+    const v4 = viewTable().phase3.restV4;
+    slot.icon.setActive(v4);
+    if (v4) slot.icon.show(`emblem_${rc.quality}`, rowIconRect(row.rect), "stretch");
+    const dx = v4 ? ROW_ICON_SHIFT : 0;
 
     slot.name.active(true);
     slot.name.bold(true);
-    slot.name.set(row.name.x, row.name.baseY, row.name.maxW, row.name.px, rc.name, "left", rc.color);
+    slot.name.set(row.name.x + dx, row.name.baseY, row.name.maxW - dx, row.name.px, rc.name, "left", rc.color);
     slot.desc.active(true);
     slot.desc.bold(false);
-    slot.desc.set(row.desc.x, row.desc.baseY, row.desc.maxW, row.desc.px, rc.descText, "left", p4.guDesc);
+    slot.desc.set(row.desc.x + dx, row.desc.baseY, row.desc.maxW - dx, row.desc.px, rc.descText, "left", p4.guDesc);
 
     // 徽记带(在按钮左侧):槽数与点亮门控都由内容层给,贴图缺失的那一颗才退文字星
     row.stars.forEach((star, s) => {
@@ -279,6 +307,7 @@ export class GearUpView {
   /** 收起一行(行数少于 GU_ROWS_MAX 的那些槽,以及空态下的全部槽):含五颗徽记的两条分支 */
   private hideRow(slot: RowSlot): void {
     slot.frame.node.active = false;
+    slot.icon.setActive(false);
     slot.name.active(false);
     slot.desc.active(false);
     slot.btn.setActive(false);

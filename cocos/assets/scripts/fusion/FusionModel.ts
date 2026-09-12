@@ -56,7 +56,7 @@ import {
   tripleUnlocked,
   type TripleMode,
 } from "../game/data/fusion";
-import { HIDDEN_PITY_N, qualityDef } from "../game/data/quality";
+import { HIDDEN_PITY_N, qualityDef, type Quality } from "../game/data/quality";
 import type { FusionLayout, FuRect } from "../game/ui/fusionLayout";
 
 /** 本屏要读的存档字段(`ownedTalents` 只取长度,收窄成计数;装备列表是局内态,另走入参) */
@@ -103,6 +103,8 @@ export interface FusionRowContent {
   subText: string;
   /** 品质色(未选中且可用时行名与行描边都走它;动态色,来自 qualityDef 不进表) */
   qualityColor: string;
+  /** 品质键(v5 行左徽记 emblem_<quality> 用) */
+  quality: Quality;
   /** 带隐藏词缀 → 不可作素材(行名标灰) */
   disabled: boolean;
 }
@@ -335,6 +337,7 @@ export function buildFusionContent(
       nameText: eq.hiddenAffix ? `【隐藏·${eq.name}】` : eq.name,
       subText: `Lv.${eq.level} ${q.name} · ${fusionAffixSummary(eq)}${eq.hiddenAffix ? " · 不可作素材" : ""}`,
       qualityColor: q.color,
+      quality: eq.quality,
       disabled: !!eq.hiddenAffix,
     };
   });

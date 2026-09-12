@@ -31,12 +31,12 @@
  * (广告闸门全仓只有 `GameShell.watchAd` 首行那一道)。
  */
 
-import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
+import { Graphics, Label, Node, SpriteFrame, UIOpacity, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
-import { Plate, fitOne, flatBox, placeLine, qualityBox } from "../ui/PanelKit";
-import { LV_CARDS, LV_DESC_MAX_LINES, LV_BTN_STROKE_W, type LvTextLine } from "../game/ui/levelUpLayout";
+import { Plate, fitOne, flatBox, placeLine, qualityBox, boxPlace } from "../ui/PanelKit";
+import { LV_CARDS, LV_DESC_MAX_LINES, LV_BTN_STROKE_W, LV_EMBLEM_N, LV_EMBLEM_ALPHA, type LvTextLine } from "../game/ui/levelUpLayout";
 import type { LevelUpLayout } from "../game/ui/levelUpLayout";
 import { hitLevelUp, type LevelUpAction, type LevelUpCardContent, type LevelUpContent } from "./LevelUpModel";
 
@@ -71,6 +71,10 @@ class Txt {
       this.lb.isBold = t.bold;
     }
     bindLabel(this.lb, fitOne(text, t.maxW, t.px));
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, t.x, t.baseY, t.maxW, t.px, t.align);
+      return;
+    }
     placeLine(this.lb.node, t.x, t.baseY, t.maxW, t.px, t.align);
   }
 
@@ -86,12 +90,18 @@ class Txt {
 /** 一枚纯代码钮(禁态只换配色档,不换矩形) */
 interface BtnSlot {
   flat: ReturnType<typeof flatBox>;
+  /** v4:铁框钮板(旧档纯代码矩形) */
+  plate: Plate;
   text: Txt;
 }
 
 /** 一张卡的品质框 + 六族文本 + 三枚钮 */
 interface CardSlot {
+  /** v4:高卡板(素材表 card_tall 九宫格,压在品质框之下) */
+  plate: Plate;
   frame: ReturnType<typeof qualityBox>;
+  /** v4:卡中徽记水印 */
+  emblem: Plate;
   quality: Txt;
   name: Txt;
   /** 描述行槽位数 = 共享层 `LV_DESC_MAX_LINES`,视图不写死枚数 */
@@ -160,9 +170,15 @@ export class LevelUpView {
   private makeCardSlot(name: string): CardSlot {
     const desc: Txt[] = [];
     for (let i = 0; i < LV_DESC_MAX_LINES; i++) desc.push(new Txt(name + "Desc" + i, this.root));
-    const btn = (k: string): BtnSlot => ({ flat: flatBox(name + k + "Btn", this.root), text: new Txt(name + k + "Text", this.root) });
+    const btn = (k: string): BtnSlot => ({ plate: new Plate(name + k + "Plate", this.root, this.frames), flat: flatBox(name + k + "Btn", this.root), text: new Txt(name + k + "Text", this.root) });
+    const plate = new Plate(name + "Plate", this.root, this.frames);
+    const frame = qualityBox(name + "Frame", this.root, this.frames);
+    const emblem = new Plate(name + "Emblem", this.root, this.frames);
+    emblem.node.addComponent(UIOpacity).opacity = LV_EMBLEM_ALPHA;
     return {
-      frame: qualityBox(name + "Frame", this.root, this.frames),
+      plate,
+      frame,
+      emblem,
       quality: new Txt(name + "Quality", this.root),
       name: new Txt(name + "Name", this.root),
       desc,
@@ -199,6 +215,8 @@ export class LevelUpView {
     const slot = this.cards[i];
     const g = L.cards[i];
     if (!g || !v) {
+      slot.plate.setActive(false);
+      slot.emblem.setActive(false);
       slot.frame.node.active = false;
       slot.quality.active(false);
       slot.name.active(false);
@@ -206,14 +224,22 @@ export class LevelUpView {
       slot.delta.active(false);
       slot.tag.active(false);
       for (const b of [slot.pick, slot.reroll, slot.lock]) {
+        b.plate.setActive(false);
         b.flat.node.active = false;
         b.text.active(false);
       }
       return;
     }
+    // v4:高卡板压底、徽记水印压在文字之下(几何来自共享层)
+    const v4 = viewTable().phase3.restV4;
+    slot.plate.setActive(v4);
+    if (v4) slot.plate.show("card_tall", g.rect, "slice");
+    slot.emblem.setActive(v4);
+    if (v4) slot.emblem.show(`lv_emblem_${(g.idx % LV_EMBLEM_N) + 1}`, g.emblem, "stretch");
     slot.frame.node.active = true;
     // 品质框:命中隐藏词条时模型层已把色与键换成隐藏档,视图不判隐藏
-    slot.frame.draw(g.rect, v.color, true, v.frameKey);
+    // v4:卡底已是高卡板,品质框只留品质色描边(空键 → 代码形状,不再叠亮顶带的 frame_<quality> 贴图)
+    slot.frame.draw(g.rect, v.color, !v4, v4 ? "" : v.frameKey);
 
     slot.quality.active(true);
     slot.quality.set(g.quality, v.qualityText, p4.lvCardTag);
@@ -245,7 +271,11 @@ export class LevelUpView {
     fg: string,
     p4: ReturnType<typeof viewTable>["phase4"]
   ): void {
-    slot.flat.node.active = true;
+    // v4:可用档走铁框钮板,禁态与旧档走纯代码矩形
+    const v4 = viewTable().phase3.restV4 && enabled;
+    slot.plate.setActive(v4);
+    if (v4) slot.plate.show("btn_iron", g.rect, "slice");
+    slot.flat.node.active = !v4;
     slot.flat.draw(g.rect, enabled ? bg : p4.lvBtnOffBg, enabled ? stroke : p4.lvBtnOffStroke, LV_BTN_STROKE_W);
     slot.text.active(true);
     slot.text.set(g.text, text, enabled ? fg : p4.lvBtnTextOff);

@@ -502,7 +502,149 @@ function rowLayout(id: number, index: number, rect: GcRect): GachaRowLayout {
  * 件数一多,各档已退到硬下限仍装不下时,`rowsEnd` 越出视口底缘。
  * 这是 Web `gachaLayout` 同式的既有性质,两端一致,本层不钳也不裁。
  */
-export function gachaLayout(w: number, h: number, ownedIds: readonly number[], recentCount: number): GachaLayout {
+/**
+ * v4「深渊铭刻」版式开关(Cocos 侧由 viewTable.phase3.gachaV4 打开;Web 冻结基准不传 = 旧版式)。
+ * 顶带 0..64(标题 / 券数 / 返回钮同带)→ 三枚钮 44 → 换券条 40 → 保底两行(条 8 高)→
+ * 最近抽取(22 行距)→ 收藏分区(标题行 + 铁框行 52..56、行距 4..8)。富余落在收藏行区(spreadRows)。
+ */
+export interface GachaLayoutOpts {
+  v4: boolean;
+}
+
+/** v4 纵向骨架常量(设计 px) */
+const V4_BAND_H = 64;
+const V4_BTN_Y = 76;
+const V4_BTN_H = 44;
+const V4_TICKET_Y = 130;
+const V4_TICKET_H = 40;
+const V4_PITY_ROW1 = 196;
+const V4_PITY_STEP = 28;
+const V4_PITY_BAR_H = 8;
+const V4_SECTION_H = 22;
+const V4_RES_HEAD_Y = 244;
+const V4_RES_LINE_H = 22;
+const V4_COLL_GAP = 30;
+const V4_ROWS_GAP = 30;
+const V4_ROW_MIN_H = 44;
+const V4_ROW_MAX_H = 56;
+const V4_ROW_GAP_MAX = 8;
+const V4_FOOT = 8;
+
+function gachaLayoutV4(w: number, h: number, ownedIds: readonly number[], recentCount: number): GachaLayout {
+  const pad = GC_PAD;
+  const hh = evenDown(h);
+  const rowW = w - pad * 2;
+  const nRes = gachaRecentRows(recentCount);
+  const resLines = Math.max(1, nRes);
+
+  const backBtn: GcRect = { x: w - pad - ui.backW, y: 10, w: ui.backW, h: 44 };
+  const iconH = backBtn.h - GC_BACK_ICON_SHRINK;
+  const backIcon: GcRect = { x: backBtn.x + GC_BACK_ICON_DX, y: backBtn.y + (backBtn.h - iconH) / 2, w: iconH, h: iconH };
+  const backBaseY = backBtn.y + backBtn.h / 2 + GC_BACK_TEXT_DY;
+  const backRemainW = backBtn.w - GC_BACK_ICON_DX - iconH;
+  const topLimit = backBtn.x - TEXT_SLACK - pad;
+
+  const singleBtn: GcRect = { x: pad, y: V4_BTN_Y, w: GC_SINGLE_W, h: V4_BTN_H };
+  const tenBtn: GcRect = { x: pad + GC_TEN_DX, y: V4_BTN_Y, w: GC_TEN_W, h: V4_BTN_H };
+  const adBtn: GcRect = { x: pad + GC_AD_DX, y: V4_BTN_Y, w: rowW - GC_AD_DX, h: V4_BTN_H };
+  const ticketBtn: GcRect = { x: pad, y: V4_TICKET_Y, w: rowW, h: V4_TICKET_H };
+
+  const barX = pad + GC_PITY_BAR_DX;
+  const barW = rowW - GC_PITY_BAR_DX;
+  const pityEpicBar: GcRect = { x: barX, y: V4_PITY_ROW1 - V4_PITY_BAR_H / 2, w: barW, h: V4_PITY_BAR_H };
+  const pityLegendBar: GcRect = { x: barX, y: V4_PITY_ROW1 + V4_PITY_STEP - V4_PITY_BAR_H / 2, w: barW, h: V4_PITY_BAR_H };
+  const pityLabelY = V4_PITY_ROW1 + 4;
+
+  /* 最近抽取:分区标题行 244..266,行从 266 起、22 一行(0 条也让出一行给空态) */
+  const resLabelY = V4_RES_HEAD_Y + V4_SECTION_H - 6;
+  const resTop = V4_RES_HEAD_Y + V4_SECTION_H;
+  const resRows: GcRecentLine[] = [];
+  for (let i = 0; i < nRes; i++) {
+    const baseY = resTop + i * V4_RES_LINE_H + V4_RES_LINE_H - 6;
+    resRows.push({
+      name: { x: pad + GC_TEXT_DX, baseY, maxW: rowW - GC_TEXT_DX - GC_DUP_RESERVE, px: fs.muted, align: "left" },
+      dup: { x: w - pad, baseY, maxW: GC_DUP_RESERVE, px: fs.muted, align: "right" },
+    });
+  }
+  const resBand = resLines * V4_RES_LINE_H;
+
+  /* 收藏:分区标题行(左标题 / 右加成)→ 行区 */
+  const collHeadY = resTop + resBand + V4_COLL_GAP - V4_SECTION_H;
+  const collLabelY = collHeadY + V4_SECTION_H - 6;
+  const rowsTop = collHeadY + V4_SECTION_H + V4_ROWS_GAP - V4_SECTION_H;
+  const rowsBottom = hh - pad;
+  const listBottom = rowsBottom - V4_FOOT;
+  const n = ownedIds.length;
+  const spread = spreadRows(n, rowsTop, listBottom, V4_ROW_MIN_H, V4_ROW_MAX_H, V4_ROW_GAP_MAX);
+  const rowH = n > 0 ? spread.rowH - (spread.rowH % 2) : 0;
+  const gap = n > 1 ? between(spread.gap - (spread.gap % 2), 4, V4_ROW_GAP_MAX) : 0;
+  const rowStep = rowH + gap;
+  const rows: GachaRowLayout[] = [];
+  for (let i = 0; i < n; i++) {
+    const rect: GcRect = { x: pad, y: rowsTop + i * rowStep, w: rowW, h: rowH };
+    const baseY = rowTextY(rect.y, rect.h, fs.muted);
+    rows.push({
+      id: ownedIds[i],
+      index: i,
+      rect,
+      name: { x: rect.x + 16, baseY, maxW: 184 - TEXT_SLACK, px: fs.muted, align: "left" },
+      level: { x: rect.x + 200, baseY, maxW: rect.w - 200 - 96, px: fs.micro, align: "left" },
+      badge: { x: rect.x + rect.w - 16, baseY, maxW: 80, px: fs.micro, align: "right" },
+    });
+  }
+  const rowsEnd = n > 0 ? rowsTop + (n - 1) * rowStep + rowH : rowsTop;
+
+  const headerBanner: GcRect = { x: 0, y: 0, w, h: V4_BAND_H };
+  const ticketIcon: GcRect = { x: pad, y: 37, w: 20, h: 20 };
+
+  return {
+    /** v4 不铺整幅面板:顶带 + 分区 + 铁框行自成骨架;panel 只留几何、键为空(视图不画) */
+    panel: { x: pad, y: V4_BAND_H + 8, w: rowW, h: rowsBottom - V4_BAND_H - 8 },
+    panelKey: "",
+    headerBanner,
+    titleWithBanner: { x: pad, baseY: 26, maxW: topLimit, px: 16, align: "left" },
+    titleBare: { x: pad, baseY: 26, maxW: topLimit, px: 16, align: "left" },
+    ticketIcon,
+    ticketTextWithIcon: { x: pad + 26, baseY: 52, maxW: topLimit - 26, px: fs.body, align: "left" },
+    ticketTextBare: { x: pad, baseY: 52, maxW: topLimit, px: fs.body, align: "left" },
+    backBtn,
+    backIcon,
+    backTextWithIcon: { x: backBtn.x + GC_BACK_ICON_DX + iconH + backRemainW / 2, baseY: backBaseY, maxW: backRemainW, px: fs.body, align: "center" },
+    backTextBare: { x: backBtn.x + backBtn.w / 2, baseY: backBaseY, maxW: backBtn.w, px: fs.body, align: "center" },
+    singleBtn,
+    tenBtn,
+    adBtn,
+    ticketBtn,
+    singleText: { x: singleBtn.x + singleBtn.w / 2, baseY: rowTextY(V4_BTN_Y, V4_BTN_H, fs.body), maxW: singleBtn.w, px: fs.body, align: "center" },
+    tenText: { x: tenBtn.x + tenBtn.w / 2, baseY: rowTextY(V4_BTN_Y, V4_BTN_H, fs.body), maxW: tenBtn.w, px: fs.body, align: "center" },
+    adText: { x: adBtn.x + adBtn.w / 2, baseY: rowTextY(V4_BTN_Y, V4_BTN_H, fs.body), maxW: adBtn.w, px: fs.body, align: "center" },
+    ticketText: { x: ticketBtn.x + ticketBtn.w / 2, baseY: rowTextY(V4_TICKET_Y, V4_TICKET_H, fs.muted), maxW: ticketBtn.w, px: fs.muted, align: "center" },
+    pityEpicLabel: { x: pad, baseY: pityLabelY, maxW: GC_PITY_BAR_DX - TEXT_SLACK, px: fs.micro, align: "left" },
+    pityLegendLabel: { x: pad, baseY: pityLabelY + V4_PITY_STEP, maxW: GC_PITY_BAR_DX - TEXT_SLACK, px: fs.micro, align: "left" },
+    pityEpicBar,
+    pityLegendBar,
+    pityBarOverlap: pityEpicBar.y + pityEpicBar.h - pityLegendBar.y,
+    resLabel: { x: pad, baseY: resLabelY, maxW: rowW, px: fs.muted, align: "left" },
+    nRes,
+    resLineH: V4_RES_LINE_H,
+    resRows,
+    collLabel: { x: pad, baseY: collLabelY, maxW: 300, px: fs.body, align: "left" },
+    collBonus: { x: w - pad, baseY: collLabelY, maxW: 220, px: fs.micro, align: "right" },
+    collEmpty: { x: pad, baseY: rowsTop + 26, maxW: rowW, px: fs.muted, align: "left" },
+    empty: n === 0,
+    gearCount: n,
+    rowsTop,
+    rowH,
+    rowGap: gap,
+    rowStep,
+    rowsBottom,
+    rowsEnd,
+    rows,
+  };
+}
+
+export function gachaLayout(w: number, h: number, ownedIds: readonly number[], recentCount: number, opts?: GachaLayoutOpts): GachaLayout {
+  if (opts?.v4) return gachaLayoutV4(w, h, ownedIds, recentCount);
   const pad = GC_PAD;
   /** 与 `gachaBands` 同一档偶数屏高:带链摊平的总高 = 面板内高,奇数视口不留奇数底缘 */
   const hh = evenDown(h);
@@ -609,6 +751,6 @@ export function gachaLayout(w: number, h: number, ownedIds: readonly number[], r
 }
 
 /** 整屏几何的单一出口(视图经宿主钩子调它;行数与行区顶缘都由入参推出,本层不读存档) */
-export function gachaScreenLayout(w: number, h: number, ownedIds: readonly number[], recentCount: number): GachaLayout {
-  return gachaLayout(w, h, ownedIds, recentCount);
+export function gachaScreenLayout(w: number, h: number, ownedIds: readonly number[], recentCount: number, opts?: GachaLayoutOpts): GachaLayout {
+  return gachaLayout(w, h, ownedIds, recentCount, opts);
 }

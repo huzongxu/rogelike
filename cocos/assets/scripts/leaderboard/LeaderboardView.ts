@@ -18,7 +18,8 @@ import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
-import { Plate, fitOne, placeLine, strokeRing } from "../ui/PanelKit";
+import { TB_ICON, TB_TITLE_DX, TB_TITLE_X } from "../game/ui/titleBand";
+import { Plate, fitOne, placeLine, strokeRing, boxPlace } from "../ui/PanelKit";
 import { pixelNumber } from "../ui/PixelNumber";
 import { theme } from "../game/ui/theme";
 import { hitLeaderboard, type LeaderboardAction, type LeaderboardContent } from "./LeaderboardModel";
@@ -62,6 +63,10 @@ class Txt {
       this.lb.color = hexToColor(color);
     }
     bindLabel(this.lb, fitOne(text, maxW, px));
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, x, baseY, maxW, px, align);
+      return;
+    }
     placeLine(this.lb.node, x, baseY, maxW, px, align);
   }
 
@@ -101,6 +106,10 @@ export class LeaderboardView {
 
   private dim: Node;
   private panel: Plate;
+  /** v4:通栏 64 高的顶带(menu_title_plate,随赛季主色铁框),压在面板与横幅之上 */
+  private band: Plate;
+  /** v5:顶带左端的圆徽记(素材表 emblem_a_N) */
+  private bandIcon: Plate;
   private banner: Plate;
   private title: Txt;
   private sub: Txt;
@@ -117,6 +126,8 @@ export class LeaderboardView {
     this.dim = makeNode("Dim", this.root);
     this.dim.addComponent(Graphics);
     this.panel = new Plate("Panel", this.root, frames);
+    this.band = new Plate("BandV4", this.root, frames);
+    this.bandIcon = new Plate("BandIconV5", this.root, frames);
     this.banner = new Plate("Banner", this.root, frames);
     this.title = new Txt("Title", this.root);
     this.sub = new Txt("Sub", this.root);
@@ -124,9 +135,11 @@ export class LeaderboardView {
     // 行数恒定(PHANTOM_COUNT + 1),行槽一次建满,不做池化
     const slots = this.hooks.layout().rows.length;
     for (let i = 0; i < slots; i++) {
+      // 行板先建、勋章后建:v5 名次勋章压在铁框行板之上(同级节点按创建序绘制)
+      const plate = new Plate("Row" + i, this.root, frames);
       const badge = new Plate("Badge" + i, this.root, frames);
       this.rows.push({
-        plate: new Plate("Row" + i, this.root, frames),
+        plate,
         rank: new Txt("Rank" + i, this.root),
         name: new Txt("Name" + i, this.root),
         score: new Txt("Score" + i, this.root),
@@ -183,13 +196,24 @@ export class LeaderboardView {
     const tt = bannerOn ? L.title : L.titleBare;
     this.title.set(tt.x, tt.baseY, tt.maxW, tt.px, c.title, tt.align, HEX.gold);
     setTextOutline(this.title.lb, bannerOn ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
+    // v4 顶带:通栏 64 高,标题金 16 左起;横幅收起
+    this.band.setActive(p3.restV4);
+    this.bandIcon.setActive(p3.restV4);
+    if (p3.restV4) {
+      this.band.show("menu_title_plate", { x: 0, y: 0, w: DESIGN_W, h: 64 }, "slice", p3.detailBg, p3.detailStroke);
+      this.bandIcon.show("emblem_a_8", TB_ICON, "stretch");
+      this.banner.setActive(false);
+      setTextOutline(this.title.lb, 0, HEX.bgDeep);
+      this.title.bold(true);
+      this.title.set(TB_TITLE_X, 26, L.backBtn.x - 28 - TB_TITLE_DX, 16, c.title, "left", HEX.gold);
+    }
     this.sub.set(L.sub.x, L.sub.baseY, L.sub.maxW, L.sub.px, c.sub, "left", HEX.textSecondary);
 
     L.rows.forEach((row, i) => {
       const slot = this.rows[i];
       const rc = c.rows[i];
       if (!slot || !rc) return;
-      slot.plate.show(rc.isPlayer ? KEY_ROW_PLAYER : KEY_ROW, row.rect, "slice", rc.isPlayer ? p4.lbRowPlayer : p4.lbRowGhost, rc.isPlayer ? theme.gold : p4.lbRowGhostStroke);
+      slot.plate.show(rc.isPlayer ? (p3.restV4 ? "menu_row_plate_current" : KEY_ROW_PLAYER) : KEY_ROW, row.rect, "slice", rc.isPlayer ? p4.lbRowPlayer : p4.lbRowGhost, rc.isPlayer ? theme.gold : p4.lbRowGhostStroke);
 
       const gold = HEX.gold;
       // 名次与名字共用一档色:玩家金 / 幽灵取表值;名字只把字号降到 muted、不加粗
@@ -203,6 +227,15 @@ export class LeaderboardView {
 
       // 徽标:仅玩家行且有成绩;品质框优先 + 像素数字,缺图退硬边方框(两分支都叠框心数字)
       const b = row.badge;
+      // v5:每行左侧一枚名次勋章(rank_medal_N,整图),玩家行的品质框徽标随之让位
+      if (p3.restV4) {
+        slot.badge.setActive(true);
+        slot.badge.show(`rank_medal_${i + 1}`, b, "stretch", p4.lbBackFallbackBg, theme.gold);
+        slot.ring.node.active = false;
+        slot.badgeNum.setActive(false);
+        slot.badgeText.active(false);
+        return;
+      }
       const on = !!rc.badge;
       slot.badge.setActive(on);
       slot.ring.node.active = false;

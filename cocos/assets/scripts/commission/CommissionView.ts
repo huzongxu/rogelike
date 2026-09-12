@@ -44,13 +44,17 @@ import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
-import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
+import { TB_ICON, TB_TITLE_DX, TB_TITLE_X } from "../game/ui/titleBand";
+import { Plate, fitOne, flatBox, iconNode, placeLine, boxPlace } from "../ui/PanelKit";
 import { CM_START_STROKE_W, commissionBarRects, type CmRect, type CommissionLayout, type CommissionPanelLayout, type CommissionRowLayout } from "../game/ui/commissionLayout";
 import { DIFFICULTIES, REGIONS } from "../game/data/commissions";
+import { ROW_ICON_SHIFT, rowIconRect, rowSceneRect } from "../game/ui/rowIcon";
 import { hitCommission, type CommissionAction, type CommissionContent, type CommissionPanelContent, type CommissionRowContent } from "./CommissionModel";
 
 /** 贴图键(与 Web drawCommission / drawCommissionPanel 的实参逐字对应) */
 const KEY_BANNER = "banner_title_iron";
+/** v5 行窗景:借主界面的七条战场裁条(menu_scene_N,示意图的行内风景),六个区域循环取 */
+const MENU_SCENE_COUNT = 7;
 const KEY_POSE = "player_pose_6";
 const KEY_FRAGMENT_ICON = "icon_fragment";
 const KEY_STARDUST_ICON = "icon_stardust";
@@ -87,6 +91,10 @@ class Txt {
       this.lb.color = hexToColor(color);
     }
     bindLabel(this.lb, fitOne(text, maxW, px));
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, x, baseY, maxW, px, align);
+      return;
+    }
     placeLine(this.lb.node, x, baseY, maxW, px, align);
   }
 
@@ -122,6 +130,12 @@ interface PanelSlot {
 /** 区域行的一件:纯代码底板 + 名字 + 第二行 + 右对齐产出(仅解锁档) */
 interface RowSlot {
   base: ReturnType<typeof flatBox>;
+  /** v5:行风景带(comm_scene_N,压在暗面之上、铁框之下) */
+  scene: Plate;
+  /** v4:铁框行板(选中 → 金框) */
+  plate: Plate;
+  /** v5:区域圆图(comm_region_N) */
+  icon: Plate;
   name: Txt;
   sub: Txt;
   rate: Txt;
@@ -130,6 +144,8 @@ interface RowSlot {
 /** 难度钮的一件:纯代码底板 + 两行居中文字 */
 interface DiffSlot {
   base: ReturnType<typeof flatBox>;
+  /** v5:铁框(选中 → 金框)压在代码底板之上 */
+  plate: Plate;
   mult: Txt;
   fail: Txt;
 }
@@ -154,6 +170,10 @@ export class CommissionView {
 
   private dim: Node;
   private panel: Plate;
+  /** v4:通栏 64 高的顶带(menu_title_plate,随赛季主色铁框),压在面板与横幅之上 */
+  private band: Plate;
+  /** v5:顶带左端的圆徽记(素材表 emblem_a_N) */
+  private bandIcon: Plate;
   private banner: ReturnType<typeof iconNode>;
   private title: Txt;
   private pose: ReturnType<typeof iconNode>;
@@ -173,6 +193,8 @@ export class CommissionView {
   private diffLabel: Txt;
   private diffSlots: DiffSlot[] = [];
   private start: { base: ReturnType<typeof flatBox>; text: Txt };
+  /** v5:开始委托钮的金面板(btn_gold 九宫格;旧档纯代码矩形) */
+  private startPlate: Plate;
 
   constructor(parent: Node, frames: Map<string, SpriteFrame>, hooks: CommissionViewHooks) {
     this.frames = frames;
@@ -183,6 +205,8 @@ export class CommissionView {
     this.dim = makeNode("Dim", this.root);
     this.dim.addComponent(Graphics);
     this.panel = new Plate("Panel", this.root, frames);
+    this.band = new Plate("BandV4", this.root, frames);
+    this.bandIcon = new Plate("BandIconV5", this.root, frames);
 
     // 节点创建顺序 = Web drawCommission 的绘制顺序(横幅 → 标题 → 立绘 → 三项读数 → 兑换钮 → 返回钮 → 面板 / 列表)
     this.banner = iconNode("HeaderBanner", this.root, frames, ZERO);
@@ -203,6 +227,7 @@ export class CommissionView {
     for (let i = 0; i < REGIONS.length; i++) this.rowSlots.push(this.makeRowSlot("Region" + i));
     this.diffLabel = new Txt("DiffLabel", this.listNode);
     for (let i = 0; i < DIFFICULTIES.length; i++) this.diffSlots.push(this.makeDiffSlot("Diff" + i));
+    this.startPlate = new Plate("StartPlate", this.listNode, frames);
     this.start = { base: flatBox("StartBtn", this.listNode), text: new Txt("StartText", this.listNode) };
 
     this.capture = makeNode("Capture", this.root);
@@ -236,11 +261,11 @@ export class CommissionView {
   }
 
   private makeRowSlot(name: string): RowSlot {
-    return { base: flatBox(name + "Base", this.listNode), name: new Txt(name + "Name", this.listNode), sub: new Txt(name + "Sub", this.listNode), rate: new Txt(name + "Rate", this.listNode) };
+    return { base: flatBox(name + "Base", this.listNode), scene: new Plate(name + "Scene", this.listNode, this.frames), plate: new Plate(name + "Plate", this.listNode, this.frames), icon: new Plate(name + "Icon", this.listNode, this.frames), name: new Txt(name + "Name", this.listNode), sub: new Txt(name + "Sub", this.listNode), rate: new Txt(name + "Rate", this.listNode) };
   }
 
   private makeDiffSlot(name: string): DiffSlot {
-    return { base: flatBox(name + "Base", this.listNode), mult: new Txt(name + "Mult", this.listNode), fail: new Txt(name + "Fail", this.listNode) };
+    return { base: flatBox(name + "Base", this.listNode), plate: new Plate(name + "Plate", this.listNode, this.frames), mult: new Txt(name + "Mult", this.listNode), fail: new Txt(name + "Fail", this.listNode) };
   }
 
   /** 晚到贴图流到位后由宿主调用:frames 是同一个 Map 引用,iconNode/Plate 在 sync 时自会读到新键 */
@@ -266,9 +291,22 @@ export class CommissionView {
     const tt = banner ? L.titleWithBanner : L.titleBare;
     this.title.set(tt.x, tt.baseY, tt.maxW, tt.px, c.title, tt.align, p4.cmTitle);
     setTextOutline(this.title.lb, banner ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
+    // v4 顶带:通栏 64 高,标题金 16 左起;横幅收起
+    this.band.setActive(p3.restV4);
+    this.bandIcon.setActive(p3.restV4);
+    if (p3.restV4) {
+      this.band.show("menu_title_plate", { x: 0, y: 0, w: DESIGN_W, h: 64 }, "slice", p3.detailBg, p3.detailStroke);
+      this.bandIcon.show("emblem_a_1", TB_ICON, "stretch");
+      this.banner.show("");
+      placeRect(this.banner.node, ZERO);
+      setTextOutline(this.title.lb, 0, HEX.bgDeep);
+      this.title.bold(true);
+      this.title.set(TB_TITLE_X, 26, L.backBtn.x - 28 - TB_TITLE_DX, 16, c.title, "left", HEX.gold);
+    }
 
     // 头部小立绘:固定坐标的一笔,无回退分支;画在三项读数之前(Web 的覆盖顺序)
-    const pose = this.pose.show(KEY_POSE);
+    const pose = !p3.restV4 && this.pose.show(KEY_POSE);
+    if (p3.restV4) this.pose.show("");
     placeRect(this.pose.node, pose ? L.pose : ZERO);
 
     // 三项读数:两项走 iconText(有图右移、缺图前置替代字形),第三项是裸文字
@@ -376,6 +414,7 @@ export class CommissionView {
 
   /** 列表态:区域行(恒 6 条)+ 难度说明 + 难度钮(恒 5 枚)+ 开始钮 */
   private paintList(L: CommissionLayout, c: CommissionContent): void {
+    const p3 = viewTable().phase3;
     const p4 = viewTable().phase4;
     for (let i = 0; i < this.rowSlots.length; i++) {
       const slot = this.rowSlots[i];
@@ -394,12 +433,17 @@ export class CommissionView {
       const dc = c.diffs[i];
       if (!d || !dc) continue;
       slot.base.draw(d.rect, dc.sel ? p4.cmDiffSelFill : p4.cmDiffFill, dc.sel ? p4.cmDiffSelStroke : p4.cmDiffStroke);
+      slot.plate.setActive(p3.restV4);
+      if (p3.restV4) slot.plate.show(dc.sel ? "menu_row_plate_current" : "chip_eff", d.rect, "slice");
       slot.mult.bold(true);
       slot.mult.set(d.mult.x, d.mult.baseY, d.mult.maxW, d.mult.px, dc.multText, "center", dc.sel ? p4.cmDiffSelText : p4.cmDiffText);
       slot.fail.bold(false);
       slot.fail.set(d.fail.x, d.fail.baseY, d.fail.maxW, d.fail.px, dc.failText, "center", dc.sel ? p4.cmDiffSelText : p4.cmDiffText);
     }
 
+    this.startPlate.setActive(p3.restV4);
+    if (p3.restV4) this.startPlate.show("btn_gold", L.startBtn, "slice");
+    this.start.base.node.active = !p3.restV4;
     this.start.base.draw(L.startBtn, p4.cmStartBg, p4.cmStartStroke, CM_START_STROKE_W);
     this.start.text.bold(true);
     this.start.text.set(L.startText.x, L.startText.baseY, L.startText.maxW, L.startText.px, c.startText, "center", p4.cmStartText);
@@ -410,12 +454,23 @@ export class CommissionView {
     const p4 = viewTable().phase4;
     slot.base.node.active = true;
     slot.base.draw(row.rect, rc.sel ? p4.cmRowSelFill : p4.cmRowFill, rc.sel ? p4.cmRowSelStroke : p4.cmRowStroke);
+    const v4 = viewTable().phase3.restV4;
+    slot.plate.setActive(v4);
+    if (v4) slot.plate.show(rc.sel ? "menu_row_plate_current" : "menu_row_plate", row.rect, "slice");
+    // v5:风景带 + 区域圆图,文字整体右移(几何来自共享层 rowIcon)
+    slot.scene.setActive(v4);
+    slot.icon.setActive(v4);
+    if (v4) {
+      slot.scene.show(`menu_scene_${(row.index % MENU_SCENE_COUNT) + 1}`, rowSceneRect(row.rect), "stretch");
+      slot.icon.show(`comm_region_${row.index + 1}`, rowIconRect(row.rect), "stretch");
+    }
+    const dx = v4 ? ROW_ICON_SHIFT : 0;
     slot.name.active(true);
     slot.name.bold(true);
-    slot.name.set(row.name.x, row.name.baseY, row.name.maxW, row.name.px, rc.name, "left", rc.unlocked ? (rc.sel ? p4.cmRowNameSel : p4.cmRowName) : p4.cmRowNameLocked);
+    slot.name.set(row.name.x + dx, row.name.baseY, row.name.maxW, row.name.px, rc.name, "left", rc.unlocked ? (rc.sel ? p4.cmRowNameSel : p4.cmRowName) : p4.cmRowNameLocked);
     slot.sub.active(true);
     slot.sub.bold(false);
-    slot.sub.set(row.sub.x, row.sub.baseY, row.sub.maxW, row.sub.px, rc.subText, "left", p4.cmRowSub);
+    slot.sub.set(row.sub.x + dx, row.sub.baseY, row.sub.maxW - dx, row.sub.px, rc.subText, "left", p4.cmRowSub);
     slot.rate.active(rc.unlocked);
     if (rc.unlocked) {
       slot.rate.bold(false);
@@ -425,6 +480,9 @@ export class CommissionView {
 
   private hideRow(slot: RowSlot): void {
     slot.base.node.active = false;
+    slot.scene.setActive(false);
+    slot.plate.setActive(false);
+    slot.icon.setActive(false);
     slot.name.active(false);
     slot.sub.active(false);
     slot.rate.active(false);

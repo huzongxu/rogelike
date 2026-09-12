@@ -129,6 +129,18 @@ export interface MenuPresentationParams {
   dotColor: string;
   /** 关卡行"当前章"用高亮行板 */
   currentRowPlate: string;
+  /** 货币筹码数字走像素字形(true)还是系统字体文本(false,v4 示意图口径:金字) */
+  chipPixelDigits: boolean;
+  /** 筹码文本档字号 / 字色 */
+  chipTextPx: number;
+  chipTextColor: string;
+  /** 主按钮(无限关)文字字号 */
+  endlessPx: number;
+  /**
+   * Cocos 独有的几何覆盖:合到 layoutMenu 表快照之上再进 menuLayoutPure()。
+   * 键名与 MenuLayoutOrigin / MenuLayoutDeco 同名,只收数值;Web 冻结基准不读本段。
+   */
+  layout: { origin: Record<string, number>; deco: Record<string, number> };
 }
 
 /** 含义:主菜单表现默认值.单位:见各字段.依据:Web drawMenu 内联色与字阶.出处:Phase 2 */
@@ -147,6 +159,11 @@ export const MENU_PRESENTATION_DEFAULTS: MenuPresentationParams = {
   highlightAlpha: 180,
   dotColor: "#FF5A6E",
   currentRowPlate: "menu_set_plate_selected",
+  chipPixelDigits: true,
+  chipTextPx: 14,
+  chipTextColor: "#FFD76A",
+  endlessPx: 16,
+  layout: { origin: {}, deco: {} },
 };
 
 /** 布局台在 viewTable 通道里可编辑的状态(全部对齐默认值,只导 dirty) */

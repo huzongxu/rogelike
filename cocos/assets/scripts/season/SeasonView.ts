@@ -25,7 +25,7 @@ import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
-import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
+import { Plate, fitOne, flatBox, iconNode, placeLine, boxPlace } from "../ui/PanelKit";
 import { SE_BTN_STROKE_W, type SeRect, type SeasonLayout } from "../game/ui/seasonLayout";
 import { hitSeason, type SeasonAction, type SeasonContent } from "./SeasonModel";
 
@@ -66,6 +66,11 @@ class Txt {
     }
     if (this.lb.isBold !== bold) this.lb.isBold = bold;
     bindLabel(this.lb, fitOne(text, maxW, px));
+    // v4「深渊铭刻」:盒中置(节点 = 盒、CLAMP、垂直居中),与其余各屏同一口径;旧档仍是 placeLine
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, x, baseY, maxW, px, "center");
+      return;
+    }
     placeLine(this.lb.node, x, baseY, maxW, px, "center");
   }
 
@@ -97,6 +102,8 @@ export class SeasonView {
   private summaryNode: Node;
   private summaryLines: Txt[] = [];
   private close: { base: ReturnType<typeof flatBox>; text: Txt };
+  /** v4:贴底钮的金面板(btn_gold 九宫格;旧档纯代码矩形) */
+  private closePlate: Plate;
 
   constructor(parent: Node, frames: Map<string, SpriteFrame>, hooks: SeasonViewHooks) {
     this.frames = frames;
@@ -115,6 +122,7 @@ export class SeasonView {
     this.summaryNode = makeNode("Summary", this.root);
     for (const name of SUMMARY_NAMES) this.summaryLines.push(new Txt(name, this.summaryNode));
 
+    this.closePlate = new Plate("ClosePlate", this.root, frames);
     this.close = { base: flatBox("CloseBtn", this.root), text: new Txt("CloseText", this.root) };
 
     this.capture = makeNode("Capture", this.root);
@@ -150,10 +158,12 @@ export class SeasonView {
     this.panel.show(L.panelKey, L.panel, "slice", HEX.bgPanel, HEX.bgPanelLight);
 
     // 徽标与横幅:整幅拉伸、没有缺图回退档(缺图收成零位盒,文字照落位)
-    const emblem = this.emblem.show(KEY_EMBLEM);
-    placeRect(this.emblem.node, emblem ? L.emblem : ZERO);
-    const banner = this.banner.show(KEY_BANNER);
-    placeRect(this.banner.node, banner ? L.banner : ZERO);
+    // v4「深渊铭刻」:大徽记 + 宽暗绸带(与通关 / 阵亡同族),旧档仍是小徽标 + 青铜横幅
+    const v4 = viewTable().phase3.restV4;
+    const emblem = this.emblem.show(v4 ? "energy_emblem" : KEY_EMBLEM);
+    placeRect(this.emblem.node, emblem ? (v4 ? L.emblemV4 : L.emblem) : ZERO);
+    const banner = this.banner.show(v4 ? "ribbon_dark" : KEY_BANNER);
+    placeRect(this.banner.node, banner ? (v4 ? L.ribbon : L.banner) : ZERO);
 
     // 标题两档:有横幅走亮金字 + 深色描边(与其它三屏压带标题同一口径),缺图切左起笔
     const tl = banner ? L.title : L.titleBare;
@@ -169,6 +179,9 @@ export class SeasonView {
     }
 
     // 贴底钮:纯代码矩形 + 居中文字(Web 那里没有贴图档)
+    this.closePlate.setActive(v4);
+    if (v4) this.closePlate.show("btn_gold", L.closeBtn, "slice");
+    this.close.base.node.active = !v4;
     this.close.base.draw(L.closeBtn, p4.seBtnFill, p4.seBtnStroke, SE_BTN_STROKE_W);
     this.close.text.set(L.closeText.x, L.closeText.baseY, L.closeText.maxW, L.closeText.px, c.closeText, true, p4.seBtnText);
   }

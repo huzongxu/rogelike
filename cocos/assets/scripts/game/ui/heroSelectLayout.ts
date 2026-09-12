@@ -255,3 +255,23 @@ export function heroSelectLayout(w: number, h: number, heroes: readonly HeroDef[
 
 /** 技能行的文字起笔偏移(词缀名 / 说明共用,= 胶囊宽 + 一道偶数缝) */
 export const HERO_SKILL_TEXT_X = HERO_SKILL_TEXT_DX;
+
+/** v6:详情面板框内的窗景盒(面板四边各内缩框线厚度 6,景压在面板之上、文字之下) */
+export const HERO_DETAIL_FRAME_W = 6;
+export function heroDetailInner(d: Rect): Rect {
+  return { x: d.x + HERO_DETAIL_FRAME_W, y: d.y + HERO_DETAIL_FRAME_W, w: d.w - HERO_DETAIL_FRAME_W * 2, h: d.h - HERO_DETAIL_FRAME_W * 2 };
+}
+
+/**
+ * v6 城堡窗景固有尺寸(scene_castle 516×428:源图 516×208 向上扩天 220,城堡贴底居中),
+ * 与详情面板框内盒(528×440 内缩 6)同比例;窗景整幅铺满框内盒,城堡落在下方中心。
+ */
+export const SCENE_CASTLE_W = 516;
+export const SCENE_CASTLE_H = 428;
+export function heroDetailScene(d: Rect): Rect {
+  const inner = heroDetailInner(d);
+  const k = Math.min(inner.w / SCENE_CASTLE_W, inner.h / SCENE_CASTLE_H);
+  const w = Math.floor((SCENE_CASTLE_W * k) / 2) * 2;
+  const h = Math.floor((SCENE_CASTLE_H * k) / 2) * 2;
+  return { x: inner.x + Math.floor((inner.w - w) / 2), y: inner.y + inner.h - h, w, h };
+}

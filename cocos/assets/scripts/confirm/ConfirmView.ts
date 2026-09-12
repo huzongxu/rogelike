@@ -40,7 +40,7 @@ import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
-import { Plate, fitOne, placeLine } from "../ui/PanelKit";
+import { Plate, fitOne, placeLine, boxPlace } from "../ui/PanelKit";
 import { CF_BODY_MAX_LINES, hitConfirm, type CfTextLine, type ConfirmAction, type ConfirmContent, type ConfirmLayout } from "./ConfirmModel";
 
 /** 一行可重排的文本：落位只走 `ui/PanelKit.placeLine`（与已落地十六屏同款） */
@@ -74,6 +74,10 @@ class Txt {
       this.lb.isBold = t.bold;
     }
     bindLabel(this.lb, fitOne(text, t.maxW, t.px));
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, t.x, t.baseY, t.maxW, t.px, t.align);
+      return;
+    }
     placeLine(this.lb.node, t.x, t.baseY, t.maxW, t.px, t.align);
   }
 
@@ -157,7 +161,9 @@ export class ConfirmView {
     // 盒底垫:Web 的 drawNine("panel_dark_corners", …, 32),缺图回退 panel() 的代码底板 + 金描边
     this.panel.show(L.panelKey, L.box, "slice", p4.cfPanelFallbackBg, p4.cfPanelFallbackStroke);
     // 标题横幅:Web 的 drawNine("banner_mid_navy", …, 13),缺图回退平面底 + 1px 细描边
-    this.banner.show(L.bannerKey, L.banner, "slice", p4.cfBannerFallbackBg, p4.cfBannerFallbackStroke);
+    // v4「深渊铭刻」:标题带走各屏同族的铁框顶带,确认钮换金面(几何与回退色不变)
+    const v4 = viewTable().phase3.restV4;
+    this.banner.show(v4 ? "menu_title_plate" : L.bannerKey, L.banner, "slice", p4.cfBannerFallbackBg, p4.cfBannerFallbackStroke);
 
     this.title.set(L.title, c.title, p4.cfTitle);
 
@@ -172,7 +178,7 @@ export class ConfirmView {
     }
 
     // 两枚钮:贴图优先(dangerButton → btn_danger / minorButtonBg → btn_minor),缺图退各自的代码底板
-    this.ok.plate.show(L.okKey, L.ok, "slice", p4.cfOkFallbackBg, p4.cfOkFallbackStroke);
+    this.ok.plate.show(v4 ? "btn_gold" : L.okKey, L.ok, "slice", p4.cfOkFallbackBg, p4.cfOkFallbackStroke);
     this.ok.text.set(L.okText, c.okText, p4.cfOkText);
     this.cancel.plate.show(L.cancelKey, L.cancel, "slice", p4.cfCancelFallbackBg, p4.cfCancelFallbackStroke);
     this.cancel.text.set(L.cancelText, c.cancelText, p4.cfCancelText);

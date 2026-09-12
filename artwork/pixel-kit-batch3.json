@@ -68,6 +68,8 @@
    "cells": [
     {
      "key": "banner_large_purple",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       120,
       23
@@ -79,6 +81,8 @@
     },
     {
      "key": "banner_title_gold_b",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       110,
       21
@@ -119,6 +123,8 @@
    "cells": [
     {
      "key": "bar_progress_blue_b",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       201,
       3
@@ -132,6 +138,8 @@
     },
     {
      "key": "bar_progress_purple",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       264,
       5
@@ -173,6 +181,8 @@
    "cells": [
     {
      "key": "btn_back",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       11,
       11
@@ -218,6 +228,8 @@
    "cells": [
     {
      "key": "panel_dark_corners",
+     "frozen": true,
+     "frozenBy": "pixel-kit-chrome.json",
      "art": [
       64,
       48

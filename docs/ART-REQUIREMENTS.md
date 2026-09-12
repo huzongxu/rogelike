@@ -166,6 +166,7 @@
 > `monster_tone_leader` `monster_abyss_herald` `monster_myriad_bone_marshal` `monster_first_echo`(精英 ×4)
 > `monster_primeval_echo` `monster_empty_valley_lord`(首领 ×2)
 > 到位一批登记一批:PNG 放进 `public/assets/` 后再往 `src/data/assets.ts` 的 `ASSET_MANIFEST` 加同名键(当前清单 150 键 0 缺图,不提前登记空键)。
+> **S1 现状(2026-09-12)**:30 个 `monster_*` 键已在 Cocos 侧全部落图 —— 由派生批 `artwork/pixel-kit-s1.json` + `scripts/pixel-variants.mjs` 从同行为基线件做 OKLCH 色相重映射 + 回响主题贴花(声囊 / 波纹弧 / 骨珠 / 残影 / 裂纹 / 镜甲 / 巨口 / 音壁 / 种荚 / 尸群)得到,只登记 `PIXEL_ART_KEYS.S1_MONSTER_KEYS`(不进 `ASSET_MANIFEST`,Web 侧不受影响)。其中特性 6 / 精英 4 / 首领 2 的独立立绘走 AI 重绘同键覆盖,prompt 包与规格见 `docs/ART-S1-PROMPTS.md` / `artwork/pixel-kit-s1-ai.json`。同批还出了 S1 三英雄的战斗件 `player_vera/kyle/bran`(战斗里按 `save.selectedHero` 取图,缺图回退 `player`)。
 
 ### S1 回响苏醒(主题色 #7a5cff 紫回响;尸潮感 = 残破 + 发声器官)
 - 基础:回响行尸(喉部紫色声囊)· 共鸣尸(胸腔裂纹发微光)· 空鸣骸(骷髅,下颌张开)· 低语腐尸(耳部溃大)· 震颤尸(周身波纹虚影)· 回响壳(螺壳状背甲)· 余音骸骨(骨上挂铃铛状骨珠)◆ · 初醒尸群(三小尸连体)

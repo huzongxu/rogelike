@@ -27,15 +27,20 @@ import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
-import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
+import { TB_ICON, TB_TITLE_DX, TB_TITLE_X } from "../game/ui/titleBand";
+import { Plate, fitOne, flatBox, iconNode, placeLine, boxPlace } from "../ui/PanelKit";
 import { DAILY_BOXES, DAILY_TALENT_POOL } from "../game/data/daily";
+import { ROW_ICON_SHIFT, rowIconRect } from "../game/ui/rowIcon";
 import { hitDaily, type DailyAction, type DailyContent } from "./DailyModel";
-import type { DailyLayout, DailyRowGeom, DailyRowLayout } from "../game/ui/dailyLayout";
+import type { DailyLayout, DailyRect, DailyRowGeom, DailyRowLayout } from "../game/ui/dailyLayout";
 
 /** 贴图键(与 Web drawDaily 的实参逐字对应;都在 ASSET_MANIFEST 里。
  *  两种行底板与屏底板的键由共享层布局给出:`L.rowPlate.key` / `L.makeUpPlate.key` / `L.panelKey`) */
 const KEY_HEADER = "banner_title_gold_c";
 const KEY_DECO = "player_pose_2";
+/** v5:三档宝箱图标(木 / 银 / 金,与 DAILY_BOXES 同序)与天赋徽记的循环枚数 */
+const DAILY_BOX_ICONS = ["daily_potion", "daily_box_silver", "daily_box_gold"];
+const DAILY_TALENT_ICONS = 3;
 
 /** 一行可重排的文本:落位只走 `ui/PanelKit.placeLine`(与 ShopView/HeroSelectView/LeaderboardView 同款) */
 class Txt {
@@ -63,6 +68,10 @@ class Txt {
       this.lb.color = hexToColor(color);
     }
     bindLabel(this.lb, fitOne(text, maxW, px));
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, x, baseY, maxW, px, align);
+      return;
+    }
     placeLine(this.lb.node, x, baseY, maxW, px, align);
   }
 
@@ -80,6 +89,10 @@ class Txt {
 /** 一行的节点槽:底板 + 三段文本(名字 / 描述 / 右对齐状态) */
 interface RowSlot {
   plate: Plate;
+  /** v5:行图标(宝箱 / 天赋徽记) */
+  icon: Plate;
+  /** v5:补领行的金面钮(btn_gold) */
+  cta: Plate;
   name: Txt;
   desc: Txt;
   status: Txt;
@@ -89,6 +102,10 @@ interface RowSlot {
 interface RowTone {
   /** 底板贴图键;空串 = 直接走代码回退形状(Web 已领态短路掉 skinButtonBase 的那一支) */
   plateKey: string;
+  /** v5 行图标键(空 = 不挂) */
+  iconKey?: string;
+  /** v5 右侧金面钮盒(只有可补领的补领行给;状态文案改为居中压在钮上) */
+  ctaRect?: DailyRect;
   fill: string;
   stroke: string;
   nameColor: string;
@@ -110,6 +127,10 @@ export class DailyView {
 
   private dim: Node;
   private panel: Plate;
+  /** v4:通栏 64 高的顶带(menu_title_plate,随赛季主色铁框),压在面板与横幅之上 */
+  private band: Plate;
+  /** v5:顶带左端的圆徽记(素材表 emblem_a_N) */
+  private bandIcon: Plate;
   private header: ReturnType<typeof iconNode>;
   private title: Txt;
   private deco: ReturnType<typeof iconNode>;
@@ -131,6 +152,8 @@ export class DailyView {
     this.dim = makeNode("Dim", this.root);
     this.dim.addComponent(Graphics);
     this.panel = new Plate("Panel", this.root, frames);
+    this.band = new Plate("BandV4", this.root, frames);
+    this.bandIcon = new Plate("BandIconV5", this.root, frames);
     this.header = iconNode("Header", this.root, frames, { x: 0, y: 0, w: 1, h: 1 });
     this.title = new Txt("Title", this.root);
     this.deco = iconNode("Deco", this.root, frames, { x: 0, y: 0, w: 1, h: 1 });
@@ -161,7 +184,7 @@ export class DailyView {
   }
 
   private makeRowSlot(name: string): RowSlot {
-    return { plate: new Plate(name + "Plate", this.root, this.frames), name: new Txt(name + "Name", this.root), desc: new Txt(name + "Desc", this.root), status: new Txt(name + "Status", this.root) };
+    return { plate: new Plate(name + "Plate", this.root, this.frames), icon: new Plate(name + "Icon", this.root, this.frames), cta: new Plate(name + "Cta", this.root, this.frames), name: new Txt(name + "Name", this.root), desc: new Txt(name + "Desc", this.root), status: new Txt(name + "Status", this.root) };
   }
 
   /** 天赋行槽(建屏时已按池子大小建满;存档里多出来的条数越界即跳过,不会让视图崩) */
@@ -190,9 +213,21 @@ export class DailyView {
     this.title.bold(true);
     if (banner) this.title.set(L.titleOnBanner.x, L.titleOnBanner.baseY, L.titleOnBanner.maxW, L.titleOnBanner.px, c.title, "center", HEX.bgDeep);
     else this.title.set(L.titleBare.x, L.titleBare.baseY, L.titleBare.maxW, L.titleBare.px, c.title, "left", HEX.gold);
+    // v4 顶带:通栏 64 高,标题金 16 左起;横幅收起
+    this.band.setActive(p3.restV4);
+    this.bandIcon.setActive(p3.restV4);
+    if (p3.restV4) {
+      this.band.show("menu_title_plate", { x: 0, y: 0, w: DESIGN_W, h: 64 }, "slice", p3.detailBg, p3.detailStroke);
+      this.bandIcon.show("emblem_a_4", TB_ICON, "stretch");
+      this.header.show("");
+      placeRect(this.header.node, { x: 0, y: 0, w: 0, h: 0 });
+      this.title.bold(true);
+      this.title.set(TB_TITLE_X, 26, L.backBtn.x - 28 - TB_TITLE_DX, 16, c.title, "left", HEX.gold);
+    }
 
     // 装饰立绘:缺图即不画(Web assets.draw 的返回值直接被丢掉)
-    const deco = this.deco.show(KEY_DECO);
+    const deco = !p3.restV4 && this.deco.show(KEY_DECO);
+    if (p3.restV4) this.deco.show("");
     placeRect(this.deco.node, deco ? L.deco : { x: 0, y: 0, w: 0, h: 0 });
 
     // 资源行:替代字形 + 文本,起笔于 pad(Web iconText 的缺图那一支;钻石图标已在 Cocos 侧退役)
@@ -208,7 +243,8 @@ export class DailyView {
       if (!rc) return;
       // 已领:代码形状(青底 + 青描边),名字与右文同色;未领:btn_minor 九宫格优先,缺图走白底细边
       this.paintRow(this.boxSlots[i], row, rc, {
-        plateKey: rc.claimed ? "" : L.rowPlate.key,
+        plateKey: rc.claimed ? "" : p3.restV4 ? "menu_row_plate" : L.rowPlate.key,
+        iconKey: p3.restV4 ? DAILY_BOX_ICONS[i] ?? "" : "",
         fill: rc.claimed ? p4.dlBoxClaimedBg : p4.dlRowFallbackBg,
         stroke: rc.claimed ? p4.dlBoxClaimedStroke : p4.dlRowFallbackStroke,
         nameColor: rc.claimed ? p4.dlBoxClaimedText : p4.dlRowName,
@@ -222,7 +258,8 @@ export class DailyView {
       const slot = this.talentSlot(i);
       if (!rc || !slot) return;
       this.paintRow(slot, row, rc, {
-        plateKey: rc.claimed ? "" : L.rowPlate.key,
+        plateKey: rc.claimed ? "" : p3.restV4 ? "menu_row_plate" : L.rowPlate.key,
+        iconKey: p3.restV4 ? `daily_talent_${(i % DAILY_TALENT_ICONS) + 1}` : "",
         fill: rc.claimed ? p4.dlTalentClaimedBg : p4.dlRowFallbackBg,
         stroke: rc.claimed ? p4.dlTalentClaimedStroke : p4.dlRowFallbackStroke,
         nameColor: rc.claimed ? p4.dlTalentClaimedText : p4.dlRowName,
@@ -237,7 +274,8 @@ export class DailyView {
     // 补领行:可补领走主按钮底板(Web 的 btn_primary + 圆角 10,由九宫格贴图承担),不可补领走代码形状
     const open = c.makeUp.claimable;
     this.paintRow(this.makeUp, L.makeUpRow, { name: c.makeUp.title, desc: c.makeUp.desc, statusText: c.makeUp.statusText }, {
-      plateKey: open ? L.makeUpPlate.key : "",
+      plateKey: open ? (p3.restV4 ? "menu_row_plate_current" : L.makeUpPlate.key) : "",
+      ctaRect: open && p3.restV4 ? L.makeUpCta : undefined,
       fill: open ? p4.dlMakeUpOpenBg : p4.dlMakeUpDoneBg,
       stroke: open ? p4.dlMakeUpOpenStroke : p4.dlMakeUpDoneStroke,
       nameColor: open ? p4.dlMakeUpOpenTitle : p4.dlMakeUpDoneTitle,
@@ -254,18 +292,32 @@ export class DailyView {
   private paintRow(slot: RowSlot, row: DailyRowGeom | DailyRowLayout, text: { name: string; desc: string; statusText: string }, tone: RowTone): void {
     slot.plate.setActive(true);
     slot.plate.show(tone.plateKey, row.rect, "slice", tone.fill, tone.stroke);
+    // v5:左侧行图标,文字整体右移(几何来自共享层 rowIcon)
+    const iconOn = !!tone.iconKey;
+    slot.icon.setActive(iconOn);
+    if (iconOn) slot.icon.show(tone.iconKey!, rowIconRect(row.rect), "stretch");
+    const dx = iconOn ? ROW_ICON_SHIFT : 0;
     slot.name.active(true);
     slot.name.bold(true);
-    slot.name.set(row.line1.x, row.line1.baseY, row.line1.maxW, row.line1.px, text.name, "left", tone.nameColor);
+    slot.name.set(row.line1.x + dx, row.line1.baseY, row.line1.maxW - dx, row.line1.px, text.name, "left", tone.nameColor);
     slot.desc.active(true);
-    slot.desc.set(row.line2.x, row.line2.baseY, row.line2.maxW, row.line2.px, text.desc, "left", tone.descColor);
+    slot.desc.set(row.line2.x + dx, row.line2.baseY, row.line2.maxW - dx, row.line2.px, text.desc, "left", tone.descColor);
     slot.status.active(true);
     slot.status.bold(true);
-    slot.status.set(row.status.x, row.status.baseY, row.status.maxW, row.status.px, text.statusText, "right", tone.statusColor);
+    // v5:补领行可领时状态文案居中压在金面钮上;其余行仍右对齐贴行右缘
+    const cta = tone.ctaRect;
+    slot.cta.setActive(!!cta);
+    if (cta) {
+      slot.cta.show("btn_gold", cta, "slice");
+      slot.status.set(cta.x + cta.w / 2, row.status.baseY, cta.w, row.status.px, text.statusText, "center", tone.statusColor);
+    } else {
+      slot.status.set(row.status.x, row.status.baseY, row.status.maxW, row.status.px, text.statusText, "right", tone.statusColor);
+    }
   }
 
   private hideRow(slot: RowSlot): void {
     slot.plate.setActive(false);
+    slot.cta.setActive(false);
     slot.name.active(false);
     slot.desc.active(false);
     slot.status.active(false);

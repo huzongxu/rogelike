@@ -45,6 +45,8 @@ interface RowNodes {
   root: Node;
   /** 锁定/通关行的整行减淡档(对标 Web 未解锁行 globalAlpha) */
   op: UIOpacity;
+  /** 关卡窗景(menu_scene_<id>,各关战场背景裁条),缺图不占位 */
+  scene: Plate;
   plate: Plate;
   badge: Plate;
   /** 序号牌上的像素数字(与货币筹码同一组件、同一档字号) */
@@ -54,6 +56,7 @@ interface RowNodes {
   desc: Label;
   /** 行右尾列:章节数 · Boss 标记 */
   tail: Label;
+  tail2: Label;
   makeup: Plate;
   makeupText: Label;
 }
@@ -76,7 +79,13 @@ export class MenuLayoutView {
   private heroLines: Label[] = [];
   private noteLines: Label[] = [];
   private insetCache = new Map<string, SpriteFrame>();
-  private cur: MenuLayout | null = null;
+  private cur: MenuLayout | null = null;
+
+  /** v6:标题带 / 英雄带框下的窗景(素材表两幅横景,cover 裁条) */
+
+  private bannerScene: Plate;
+
+  private heroScene: Plate;
 
   private banner: Plate;
   private crest: Plate;
@@ -86,8 +95,10 @@ export class MenuLayoutView {
   private strip: Plate;
   private phantom: { plate: Plate; text: Label };
   private section: { plate: Plate; text: Label };
+  private sectionHint: Label;
   private endless: { plate: Plate; text: Label };
   private heroBand: Plate;
+  private heroFace: Plate;
   private heroPort: Plate;
   private heroBtn: { plate: Plate; text: Label };
   private notePlate: Plate;
@@ -101,6 +112,7 @@ export class MenuLayoutView {
     this.backdrop(this.root);
     this.page = makeNode("Page", this.root);
 
+    this.bannerScene = this.plate("BanScene", this.page);
     this.banner = this.plate("ban", this.page);
     this.crest = this.plate("crest", this.page);
     this.titleText = label("TitleText", this.page, "", FS.title, HEX.gold, { bold: true });
@@ -117,8 +129,11 @@ export class MenuLayoutView {
     }
     this.phantom = { plate: this.plate("Phantom", this.page), text: label("PhantomText", this.page, "", FS.micro, HEX.textSecondary, { hAlign: CENTER }) };
     this.section = { plate: this.plate("SectionStrip", this.page), text: label("SectionText", this.page, "", FS.section, HEX.gold, { hAlign: CENTER }) };
+    this.sectionHint = label("SectionHint", this.page, "", FS.micro, HEX.textMuted, { hAlign: RIGHT });
     this.endless = { plate: this.plate("Endless", this.page), text: label("EndlessText", this.page, "", FS.section, HEX.textPrimary, { bold: true, hAlign: CENTER }) };
+    this.heroScene = this.plate("HeroScene", this.page);
     this.heroBand = this.plate("HeroBand", this.page);
+    this.heroFace = this.plate("HeroFace", this.page);
     this.heroPort = this.plate("HeroPort", this.page);
     this.heroBtn = { plate: this.plate("HeroBtn", this.page), text: label("HeroBtnText", this.page, "", FS.body, HEX.textSecondary, { hAlign: CENTER }) };
     for (let i = 0; i < 3; i++) this.heroLines.push(label(`HeroLine${i}`, this.page, "", i === 0 ? FS.body : FS.micro, i === 0 ? HEX.textPrimary : HEX.textSecondary));
@@ -252,8 +267,13 @@ export class MenuLayoutView {
     const rowFrame = !isSkinHidden(skin, rowKey) ? this.frames.get(rowKey) : undefined;
     const sectionKey = resolveSkinKey(skin, "menu_section_strip");
     const sectionFrame = !isSkinHidden(skin, sectionKey) ? this.frames.get(sectionKey) : undefined;
+    // Cocos 独有几何覆盖(viewTable.menu.layout):v4「深渊铭刻」示意图对标;共享层表与 Web 基准不动
+    const table = snapshotMenuLayout();
+    const ov = viewTable().menu.layout;
+    Object.assign(table.origin, ov.origin);
+    Object.assign(table.deco, ov.deco);
     return menuLayoutPure(DESIGN_W, logicalH(), {
-      table: snapshotMenuLayout(),
+      table,
       stageIds: this.stageIds,
       setIds: this.setIds,
       sectionStripReady: !!sectionFrame,
@@ -276,26 +296,24 @@ export class MenuLayoutView {
     /* --- ① 标题带 --- */
     // 像素翻新的标题/筹码底板是同一族九宫格贴图:整图拉伸会把 8 art px 的切边带糊成横纹,
     // 一律走 slice(矩形仍由布局层给,几何与热区不变)。
+    this.showPlate(this.bannerScene, "scene_menu_top", L.d.ban, "stretch");
     this.showPlate(this.banner, "menu_title_plate", L.d.ban, "slice");
     this.showPlate(this.crest, "crest_echo", L.d.crest, "stretch");
-    placeLine(this.titleText.node, L.d.titlePos.x, L.d.titlePos.y, L.d.ban.x + L.d.ban.w - L.d.titlePos.x - L.pad, m.titlePx);
-    this.titleText.fontSize = m.titlePx;
+    this.fitBox(this.titleText, { x: L.d.titlePos.x, y: L.d.ban.y, w: Math.max(40, L.d.seasonPos.x - 200 - L.d.titlePos.x), h: L.d.ban.h }, Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER, m.titlePx);
     this.titleText.color = hexToColor(m.titleColor);
     bindLabel(this.titleText, c.title);
 
     /* --- ② 赛季 / 筹码带:整带右对齐,右缘 = 屏宽 − pad(文本带宽铺到内容列,不再越出页边距) --- */
-    const rightColW = L.d.seasonPos.x - L.pad;
-    placeLine(this.seasonText.node, L.d.seasonPos.x, L.d.seasonPos.y, rightColW, m.subPx, "right");
-    this.seasonText.fontSize = m.subPx;
+    const rightColW = Math.min(L.d.seasonPos.x - L.pad, 320);
+    const halfH = Math.floor(L.d.ban.h / 2);
+    this.fitBox(this.seasonText, { x: L.d.seasonPos.x - rightColW, y: L.d.ban.y + 2, w: rightColW, h: halfH }, Label.HorizontalAlign.RIGHT, Label.VerticalAlign.CENTER, m.subPx);
     bindLabel(this.seasonText, c.seasonLine);
     for (const lb of [this.titleText, this.seasonText, this.row2Text]) lb.node.active = !textOff("title");
 
-    /* 能量筹码(原通栏货币条换成同一族的一枚板,文字在板内居中) */
-    this.showPlate(this.strip, "menu_chip_plate", L.d.strip, "slice");
-    placeRect(this.row2Text.node, L.d.strip);
-    this.row2Text.node.getComponent(Label)!.verticalAlign = Label.VerticalAlign.CENTER;
-    this.row2Text.horizontalAlign = CENTER;
-    this.row2Text.fontSize = m.subPx;
+    /* 能量行(v4 版式):收进标题带右侧、赛季行之下右对齐;能量板不再画 */
+    this.strip.root.active = false;
+    this.fitBox(this.row2Text, { x: L.d.seasonPos.x - rightColW, y: L.d.ban.y + halfH - 2, w: rightColW, h: halfH }, Label.HorizontalAlign.RIGHT, Label.VerticalAlign.CENTER, m.subPx);
+    this.row2Text.color = hexToColor(m.titleColor);
     bindLabel(this.row2Text, c.energyLine);
 
     /* 三枚货币筹码:板 → 图标 → 像素数字,全部读 menuChipRects 的同一矩形 */
@@ -318,11 +336,17 @@ export class MenuLayoutView {
         w: box.w - L.d.chipSlide - L.d.chipIconW - L.d.chipIconGap - L.d.chipTailPad,
         h: L.d.chipBase.h,
       };
-      const pixelised = slot.number.setText(icon.text);
+      const pixelised = m.chipPixelDigits && slot.number.setText(icon.text);
       slot.number.place(band);
       slot.number.setActive(pixelised && !textOff("chip"));
       slot.text.node.active = !!icon && !textOff("chip") && !pixelised;
-      if (!pixelised) bindLabel(slot.text, icon.text);
+      if (!pixelised) {
+        // 文本档:紧随图标起笔(placeLine 的 left 语义 = 起笔点),基线取带心 + 0.36 字号,字号与色走表(示意图为 14px 金字)
+        this.fitBox(slot.text, band, Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER, m.chipTextPx);
+        slot.text.isBold = true;
+        slot.text.color = hexToColor(m.chipTextColor);
+        bindLabel(slot.text, icon.text);
+      }
     });
 
     /* 幻影榜入口:同一族筹码板,文字板内居中(热区 = 板矩形) */
@@ -336,12 +360,20 @@ export class MenuLayoutView {
     const sectionOn = L.sectionH > 0;
     this.section.plate.root.active = sectionOn;
     this.section.text.node.active = sectionOn && !textOff("section");
+    this.sectionHint.node.active = sectionOn && !textOff("section");
     if (sectionOn) {
       this.showPlate(this.section.plate, "menu_section_strip", { x: L.sectionX, y: L.stageHdrY, w: L.sectionW, h: L.sectionH }, "slice");
-      const band = L.d.sectionTextBand;
-      placeRect(this.section.text.node, { x: L.sectionX, y: L.stageHdrY + band.dy, w: L.sectionW, h: Math.max(8, band.h) });
+      // v4 版式:分区只留两行小字,左标题、右提示,条本身是透明占位
+      // 基线抬 6px:与首行行框顶缘(hdrBand 4)留出一行字的呼吸位
+      const baseY = L.stageHdrY + L.sectionH - 6;
+      placeLine(this.section.text.node, L.pad, baseY, L.rowW - 8, m.subPx, "left");
+      this.section.text.horizontalAlign = Label.HorizontalAlign.LEFT;
+      this.section.text.fontSize = m.subPx;
+      this.section.text.color = hexToColor(m.subColor);
       bindLabel(this.section.text, c.sectionText);
-      this.section.text.color = hexToColor(m.titleColor);
+      placeLine(this.sectionHint.node, L.pad + L.rowW, baseY, L.rowW - 8, m.subPx, "right");
+      this.sectionHint.fontSize = m.subPx;
+      bindLabel(this.sectionHint, c.sectionHint);
     }
 
     /* --- 关卡行 --- */
@@ -353,11 +385,18 @@ export class MenuLayoutView {
       const n = this.ensureRow(r.id);
       // 逐行状态:未解锁整行减淡(对标 Web 未解锁行 globalAlpha),通关行轻微减淡
       n.op.opacity = !content || content.unlocked ? 255 : content.cleared ? p3.menuRowClearedAlpha : p3.menuRowLockedAlpha;
+      // v4「深渊铭刻」:行框透明心,框下铺本关战场窗景(SIMPLE 拉伸铺满整行,缺图即整块不画)
+      const sceneOn = this.frames.has(`menu_scene_${r.id}`);
+      n.scene.root.active = sceneOn;
+      if (sceneOn) this.showPlate(n.scene, `menu_scene_${r.id}`, r, "stretch");
       this.showPlate(n.plate, content?.unlocked ? m.currentRowPlate : "menu_row_plate", r, "slice");
       const cy = r.y + r.h / 2;
       /* 序号牌:chip 族小板 + 像素数字(20 逻辑 px 档的小徽记会抖糊,已由本牌接替) */
       const badgeBox: Rect = { x: r.x + L.rowMargin + L.d.badgeOffX - L.d.badgeSize / 2, y: cy - L.d.badgeSize / 2, w: L.d.badgeSize, h: L.d.badgeSize };
-      this.showPlate(n.badge, "menu_chip_plate", badgeBox, "slice");
+      // 序号勋章:圆形整图件(当前可挑战关金环,其余铁环);缺图退回 chip 族方板
+      const medalKey = content?.current ? "menu_row_medal_cur" : "menu_row_medal";
+      if (this.frames.has(medalKey)) this.showPlate(n.badge, medalKey, badgeBox, "stretch");
+      else this.showPlate(n.badge, "menu_chip_plate", badgeBox, "slice");
       const ordinal = content?.badgeText ?? String(r.id);
       const ordinalPixel = n.badgeNum.setText(ordinal);
       n.badgeNum.place(badgeBox);
@@ -374,10 +413,17 @@ export class MenuLayoutView {
       const tw = Math.max(20, rightX - L.d.descClipPad - textX);
       placeLine(n.name.node, textX, c1, Math.max(20, rightX - L.d.checkOffX - textX), m.bodyPx);
       bindLabel(n.name, content?.name ?? `第 ${r.id} 关`);
+      n.name.color = hexToColor(content?.current ? HEX.gold : HEX.textPrimary);
       placeLine(n.desc.node, textX, c1 + L.d.rowC2Gap, tw, m.subPx);
       bindLabel(n.desc, content?.sub ?? "");
-      placeLine(n.tail.node, rightX, c1 + L.d.rowC2Gap, L.d.descClipPad, m.subPx, "right");
+      // 右列两行(v4 版式):右上 "N 章 · Boss"(解锁金字 / 锁定灰字),右下 解锁条件 / 已通关
+      placeLine(n.tail.node, rightX, c1, L.d.descClipPad * 2, m.subPx, "right");
       bindLabel(n.tail, content?.tail ?? "");
+      n.tail.color = hexToColor(content?.unlocked === false ? HEX.textSecondary : HEX.gold);
+      placeLine(n.tail2.node, rightX, c1 + L.d.rowC2Gap, L.d.descClipPad * 2, m.subPx, "right");
+      bindLabel(n.tail2, content?.tail2 ?? "");
+      n.tail2.color = hexToColor(content?.cleared ? HEX.actionPrimary : HEX.textMuted);
+      n.tail2.node.active = !!content?.tail2 && !textOff("row");
       n.name.node.active = !textOff("row");
       n.desc.node.active = !textOff("row");
       n.tail.node.active = !textOff("row");
@@ -400,7 +446,8 @@ export class MenuLayoutView {
     [L.commissionBtn, L.gachaBtn, L.talentBtn, L.passBtn, L.dailyBtn, L.gearupBtn].forEach((b, i) => {
       const slot = this.entries[i] ?? this.addEntry();
       const src = c.entries[i];
-      this.showPlate(slot.plate, src?.plateKey ?? "btn_minor", b, "slice");
+      // v6:入口钮换素材表的页签小板(缺图退内容层给的键)
+      this.showPlate(slot.plate, this.frames.has("btn_tab") ? "btn_tab" : (src?.plateKey ?? "btn_minor"), b, "slice");
       // 图标 2× 落格(1 art px = 2 逻辑 px):b.h − 12 = 32 恰是 16 源图的整数倍
       const ih = b.h - 12;
       const iconOn = !!src?.iconKey && ih >= 8;
@@ -422,34 +469,51 @@ export class MenuLayoutView {
     if (c.showCommissionDot) this.showPlate(this.dotCommission, "", { x: commDot.cx - commDot.r, y: commDot.cy - commDot.r, w: commDot.r * 2, h: commDot.r * 2 }, "dot");
 
     /* --- 无限关主按钮 --- */
-    this.showPlate(this.endless.plate, "btn_primary", L.endlessBtn, "slice");
+    this.showPlate(this.endless.plate, this.frames.has("btn_wide") ? "btn_wide" : "btn_primary", L.endlessBtn, "slice");
     placeRect(this.endless.text.node, L.endlessBtn);
     this.endless.text.node.getComponent(Label)!.verticalAlign = Label.VerticalAlign.CENTER;
+    this.endless.text.fontSize = m.endlessPx;
     bindLabel(this.endless.text, c.endlessText);
 
     /* --- ⑦ 英雄带面板(贴底,屏高 − setGapY):一块 note 板 + 三行说明 + 右侧次级钮 --- */
     this.notePlate.root.active = false; // 说明板与英雄带同一矩形,不再叠第二块板
+    this.showPlate(this.heroScene, "scene_castle_strip", L.heroBand, "stretch");
     const bandHasPlate = this.showPlate(this.heroBand, "menu_note_plate", L.heroBand, "slice");
     if (!bandHasPlate && this.heroBand.gfx && c.accent) {
       const g = this.heroBand.gfx;
       g.fillColor = hexToColor(c.accent);
       strokeRing(g, L.heroBand.w, L.heroBand.h, 1);
     }
-    this.showPlate(this.heroPort, "", L.heroPort, "stretch");
+    // 像框:先铺立绘(hero_<id>,缺图或未选英雄留暗底),再压骸骨白框(menu_port_frame,透明心)
+    const faceKey = c.heroPortraitKey && this.frames.has(c.heroPortraitKey) ? c.heroPortraitKey : "";
+    this.showPlate(this.heroFace, faceKey, L.heroPort, "stretch");
+    this.showPlate(this.heroPort, this.frames.has("menu_port_frame") ? "menu_port_frame" : "", L.heroPort, "stretch");
     // 已选出战时那两行套组详情覆盖第 2/3 行(同一批字面量,只是换了落位)
-    const bandLines = c.noteLines.length > 0 ? [c.heroLines[0], c.noteLines[0], c.noteLines[1]] : c.heroLines;
+    // v4 版式:带内只放短句三行(名 / 套组一句 / 初始武器),长版说明 noteLines 留给 Web 对账,不上屏
+    const bandLines = c.heroLines;
     const heroYs = [L.heroRow1Y, L.heroRow2Y, L.heroRow3Y];
-    c.heroLines.forEach((_t, i) => {
-      const lb = this.heroLines[i];
-      if (!lb) return;
-      const y = heroYs[i];
-      if (y === undefined) return;
-      const line = bandLines[i] ?? "";
-      placeLine(lb.node, L.heroTextX, y, Math.max(20, L.heroTextMaxW), i === 0 ? m.bodyPx : m.subPx);
-      bindLabel(lb, line);
-      lb.color = hexToColor(i === 1 && c.accent ? c.accent : i === 0 ? HEX.textPrimary : HEX.textSecondary);
-      lb.node.active = line !== "" && !textOff("setCard");
-    });
+    void heroYs;
+    const textW = Math.max(40, L.heroTextMaxW);
+    const nameH = Math.round(m.bodyPx * 1.6);
+    // 说明块限两行(行高 1.35 × 字号),名 + 说明整块在带内垂直居中;单行时块变矮、仍居中
+    const descLineH = Math.round(m.subPx * 1.35);
+    const desc2 = [bandLines[1] ?? "", bandLines[2] ?? ""].filter((t) => t !== "").join(String.fromCharCode(10));
+    const descLines = desc2 === "" ? 0 : 2;
+    const descH = descLineH * descLines;
+    const blockH = nameH + (descLines ? 4 + descH : 0);
+    const bandTop = L.heroBand.y + Math.round((L.heroBand.h - blockH) / 2);
+    // 首行(英雄名 / 未选提示):盒内左对齐、垂直居中
+    this.fitBox(this.heroLines[0], { x: L.heroTextX, y: bandTop, w: textW, h: nameH }, Label.HorizontalAlign.LEFT, Label.VerticalAlign.CENTER, m.bodyPx);
+    bindLabel(this.heroLines[0], bandLines[0] ?? "");
+    this.heroLines[0].color = hexToColor(HEX.textPrimary);
+    this.heroLines[0].node.active = (bandLines[0] ?? "") !== "" && !textOff("setCard");
+    // 说明块:自动换行,宽度到按钮左侧为止,限两行,溢出裁掉
+    const descTop = bandTop + nameH + 4;
+    this.fitBox(this.heroLines[1], { x: L.heroTextX, y: descTop, w: textW, h: Math.max(descLineH, descH) }, Label.HorizontalAlign.LEFT, Label.VerticalAlign.TOP, m.subPx, true);
+    bindLabel(this.heroLines[1], desc2);
+    this.heroLines[1].color = hexToColor(c.accent ?? HEX.textSecondary);
+    this.heroLines[1].node.active = desc2 !== "" && !textOff("setCard");
+    this.heroLines[2].node.active = false;
     this.showPlate(this.heroBtn.plate, "btn_minor", L.heroBtn, "slice");
     placeRect(this.heroBtn.text.node, L.heroBtn);
     this.heroBtn.text.node.getComponent(Label)!.verticalAlign = Label.VerticalAlign.CENTER;
@@ -461,14 +525,33 @@ export class MenuLayoutView {
     return L;
   }
 
+  /**
+   * 把一枚 Label 放进盒里对齐:节点尺寸 = 盒,溢出 CLAMP(不改节点尺寸),水平 / 垂直对齐交给 Label。
+   * 与 placeLine 的基线估算不同,这里文字的视觉中线严格对齐盒中线 —— 标题带、筹码、英雄带三处
+   * 用户实测「文字没对齐中线」的根因就是基线系数与系统字体的实际出墨不一致。
+   * wrap=true 时启用自动换行(仍 CLAMP 在盒内,超出盒高的行被裁掉,不会溢出到框外)。
+   */
+  private fitBox(lb: Label, rect: Rect, hAlign: Label["horizontalAlign"], vAlign: Label["verticalAlign"], px: number, wrap = false): void {
+    placeRect(lb.node, rect);
+    lb.fontSize = px;
+    lb.lineHeight = Math.round(px * 1.35);
+    lb.overflow = Label.Overflow.CLAMP;
+    lb.enableWrapText = wrap;
+    lb.horizontalAlign = hAlign;
+    lb.verticalAlign = vAlign;
+  }
+
   private ensureRow(id: number): RowNodes {
     const hit = this.rows.get(id);
     if (hit) return hit;
     const root = makeNode(`Row#${id}`, this.page);
+    // 窗景先建、行框后建:同一父节点下后建者压在上层,框才能「压在画面上」
+    const scene = this.plate("Scene", root);
     const badge = this.plate("Badge", root);
     const n: RowNodes = {
       root,
       op: root.addComponent(UIOpacity),
+      scene,
       plate: this.plate("Plate", root),
       badge,
       badgeNum: pixelNumber("BadgeNum", root, this.frames, { ...PXNUM_OPTS, align: "center", tint: HEX.gold }),
@@ -476,6 +559,7 @@ export class MenuLayoutView {
       name: label("RowName", root, "", FS.body, HEX.textPrimary, { bold: true }),
       desc: label("RowDesc", root, "", FS.micro, HEX.textSecondary),
       tail: label("RowTail", root, "", FS.micro, HEX.textSecondary, { hAlign: RIGHT }),
+      tail2: label("RowTail2", root, "", FS.micro, HEX.textMuted, { hAlign: RIGHT }),
       makeup: this.plate("Makeup", root),
       makeupText: label("MakeupText", root, "补星", FS.micro, HEX.textPrimary, { hAlign: CENTER }),
     };

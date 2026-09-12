@@ -273,3 +273,59 @@ describe("cardRibbon / cardIconSize", () => {
     }
   });
 });
+
+/**
+ * v4「深渊铭刻」版式(Cocos 侧 viewTable.phase3.shopV4):第四实参 opts 打开。
+ * 与旧版式的差别只在弹性表:钮高 40..44、卡带 208(最满形态收 176)、标题 22、
+ * 武器行 = max(持有, 槽位)且 52..56 高、富余落到末行与底坞之间。
+ * 旧版式(不传 opts)逐位不变 —— 上面的网格与锚点测试就是它的守卫。
+ */
+describe("商店 v4 版式(opts.v4 + slotCount)", () => {
+  const OPTS = (slotCount: number) => ({ v4: true, slotCount });
+  it("不传 opts 与传 undefined 逐位相同(旧版式零改动)", () => {
+    expect(JSON.stringify(shopLayoutPure(3, 2, 1212))).toBe(JSON.stringify(shopLayoutPure(3, 2, 1212, undefined)));
+    expect(shopLayoutPure(3, 2).captionY).toBe(null);
+  });
+  for (const h of HEIGHTS) {
+    for (const slots of [4, 6, 8]) {
+      for (let nw = 0; nw <= slots; nw++) {
+        for (let nm = 0; nm <= 4; nm++) {
+          const L = shopLayoutPure(nw, nm, h, OPTS(slots));
+          const tag = `v4 h=${h} slots=${slots} weapons=${nw} merges=${nm}`;
+          it(`${tag}:行数 = max(持有,槽位),块间零重叠、不越界、末行不过底坞`, () => {
+            expect(L.nW, tag).toBe(Math.max(1, Math.min(8, Math.max(nw, slots))));
+            expect(L.weaponRows, tag).toHaveLength(L.nW);
+            const bs = blocks(L);
+            for (let i = 1; i < bs.length; i++) expect(bs[i].y0, `${tag} ${bs[i - 1].name} → ${bs[i].name}`).toBeGreaterThanOrEqual(bs[i - 1].y1);
+            for (const b of bs) expect(b.y0, tag).toBeGreaterThanOrEqual(SHOP_TOP);
+            const last = L.merges[L.merges.length - 1];
+            expect(last.y + last.h, tag).toBeLessThanOrEqual(L.contentBottom);
+            expect(L.nextBtn, tag).toEqual({ x: 264, y: h - DOCK_H + 2, w: 280, h: 44 });
+            for (const r of rects(L)) for (const v of [r.x, r.y, r.w, r.h]) expect(v % 2, tag).toBe(0);
+          });
+          it(`${tag}:钮高 40..44、卡带 176..208、行高 34..56 / 32..48、说明行落在卡带与槽位钮之间`, () => {
+            for (const b of L.toolBtns) { expect(b.h, tag).toBeGreaterThanOrEqual(40); expect(b.h, tag).toBeLessThanOrEqual(44); }
+            expect(L.slotBtn.h, tag).toBeGreaterThanOrEqual(40);
+            expect(L.cardH, tag).toBeGreaterThanOrEqual(176);
+            expect(L.cardH, tag).toBeLessThanOrEqual(208);
+            expect(L.headerH, tag).toBe(22);
+            for (const r of L.weaponRows) { expect(r.h, tag).toBeGreaterThanOrEqual(34); expect(r.h, tag).toBeLessThanOrEqual(56); }
+            for (const r of L.merges) { expect(r.h, tag).toBeGreaterThanOrEqual(32); expect(r.h, tag).toBeLessThanOrEqual(48); }
+            expect(L.captionY, tag).not.toBe(null);
+            expect(L.captionY!, tag).toBeGreaterThanOrEqual(L.cards[0].y + L.cardH);
+            expect(L.captionY! + 16, tag).toBeLessThanOrEqual(L.slotBtn.y);
+          });
+        }
+      }
+    }
+  }
+  it("标定档 6 槽 1 件 0 组:数值锚点(工具 74/40、卡 124/208、说明行 332+、槽位钮 356、6 行 52 高)", () => {
+    const L = shopLayoutPure(1, 0, 996, OPTS(6));
+    expect(L.toolBtns[0]).toMatchObject({ y: 74, h: 40 });
+    expect(L.cards[0]).toMatchObject({ y: 124, h: 208 });
+    expect(L.slotBtn).toMatchObject({ y: 356, h: 40 });
+    expect(L.weaponRows).toHaveLength(6);
+    expect(L.weaponRowH).toBe(56);
+    expect(L.weaponRowGap).toBe(6);
+  });
+});

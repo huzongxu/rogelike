@@ -32,7 +32,7 @@ import { Graphics, Label, Node, SpriteFrame, UIOpacity, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
-import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
+import { Plate, fitOne, flatBox, iconNode, placeLine, boxPlace } from "../ui/PanelKit";
 import { GO_BTN_STROKE_W, GO_POSE_ALPHA, type GoRect, type GameOverLayout, type GoTextLine } from "../game/ui/gameOverLayout";
 import { hitGameOver, type GameOverAction, type GameOverContent } from "./GameOverModel";
 
@@ -76,6 +76,10 @@ class Txt {
       this.lb.isBold = t.bold;
     }
     bindLabel(this.lb, fitOne(text, t.maxW, t.px));
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, t.x, t.baseY, t.maxW, t.px, t.align);
+      return;
+    }
     placeLine(this.lb.node, t.x, t.baseY, t.maxW, t.px, t.align);
   }
 
@@ -106,6 +110,8 @@ export class GameOverView {
   /** 屏底板：`panel_dark_corners` 九宫格，缺图退代码底板（`ui/PanelKit.Plate` 自带兜底子节点） */
   private panel: Plate;
   private pose: ReturnType<typeof iconNode>;
+  /** v5:绸带之上的场景立绘 */
+  private scene: ReturnType<typeof iconNode>;
   private poseOpacity: UIOpacity;
   private banner: ReturnType<typeof iconNode>;
   private title: Txt;
@@ -138,6 +144,7 @@ export class GameOverView {
     // 但 pose 的横向锚点在屏心左 196、与 banner 的 x 区间 [160,400] 在 996 档重叠 0px，
     // 两档互不遮挡，故这里保持 Web 的笔序：banner → pose）
     this.banner = iconNode("HeaderBanner", this.root, frames, ZERO);
+    this.scene = iconNode("Scene", this.root, frames, ZERO);
     this.pose = iconNode("Pose", this.root, frames, ZERO);
     this.poseOpacity = this.pose.node.addComponent(UIOpacity);
     this.poseOpacity.opacity = Math.round(GO_POSE_ALPHA * 255);
@@ -198,9 +205,15 @@ export class GameOverView {
     this.panel.show(L.panelKey, L.panel, "slice", HEX.bgPanel, HEX.bgPanelLight);
 
     // 横幅与立绘：整幅拉伸、没有缺图回退档（缺图收成零位盒，文字照落位）
-    const banner = this.banner.show(KEY_BANNER);
-    placeRect(this.banner.node, banner ? L.banner : ZERO);
-    const pose = this.pose.show(KEY_POSE);
+    const v4 = viewTable().phase3.restV4;
+    const banner = this.banner.show(v4 ? "ribbon_dark" : KEY_BANNER);
+    placeRect(this.banner.node, banner ? (v4 ? L.ribbon : L.banner) : ZERO);
+    // v5:场景立绘压在绸带之上,小立绘收起(场景已含人物与场地)
+    const scene = v4 && this.scene.show("gameover_scene");
+    placeRect(this.scene.node, scene ? L.scene : ZERO);
+    if (!v4) this.scene.show("");
+    const pose = !v4 && this.pose.show(KEY_POSE);
+    if (v4) this.pose.show("");
     placeRect(this.pose.node, pose ? L.pose : ZERO);
 
     // 标题压在绸带带心：带心亮度跨 5~6 档，单色字到不了对比 → 走共享描边出口，缺图那一档关掉

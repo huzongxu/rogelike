@@ -32,7 +32,7 @@ import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
 import type { ViewTable } from "../core/ViewTable";
 import { Plate, fitLines, fitOne, flatBox, iconNode, placeLine, strokeRing } from "../ui/PanelKit";
 import { evenDown, hexA, theme } from "../game/ui/theme";
-import { HERO_SKILL_TEXT_X } from "../game/ui/heroSelectLayout";
+import { HERO_SKILL_TEXT_X, heroDetailScene } from "../game/ui/heroSelectLayout";
 import type { HeroSelectLayout } from "../game/ui/heroSelectLayout";
 import type { Phase3Params } from "../core/ViewTable";
 import type { HeroAction, HeroRowView, HeroSelectModel } from "./HeroSelectModel";
@@ -47,6 +47,12 @@ const KEY_SKILL_ROW = "menu_row_plate";
 const KEY_BACK = "btn_minor";
 const KEY_PRIMARY = "btn_primary";
 const KEY_CLEAR = "btn_minor";
+/** v4:顶带走主菜单标题板(随赛季主色的铁框),预览行走金框 */
+const KEY_BAND_V4 = "menu_title_plate";
+const KEY_ROW_ACTIVE_V4 = "menu_row_plate_current";
+/** v4 行 / 技能行的暗石面与空槽描边(与商店同一口径) */
+const V4_FACE = "rgba(11,14,20,0.78)";
+const V4_BONE = "#a9b4c4";
 
 /** 行池容量:最大屏高下视口 634 / 步长 80 ≈ 9 行可见,缓冲行与甩动高速段留足余量 */
 const ROW_POOL = 16;
@@ -68,6 +74,9 @@ const EMPTY_LINE_PITCH = 26;
 
 interface RowSlot {
   node: Node;
+  /** v4:行板之下的暗石面 / 行板之上的英雄主色竖条 */
+  face: ReturnType<typeof flatBox>;
+  accent: ReturnType<typeof flatBox>;
   /** 行板(子节点:贴图优先,缺图走 Plate 自带的硬边兜底) */
   plate: Plate;
   portrait: { node: Node; show: (key: string) => boolean };
@@ -84,6 +93,8 @@ interface RowSlot {
 }
 
 interface SkillSlot {
+  /** v4:技能行板之下的暗石面 */
+  face: ReturnType<typeof flatBox>;
   /** 技能行板(九宫格贴图,缺图走 Plate 自带的硬边兜底) */
   row: Plate;
   /** 左端 tag 胶囊:22 高撑不起九宫格的可拉伸带,仍走代码硬边块 */
@@ -111,6 +122,21 @@ class Txt {
     this.font(px, align, color);
     bindLabel(this.lb, fitOne(text, maxW, px));
     placeLine(this.lb.node, x, baseY, maxW, px, align, box);
+  }
+
+  /**
+   * 盒内对齐档(v4):节点 = 盒,Overflow.CLAMP,水平随 align、垂直居中(wrap 时顶对齐 + 自动换行,
+   * 超出盒高的行被裁掉)。给 `box` 时按行局部坐标落位。与 set() 的基线估算不同,文字视觉中线严格对齐盒中线。
+   */
+  box(r: Rect, px: number, text: string, align: "left" | "center" | "right", color?: string, box?: { w: number; h: number }, wrap = false): void {
+    this.font(px, align, color);
+    this.lb.lineHeight = Math.round(px * 1.3);
+    if (this.lb.overflow !== Label.Overflow.CLAMP) this.lb.overflow = Label.Overflow.CLAMP;
+    if (this.lb.enableWrapText !== wrap) this.lb.enableWrapText = wrap;
+    const va = wrap ? Label.VerticalAlign.TOP : Label.VerticalAlign.CENTER;
+    if (this.lb.verticalAlign !== va) this.lb.verticalAlign = va;
+    bindLabel(this.lb, wrap ? text : fitOne(text, r.w, px));
+    placeRect(this.lb.node, r, box?.w ?? DESIGN_W, box?.h ?? logicalH());
   }
 
   /** 多行正文:整块按行高 × 行数占位,顶锚(与 Web 逐行 fillText 的堆叠一致) */
@@ -169,7 +195,9 @@ export class HeroSelectView {
   private listMask: Node;
   private rows: RowSlot[] = [];
   private track: ReturnType<typeof flatBox>;
-  private thumb: ReturnType<typeof flatBox>;
+  private thumb: ReturnType<typeof flatBox>;
+  /** v6:详情面板框内的城堡窗景(压在面板之上、文字之下) */
+  private detailScene: Plate;
   private detail: Plate;
   /** 详情立绘缺图时的硬边主色方块(独立子节点,不与详情板抢 UIRenderer 槽位) */
   private detailPortBox: Node;
@@ -205,8 +233,10 @@ export class HeroSelectView {
     for (let i = 0; i < ROW_POOL; i++) {
       const node = makeNode("Row" + i, this.listMask);
       node.addComponent(UITransform);
-      // 兄弟次序 = 渲染次序:行板 → 立绘兜底块 → 立绘贴图 → 首字 → 名字 → 副信息 → 徽章板 → 徽章兜底框 → 徽章字
+      // 兄弟次序 = 渲染次序:暗面 → 行板 → 主色竖条 → 立绘兜底块 → 立绘贴图 → 首字 → 名字 → 副信息 → 徽章板 → 徽章兜底框 → 徽章字
+      const face = flatBox("RowFace", node);
       const plate = new Plate("RowPlate", node, frames);
+      const accent = flatBox("RowAccent", node);
       const portBox = makeNode("PortraitBox", node);
       portBox.addComponent(Graphics);
       const portrait = iconNode("Portrait", node, frames, { x: 0, y: 0, w: 1, h: 1 });
@@ -217,12 +247,13 @@ export class HeroSelectView {
       const badgeRing = makeNode("BadgeRing", node);
       badgeRing.addComponent(Graphics);
       const badgeText = new Txt("BadgeText", node);
-      this.rows.push({ node, plate, portrait, portBox, char, name, sub, badge, badgeRing, badgeText });
+      this.rows.push({ node, face, accent, plate, portrait, portBox, char, name, sub, badge, badgeRing, badgeText });
     }
     this.track = flatBox("Track", this.root);
     this.thumb = flatBox("Thumb", this.root);
 
     this.detail = new Plate("Detail", this.root, frames);
+    this.detailScene = new Plate("DetailScene", this.root, frames);
     this.detailPortBox = makeNode("DetailPortraitBox", this.root);
     this.detailPortBox.addComponent(Graphics);
     this.detailPort = iconNode("DetailPortrait", this.root, frames, { x: 0, y: 0, w: 1, h: 1 });
@@ -233,6 +264,7 @@ export class HeroSelectView {
     this.skillLabel = new Txt("SkillCaption", this.root);
     for (let i = 0; i < SKILL_POOL; i++) {
       this.skills.push({
+        face: flatBox("SkillFace" + i, this.root),
         row: new Plate("SkillRow" + i, this.root, frames),
         chip: flatBox("SkillChip" + i, this.root),
         tag: new Txt("SkillTag" + i, this.root),
@@ -312,11 +344,21 @@ export class HeroSelectView {
     // 屏底板:九宫格内缩落屏内页边距(整幅铺满会让角块没有可拉伸带)
     this.panel.show(KEY_PANEL, L.panel, "slice", p3.detailBg, p3.detailStroke);
 
-    // 标题横幅:整图拉伸(源图 2 倍),缺图退左起笔一档
     const head = this.model.header();
+    const v4 = p3.heroesV4;
+    const bandV4: Rect = { x: 0, y: 0, w: DESIGN_W, h: 64 };
+    this.headerTitle.bold(true);
+    if (v4) {
+      /* v4 顶带:通栏 64 高的标题板(随赛季主色铁框),标题金 16 | 返回钮;次行 副题 12 灰 */
+      this.banner.show(KEY_BAND_V4, bandV4, "slice", p3.detailBg, p3.detailStroke);
+      this.banner.setActive(true);
+      const tw = L.backBtn.x - 12 - 16;
+      this.headerTitle.box({ x: 16, y: 6, w: tw, h: 28 }, 16, head.title, "left", HEX.gold);
+      this.headerSub.box({ x: 16, y: 36, w: tw, h: 22 }, FS.micro, head.sub, "left", HEX.textSecondary);
+    } else {
+    // 标题横幅:整图拉伸(源图 2 倍),缺图退左起笔一档
     const bannerOn = this.banner.show(KEY_BANNER, L.banner, "stretch", p3.detailBg, p3.detailStroke);
     this.banner.setActive(bannerOn);
-    this.headerTitle.bold(true);
     if (bannerOn) {
       const t = L.titleBand;
       this.headerTitle.set(t.x, t.baseY, t.maxW, t.px, head.title, "center", HEX.gold, screen);
@@ -325,6 +367,7 @@ export class HeroSelectView {
       this.headerTitle.set(t.x, t.baseY, t.maxW, t.px, head.title, "left", HEX.gold, screen);
     }
     this.headerSub.set(L.subBand.x, L.subBand.baseY, L.subBand.maxW, FS.muted, head.sub, "left", HEX.textSecondary, screen);
+    }
 
     /* --- 列表:Mask 容器 + 行池(行节点在列表局部坐标里) --- */
     const list = L.list;
@@ -351,20 +394,23 @@ export class HeroSelectView {
     /* --- 详情面板 --- */
     const d = L.detail;
     this.detail.show(KEY_PANEL, d, "slice", p3.detailBg, p3.detailStroke);
+    this.detailScene.setActive(p3.heroesV4);
+    if (p3.heroesV4) this.detailScene.show("scene_castle", heroDetailScene(d), "stretch");
     const det = this.model.detail();
     const port = L.portrait;
     const portOn = !det.empty && this.detailPort.show(`hero_${this.model.preview ?? ""}`);
     this.detailPort.node.active = portOn;
     if (portOn) placeRect(this.detailPort.node, port);
     // 立绘缺图:硬边主色方块垫底 + 名字首字(像素档不画圆角,圆边在 2px 网格上会抖糊)
-    this.detailPortBox.active = !portOn && !det.empty;
-    if (!portOn && !det.empty) {
+    // v4:有立绘也画一圈骸骨白像框(暗底 + 2px 环),与主菜单英雄带同款
+    this.detailPortBox.active = (!portOn || v4) && !det.empty;
+    if (this.detailPortBox.active) {
       const g = this.detailPortBox.getComponent(Graphics)!;
       g.clear();
-      g.fillColor = hexToColor(hexA(det.color, 0.18));
+      g.fillColor = hexToColor(v4 ? V4_FACE : hexA(det.color, 0.18));
       g.rect(-port.w / 2, -port.h / 2, port.w, port.h);
       g.fill();
-      g.fillColor = hexToColor(hexA(det.color, 0.55));
+      g.fillColor = hexToColor(v4 && portOn ? V4_BONE : hexA(det.color, 0.55));
       strokeRing(g, port.w, port.h, RING_LINE_W);
       placeRect(this.detailPortBox, port);
     }
@@ -381,7 +427,13 @@ export class HeroSelectView {
     this.detailTitle.active(true);
     this.detailLore.active(!emptyMode);
     this.skillLabel.active(!emptyMode);
-    if (emptyMode) {
+    if (emptyMode && v4) {
+      const blockH = FS.section + EMPTY_LINE_PITCH;
+      const blockTop = d.y + evenDown((d.h - blockH) / 2);
+      this.detailName.bold(true);
+      this.detailName.box({ x: d.x + 16, y: blockTop - 4, w: d.w - 32, h: FS.section + 8 }, FS.section, det.name, "center", HEX.textSecondary);
+      this.detailTitle.box({ x: d.x + 16, y: blockTop + FS.section + 6, w: d.w - 32, h: FS.muted + 8 }, FS.muted, det.title, "center", HEX.textSecondary);
+    } else if (emptyMode) {
       // 「不出战」:详情板里只有这两行,把它们作为一个块纵向居中(板心上下对称)。
       // 块高 = 主名行高 + 行步进,行步进沿用原档的 26,只换纵向落位、不改行距。
       const blockH = FS.section + EMPTY_LINE_PITCH;
@@ -389,6 +441,12 @@ export class HeroSelectView {
       this.detailName.bold(true);
       this.detailName.set(d.x + d.w / 2, blockTop + FS.section, d.w - 32, FS.section, det.name, "center", HEX.textSecondary, screen);
       this.detailTitle.set(d.x + d.w / 2, blockTop + blockH, d.w - 32, FS.muted, det.title, "center", HEX.textSecondary, screen);
+    } else if (v4) {
+      /* v4:名 22 金 / 称号 13 主色 / 正文 13 灰自动换行(盒高到立绘底,超出裁掉) */
+      this.detailName.bold(true);
+      this.detailName.box({ x: L.textX, y: port.y, w: L.loreW, h: 30 }, FS.title, det.name, "left", HEX.gold);
+      this.detailTitle.box({ x: L.textX, y: port.y + 32, w: L.loreW, h: 22 }, FS.muted, det.title, "left", det.color);
+      this.detailLore.box({ x: L.textX, y: port.y + 60, w: L.loreW, h: Math.max(FS.muted * 2, port.h - 60) }, FS.muted, det.lore, "left", HEX.textSecondary, undefined, true);
     } else {
       this.detailName.bold(true);
       this.detailName.set(L.textX, L.nameY, L.loreW, FS.title, det.name, "left", HEX.textPrimary, screen);
@@ -397,17 +455,31 @@ export class HeroSelectView {
       this.detailLore.lines(lines, L.textX, Math.round(L.loreY - FS.muted * lift), L.loreW, FS.muted, HEX.textSecondary, screen);
     }
     this.skillLabel.bold(true);
-    this.skillLabel.set(port.x, L.skillLabelY, 160, FS.micro, "技能详情", "left", HEX.gold, screen);
+    if (v4) this.skillLabel.box({ x: port.x, y: L.skillLabelY, w: 200, h: 22 }, FS.micro, "技能详情", "left", HEX.gold);
+    else this.skillLabel.set(port.x, L.skillLabelY, 160, FS.micro, "技能详情", "left", HEX.gold, screen);
     this.skills.forEach((slot, i) => {
       const sr = L.skillRows[i];
       const line = det.skills[i];
       const on = !emptyMode && !!sr && !!line;
+      slot.face.node.active = on && v4;
       slot.row.node.active = on;
       slot.chip.node.active = on;
       slot.tag.active(on);
       slot.label.active(on);
       slot.desc.active(on);
       if (!on || !sr || !line) return;
+      if (v4) {
+        slot.face.draw(sr.rect, V4_FACE);
+        slot.row.show(KEY_SKILL_ROW, sr.rect, "slice", p3.detailBg, p3.detailStroke);
+        slot.chip.draw(sr.chip, hexA(det.color, 0.16), hexA(det.color, 0.55), RING_LINE_W);
+        slot.tag.bold(true);
+        slot.tag.box(sr.chip, FS.micro, line.tag, "center", det.color);
+        slot.label.bold(true);
+        const tx = sr.rect.x + HERO_SKILL_TEXT_X;
+        slot.label.box({ x: tx, y: sr.rect.y + 2, w: sr.descW, h: 22 }, FS.body, line.label, "left", HEX.textPrimary);
+        slot.desc.box({ x: tx, y: sr.rect.y + 24, w: sr.descW, h: Math.max(16, sr.rect.h - 28) }, FS.micro, line.desc, "left", HEX.textMuted);
+        return;
+      }
       slot.row.show(KEY_SKILL_ROW, sr.rect, "slice", p3.detailBg, p3.detailStroke);
       // 胶囊:22 高撑不起九宫格的可拉伸带 → 代码硬边块(主色 16% 底 + 主色 55% 描边)
       slot.chip.draw(sr.chip, hexA(det.color, 0.16), hexA(det.color, 0.55), RING_LINE_W);
@@ -421,14 +493,20 @@ export class HeroSelectView {
     /* --- 右上返回 / 底部确定与不出战 --- */
     const B = L.backBtn;
     this.back.plate.show(KEY_BACK, B, "slice", p3.detailBg, p3.detailStroke);
-    this.back.text.set(B.x + B.w / 2, B.y + B.h / 2 + FS.muted / 3, B.w, FS.muted, "返回", "center", p3.buttonText, screen);
     const C = L.confirm;
     this.confirm.plate.show(KEY_PRIMARY, C, "slice", p3.heroRowSel, theme.gold);
     this.confirm.text.bold(true);
-    this.confirm.text.set(C.x + C.w / 2, C.y + C.h / 2 + FS.body / 3, C.w - 16, FS.body, this.model.confirmText(), "center", HEX.textPrimary, screen);
     const CL = L.clearBtn;
     this.clear.plate.show(KEY_CLEAR, CL, "slice", p3.detailBg, p3.detailStroke);
-    this.clear.text.set(CL.x + CL.w / 2, CL.y + CL.h / 2 + FS.muted / 3, CL.w - 8, FS.muted, "不出战", "center", HEX.textSecondary, screen);
+    if (v4) {
+      this.back.text.box(B, FS.muted, "返回", "center", p3.buttonText);
+      this.confirm.text.box(C, 15, this.model.confirmText(), "center", HEX.actionPrimary);
+      this.clear.text.box(CL, FS.muted, "不出战", "center", HEX.textSecondary);
+    } else {
+      this.back.text.set(B.x + B.w / 2, B.y + B.h / 2 + FS.muted / 3, B.w, FS.muted, "返回", "center", p3.buttonText, screen);
+      this.confirm.text.set(C.x + C.w / 2, C.y + C.h / 2 + FS.body / 3, C.w - 16, FS.body, this.model.confirmText(), "center", HEX.textPrimary, screen);
+      this.clear.text.set(CL.x + CL.w / 2, CL.y + CL.h / 2 + FS.muted / 3, CL.w - 8, FS.muted, "不出战", "center", HEX.textSecondary, screen);
+    }
   }
 
   /** 一行的行板 / 立绘位 / 双行文字 / 右缘徽章(矩形全部来自 layout,行内一律走列表局部坐标) */
@@ -436,8 +514,21 @@ export class HeroSelectView {
     // 行板:预览行换「当前行」语义那张贴图。Plate 的落位参照恒为整屏,而行节点活在列表
     // 局部坐标里 → 贴完按行盒重落一次(行板恰好铺满行节点自身,局部矩形就是 0,0,box)
     const full: Rect = { x: 0, y: 0, w: box.w, h: box.h };
-    slot.plate.show(v.active ? KEY_ROW_ACTIVE : KEY_ROW, row.rect, "slice", v.active ? p3.heroRowSel : p3.heroRowIdle, v.active ? theme.select : p3.heroRowStroke);
+    const v4 = p3.heroesV4;
+    // v4:暗石面垫底,预览行金框,已解锁行左侧一条英雄主色竖条(与商店武器行同款)
+    slot.face.node.active = v4;
+    if (v4) {
+      slot.face.draw(full, V4_FACE);
+      placeRect(slot.face.node, full, box.w, box.h);
+    }
+    slot.plate.show(v.active ? (v4 ? KEY_ROW_ACTIVE_V4 : KEY_ROW_ACTIVE) : KEY_ROW, row.rect, "slice", v.active ? p3.heroRowSel : p3.heroRowIdle, v.active ? theme.select : p3.heroRowStroke);
     placeRect(slot.plate.node, full, box.w, box.h);
+    slot.accent.node.active = v4 && v.released;
+    if (v4 && v.released) {
+      const bar: Rect = { x: 4, y: 6, w: 4, h: box.h - 12 };
+      slot.accent.draw(bar, v.color);
+      placeRect(slot.accent.node, bar, box.w, box.h);
+    }
 
     // 立绘:贴图优先,缺图退硬边主色方块 + 名字首字(未解锁行走灰色档)
     const lp = local(row.portrait, row.rect);
@@ -461,8 +552,14 @@ export class HeroSelectView {
 
     // 双行文字:限宽由 layout 给到「徽章左缘前一道偶数缝」,视图不另算一份
     slot.name.bold(true);
+    if (v4) {
+      const tx = row.textX - row.rect.x;
+      slot.name.box({ x: tx, y: 12, w: row.textW, h: 26 }, 15, v.name, "left", v.released ? HEX.textPrimary : HEX.textMuted, box);
+      slot.sub.box({ x: tx, y: 38, w: row.textW, h: 22 }, FS.micro, v.sub, "left", v.released ? HEX.textSecondary : HEX.textMuted, box);
+    } else {
     slot.name.set(row.textX - row.rect.x, row.nameY - row.rect.y, row.textW, FS.body, v.name, "left", v.released ? HEX.textPrimary : HEX.textMuted, box);
     slot.sub.set(row.textX - row.rect.x, row.subY - row.rect.y, row.textW, FS.micro, v.sub, "left", v.released ? HEX.textSecondary : HEX.textMuted, box);
+    }
 
     // 套组徽章:九宫格底板优先,缺图退硬边方框(当前出战 = 金描边,语义色不丢)
     const lb = local(row.badge, row.rect);
@@ -482,7 +579,8 @@ export class HeroSelectView {
       placeRect(slot.badgeRing, lb, box.w, box.h);
     }
     slot.badgeText.bold(true);
-    slot.badgeText.set(lb.x + lb.w / 2, lb.y + lb.h / 2 + FS.micro / 3, lb.w, FS.micro, v.badgeText, "center", v.color, box);
+    if (v4) slot.badgeText.box(lb, FS.micro, v.badgeText, "center", v.color, box);
+    else slot.badgeText.set(lb.x + lb.w / 2, lb.y + lb.h / 2 + FS.micro / 3, lb.w, FS.micro, v.badgeText, "center", v.color, box);
   }
 }
 

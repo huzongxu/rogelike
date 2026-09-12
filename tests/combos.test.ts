@@ -349,7 +349,7 @@ describe("基线纯净(§3.3:组合技不扰动已标定曲线)", () => {
 describe("强度上限(常规压力 ≤ +35%,防数值墙提前崩塌)", () => {
   const COMBO_BUILDS: SimOptions["build"][] = ["combo_barrage", "combo_rift", "combo_thorn"];
 
-  it("3 build × 3 种子,聚合总伤害增幅 ≤ 35%", () => {
+  it("3 build × 3 种子,聚合总伤害增幅 ≤ 35%", { timeout: 60_000 }, () => {
     for (const b of COMBO_BUILDS) {
       let base = 0;
       let withCombo = 0;
@@ -368,7 +368,8 @@ describe("强度上限(常规压力 ≤ +35%,防数值墙提前崩塌)", () => {
 });
 
 describe("高压有感(组合技必须在压力局产生信号)", () => {
-  it("弹幕风暴:spawnScale 6(溺水压力:品质轴时代常规 build 已能清空低密度,信号只在 DPS 不足区间可见)聚合总伤害显著高于对照", () => {
+  it("弹幕风暴:spawnScale 6(溺水压力:品质轴时代常规 build 已能清空低密度,信号只在 DPS 不足区间可见)聚合总伤害显著高于对照", { timeout: 60_000 }, () => {
+    // 16 局 × 300 s 的真模拟,慢机上 6 s+,默认 5 s 上限会先到
     let base = 0;
     let withCombo = 0;
     for (const seed of [2, 3, 5, 7, 11, 13, 17, 21]) {

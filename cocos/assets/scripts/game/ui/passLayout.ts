@@ -186,6 +186,14 @@ export const PS_NODE_TRACK_GAP = 6;
 export const PS_ROW_MIN_H = 56;
 export const PS_ROW_MAX_H = 96;
 export const PS_ROW_MAX_GAP = 60;
+/** v4「深渊铭刻」行区口径(示意图:五行几乎摊满列表区,行距收窄):行高上限 / 行距上限 */
+export const PS_V4_ROW_MAX_H = 120;
+export const PS_V4_ROW_MAX_GAP = 12;
+
+/** 几何入参(可选):v4 打开时行区按 PS_V4_* 摊开,其余几何不变 */
+export interface PassLayoutOpts {
+  v4?: boolean;
+}
 
 /** 行内三段文本的起笔偏移、右列内缩与三段基线式 */
 export const PS_ROW_TEXT_DX = 16;
@@ -292,7 +300,7 @@ function rowLayout(index: number, rect: PsRect): PassRowLayout {
  * 整屏几何。行数恒 = `PASS_TIERS.length`,屏高收 `h`(行区在
  * `[listY0, 进度条文字带顶缘]` 内摊开,996 与 1246 两档都不越界,且末行底边落在进度文字之上)。
  */
-export function passLayout(w: number, h: number): PassLayout {
+export function passLayout(w: number, h: number, opts: PassLayoutOpts = {}): PassLayout {
   const hh = evenDown(h);
   const pad = PS_PAD;
   const rowW = w - pad * 2;
@@ -307,7 +315,9 @@ export function passLayout(w: number, h: number): PassLayout {
   const progressBaseY = evenDown(progressBar.y - PS_PROGRESS_LABEL_GAP);
   const listBottom = progressBaseY - PS_PROGRESS_LABEL_BAND;
 
-  const spread = spreadRows(PASS_TIERS.length, listY0, listBottom, PS_ROW_MIN_H, PS_ROW_MAX_H, PS_ROW_MAX_GAP);
+  const spread = opts.v4
+    ? spreadRows(PASS_TIERS.length, listY0, listBottom, PS_ROW_MIN_H, PS_V4_ROW_MAX_H, PS_V4_ROW_MAX_GAP)
+    : spreadRows(PASS_TIERS.length, listY0, listBottom, PS_ROW_MIN_H, PS_ROW_MAX_H, PS_ROW_MAX_GAP);
   const rowH = evenDown(spread.rowH);
   const gap = evenDown(spread.gap);
   const rows: PassRowLayout[] = PASS_TIERS.map((_, i) => rowLayout(i, { x: pad, y: listY0 + i * (rowH + gap), w: rowW, h: rowH }));
@@ -386,6 +396,6 @@ export function passProgressRects(L: PassLayout, frac: number): PassBarRects {
 }
 
 /** 整屏几何的单一出口(视图经宿主钩子调它;行数由 PASS_TIERS 表长决定) */
-export function passScreenLayout(w: number, h: number): PassLayout {
-  return passLayout(w, h);
+export function passScreenLayout(w: number, h: number, opts: PassLayoutOpts = {}): PassLayout {
+  return passLayout(w, h, opts);
 }

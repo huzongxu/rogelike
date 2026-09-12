@@ -131,6 +131,10 @@ export interface VictoryLayout extends VictoryForms {
   block: ViRect;
   /** 标题横幅盒（`a` 上方 34，240×48 = `banner_large_navy_a` 固有 120×24 的精确 2 倍；整幅拉伸，没有缺图回退档） */
   banner: ViRect;
+  /** v5 场景立绘盒(绸带之上) */
+  scene: ViRect;
+  /** v5 宽绸带盒(ribbon_dark 整图,与 banner 同心) */
+  ribbon: ViRect;
   /** 通关立绘盒（`a` 上方 44，58×92；挂在屏心**右**侧，本屏没有半透明贴图件） */
   pose: ViRect;
   /** 「通关!」 */
@@ -188,6 +192,13 @@ export interface VictoryLayout extends VictoryForms {
  *  出处：`VI_PAD` 与 `victoryDoubleBtn` 的 `hh − VI_DOUBLE_UP`） */
 export const VI_BLOCK_INSET = VI_PAD;
 /** 横幅：宽 / 高 / 半宽（**由宽推导**）/ 相对锚线的上抬 */
+/** v5 场景立绘(victory_scene 320×246):居中压在标题绸带之上,底缘与绸带顶缘留 8 */
+export const VI_SCENE_W = 400;
+export const VI_SCENE_H = 302;
+/** v5 宽绸带(ribbon_dark 整图):与旧横幅同心,320×56 */
+export const VI_RIBBON_W = 320;
+export const VI_RIBBON_H = 56;
+
 export const VI_BANNER_W = 240;
 export const VI_BANNER_H = 48;
 export const VI_BANNER_DX = evenDown(VI_BANNER_W / 2);
@@ -378,6 +389,8 @@ export function victoryLayout(w: number, h: number, forms: VictoryForms): Victor
     contentBand: band,
     block: { x: band.x, y: a - VI_BLOCK_TOP_DY, w: band.w, h: VI_BLOCK_H },
     banner: { x: cx - VI_BANNER_DX, y: a - VI_BANNER_DY, w: VI_BANNER_W, h: VI_BANNER_H },
+    ribbon: { x: cx - evenDown(VI_RIBBON_W / 2), y: a - VI_BANNER_DY - evenDown((VI_RIBBON_H - VI_BANNER_H) / 2), w: VI_RIBBON_W, h: VI_RIBBON_H },
+    scene: { x: cx - evenDown(VI_SCENE_W / 2), y: a - VI_BANNER_DY - 8 - VI_SCENE_H, w: VI_SCENE_W, h: VI_SCENE_H },
     pose: { x: cx + VI_POSE_DX, y: a - VI_POSE_DY, w: VI_POSE_W, h: VI_POSE_H },
     title: line(cx, a, maxW, VI_TITLE_PX, true),
     stageLine: line(cx, a + VI_STAGE_DY, maxW, VI_STAGE_PX, false),

@@ -25,7 +25,17 @@
             "frame_legendary": 16,
             "frame_hidden": 16,
             "panel_dark_corners": 32,
-            "banner_mid_navy": 12
+            "banner_mid_navy": 12,
+            "hud_card_frame": 8,
+            "btn_gold": 10,
+            "btn_tab": 12,
+            "btn_iron": 12,
+            "chip_eff": 14,
+            "btn_wide": 14,
+            "row_thin": 8,
+            "card_tall": 20,
+            "btn_purple": 10,
+            "btn_blue": 10
         }
     },
     "cardFrame": {
@@ -44,6 +54,10 @@
         "playerSpriteScale": 2.8,
         "minionSpriteScale": 2.4,
         "hiddenAlpha": 0.22,
+        "enemyBobPx": 2,
+        "enemyBobRate": 9,
+        "animWalkFps": 8,
+        "animAttackFps": 10,
         "enemyBarH": 3,
         "enemyBarGap": 8,
         "enemyBarBg": "rgba(0,0,0,0.5)",
@@ -95,7 +109,7 @@
         "xpBarH": 5,
         "bossBarW": 240,
         "bossBarH": 10,
-        "chapterBarW": 170,
+        "chapterBarW": 120,
         "chapterBarH": 6,
         "topRowCenters": [16, 32, 48],
         "barTrack": "rgba(6,8,14,0.8)",
@@ -161,22 +175,55 @@
         "coverAlpha": 0.55,
         "dimColor": "rgba(11,14,20,0.35)"
     },
+    "phase3": {
+        "$comment": "锁定关卡行整行减淡档(0-255):v4 版式里窗景与文字仍要读得出,较默认 140 抬到 200。",
+        "menuRowLockedAlpha": 200,
+        "shopV4": true,
+        "heroesV4": true,
+        "hudV4": true,
+        "gachaV4": true,
+        "restV4": true
+    },
     "menu": {
         "$comment": "主菜单表驱动视图(MenuLayoutView)的表现参数;几何一律由 game/ui/menuLayout.ts 派生,这里只管颜色与字号。",
         "titleColor": "#FFD76A",
         "subColor": "#8F9BB3",
         "noteColor": "#C8C2B1",
         "titlePx": 22,
-        "subPx": 13,
-        "bodyPx": 14,
+        "subPx": 12,
+        "bodyPx": 16,
         "baselineLift": 0.82,
         "rightColumnW": 200,
-        "chipIconH": 15,
+        "chipIconH": 20,
         "fallbackPlate": "rgba(19,24,38,0.92)",
         "fallbackStroke": "rgba(255,255,255,0.14)",
         "highlightAlpha": 180,
         "dotColor": "#FF5A6E",
-        "currentRowPlate": "menu_row_plate_current"
+        "currentRowPlate": "menu_row_plate_current",
+        "chipPixelDigits": false,
+        "chipTextPx": 14,
+        "chipTextColor": "#FFD76A",
+        "endlessPx": 18,
+        "layout": {
+            "$comment": "Cocos 独有的主菜单几何覆盖(直接复刻 v4「深渊铭刻」示意图),合到 game/data/layoutMenu.ts 的表快照之上;Web 冻结基准不读本段。字段名与 MenuLayoutOrigin / MenuLayoutDeco 同名。",
+            "origin": {
+                "entryY": 96, "entryH": 34, "entryGap": 4,
+                "stageHdrY": 132, "sectionH": 16, "hdrBand": 4, "listYNoSection": 152,
+                "rowMinH": 78, "rowMaxH": 78, "rowMaxGap": 20,
+                "endlessGapSet": 8, "endlessGapSet2": 8, "endlessH": 56, "endlessListGap": 8,
+                "setGapY": 32, "setH": 60, "setDescH": 72,
+                "heroBtnW": 120, "heroBtnH": 44,
+                "phantomY": 56, "phantomH": 30, "phantomAnchor": 142
+            },
+            "deco": {
+                "banInset": 16, "banY": 0, "banH": 46, "crestOffX": -2, "crestOffY": 5, "crestW": 36, "crestH": 36,
+                "titleOffX": 42, "titleOffY": 26, "seasonInset": -2, "seasonOffY": 18, "row2OffY": 34,
+                "stripY": 56, "stripH": 30, "chipH": 30, "chipW": 126, "chipGap": 10, "energyW": 0,
+                "chipX1": 16, "chipX2": 16, "chipX3": 16, "chipIconW": 20, "chipSlide": 10, "chipIconGap": 8,
+                "rowC1Off": 8, "rowC2Gap": 23, "rowTxOff": 50, "rowRightInset": 4, "badgeOffX": 18,
+                "heroPadX": 18, "heroPortW": 100, "heroPortH": 100, "heroNameOffY": 42, "heroRow2Gap": 26, "heroRow3Gap": 23
+            }
+        }
     },
     "lab": {
         "$comment": "布局台浮层自身参数:core/ViewTable.ts 装载本段,Web 侧工作台 src/dev/layoutWorkbench.ts 消费。手柄位置永远由 game/dev/labModel.ts 从表算出,这里只定它们画多大、点得到多松。",

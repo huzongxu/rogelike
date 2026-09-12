@@ -36,6 +36,12 @@ export interface ViewTable {
         minionSpriteScale: number;
         /** 隐匿敌人整体透明度(Web globalAlpha 0.22) */
         hiddenAlpha: number;
+        /** 敌人行走起伏:抬升幅度(px,0 = 关)与相位角速度(rad/s,按 speed/72 再乘) */
+        enemyBobPx: number;
+        enemyBobRate: number;
+        /** 序列帧图集的帧率:行走循环 / 攻击三帧(见 game/ui/spriteAnim) */
+        animWalkFps: number;
+        animAttackFps: number;
         /** 敌人头顶血条:高(px)/距头顶(px)/底色/填充色 */
         enemyBarH: number;
         enemyBarGap: number;
@@ -1126,6 +1132,16 @@ export interface Phase3Params {
     menuRowLockedAlpha: number;
     /** 主菜单已通关关卡行不透明度(通关只换常态板,减淡档留给"看得见但不在焦点") */
     menuRowClearedAlpha: number;
+    /** 章间商店走 v4「深渊铭刻」版式(几何 + 皮;见 game/ui/shop.ts:ShopLayoutOpts) */
+    shopV4: boolean;
+    /** 出战英雄屏走 v4「深渊铭刻」版式(顶带 / 行面 / 金框预览行 / 盒内对齐文字) */
+    heroesV4: boolean;
+    /** 战斗 HUD 走 v4「深渊铭刻」:铁框双坞 / 卡框 / 盒内对齐文字 / 方形组合技钮(几何常量不变) */
+    hudV4: boolean;
+    /** 扭蛋机走 v4「深渊铭刻」(几何 opts + 顶带 / 分区 / 铁框行) */
+    gachaV4: boolean;
+    /** 其余屏(通行证 / 每日 / 委托 / 幻影榜 / 体力 / 装备升级 / 融合 / 轮回 / 通关 / 阵亡 / 确认 / 升级三选一)走 v4 文字口径 + 顶带 + 铁框行 */
+    restV4: boolean;
     /** 点回响筹码看一次激励视频入账的回响 */
     echoAdGain: number;
     /** 屏幕尚未接入时的提示条停留时长(秒) */
@@ -1173,6 +1189,11 @@ export interface Phase3Params {
 export const PHASE3_DEFAULTS: Phase3Params = {
     menuRowLockedAlpha: 140,
     menuRowClearedAlpha: 235,
+    shopV4: false,
+    heroesV4: false,
+    hudV4: false,
+    gachaV4: false,
+    restV4: false,
     echoAdGain: 100,
     hintTtl: 1.6,
     hintPx: 13,
@@ -1214,6 +1235,10 @@ export const FALLBACK: ViewTable = {
         playerSpriteScale: 2.8,
         minionSpriteScale: 2.4,
         hiddenAlpha: 0.22,
+        enemyBobPx: 2,
+        enemyBobRate: 9,
+        animWalkFps: 8,
+        animAttackFps: 10,
         enemyBarH: 3,
         enemyBarGap: 8,
         enemyBarBg: "rgba(0,0,0,0.5)",
@@ -1412,7 +1437,20 @@ export function loadViewTable(): Promise<ViewTable> {
                             ? raw.backdrop.dimColor
                             : FALLBACK.backdrop.dimColor,
                 },
-                menu: typedMerge(FALLBACK.menu, raw.menu),
+                menu: (() => {
+                    const m = typedMerge(FALLBACK.menu, raw.menu);
+                    // 嵌套的几何覆盖段:typedMerge 只收标量,这里单独逐字段收数值
+                    const numMap = (src: unknown): Record<string, number> => {
+                        const out: Record<string, number> = {};
+                        if (src && typeof src === "object" && !Array.isArray(src)) {
+                            for (const [k, v] of Object.entries(src as Record<string, unknown>)) if (typeof v === "number" && Number.isFinite(v)) out[k] = v;
+                        }
+                        return out;
+                    };
+                    const lay = raw.menu && (raw.menu as unknown as Record<string, unknown>).layout;
+                    m.layout = { origin: numMap(lay && (lay as Record<string, unknown>).origin), deco: numMap(lay && (lay as Record<string, unknown>).deco) };
+                    return m;
+                })(),
                 phase3: typedMerge(FALLBACK.phase3, raw.phase3),
                 phase4: typedMerge(FALLBACK.phase4, raw.phase4),
                 lab: (() => {

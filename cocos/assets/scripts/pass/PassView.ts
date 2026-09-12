@@ -33,9 +33,11 @@ import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode, setTextOutline } from "../ui/Widgets";
-import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
+import { TB_ICON, TB_TITLE_DX, TB_TITLE_X } from "../game/ui/titleBand";
+import { Plate, fitOne, flatBox, iconNode, placeLine, boxPlace } from "../ui/PanelKit";
 import { PASS_TIERS } from "../game/data/pass";
 import { passProgressRects, type PassLayout, type PsRect, type PsTextLine } from "../game/ui/passLayout";
+import { ROW_ICON_SHIFT, rowIconRect } from "../game/ui/rowIcon";
 import { hitPass, type PassAction, type PassContent, type PassRowContent } from "./PassModel";
 
 /** 贴图键(屏底板那一枚由共享层 `PS_PANEL_KEY` 给出,不在视图里重复一份) */
@@ -74,6 +76,10 @@ class Txt {
       this.lb.color = hexToColor(color);
     }
     bindLabel(this.lb, fitOne(text, maxW, px));
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, x, baseY, maxW, px, align);
+      return;
+    }
     placeLine(this.lb.node, x, baseY, maxW, px, align);
   }
 
@@ -91,6 +97,10 @@ class Txt {
 /** 一个档位行的节点槽:代码底板 + 三段左对齐文本 + 右列状态 + 已领取对勾 */
 interface RowSlot {
   base: ReturnType<typeof flatBox>;
+  /** v4:铁框行板(可领 → 金框) */
+  plate: Plate;
+  /** v5:行左侧档位盾图标(pass_tier_N) */
+  icon: Plate;
   name: Txt;
   free: Txt;
   premium: Txt;
@@ -112,6 +122,10 @@ export class PassView {
 
   private dim: Node;
   private panel: Plate;
+  /** v4:通栏 64 高的顶带(menu_title_plate,随赛季主色铁框),压在面板与横幅之上 */
+  private band: Plate;
+  /** v5:顶带左端的圆徽记(素材表 emblem_a_N) */
+  private bandIcon: Plate;
   private header: ReturnType<typeof iconNode>;
   private title: Txt;
   private echo: Txt;
@@ -138,6 +152,8 @@ export class PassView {
     this.dim = makeNode("Dim", this.root);
     this.dim.addComponent(Graphics);
     this.panel = new Plate("Panel", this.root, frames);
+    this.band = new Plate("BandV4", this.root, frames);
+    this.bandIcon = new Plate("BandIconV5", this.root, frames);
     this.header = iconNode("Header", this.root, frames, ZERO);
     this.title = new Txt("Title", this.root);
     this.echo = new Txt("Echo", this.root);
@@ -175,6 +191,8 @@ export class PassView {
   private makeRowSlot(name: string): RowSlot {
     return {
       base: flatBox(name + "Bg", this.root),
+      plate: new Plate(name + "Plate", this.root, this.frames),
+      icon: new Plate(name + "Icon", this.root, this.frames),
       name: new Txt(name + "Name", this.root),
       free: new Txt(name + "Free", this.root),
       premium: new Txt(name + "Premium", this.root),
@@ -208,6 +226,18 @@ export class PassView {
     if (banner) this.title.set(L.titleOnBanner.x, L.titleOnBanner.baseY, L.titleOnBanner.maxW, L.titleOnBanner.px, c.title, "center", p4.psTitle);
     else this.title.set(L.titleBare.x, L.titleBare.baseY, L.titleBare.maxW, L.titleBare.px, c.title, "left", p4.psTitle);
     setTextOutline(this.title.lb, banner ? p4.bannerTitleOutlineW : 0, HEX.bgDeep);
+    // v4 顶带:通栏 64 高,标题金 16 左起;横幅收起
+    this.band.setActive(p3.restV4);
+    this.bandIcon.setActive(p3.restV4);
+    if (p3.restV4) {
+      this.band.show("menu_title_plate", { x: 0, y: 0, w: DESIGN_W, h: 64 }, "slice", p3.detailBg, p3.detailStroke);
+      this.bandIcon.show("emblem_a_3", TB_ICON, "stretch");
+      this.header.show("");
+      placeRect(this.header.node, ZERO);
+      setTextOutline(this.title.lb, 0, HEX.bgDeep);
+      this.title.bold(true);
+      this.title.set(TB_TITLE_X, 26, L.backBtn.x - 28 - TB_TITLE_DX, 16, c.title, "left", HEX.gold);
+    }
 
     // 回响统计行(Web 单行 body 左对齐)
     this.echo.set(L.echo.x, L.echo.baseY, L.echo.maxW, L.echo.px, c.echoText, "left", p4.psEcho);
@@ -224,7 +254,9 @@ export class PassView {
     this.actPlate.setActive(!prem);
     this.actText.bold(false);
     if (!prem) {
-      this.actPlate.show(L.actPlate.key, L.actRect, "slice", p4.psActFallbackBg, p4.psActFallbackStroke);
+      // v5:激活行换箭头横幅(pass_progress_banner 整图拉伸)
+      if (p3.restV4) this.actPlate.show("pass_progress_banner", L.actRect, "stretch", p4.psActFallbackBg, p4.psActFallbackStroke);
+      else this.actPlate.show(L.actPlate.key, L.actRect, "slice", p4.psActFallbackBg, p4.psActFallbackStroke);
       this.actText.set(L.actBtnText.x, L.actBtnText.baseY, L.actBtnText.maxW, L.actBtnText.px, c.actText, "center", p4.psActText);
     } else {
       this.actText.set(L.actDoneText.x, L.actDoneText.baseY, L.actDoneText.maxW, L.actDoneText.px, c.actText, "left", p4.psActDone);
@@ -241,10 +273,16 @@ export class PassView {
       const slot = this.rowSlots[i];
       if (!rc || !slot) return;
       slot.base.draw(row.rect, rc.claimed ? p4.psRowClaimedBg : p4.psRowBg, rc.unlocked ? p4.psRowStrokeUnlocked : p4.psRowStrokeLocked);
+      slot.plate.setActive(p3.restV4);
+      if (p3.restV4) slot.plate.show(rc.status === "ready" ? "menu_row_plate_current" : "menu_row_plate", row.rect, "slice");
+      // v5:左侧档位盾图标,文字整体右移(几何来自共享层 rowIcon)
+      slot.icon.setActive(p3.restV4);
+      if (p3.restV4) slot.icon.show(`pass_tier_${i + 1}`, rowIconRect(row.rect), "stretch");
+      const dx = p3.restV4 ? ROW_ICON_SHIFT : 0;
       slot.name.bold(true);
-      slot.name.set(row.name.x, row.name.baseY, row.name.maxW, row.name.px, rc.nameText, "left", rc.unlocked ? p4.psRowNameUnlocked : p4.psRowNameLocked);
-      slot.free.set(row.free.x, row.free.baseY, row.free.maxW, row.free.px, rc.freeText, "left", p4.psRowFree);
-      slot.premium.set(row.premium.x, row.premium.baseY, row.premium.maxW, row.premium.px, rc.premiumText, "left", rowPremColor);
+      slot.name.set(row.name.x + dx, row.name.baseY, row.name.maxW - dx, row.name.px, rc.nameText, "left", rc.unlocked ? p4.psRowNameUnlocked : p4.psRowNameLocked);
+      slot.free.set(row.free.x + dx, row.free.baseY, row.free.maxW - dx, row.free.px, rc.freeText, "left", p4.psRowFree);
+      slot.premium.set(row.premium.x + dx, row.premium.baseY, row.premium.maxW - dx, row.premium.px, rc.premiumText, "left", rowPremColor);
       const ready = rc.status === "ready";
       const line = ready ? row.statusBody : row.statusMuted;
       slot.status.bold(ready);

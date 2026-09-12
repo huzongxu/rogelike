@@ -42,6 +42,7 @@
  * 颜色、贴图键这类纯表现项在 `core/ViewTable.ts` 的 `phase4` 段（键前缀 `en`）；本文件只留几何。
  */
 
+import { TB_ICON, TB_TITLE_DX, TB_TITLE_X } from "./titleBand";
 import { evenDown, fs, rowTextY, ui } from "./theme";
 
 /** 页边距 16 / 内容宽 528：右缘恒落 544（`ui.pad` 是 Web 冻结档 14，本屏不再用） */
@@ -89,6 +90,8 @@ export interface EnergyLayout {
   panelNine: number;
   /** 标题横幅盒（`a` 上方 30，220×40；整幅拉伸，没有缺图回退档） */
   banner: EnRect;
+  /** v4 大徽记盒(energy_emblem) */
+  emblem: EnRect;
   /** 「体力不足」 */
   title: EnTextLine;
   /** `体力 N/MAX · 每 X 分钟恢复 1 点` */
@@ -128,6 +131,22 @@ export const EN_BTN_ANCHOR_RATIO = 0.42;
  *  单位:设计 px;依据:与本屏页边距同一把尺,不引入第二个间距事实源;出处:`EN_PAD`) */
 export const EN_BLOCK_INSET = EN_PAD;
 /** 横幅：宽 / 高 / 半宽 / 相对文字锚线的上抬（半宽由宽度推导，不留第二个事实源） */
+/** v4「深渊铭刻」顶带:通栏 64 高(与其它屏同档);标题金 16 左起、限宽到返回钮前 */
+export const EN_V4_BAND: EnRect = { x: 0, y: 0, w: 560, h: 64 };
+export function enV4Title(backX: number): EnTextLine {
+  return { x: TB_TITLE_X, baseY: 26, maxW: backX - 28 - TB_TITLE_DX, px: 16, align: "left", bold: true };
+}
+
+/** v5 顶带徽记盒(与其余七屏同一份共享几何) */
+export const EN_V4_ICON: EnRect = { ...TB_ICON };
+
+/** v4 大徽记(energy_emblem 200×212):居中压在标题之上,底缘与标题横幅顶缘留 8 */
+export const EN_V4_EMBLEM_W = 200;
+export const EN_V4_EMBLEM_H = 212;
+export function enV4Emblem(cx: number, bannerTop: number): EnRect {
+  return { x: cx - evenDown(EN_V4_EMBLEM_W / 2), y: bannerTop - 8 - EN_V4_EMBLEM_H, w: EN_V4_EMBLEM_W, h: EN_V4_EMBLEM_H };
+}
+
 export const EN_BANNER_W = 220;
 export const EN_BANNER_H = 40;
 export const EN_BANNER_DX = evenDown(EN_BANNER_W / 2);
@@ -241,6 +260,7 @@ export function energyLayout(w: number, h: number): EnergyLayout {
     panelKey: "panel_dark_corners",
     panelNine: EN_PANEL_NINE,
     banner: { x: cx - EN_BANNER_DX, y: a - EN_BANNER_DY, w: EN_BANNER_W, h: EN_BANNER_H },
+    emblem: enV4Emblem(cx, a - EN_BANNER_DY),
     title: line(cx, a, maxW, EN_TITLE_PX, true),
     statLine: line(cx, a + EN_STAT_DY, maxW, EN_STAT_PX, false),
     hint: line(cx, a + EN_HINT_DY, maxW, EN_HINT_PX, false),

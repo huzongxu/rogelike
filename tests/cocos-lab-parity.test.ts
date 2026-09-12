@@ -307,7 +307,14 @@ describe("九宫格边距通道", () => {
   it("主菜单表现段的每个数都有默认值(视图不留内联魔法数)", () => {
     for (const [k, v] of Object.entries(MENU_PRESENTATION_DEFAULTS)) {
       expect(v, k).not.toBe(null);
-      expect(typeof v === "number" || typeof v === "string", k).toBe(true);
+      // 标量三型之外只允许 layout 这一段几何覆盖(origin / deco 两张数值表,默认为空)
+      if (k === "layout") {
+        const lay = v as { origin: Record<string, number>; deco: Record<string, number> };
+        expect(Object.keys(lay).sort()).toEqual(["deco", "origin"]);
+        for (const sec of [lay.origin, lay.deco]) for (const n of Object.values(sec)) expect(typeof n).toBe("number");
+        continue;
+      }
+      expect(typeof v === "number" || typeof v === "string" || typeof v === "boolean", k).toBe(true);
     }
   });
 });

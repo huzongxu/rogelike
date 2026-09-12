@@ -7,7 +7,8 @@ import { readSave, writeSave } from "./core/SaveChannel";
 import { showRewardedAd } from "./core/AdChannel";
 import { HEX, UI, bindLabel, hexToColor, label, makeNode, solidRect } from "./ui/Widgets";
 import { ASSET_MANIFEST } from "./game/data/assets";
-import { isPixelArtKey, isPixelNumFrameKey, streamFrameKeys } from "./game/data/pixelArt";
+import { isPixelArtKey, isPixelNumFrameKey, seasonSkinFile, streamFrameKeys } from "./game/data/pixelArt";
+import { seasonThemeIndex } from "./game/data/seasonSets";
 import { neutraliseGlyphHoles } from "./ui/PixelNumber";
 import { applyBalance as applyDaily, DIAMOND_AD_DAILY, DIAMOND_PER_AD } from "./game/data/daily";
 import { applyBalance as applyStages } from "./game/data/stages";
@@ -120,7 +121,8 @@ import {
 } from "./confirm/ConfirmModel";
 import { LevelUpView } from "./levelup/LevelUpView";
 import { LevelUpModel, type LevelUpAction, type LevelUpWorld } from "./levelup/LevelUpModel";
-import { approxW } from "./ui/PanelKit";
+import { Plate, approxW } from "./ui/PanelKit";
+import { HUD_BOT_H, HUD_BOT_H_V4 } from "./game/ui/hud";
 import type { TripleMode } from "./game/data/fusion";
 import type { Equipment } from "./game/data/equipmentGen";
 
@@ -408,6 +410,8 @@ export class GameShell extends Component {
     private seasonSlice: SeasonSaveView = { seasonId: 1, seasonStartAt: 0, stageStars: [], seasonBest: 0, stardust: 0 };
     private overlay: Node | null = null;
     private toastNode: Node | null = null;
+    /** v4「深渊铭刻」:提示条外框(金框行板,透明心压在暗底之上;与 toastNode 同起落) */
+    private toastPlate: Plate | null = null;
     private toastLabel: Label | null = null;
     private toastLeft = 0;
 
@@ -426,6 +430,9 @@ export class GameShell extends Component {
         // 迟到的回调再读 this.frames 就是「null (reading 'set')」。进 Promise 前捕获引用,
         // 销毁后的回调只推进计数、不再写这枚已无人引用的表。
         const sink = this.frames;
+        // 随赛季换色的 chrome:按当前赛季主题选文件,frames 仍以基名登记(视图与切边表只认基名)。
+        // 这批键都在 ready 之后流式加载,那时 sim 已建、存档已读;万一更早到就落主题 0 的基名文件。
+        const themeIdx = this.sim ? seasonThemeIndex(this.sim.save.seasonId) : 0;
         return new Promise((resolve) => {
             if (keys.length === 0) {
                 resolve();
@@ -437,7 +444,7 @@ export class GameShell extends Component {
                 if (pending <= 0) resolve();
             };
             keys.forEach((key) => {
-                resources.load("textures/" + key + "/spriteFrame", SpriteFrame, (err, asset) => {
+                resources.load("textures/" + seasonSkinFile(key, themeIdx) + "/spriteFrame", SpriteFrame, (err, asset) => {
                     if (!err && asset && sink) {
                         const sf = asset as SpriteFrame;
                         // 字形是掩码:先键出封闭字腔里的红族残留,再定采样,否则 tint 相乘出饱和红块
@@ -604,6 +611,7 @@ export class GameShell extends Component {
             save,
             input: this.joystick,
             worldH: wh,
+            bottomDockH: viewTable().phase3.hudV4 ? HUD_BOT_H_V4 : HUD_BOT_H,
             persist: (s) => {
                 writeSave(s);
             },
@@ -828,9 +836,15 @@ export class GameShell extends Component {
             node.addComponent(Graphics);
             const g = node.getComponent(Graphics)!;
             g.fillColor = hexToColor(t.hintBg);
-            g.roundRect(-w / 2, -t.hintH / 2, w, t.hintH, t.hintH / 2);
+            // v4:直角暗底 + 金框行板(圆角胶囊与方框不搭);旧档仍是胶囊
+            if (t.restV4) g.rect(-w / 2, -t.hintH / 2, w, t.hintH);
+            else g.roundRect(-w / 2, -t.hintH / 2, w, t.hintH, t.hintH / 2);
             g.fill();
             placeRect(node, { x: UI.pad, y: t.hintY, w, h: t.hintH });
+            if (t.restV4) {
+                this.toastPlate = new Plate("ToastPlate", this.overlay ?? this.worldLayer, this.frames);
+                this.toastPlate.show("menu_row_plate_current", { x: UI.pad, y: t.hintY, w, h: t.hintH }, "slice");
+            }
             const lb = label("ToastText", node, "", t.hintPx, t.hintFg, {
                 bold: true,
                 hAlign: Label.HorizontalAlign.CENTER,
@@ -843,6 +857,7 @@ export class GameShell extends Component {
         }
         bindLabel(this.toastLabel!, text);
         this.toastNode.active = true;
+        this.toastPlate?.setActive(true);
         this.toastLeft = t.hintTtl;
     }
 
@@ -850,7 +865,10 @@ export class GameShell extends Component {
     private tickToast(dt: number): void {
         if (this.toastLeft <= 0) return;
         this.toastLeft -= dt;
-        if (this.toastLeft <= 0 && this.toastNode && this.toastNode.isValid) this.toastNode.active = false;
+        if (this.toastLeft <= 0 && this.toastNode && this.toastNode.isValid) {
+            this.toastNode.active = false;
+            this.toastPlate?.setActive(false);
+        }
     }
 
     /* ================= 章间商店屏 ================= */
@@ -893,6 +911,7 @@ export class GameShell extends Component {
             mergeGroups: () => sim.world.mergeGroups(),
         };
         this.shopModel = new ShopModel(world);
+        this.shopModel.v4 = viewTable().phase3.shopV4;
         this.shopView = new ShopView(node, this.frames, this.shopModel, worldH(), (a) => this.onShopAction(a));
         this.shopView.sync();
     }
@@ -1124,7 +1143,7 @@ export class GameShell extends Component {
         if (!node) return;
         node.removeAllChildren();
         this.dailyView = new DailyView(node, this.frames, {
-            layout: () => dailyScreenLayout(DESIGN_W, logicalH(), this.dailySave()),
+            layout: () => dailyScreenLayout(DESIGN_W, logicalH(), this.dailySave(), { v4: viewTable().phase3.restV4 }),
             content: () => buildDailyContent(this.dailySave()),
             onAction: (a) => this.onDailyAction(a),
         });
@@ -1218,7 +1237,7 @@ export class GameShell extends Component {
         if (!node) return;
         node.removeAllChildren();
         this.passView = new PassView(node, this.frames, {
-            layout: () => passScreenLayout(DESIGN_W, logicalH()),
+            layout: () => passScreenLayout(DESIGN_W, logicalH(), { v4: viewTable().phase3.restV4 }),
             content: () => buildPassContent(this.passSave()),
             onAction: (a) => this.onPassAction(a),
         });
@@ -1381,7 +1400,7 @@ export class GameShell extends Component {
         if (!node) return;
         node.removeAllChildren();
         this.gachaView = new GachaView(node, this.frames, {
-            layout: () => gachaScreenLayout(DESIGN_W, logicalH(), this.gachaSave().ownedGear.map((g) => g.id), this.gachaResults.length),
+            layout: () => gachaScreenLayout(DESIGN_W, logicalH(), this.gachaSave().ownedGear.map((g) => g.id), this.gachaResults.length, { v4: viewTable().phase3.gachaV4 }),
             content: (L) => buildGachaContent(this.gachaSave(), this.gachaResults, L),
             onAction: (a) => this.onGachaAction(a),
         });

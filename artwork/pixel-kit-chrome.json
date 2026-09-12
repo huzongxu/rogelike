@@ -1,0 +1,595 @@
+{
+  "$comment": "界面 chrome 程序化像素出图规格(scripts/pixel-chrome.mjs)。与 AI 生图批不同,这批贴图由代码逐像素绘制:同名键覆盖、PNG 尺寸与 viewTable.nineSlice.keys 的切边一律不变,视图层零改动。颜色只用 scripts/lib/pixel-draw.mjs 的 33 色名。plate 的 top/bottom/left/right 是从边缘向内逐像素的颜色序列,序列之后一律落到 face;九宫格件的可拉伸带由生成器自检保证行/列恒色。文件名保留 pixel-kit 前缀是为了让 scripts/sync-cocos.mjs 把这批键继续算作 Cocos 独占资产;它不是 pixel-kit.mjs 的输入。",
+  "seasonAccents": {
+    "$comment": "与 cocos/assets/scripts/game/data/seasonSets.ts 的 THEMES 同序:回响苏醒(#7a5cff) / 永冻深渊(#5ac8fa) / 熔火回响(#ff9d2e) / 幽冥潮汐(#9b6cff)。带 seasonAccent 的格子里 A1/A2/A3 = 主色暗/中/亮档;t0 落成基名文件,t1..t3 落成 <key>_t<n>.png,运行时 GameShell.loadFrames 按 seasonThemeIndex 选文件、仍以基名入 frames。",
+    "themes": [
+      [
+        "violet1",
+        "violet2",
+        "violet3"
+      ],
+      [
+        "blue1",
+        "blue2",
+        "blue3"
+      ],
+      [
+        "gold1",
+        "gold2",
+        "gold3"
+      ],
+      [
+        "violet0",
+        "violet1",
+        "violet2"
+      ]
+    ]
+  },
+  "singles": [
+    {
+      "key": "menu_chip_plate",
+      "keys": [
+        "menu_note_plate",
+        "menu_strip_plate",
+        "menu_set_plate"
+      ],
+      "kind": "frame",
+      "tone": "iron",
+      "rivet": "goldDim",
+      "w": 72,
+      "h": 48,
+      "inset": 16,
+      "corner": 2,
+      "face": "navy0"
+    },
+    {
+      "key": "menu_section_strip",
+      "kind": "frame",
+      "tone": "iron",
+      "w": 72,
+      "h": 48,
+      "inset": 16,
+      "corner": 2,
+      "transparent": true
+    },
+    {
+      "key": "menu_set_plate_selected",
+      "keys": [
+        "menu_title_plate"
+      ],
+      "kind": "frame",
+      "tone": "iron",
+      "rivet": "accent",
+      "seasonAccent": true,
+      "w": 72,
+      "h": 48,
+      "inset": 16,
+      "corner": 2,
+      "face": "navy1"
+    },
+    {
+      "key": "btn_danger",
+      "kind": "frame",
+      "tone": "iron",
+      "glow": "red1",
+      "w": 108,
+      "h": 40,
+      "inset": 10,
+      "corner": 2,
+      "face": "red0"
+    },
+    {
+      "key": "hud_dock_top",
+      "kind": "frame",
+      "tone": "iron",
+      "glow": "navy1",
+      "w": 36,
+      "h": 24,
+      "inset": 8,
+      "corner": 0,
+      "face": "deep"
+    },
+    {
+      "key": "hud_dock_bottom",
+      "kind": "frame",
+      "tone": "iron",
+      "glow": "navy1",
+      "w": 36,
+      "h": 24,
+      "inset": 8,
+      "corner": 0,
+      "face": "deep"
+    },
+    {
+      "key": "slot_skill",
+      "kind": "frame",
+      "tone": "iron",
+      "rivet": "goldDim",
+      "glow": "navy0",
+      "w": 48,
+      "h": 48,
+      "inset": 12,
+      "corner": 1,
+      "face": "deep"
+    },
+    {
+      "key": "hud_card_frame",
+      "kind": "frame",
+      "tone": "iron",
+      "rivet": "goldDim",
+      "w": 64,
+      "h": 36,
+      "inset": 8,
+      "corner": 2
+    },
+    {
+      "key": "bar_capsule",
+      "kind": "frame",
+      "tone": "iron",
+      "w": 32,
+      "h": 20,
+      "inset": 8,
+      "corner": 1,
+      "face": "deep"
+    },
+    {
+      "key": "banner_mid_navy",
+      "kind": "plate",
+      "w": 496,
+      "h": 74,
+      "inset": 12,
+      "corner": 0,
+      "chamfer": 7,
+      "face": "blue0",
+      "top": [
+        "ink",
+        "blue3",
+        "blue2",
+        "blue1",
+        "blue1",
+        "blue0",
+        "blue0",
+        "blue1"
+      ],
+      "left": [
+        "ink",
+        "blue2",
+        "blue1",
+        "blue1",
+        "blue0",
+        "blue0",
+        "blue0",
+        "blue1"
+      ],
+      "bottom": [
+        "ink",
+        "blue1",
+        "blue0",
+        "deep",
+        "blue0",
+        "blue0",
+        "blue0",
+        "blue1"
+      ],
+      "right": [
+        "ink",
+        "blue1",
+        "blue0",
+        "deep",
+        "blue0",
+        "blue0",
+        "blue0",
+        "blue1"
+      ]
+    },
+    {
+      "key": "frame_common",
+      "kind": "cardFrame",
+      "w": 138,
+      "h": 208,
+      "inset": 16,
+      "ribbon": [
+        42,
+        67
+      ],
+      "quality": [
+        "steel2",
+        "steel3",
+        "bone0"
+      ]
+    },
+    {
+      "key": "frame_rare",
+      "kind": "cardFrame",
+      "w": 138,
+      "h": 208,
+      "inset": 16,
+      "ribbon": [
+        42,
+        67
+      ],
+      "quality": [
+        "blue1",
+        "blue2",
+        "blue3"
+      ]
+    },
+    {
+      "key": "frame_epic",
+      "kind": "cardFrame",
+      "w": 138,
+      "h": 208,
+      "inset": 16,
+      "ribbon": [
+        42,
+        67
+      ],
+      "quality": [
+        "violet1",
+        "violet2",
+        "violet3"
+      ]
+    },
+    {
+      "key": "frame_legendary",
+      "kind": "cardFrame",
+      "w": 138,
+      "h": 208,
+      "inset": 16,
+      "ribbon": [
+        42,
+        67
+      ],
+      "quality": [
+        "gold1",
+        "gold2",
+        "gold3"
+      ]
+    },
+    {
+      "key": "frame_hidden",
+      "kind": "cardFrame",
+      "w": 138,
+      "h": 208,
+      "inset": 16,
+      "ribbon": [
+        42,
+        67
+      ],
+      "quality": [
+        "teal1",
+        "teal2",
+        "teal3"
+      ]
+    },
+    {
+      "key": "banner_title_gold_b",
+      "kind": "ribbon",
+      "w": 110,
+      "h": 21,
+      "tones": [
+        "gold0",
+        "gold1",
+        "gold2",
+        "gold3"
+      ],
+      "fold": 7
+    },
+    {
+      "key": "banner_title_gold_c",
+      "kind": "ribbon",
+      "w": 122,
+      "h": 21,
+      "tones": [
+        "gold1",
+        "gold2",
+        "gold2",
+        "gold3"
+      ],
+      "fold": 7,
+      "bright": true
+    },
+    {
+      "key": "banner_title_iron",
+      "kind": "ribbon",
+      "w": 169,
+      "h": 21,
+      "tones": [
+        "navy1",
+        "slate1",
+        "steel1",
+        "steel2"
+      ],
+      "fold": 7
+    },
+    {
+      "key": "banner_large_navy_a",
+      "kind": "ribbon",
+      "w": 120,
+      "h": 24,
+      "tones": [
+        "deep",
+        "blue0",
+        "blue1",
+        "blue2"
+      ],
+      "fold": 8
+    },
+    {
+      "key": "banner_large_red",
+      "kind": "ribbon",
+      "w": 120,
+      "h": 24,
+      "tones": [
+        "deep",
+        "red0",
+        "red1",
+        "red2"
+      ],
+      "fold": 8
+    },
+    {
+      "key": "banner_large_purple",
+      "kind": "ribbon",
+      "w": 120,
+      "h": 23,
+      "tones": [
+        "violet0",
+        "violet1",
+        "violet1",
+        "violet2"
+      ],
+      "fold": 8
+    },
+    {
+      "key": "banner_purple_cosmic",
+      "kind": "ribbon",
+      "w": 186,
+      "h": 23,
+      "tones": [
+        "deep",
+        "violet0",
+        "violet1",
+        "violet2"
+      ],
+      "fold": 8,
+      "stars": "violet3"
+    },
+    {
+      "key": "banner_mid_blue",
+      "kind": "ribbon",
+      "w": 161,
+      "h": 20,
+      "tones": [
+        "blue0",
+        "blue1",
+        "blue1",
+        "blue2"
+      ],
+      "fold": 7
+    },
+    {
+      "key": "banner_mid_bronze",
+      "kind": "ribbon",
+      "w": 181,
+      "h": 22,
+      "tones": [
+        "gold0",
+        "gold0",
+        "gold1",
+        "gold2"
+      ],
+      "fold": 7
+    },
+    {
+      "key": "banner_mid_black",
+      "kind": "ribbon",
+      "w": 110,
+      "h": 20,
+      "tones": [
+        "ink",
+        "deep",
+        "navy1",
+        "slate1"
+      ],
+      "fold": 7
+    },
+    {
+      "key": "bar_progress_blue_b",
+      "kind": "bar",
+      "w": 201,
+      "h": 3,
+      "tones": [
+        "blue3",
+        "blue2",
+        "blue1"
+      ]
+    },
+    {
+      "key": "bar_progress_purple",
+      "kind": "bar",
+      "w": 264,
+      "h": 5,
+      "tones": [
+        "violet3",
+        "violet2",
+        "violet2",
+        "violet1",
+        "violet0"
+      ]
+    },
+    {
+      "key": "bar_progress_teal",
+      "kind": "bar",
+      "w": 100,
+      "h": 4,
+      "tones": [
+        "teal3",
+        "teal2",
+        "teal2",
+        "teal1"
+      ]
+    },
+    {
+      "key": "tabs_talent_three",
+      "kind": "tabs",
+      "w": 264,
+      "h": 15,
+      "count": 3,
+      "gap": 3
+    },
+    {
+      "key": "menu_row_medal",
+      "kind": "medal",
+      "tone": "iron",
+      "w": 40,
+      "h": 40
+    },
+    {
+      "key": "menu_row_medal_cur",
+      "kind": "medal",
+      "tone": "gold",
+      "w": 40,
+      "h": 40
+    },
+    {
+      "key": "menu_port_frame",
+      "kind": "frame",
+      "tone": "bone",
+      "glow": "teal1",
+      "w": 100,
+      "h": 100,
+      "corner": 2,
+      "rivet": "goldDim"
+    },
+    {
+      "key": "menu_scene_1",
+      "kind": "sceneCrop",
+      "src": "bg_stage_1",
+      "w": 528,
+      "h": 78,
+      "x0": 16,
+      "y0": 40
+    },
+    {
+      "key": "menu_scene_2",
+      "kind": "sceneCrop",
+      "src": "bg_stage_2",
+      "w": 528,
+      "h": 78,
+      "x0": 16,
+      "y0": 60
+    },
+    {
+      "key": "menu_scene_3",
+      "kind": "sceneCrop",
+      "src": "bg_stage_3",
+      "w": 528,
+      "h": 78,
+      "x0": 16,
+      "y0": 40
+    },
+    {
+      "key": "menu_scene_4",
+      "kind": "sceneCrop",
+      "src": "bg_stage_4",
+      "w": 528,
+      "h": 78,
+      "x0": 16,
+      "y0": 360
+    },
+    {
+      "key": "menu_scene_5",
+      "kind": "sceneCrop",
+      "src": "bg_stage_5",
+      "w": 528,
+      "h": 78,
+      "x0": 16,
+      "y0": 300
+    },
+    {
+      "key": "menu_scene_6",
+      "kind": "sceneCrop",
+      "src": "bg_stage_6",
+      "w": 528,
+      "h": 78,
+      "x0": 16,
+      "y0": 120
+    },
+    {
+      "key": "menu_scene_7",
+      "kind": "sceneCrop",
+      "src": "bg_stage_7",
+      "w": 528,
+      "h": 78,
+      "x0": 16,
+      "y0": 260
+    },
+    {
+      "key": "btn_back",
+      "kind": "bitmap",
+      "w": 11,
+      "h": 11
+    },
+    {
+      "key": "intel_horde",
+      "kind": "bitmap",
+      "w": 12,
+      "h": 12
+    },
+    {
+      "key": "intel_armor",
+      "kind": "bitmap",
+      "w": 12,
+      "h": 12
+    },
+    {
+      "key": "intel_mutant",
+      "kind": "bitmap",
+      "w": 12,
+      "h": 12
+    },
+    {
+      "key": "intel_elite",
+      "kind": "bitmap",
+      "w": 12,
+      "h": 12
+    },
+    {
+      "key": "icon_set_thorn",
+      "kind": "bitmap",
+      "w": 18,
+      "h": 18
+    },
+    {
+      "key": "icon_set_barrage",
+      "kind": "bitmap",
+      "w": 18,
+      "h": 18
+    },
+    {
+      "key": "icon_set_ember",
+      "kind": "bitmap",
+      "w": 18,
+      "h": 18
+    },
+    {
+      "key": "icon_set_frost",
+      "kind": "bitmap",
+      "w": 18,
+      "h": 18
+    },
+    {
+      "key": "icon_set_magma",
+      "kind": "bitmap",
+      "w": 18,
+      "h": 18
+    },
+    {
+      "key": "icon_set_phantom",
+      "kind": "bitmap",
+      "w": 18,
+      "h": 18
+    }
+  ]
+}

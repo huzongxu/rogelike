@@ -1,0 +1,367 @@
+{
+ "$comment": "S1「回响苏醒」AI 重绘批(scripts/pixel-kit.mjs,单图产物):Holopix 等生成器逐只出图并自带去背景导出 → 放进 vibe_images/ 按下方 src 前缀命名(文件名可带时间戳后缀,resolveSrc 取同前缀最新一张)。英雄三人各只出一张全身图:同一张图整框出战斗件 player_<id>(44),再按内容框上部 crop 出半身像 hero_<id>(84,cover 铺满),两枚贴图取自同一幅画、样貌天然一致。怪物 12 只各一张(特性 6 / 精英 4 / 首领 2),art 尺寸 = 基线件尺寸(export=1)。透明底走 keyout=alpha;若生成器导出的是品红平涂底,把该格的 keyout 删掉即回到色键路径(需同时给 keyGlobal/tolerance,见 pixel-kit-units.json 的实测值)。跑法:node scripts/pixel-kit.mjs --config=artwork/pixel-kit-s1-ai.json --out=.probe/px/s1-ai --contact,验过接触表再去掉 --out 落库,并把 artwork/pixel-kit-s1.json 里同键格子打 frozen。prompt 与工作流见 docs/ART-S1-PROMPTS.md。",
+ "module": 2,
+ "export": 1,
+ "keyout": {
+  "color": "#ff00ff",
+  "tolerance": 60,
+  "erode": 1,
+  "keyTolerance": 60
+ },
+ "palette": [
+  "#05070c",
+  "#0b0e14",
+  "#121826",
+  "#1a2233",
+  "#232e44",
+  "#2a3548",
+  "#38465e",
+  "#4a5a76",
+  "#62738f",
+  "#8391a8",
+  "#a9b4c4",
+  "#c8cdd6",
+  "#e8ecf4",
+  "#0e3b36",
+  "#17624f",
+  "#2e9e7f",
+  "#4dffc8",
+  "#0d3f3c",
+  "#17706a",
+  "#26a69a",
+  "#6fe0d4",
+  "#3f4a12",
+  "#6b7a1c",
+  "#a3b833",
+  "#d4e86a",
+  "#1a1030",
+  "#2b1f47",
+  "#4b3a7a",
+  "#7a5cff",
+  "#8a6fd1",
+  "#c8b6ff",
+  "#4a4258",
+  "#7d6b8f",
+  "#b0a0c0",
+  "#4a3410",
+  "#8a6220",
+  "#d9a63c",
+  "#ffd76a",
+  "#3a2216",
+  "#6b4028",
+  "#b06a4a",
+  "#d69a70",
+  "#ff9a70",
+  "#3a1218",
+  "#7a1f2a",
+  "#a8202a",
+  "#c0374a",
+  "#e05040",
+  "#ff2d2d",
+  "#ff5a6e",
+  "#10294a",
+  "#1f4e8a",
+  "#2f7fd1",
+  "#4aa3ff",
+  "#7fd0ff",
+  "#a8e4ff"
+ ],
+ "sheets": [
+  {
+   "$comment": "英雄表(Holopix 全能编辑 V3,2048×1152,三人并排):整框 → 战斗件 44;同一格再按内容框上部 crop → 半身像 84(cover)。布兰生成为朝左,flipX 掰正。",
+   "src": "vibe_images/px_sheet_s1_heroes.png",
+   "grid": {
+    "cols": 3,
+    "rows": 1
+   },
+   "rects": [
+    [
+     20,
+     10,
+     674,
+     1140
+    ],
+    [
+     674,
+     10,
+     1205,
+     1140
+    ],
+    [
+     1205,
+     10,
+     2040,
+     1140
+    ]
+   ],
+   "keyGlobal": true,
+   "cells": [
+    {
+     "key": "player_vera",
+     "art": [
+      44,
+      44
+     ],
+     "wm": false,
+     "flipX": false
+    },
+    {
+     "key": "player_kyle",
+     "art": [
+      44,
+      44
+     ],
+     "wm": false,
+     "flipX": false
+    },
+    {
+     "key": "player_bran",
+     "art": [
+      44,
+      44
+     ],
+     "wm": false,
+     "flipX": true
+    }
+   ]
+  },
+  {
+   "src": "vibe_images/px_sheet_s1_heroes.png",
+   "grid": {
+    "cols": 3,
+    "rows": 1
+   },
+   "rects": [
+    [
+     20,
+     10,
+     674,
+     1140
+    ],
+    [
+     674,
+     10,
+     1205,
+     1140
+    ],
+    [
+     1205,
+     10,
+     2040,
+     1140
+    ]
+   ],
+   "keyGlobal": true,
+   "cells": [
+    {
+     "key": "hero_vera",
+     "art": [
+      84,
+      84
+     ],
+     "fit": "cover",
+     "crop": [
+      0.12,
+      0,
+      0.76,
+      0.4
+     ],
+     "wm": false,
+     "flipX": false
+    },
+    {
+     "key": "hero_kyle",
+     "art": [
+      84,
+      84
+     ],
+     "fit": "cover",
+     "crop": [
+      0.12,
+      0,
+      0.76,
+      0.4
+     ],
+     "wm": false,
+     "flipX": false
+    },
+    {
+     "key": "hero_bran",
+     "art": [
+      84,
+      84
+     ],
+     "fit": "cover",
+     "crop": [
+      0.12,
+      0,
+      0.76,
+      0.4
+     ],
+     "wm": false,
+     "flipX": true
+    }
+   ]
+  },
+  {
+   "$comment": "怪物表 a(特性 6,3×2 等分):裂鸣体 / 消音隐者 / 鸣伤反射者 // 吸声者 / 驻鸣护壁 / 回响之种",
+   "src": "vibe_images/px_sheet_s1_a.png",
+   "grid": {
+    "cols": 3,
+    "rows": 2
+   },
+   "inset": 0.01,
+   "keyGlobal": true,
+   "cells": [
+    {
+     "key": "monster_splitting_tone",
+     "art": [
+      42,
+      42
+     ],
+     "wm": false
+    },
+    {
+     "key": "monster_mute_hider",
+     "art": [
+      32,
+      32
+     ],
+     "wm": false
+    },
+    {
+     "key": "monster_wound_reflector",
+     "art": [
+      36,
+      36
+     ],
+     "wm": false
+    },
+    {
+     "key": "monster_sound_devourer",
+     "art": [
+      42,
+      42
+     ],
+     "wm": false
+    },
+    {
+     "key": "monster_hum_wallguard",
+     "art": [
+      46,
+      46
+     ],
+     "wm": false
+    },
+    {
+     "key": "monster_echo_seed",
+     "art": [
+      46,
+      46
+     ],
+     "wm": false
+    }
+   ]
+  },
+  {
+   "$comment": "怪物表 b(精英 4 + 首领 2,逐格手钉 rects:首领横跨等分线,第一回音的残影延到格左缘):领鸣者 / 深渊传声者 / 万骸指挥 // 第一回音 / 初代回响 / 空谷之主",
+   "src": "vibe_images/px_sheet_s1_b.png",
+   "grid": {
+    "cols": 3,
+    "rows": 2
+   },
+   "keyGlobal": true,
+   "rects": [
+    [
+     120,
+     10,
+     720,
+     535
+    ],
+    [
+     740,
+     10,
+     1200,
+     535
+    ],
+    [
+     1330,
+     10,
+     1880,
+     535
+    ],
+    [
+     40,
+     545,
+     690,
+     1125
+    ],
+    [
+     690,
+     545,
+     1290,
+     1125
+    ],
+    [
+     1290,
+     545,
+     2040,
+     1125
+    ]
+   ],
+   "cells": [
+    {
+     "key": "monster_tone_leader",
+     "art": [
+      88,
+      88
+     ],
+     "wm": false
+    },
+    {
+     "key": "monster_abyss_herald",
+     "art": [
+      88,
+      88
+     ],
+     "wm": false
+    },
+    {
+     "key": "monster_myriad_bone_marshal",
+     "art": [
+      88,
+      88
+     ],
+     "wm": false
+    },
+    {
+     "key": "monster_first_echo",
+     "art": [
+      88,
+      88
+     ],
+     "wm": false,
+     "tolerance": 72,
+     "erode": 1,
+     "$comment": "半透明残影与品红底相融:色键半径 72(再大就吃到本体亮紫),调色板去掉两档亮粉,残影混色量化时落到紫族而不是粉族"
+    },
+    {
+     "key": "monster_primeval_echo",
+     "art": [
+      124,
+      124
+     ],
+     "wm": false
+    },
+    {
+     "key": "monster_empty_valley_lord",
+     "art": [
+      124,
+      124
+     ],
+     "wm": false
+    }
+   ]
+  }
+ ]
+}

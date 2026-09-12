@@ -44,8 +44,10 @@ export interface MenuRowContent {
   desc: string;
   /** 行中部副题(不含右尾列) */
   sub: string;
-  /** 行右尾列:"· N 章 · Boss" 那一段(与 desc 尾部同一字面量,只是换个落位) */
+  /** 行右尾列(右上):"N 章 · Boss" */
   tail: string;
+  /** 行右尾第二行(右下):锁定行 = 解锁条件;已通关行 = "已通关";其余为空 */
+  tail2: string;
   /** 头像徽章资产键(品质框);null = 走代码圆/方块回退 */
   badgeKey: string | null;
   badgeText: string;
@@ -70,11 +72,15 @@ export interface MenuTextContent {
   chips: { iconKey: string; text: string }[];
   phantomText: string;
   sectionText: string;
+  /** 分区行右侧提示("7 关 × 20 章 · 关底深渊领主") */
+  sectionHint: string;
   rows: MenuRowContent[];
   /** 六个场外入口:底板键 + 图标键 + 文案(顺序即列序,同 MENU_ENTRY_IDS) */
   entries: { plateKey: string; iconKey: string; label: string }[];
   endlessText: string;
   heroLines: string[];
+  /** 出战英雄立绘键(`hero_<id>`);未选英雄为 null,像框内留空 */
+  heroPortraitKey: string | null;
   heroBtnText: string;
   /** 出战英雄主色(展示带描边/强调文字);null = 未选出战 */
   accent: string | null;
@@ -247,14 +253,17 @@ export function buildMenuContent(o: MenuContentInput): MenuTextContent {
 
   const rows: MenuRowContent[] = states.map((st) => {
     const stage = stageOf(st.id);
-    const tail = ` · ${stage.chapters} 章${stage.bossChapter ? " · Boss" : ""}`;
-    const sub = st.unlocked ? stage.desc : lockHint(st.id, stage.chapters, save);
+    const tail = `${stage.chapters} 章${stage.bossChapter ? " · Boss" : ""}`;
+    // v4 版式:左列永远是关卡描述,解锁条件挪到右下行;desc 仍是整串(对账口径)
+    const sub = stage.desc;
+    const tail2 = st.unlocked ? (st.cleared ? "已通关" : "") : lockHint(st.id, stage.chapters, save);
     return {
       id: st.id,
       name: `第${st.id}关 · ${stage.name}${st.cleared ? " ✓" : ""}${st.stars > 0 ? ` ${starsGlyphs(st.stars)}` : ""}`,
-      desc: sub + tail,
+      desc: `${sub} · ${tail}${tail2 ? ` · ${tail2}` : ""}`,
       sub,
       tail,
+      tail2,
       badgeKey: `avatar_${frameQualityForStage(st.id)}`,
       badgeText: String(st.id),
       current: o.currentStageId === st.id || (st.unlocked && !st.cleared),
@@ -275,7 +284,8 @@ export function buildMenuContent(o: MenuContentInput): MenuTextContent {
       { iconKey: "icon_stardust", text: String(Math.round(save.stardust)) },
     ],
     phantomText: `幻影榜 · No.${rankAmong(seasonScore(save.stageStars, save.seasonBest), phantomBoard(save.seasonId))}`,
-    sectionText: "主线关卡 · 通关解锁",
+    sectionText: "主线关卡 · 通关解锁下一关",
+    sectionHint: `${o.stageIds.length} 关 × ${CHAPTERS_PER_STAGE} 章 · 关底深渊领主`,
     rows,
     entries: MENU_ENTRY_IDS.map((id, i) => ({
       plateKey: "btn_minor",
@@ -289,6 +299,7 @@ export function buildMenuContent(o: MenuContentInput): MenuTextContent {
       starter ? `初始武器:${starter.name}${mut ? ` · 赛季联动:${mut.name}` : ""}` : "初始武器:随机通用卡池",
     ],
     heroBtnText: hero ? "更换英雄" : "选择英雄",
+    heroPortraitKey: hero ? hero.portraitKey : null,
     accent: hero ? hero.accentColor : null,
     noteLines:
       hero && set && starter

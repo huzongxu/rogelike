@@ -33,8 +33,8 @@ import { Graphics, Label, Node, SpriteFrame, UITransform } from "cc";
 import { DESIGN_W, fullRect, logicalH, placeRect, toDesignSpace } from "../core/DesignMetrics";
 import { viewTable } from "../core/ViewTable";
 import { FS, HEX, bindLabel, hexToColor, label, makeNode } from "../ui/Widgets";
-import { Plate, fitOne, flatBox, iconNode, placeLine } from "../ui/PanelKit";
-import { type EnergyLayout, type EnRect, type EnTextLine } from "../game/ui/energyLayout";
+import { Plate, fitOne, flatBox, iconNode, placeLine, boxPlace } from "../ui/PanelKit";
+import { EN_V4_BAND, EN_V4_ICON, enV4Title, type EnergyLayout, type EnRect, type EnTextLine } from "../game/ui/energyLayout";
 import { hitEnergy, type EnergyAction, type EnergyContent } from "./EnergyModel";
 
 /** 贴图键（与 Web drawEnergy 的 assets.draw / skinButtonBase 实参逐字对应；面板底键在几何层的 `panelKey`） */
@@ -75,6 +75,10 @@ class Txt {
       this.lb.isBold = t.bold;
     }
     bindLabel(this.lb, fitOne(text, t.maxW, t.px));
+    if (viewTable().phase3.restV4) {
+      boxPlace(this.lb, t.x, t.baseY, t.maxW, t.px, t.align);
+      return;
+    }
     placeLine(this.lb.node, t.x, t.baseY, t.maxW, t.px, t.align);
   }
 
@@ -99,7 +103,15 @@ export class EnergyView {
 
   private dim: Node;
   private panel: Plate;
+  /** v4:通栏 64 高的顶带(menu_title_plate,随赛季主色铁框),压在面板与横幅之上 */
+  private band: Plate;
+  /** v5:顶带左端的圆徽记 */
+  private bandIcon: Plate;
   private banner: ReturnType<typeof iconNode>;
+  /** v5:大徽记(energy_emblem) */
+  private emblem: ReturnType<typeof iconNode>;
+  /** v5:关闭钮的金面板(旧档是纯代码矩形) */
+  private closePlate: Plate;
   private title: Txt;
   /** `体力 N/MAX · 每 X 分钟恢复 1 点`（宿主 syncEnergy 后重排即跟着往上跳） */
   private stat: Txt;
@@ -119,7 +131,11 @@ export class EnergyView {
     this.dim.addComponent(Graphics);
     // 节点创建顺序 = Web drawEnergy 的绘制顺序（暗底 → 面板九宫 → 横幅 → 三行文字 → 三枚钮 → 返回钮）
     this.panel = new Plate("Panel", this.root, frames);
+    this.band = new Plate("BandV4", this.root, frames);
+    this.bandIcon = new Plate("BandIconV5", this.root, frames);
     this.banner = iconNode("HeaderBanner", this.root, frames, ZERO);
+    this.emblem = iconNode("Emblem", this.root, frames, ZERO);
+    this.closePlate = new Plate("ClosePlate", this.root, frames);
     this.title = new Txt("Title", this.root);
     this.stat = new Txt("StatLine", this.root);
     this.hint = new Txt("Hint", this.root);
@@ -163,18 +179,36 @@ export class EnergyView {
     placeRect(this.banner.node, banner ? L.banner : ZERO);
 
     this.title.set(L.title, c.title, p4.enTitle);
+    // v4 顶带:通栏 64 高,标题金 16 左起;横幅收起
+    this.band.setActive(p3.restV4);
+    this.bandIcon.setActive(p3.restV4);
+    if (p3.restV4) {
+      this.band.show("menu_title_plate", EN_V4_BAND, "slice", p3.detailBg, p3.detailStroke);
+      this.bandIcon.show("emblem_a_2", EN_V4_ICON, "stretch");
+      this.banner.show("");
+      placeRect(this.banner.node, ZERO);
+      this.title.set(enV4Title(L.backBtn.x), c.title, HEX.gold);
+    }
+    // v5:标题之上的大徽记
+    const emblemOn = p3.restV4 && this.emblem.show("energy_emblem");
+    placeRect(this.emblem.node, emblemOn ? L.emblem : ZERO);
+    if (!p3.restV4) this.emblem.show("");
     this.stat.set(L.statLine, c.statLine, p4.enStat);
     this.hint.set(L.hint, c.hint, p4.enHint);
 
     // 广告钮:可用档才试贴图（Web 的 `canAd && skinButtonBase(...)`,禁档短路成纯代码形状）
-    this.ad.plate.show(c.canAd ? KEY_PRIMARY : "", L.adBtn, "slice", c.canAd ? p4.enAdFallbackBg : p4.enAdOffBg, c.canAd ? p4.enAdFallbackStroke : p4.enAdOffStroke);
+    this.ad.plate.show(c.canAd ? (p3.restV4 ? "btn_purple" : KEY_PRIMARY) : "", L.adBtn, "slice", c.canAd ? p4.enAdFallbackBg : p4.enAdOffBg, c.canAd ? p4.enAdFallbackStroke : p4.enAdOffStroke);
     this.ad.text.set(L.adText, c.adText, c.canAd ? p4.enAdText : p4.enAdTextOff);
 
     // 钻石钮:同一档写法,禁档只看钻石够不够价
-    this.diamond.plate.show(c.canDiamond ? KEY_PRIMARY : "", L.diamondBtn, "slice", c.canDiamond ? p4.enDiamondFallbackBg : p4.enDiamondOffBg, c.canDiamond ? p4.enDiamondFallbackStroke : p4.enDiamondOffStroke);
+    this.diamond.plate.show(c.canDiamond ? (p3.restV4 ? "btn_blue" : KEY_PRIMARY) : "", L.diamondBtn, "slice", c.canDiamond ? p4.enDiamondFallbackBg : p4.enDiamondOffBg, c.canDiamond ? p4.enDiamondFallbackStroke : p4.enDiamondOffStroke);
     this.diamond.text.set(L.diamondText, c.diamondText, c.canDiamond ? p4.enDiamondText : p4.enDiamondTextOff);
 
     // 关闭钮与返回钮:Web 两处都是纯代码矩形,没有贴图档
+    // v5:关闭钮换金面板(btn_gold 九宫格),旧档保留纯代码矩形
+    this.closePlate.setActive(p3.restV4);
+    if (p3.restV4) this.closePlate.show("btn_gold", L.closeBtn, "slice");
+    this.close.base.node.active = !p3.restV4;
     this.close.base.draw(L.closeBtn, p4.enCloseBg, p4.enCloseStroke);
     this.close.text.set(L.closeText, c.closeText, p4.enCloseText);
     this.back.base.draw(L.backBtn, p4.enBackBg, p4.enBackStroke);

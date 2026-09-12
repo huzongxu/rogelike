@@ -24,6 +24,15 @@ import { SHOP_PAD, cardIconSize, cardRibbon } from "../game/ui/shop";
 import type { ShopAction, ShopModel } from "./ShopModel";
 
 /** 坞板缺图回退(与 HudView.dockPlate 同一形态:深色板 + 朝战场一侧的紫色细描边) */
+/** v5 卡面宝箱边长(卡高 ≥200 档的 36 图标 + 28) */
+const SHOP_CHEST_S = 64;
+const ZERO_RECT = { x: 0, y: 0, w: 0, h: 0 };
+/** 品质框键 → 宝箱档:传奇/隐藏金箱、史诗紫箱、其余蓝箱 */
+function shopChestKey(frameKey: string): string {
+  if (/legendary|hidden/.test(frameKey)) return "shop_chest_gold";
+  if (/epic/.test(frameKey)) return "shop_chest_purple";
+  return "shop_chest_blue";
+}
 const DOCK_FILL = "rgba(12,15,24,0.95)";
 const DOCK_STROKE = "rgba(200,182,255,0.28)";
 /** 分区标题条缺图回退描边(Web drawSectionHeader 的金色细边) */
@@ -55,6 +64,32 @@ class Txt {
     bindLabel(this.lb, fitOne(text, maxW, px));
     placeLine(this.lb.node, x, baseY, maxW, px, align);
   }
+  /**
+   * 盒内对齐档(v4):节点 = 盒,Overflow.CLAMP,水平对齐随 align,垂直居中;超宽走 fitOne 截断。
+   * 与 set() 的基线估算不同,这里的文字视觉中线严格对齐盒中线(主菜单 §15.5 同一修法)。
+   */
+  box(r: { x: number; y: number; w: number; h: number }, px: number, text: string, align: "left" | "center" | "right" = "left", color?: string): void {
+    if (this.lastPx !== px) {
+      this.lastPx = px;
+      this.lb.fontSize = px;
+      this.lb.lineHeight = Math.round(px * 1.3);
+    }
+    const key = "box-" + align;
+    if (this.lastAlign !== key) {
+      this.lastAlign = key;
+      this.lb.horizontalAlign = align === "center" ? Label.HorizontalAlign.CENTER : align === "right" ? Label.HorizontalAlign.RIGHT : Label.HorizontalAlign.LEFT;
+    }
+    if (this.lb.overflow !== Label.Overflow.CLAMP) this.lb.overflow = Label.Overflow.CLAMP;
+    // 单行语义:关掉自动换行,否则超宽串会在盒内折成两行再被 CLAMP 裁掉上半截
+    if (this.lb.enableWrapText) this.lb.enableWrapText = false;
+    if (this.lb.verticalAlign !== Label.VerticalAlign.CENTER) this.lb.verticalAlign = Label.VerticalAlign.CENTER;
+    if (color && this.lastColor !== color) {
+      this.lastColor = color;
+      this.lb.color = hexToColor(color);
+    }
+    bindLabel(this.lb, fitOne(text, r.w, px));
+    placeRect(this.lb.node, r);
+  }
   get node(): Node {
     return this.lb.node;
   }
@@ -74,6 +109,8 @@ interface ToolSlot {
 
 interface CardSlot {
   frame: ReturnType<typeof qualityBox>;
+  /** v5:卡面宝箱(shop_chest_gold/purple/blue,按品质框分档;v4 版式下替掉小图标) */
+  chest: ReturnType<typeof iconNode>;
   icon: ReturnType<typeof iconNode>;
   iconChar: Txt;
   name: Txt;
@@ -87,6 +124,11 @@ interface CardSlot {
 }
 
 interface WeaponSlot {
+  /** v4:暗石面 / 品质竖条 / 铁框(选中金框)/ 空槽占位文字 */
+  face: ReturnType<typeof flatBox>;
+  accent: ReturnType<typeof flatBox>;
+  plate: Plate;
+  empty: Txt;
   frame: ReturnType<typeof qualityBox>;
   icon: ReturnType<typeof iconNode>;
   name: Txt;
@@ -96,6 +138,8 @@ interface WeaponSlot {
 }
 
 interface MergeSlot {
+  face: ReturnType<typeof flatBox>;
+  plate: Plate;
   frame: ReturnType<typeof qualityBox>;
   name: Txt;
   fee: Txt;
@@ -103,6 +147,8 @@ interface MergeSlot {
 
 interface HeaderSlot {
   plate: Plate;
+  /** v4:标题行底下的 1px 分隔线(v4 不画板) */
+  line: ReturnType<typeof flatBox>;
   title: Txt;
   right: Txt;
 }
@@ -183,6 +229,7 @@ export class ShopView {
     for (let i = 0; i < 3; i++) {
       this.cards.push({
         frame: qualityBox("CardFrame" + i, this.root, frames),
+        chest: iconNode("CardChest" + i, this.root, frames, ZERO_RECT),
         icon: iconNode("CardIcon" + i, this.root, frames, { x: 0, y: 0, w: 36, h: 36 }),
         iconChar: new Txt("CardIconChar" + i, this.root),
         name: new Txt("CardName" + i, this.root),
@@ -196,9 +243,13 @@ export class ShopView {
       });
     }
     this.slotBtn = { plate: new Plate("SlotBtn", this.root, frames), flat: flatBox("SlotFlat", this.root), text: new Txt("SlotBtnText", this.root) };
-    this.weaponHeader = { plate: new Plate("WeaponHeader", this.root, frames), title: new Txt("WeaponHeaderTitle", this.root), right: new Txt("WeaponHeaderRight", this.root) };
+    this.weaponHeader = { plate: new Plate("WeaponHeader", this.root, frames), line: flatBox("WeaponHeaderLine", this.root), title: new Txt("WeaponHeaderTitle", this.root), right: new Txt("WeaponHeaderRight", this.root) };
     for (let i = 0; i < 8; i++) {
       this.weapons.push({
+        face: flatBox("WeaponFace" + i, this.root),
+        accent: flatBox("WeaponAccent" + i, this.root),
+        plate: new Plate("WeaponPlate" + i, this.root, frames),
+        empty: new Txt("WeaponEmptyRow" + i, this.root),
         frame: qualityBox("WeaponFrame" + i, this.root, frames),
         icon: iconNode("WeaponIcon" + i, this.root, frames, { x: 0, y: 0, w: 24, h: 24 }),
         name: new Txt("WeaponName" + i, this.root),
@@ -208,8 +259,8 @@ export class ShopView {
       });
     }
     this.weaponEmpty = new Txt("WeaponEmpty", this.root);
-    this.mergeHeader = { plate: new Plate("MergeHeader", this.root, frames), title: new Txt("MergeHeaderTitle", this.root), right: new Txt("MergeHeaderRight", this.root) };
-    for (let i = 0; i < 4; i++) this.merges.push({ frame: qualityBox("MergeFrame" + i, this.root, frames), name: new Txt("MergeName" + i, this.root), fee: new Txt("MergeFee" + i, this.root) });
+    this.mergeHeader = { plate: new Plate("MergeHeader", this.root, frames), line: flatBox("MergeHeaderLine", this.root), title: new Txt("MergeHeaderTitle", this.root), right: new Txt("MergeHeaderRight", this.root) };
+    for (let i = 0; i < 4; i++) this.merges.push({ face: flatBox("MergeFace" + i, this.root), plate: new Plate("MergePlate" + i, this.root, frames), frame: qualityBox("MergeFrame" + i, this.root, frames), name: new Txt("MergeName" + i, this.root), fee: new Txt("MergeFee" + i, this.root) });
     this.mergeEmpty = new Txt("MergeEmpty", this.root);
     this.nextIntel = new Txt("NextIntel", this.root);
     this.nextRec = new Txt("NextRec", this.root);
@@ -249,8 +300,10 @@ export class ShopView {
     this.paintBackdrop();
     this.topDock.show("hud_dock_top", { x: 0, y: 0, w: DESIGN_W, h: HUD_TOP_H }, "slice", DOCK_FILL, DOCK_STROKE);
     this.bottomDock.show("hud_dock_bottom", { x: 0, y: L.dockTop, w: DESIGN_W, h: HUD_BOT_H }, "slice", DOCK_FILL, DOCK_STROKE);
+    const v4 = p3.shopV4;
     const zoneY = L.weaponLabelY - 8;
-    this.zone.draw({ x: 8, y: zoneY, w: DESIGN_W - 16, h: L.dockTop - 4 - zoneY }, p3.listZone);
+    this.zone.node.active = !v4;
+    if (!v4) this.zone.draw({ x: 8, y: zoneY, w: DESIGN_W - 16, h: L.dockTop - 4 - zoneY }, p3.listZone);
     /** 底坞贴本帧屏高、内容带吃满富余 → 标定高以下那条平色带不再有落点;
      *  仍按 `this.wh`(战场标定高 996)兜一层:几何少盖一格,这条带立刻补上,不留背景断口。 */
     const covered = Math.max(L.dockTop + HUD_BOT_H, this.wh);
@@ -258,6 +311,37 @@ export class ShopView {
     this.rest.node.active = rest > 0;
     if (rest > 0) this.rest.draw({ x: 0, y: covered, w: DESIGN_W, h: rest }, hud.colors.restZoneFill);
 
+    if (v4) {
+      /* --- v4 顶信息条:首行 标题(金 16)| 金币图标 + 数字(金 16);次行 敌情(12)| 槽位(12) --- */
+      this.title.bold(true);
+      this.title.box({ x: pad, y: 6, w: 240, h: 28 }, 16, c.titleText, "left", HEX.gold);
+      const gw = Math.ceil(approxW(c.goldText, 16)) + 6;
+      this.goldIcon.show("icon_gold");
+      placeRect(this.goldIcon.node, { x: rx - gw - 26, y: 10, w: 20, h: 20 });
+      this.goldText.bold(true);
+      this.goldText.box({ x: rx - gw, y: 6, w: gw, h: 28 }, 16, c.goldText, "right", HEX.gold);
+      const intelOn2 = !!c.intelIconKey && this.intelIcon.show(c.intelIconKey);
+      this.intelIcon.node.active = intelOn2;
+      if (intelOn2) placeRect(this.intelIcon.node, { x: pad, y: 41, w: 12, h: 12 });
+      this.intelText.box({ x: intelOn2 ? pad + 16 : pad, y: 36, w: 340, h: 22 }, FS.micro, c.intelText, "left", HEX.textSecondary);
+      this.slots.box({ x: rx - 120, y: 36, w: 120, h: 22 }, FS.micro, c.slotText, "right", HEX.textSecondary);
+      /* 套组链 / 推荐 / 卡价提示:说明行(卡带与槽位钮之间) */
+      const cy = L.captionY ?? L.slotBtn.y - 20;
+      const setOn2 = !!c.setText;
+      this.setText.active(setOn2);
+      this.setBar.node.active = false;
+      this.bonusText.active(setOn2);
+      this.recText.active(!setOn2);
+      if (setOn2 && c.setText) {
+        this.setText.bold(true);
+        this.setText.box({ x: pad, y: cy, w: 150, h: 16 }, FS.micro, c.setText, "left", c.setColor ?? HEX.echo);
+        const tw2 = Math.min(150, approxW(c.setText, FS.micro));
+        this.bonusText.box({ x: pad + tw2 + 8, y: cy, w: 210, h: 16 }, FS.micro, c.bonusText ?? "", "left", HEX.textSecondary);
+      } else {
+        this.recText.box({ x: pad, y: cy, w: 340, h: 16 }, FS.micro, c.recText, "left", HEX.textSecondary);
+      }
+      this.priceHint.box({ x: rx - 160, y: cy, w: 160, h: 16 }, FS.micro, c.priceHint, "right", HEX.textMuted);
+    } else {
     /* --- 顶信息条:三行基线 19/39/58,与战斗顶坞同骨架 --- */
     this.title.bold(true);
     this.title.set(pad, 19, 160, FS.micro, c.titleText, "left", HEX.gold);
@@ -288,6 +372,7 @@ export class ShopView {
       this.recText.set(pad, 58, 330, FS.micro, c.recText, "left", HEX.textSecondary);
     }
     this.priceHint.set(rx, 58, 160, FS.micro, c.priceHint, "right", HEX.textMuted);
+    }
 
     /* --- 工具钮行:刷新/融合走次级皮(禁态平面),重开/主页走危险皮 --- */
     this.tools.forEach((slot, i) => {
@@ -300,10 +385,12 @@ export class ShopView {
       const danger = v.kind === "danger";
       const skinned = danger || v.enabled;
       slot.flat.node.active = !skinned;
-      if (skinned) slot.plate.show(danger ? "btn_danger" : "btn_minor", b, "slice", p3.buttonDisabledBg, p3.buttonDisabledStroke);
+      if (skinned) slot.plate.show(danger ? "btn_danger" : v4 ? "btn_iron" : "btn_minor", b, "slice", p3.buttonDisabledBg, p3.buttonDisabledStroke);
       else slot.flat.draw(b, p3.buttonDisabledBg, p3.buttonDisabledStroke);
       slot.text.bold(true);
-      slot.text.set(b.x + b.w / 2, b.y + b.h / 2 + FS.body / 3, b.w - 12, FS.body, v.text, "center", danger ? HEX.actionDanger : v.id === "refresh" ? HEX.gold : v.enabled ? HEX.actionPrimary : HEX.textMuted);
+      const toolColor = danger ? HEX.actionDanger : v.id === "refresh" ? HEX.gold : v.enabled ? HEX.actionPrimary : HEX.textMuted;
+      if (v4) slot.text.box(b, FS.body, v.text, "center", toolColor);
+      else slot.text.set(b.x + b.w / 2, b.y + b.h / 2 + FS.body / 3, b.w - 12, FS.body, v.text, "center", toolColor);
     });
 
     /* --- 三张可购卡(买后售罄,刷新才有新货) --- */
@@ -328,11 +415,16 @@ export class ShopView {
       const iconS = cardIconSize(r.h);
       const iconTop = r.y + Math.round((rb.center - iconS / 2) / 2) * 2;
       const iconBottom = iconTop + iconS;
-      const iconOn = !v.soldOut && !!v.iconKey && slot.icon.show(v.iconKey);
+      // v5:v4 版式的卡面是一只宝箱(示意图的三只金/紫/蓝箱),底缘对齐原图标底缘;小图标与首字回退都让位
+      // v6:卡面按槽位取示意图三件道具(水晶球 / 十字 / 魔典),缺图退品质宝箱
+      const chestOn = viewTable().phase3.shopV4 && !v.soldOut && (slot.chest.show(`shop_art_${i + 1}`) || slot.chest.show(shopChestKey(v.frameKey)));
+      slot.chest.node.active = chestOn;
+      if (chestOn) placeRect(slot.chest.node, { x: icx - SHOP_CHEST_S / 2, y: iconBottom - SHOP_CHEST_S, w: SHOP_CHEST_S, h: SHOP_CHEST_S });
+      const iconOn = !chestOn && !v.soldOut && !!v.iconKey && slot.icon.show(v.iconKey);
       slot.icon.node.active = iconOn;
       if (iconOn) placeRect(slot.icon.node, { x: icx - iconS / 2, y: iconTop, w: iconS, h: iconS });
-      slot.iconChar.active(!v.soldOut && !iconOn);
-      if (!v.soldOut && !iconOn) slot.iconChar.set(icx, iconTop + Math.round(iconS / 2) + Math.round(FS.section / 3), 40, FS.section, v.name.slice(0, 1), "center", v.color);
+      slot.iconChar.active(!chestOn && !v.soldOut && !iconOn);
+      if (!chestOn && !v.soldOut && !iconOn) slot.iconChar.set(icx, iconTop + Math.round(iconS / 2) + Math.round(FS.section / 3), 40, FS.section, v.name.slice(0, 1), "center", v.color);
       const sold = v.soldOut;
       slot.name.active(!sold);
       slot.quality.active(!sold);
@@ -369,7 +461,8 @@ export class ShopView {
       if (enabled) this.slotBtn.plate.show("btn_minor", sl, "slice");
       else this.slotBtn.flat.draw(sl, p3.buttonDisabledBg, p3.buttonDisabledStroke);
       this.slotBtn.text.bold(true);
-      this.slotBtn.text.set(sl.x + sl.w / 2, sl.y + sl.h / 2 + FS.muted / 3, sl.w - 16, FS.muted, c.slotBtn.text, "center", enabled ? HEX.actionPrimary : HEX.textMuted);
+      if (v4) this.slotBtn.text.box(sl, FS.muted, c.slotBtn.text, "center", enabled ? HEX.actionPrimary : HEX.textMuted);
+      else this.slotBtn.text.set(sl.x + sl.w / 2, sl.y + sl.h / 2 + FS.muted / 3, sl.w - 16, FS.muted, c.slotBtn.text, "center", enabled ? HEX.actionPrimary : HEX.textMuted);
     }
 
     /* --- 武器管理(≤8 行) --- */
@@ -379,7 +472,17 @@ export class ShopView {
       const v = c.weapons[i];
       /** 八槽固定复用：本槽没有位就把**全部七件**一起收起，否则从多变少时旧行会叠在进化区与空态占位上 */
       const on = !!r && !!v;
-      slot.frame.node.active = on;
+      /* v4:有几何位却没有武器 = 空槽占位行(暗面 + 细描边 + 居中提示),不产热区 */
+      const emptyRow = v4 && !!r && !v;
+      slot.face.node.active = v4 && !!r;
+      slot.accent.node.active = v4 && on;
+      slot.plate.node.active = v4 && on;
+      slot.empty.active(emptyRow);
+      if (emptyRow && r) {
+        slot.face.draw(r, "rgba(11,14,20,0.45)", "#232e44");
+        slot.empty.box(r, FS.micro, "空槽 · 买卡填入", "center", HEX.textMuted);
+      }
+      slot.frame.node.active = on && !v4;
       slot.icon.node.active = on;
       slot.name.active(on);
       slot.sub.active(on);
@@ -388,8 +491,28 @@ export class ShopView {
       slot.destroy.plate.node.active = on;
       slot.destroy.text.active(on);
       if (!r || !v) return;
-      slot.frame.draw(r, v.color);
       const icy = r.y + r.h / 2;
+      const u = L.upgradeRects[i];
+      const d = L.destroyRects[i];
+      if (v4) {
+        /* v4:暗石面 + 铁框(选中 = 金框)+ 左侧品质竖条;名 14 品质色,副标 12 灰;两钮文字盒内居中 */
+        slot.face.draw(r, "rgba(11,14,20,0.78)");
+        slot.plate.show(v.selected ? "menu_row_plate_current" : "menu_row_plate", r, "slice");
+        slot.accent.draw({ x: r.x + 4, y: r.y + 6, w: 4, h: r.h - 12 }, v.color);
+        const iconOn4 = !!v.iconKey && slot.icon.show(v.iconKey);
+        slot.icon.node.active = iconOn4;
+        if (iconOn4) placeRect(slot.icon.node, { x: r.x + 14, y: icy - 12, w: 24, h: 24 });
+        const nx = iconOn4 ? r.x + 46 : r.x + 16;
+        slot.name.bold(true);
+        slot.name.box({ x: nx, y: r.y, w: Math.max(40, r.x + 236 - nx), h: r.h }, FS.body, v.name, "left", v.color);
+        slot.sub.box({ x: r.x + 240, y: r.y, w: Math.max(40, u.x - 6 - (r.x + 240)), h: r.h }, FS.micro, v.sub, "left", HEX.textSecondary);
+        slot.upgrade.plate.show("btn_minor", u, "slice", p3.buttonDisabledBg, p3.buttonDisabledStroke);
+        slot.upgrade.text.box(u, FS.micro, v.upgradeText, "center", v.affordUpgrade ? HEX.actionPrimary : HEX.textMuted);
+        slot.destroy.plate.show("btn_danger", d, "slice", p3.buttonDisabledBg, p3.buttonDisabledStroke);
+        slot.destroy.text.box(d, FS.micro, v.destroyText, "center", HEX.actionDanger);
+        return;
+      }
+      slot.frame.draw(r, v.color);
       const iconOn = !!v.iconKey && slot.icon.show(v.iconKey);
       slot.icon.node.active = iconOn;
       if (iconOn) placeRect(slot.icon.node, { x: r.x + 6, y: icy - 12, w: 24, h: 24 });
@@ -397,14 +520,13 @@ export class ShopView {
       slot.name.set(iconOn ? r.x + 38 : r.x + 10, icy + FS.muted / 3, 200, FS.muted, v.name, "left", v.color);
       /* 副标列宽 106:右缘 368,与强化钮左缘 372 留 4px 缝 */
       slot.sub.set(r.x + 246, icy + FS.micro / 3, 106, FS.micro, v.sub, "left", HEX.textSecondary);
-      const u = L.upgradeRects[i];
       slot.upgrade.plate.show("btn_minor", u, "slice", p3.buttonDisabledBg, p3.buttonDisabledStroke);
       slot.upgrade.text.set(u.x + u.w / 2, u.y + u.h / 2 + FS.micro / 3, u.w - 6, FS.micro, v.upgradeText, "center", v.affordUpgrade ? HEX.actionPrimary : HEX.textMuted);
-      const d = L.destroyRects[i];
       slot.destroy.plate.show("btn_danger", d, "slice", p3.buttonDisabledBg, p3.buttonDisabledStroke);
       slot.destroy.text.set(d.x + d.w / 2, d.y + d.h / 2 + FS.micro / 3, d.w - 6, FS.micro, v.destroyText, "center", HEX.actionDanger);
     });
-    this.weaponEmpty.active(!!c.weaponEmpty);
+    /* v4:0 件时的空态由空槽占位行承担,不再另画一行文字 */
+    this.weaponEmpty.active(!!c.weaponEmpty && !v4);
     if (c.weaponEmpty) {
       const ph = L.weaponRows[0];
       this.weaponEmpty.set(ph.x + ph.w / 2, ph.y + ph.h / 2 + FS.muted / 3, ph.w - 16, FS.muted, c.weaponEmpty, "center", HEX.textSecondary);
@@ -415,10 +537,21 @@ export class ShopView {
     this.merges.forEach((slot, i) => {
       const r = L.merges[i];
       const v = c.merges[i];
-      slot.frame.node.active = !!r && !!v;
-      slot.name.active(!!r && !!v);
-      slot.fee.active(!!r && !!v);
+      const on = !!r && !!v;
+      slot.frame.node.active = on && !v4;
+      slot.face.node.active = v4 && on;
+      slot.plate.node.active = v4 && on;
+      slot.name.active(on);
+      slot.fee.active(on);
       if (!r || !v) return;
+      if (v4) {
+        slot.face.draw(r, "rgba(11,14,20,0.78)");
+        slot.plate.show("menu_row_plate", r, "slice");
+        slot.name.bold(true);
+        slot.name.box({ x: r.x + 16, y: r.y, w: 300, h: r.h }, FS.muted, v.name, "left", v.color);
+        slot.fee.box({ x: r.x + r.w - 176, y: r.y, w: 160, h: r.h }, FS.micro, v.feeText, "right", v.fullSet ? HEX.actionPrimary : HEX.textSecondary);
+        return;
+      }
       slot.frame.draw(r, v.color);
       slot.name.bold(true);
       slot.name.set(r.x + 10, r.y + r.h / 2 + FS.muted / 3, 300, FS.muted, v.name, "left", v.color);
@@ -427,14 +560,28 @@ export class ShopView {
     this.mergeEmpty.active(!!c.mergeEmpty);
     if (c.mergeEmpty) {
       const ph = L.merges[0];
-      this.mergeEmpty.set(ph.x + ph.w / 2, ph.y + ph.h / 2 + FS.muted / 3, ph.w - 16, FS.muted, c.mergeEmpty, "center", HEX.textSecondary);
+      if (v4) {
+        /* v4:空态也是一行占位(暗面 + 细描边),与武器空槽同款 */
+        const es = this.merges[0];
+        es.face.node.active = true;
+        es.face.draw(ph, "rgba(11,14,20,0.45)", "#232e44");
+        this.mergeEmpty.box(ph, FS.micro, c.mergeEmpty, "center", HEX.textMuted);
+      } else this.mergeEmpty.set(ph.x + ph.w / 2, ph.y + ph.h / 2 + FS.muted / 3, ph.w - 16, FS.muted, c.mergeEmpty, "center", HEX.textSecondary);
     }
 
     /* --- 底操作条:左两行下一章预告 / 右开始下一章(整条贴本帧 dockTop) --- */
+    if (v4) {
+      this.nextIntel.box({ x: pad, y: L.dockTop + 4, w: 238, h: 20 }, FS.micro, c.nextIntelText, "left", HEX.textSecondary);
+      this.nextRec.box({ x: pad, y: L.dockTop + 24, w: 238, h: 20 }, FS.micro, c.nextRecText, "left", c.nextRecColor ?? HEX.textMuted);
+      this.nextBtn.plate.show("btn_primary", L.nextBtn, "slice");
+      this.nextBtn.text.bold(true);
+      this.nextBtn.text.box(L.nextBtn, 15, c.nextText, "center", HEX.actionPrimary);
+    } else {
     this.nextIntel.set(pad, L.dockTop + 19, 238, FS.micro, c.nextIntelText, "left", HEX.textSecondary);
     this.nextRec.set(pad, L.dockTop + 37, 238, FS.micro, c.nextRecText, "left", c.nextRecColor ?? HEX.textMuted);
     this.nextBtn.plate.show("btn_primary", L.nextBtn, "slice");
     this.nextBtn.text.set(L.nextBtn.x + L.nextBtn.w / 2, L.nextBtn.y + L.nextBtn.h / 2 + FS.body / 3, L.nextBtn.w - 16, FS.body, c.nextText, "center", HEX.textPrimary);
+    }
   }
 
   /** 套组进度胶囊:暗轨道 + 按比例填充(与 HUD 胶囊条同一形态,只是尺寸走 phase3 表) */
@@ -464,6 +611,18 @@ export class ShopView {
   private sectionHeader(slot: HeaderSlot, y: number, bandH: number, title: string, right: string): void {
     const p3 = viewTable().phase3;
     const bw = DESIGN_W - SHOP_PAD * 2;
+    if (p3.shopV4) {
+      slot.plate.node.active = false;
+      slot.line.node.active = true;
+      slot.line.draw({ x: SHOP_PAD, y: y + bandH - 2, w: bw, h: 1 }, "#38465e");
+      slot.title.bold(true);
+      slot.title.box({ x: SHOP_PAD, y, w: 330, h: bandH - 2 }, FS.muted, title, "left", HEX.gold);
+      slot.right.active(right !== "");
+      if (right !== "") slot.right.box({ x: SHOP_PAD + bw - 200, y, w: 200, h: bandH - 2 }, FS.micro, right, "right", HEX.textSecondary);
+      return;
+    }
+    slot.plate.node.active = true;
+    slot.line.node.active = false;
     const baseY = y + bandH / 2 + FS.muted / 3;
     slot.plate.show("banner_mid_navy", { x: SHOP_PAD, y, w: bw, h: bandH }, "slice", p3.sectionFallbackBg, SECTION_STROKE);
     slot.title.bold(true);

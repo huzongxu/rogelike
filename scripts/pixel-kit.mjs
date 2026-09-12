@@ -4,7 +4,7 @@
  *   node scripts/pixel-kit.mjs [config] [--only=k1,k2] [--out=dir] [--contact] [--dry]
  *
  * 每一步都做确定性处理,同一份配置重跑逐字节一致:
- *   1 按 grid 切格 → 2 从格边洪水填充抠底 → 3 内容 bbox 裁剪
+ *   1 按 grid 切格 → 2 从格边洪水填充抠底(或 keyout="alpha":透明底源图按 alpha 阈值硬化)→ 3 内容 bbox 裁剪(可再按 crop 取子框)
  *   4 最近邻重采样到 art-pixel 网格(1 art px = module 逻辑 px) → 5 量化到统一调色板(可选 Bayer 抖动)
  *   6 alpha 硬化 → 7 九宫格可拉伸带平整 → 8 整数倍放大导出 RGBA PNG
  *
@@ -145,6 +145,17 @@ function keyOut(im, r, bgRgb, tol) {
     for (let x = x0; x < x1; x++) if (gone[(y - y0) * w + (x - x0)]) put(im, x, y, [0, 0, 0, 0]);
   }
   return gone;
+}
+
+/** 透明底键出:alpha < min 的像素置全透明,其余置不透明(生成器去背景导出的软边在此硬化,再交给腐蚀) */
+function alphaKey(im, r, min) {
+  for (let y = r.y0; y < r.y1; y++) {
+    for (let x = r.x0; x < r.x1; x++) {
+      const p = get(im, x, y);
+      if (p[3] < min) put(im, x, y, [0, 0, 0, 0]);
+      else if (p[3] !== 255) put(im, x, y, [p[0], p[1], p[2], 255]);
+    }
+  }
 }
 
 /** 全局键出:不做连通性判断,rect 内所有贴近约定品红的不透明像素直接置透明(治封闭字腔里洪水够不到的品红) */
@@ -433,27 +444,141 @@ function pickKeyColor(im, r, keyRgb) {
   return magentaFamily ? m : keyRgb;
 }
 
+/**
+ * 抹字:`erase = [nx, ny, nw, nh]` 是相对格框的归一化矩形,把它整块填成矩形一圈外沿(1px 环)的众数色。
+ * 用于把生成器烘进按钮 / 横幅里的文案抹掉 —— 文字落在面上,环取到的正是面色;金线与角饰都在环外,
+ * 不受影响。抹字发生在抠底之前、重采样之前,所以缩图后不留任何字形残影。
+ */
+function eraseRect(im, r, nrm) {
+  const w = r.x1 - r.x0, h = r.y1 - r.y0;
+  const x0 = r.x0 + Math.round(w * nrm[0]), y0 = r.y0 + Math.round(h * nrm[1]);
+  const x1 = r.x0 + Math.round(w * (nrm[0] + nrm[2])), y1 = r.y0 + Math.round(h * (nrm[1] + nrm[3]));
+  const bins = new Map();
+  const push = (x, y) => {
+    if (x < r.x0 || y < r.y0 || x >= r.x1 || y >= r.y1) return;
+    const p = get(im, x, y);
+    const k = `${p[0] >> 3},${p[1] >> 3},${p[2] >> 3}`;
+    const hit = bins.get(k);
+    if (hit) { hit.n++; hit.acc[0] += p[0]; hit.acc[1] += p[1]; hit.acc[2] += p[2]; }
+    else bins.set(k, { n: 1, acc: [p[0], p[1], p[2]] });
+  };
+  for (let x = x0 - 1; x <= x1; x++) { push(x, y0 - 1); push(x, y1); }
+  for (let y = y0; y < y1; y++) { push(x0 - 1, y); push(x1, y); }
+  let best = null;
+  for (const v of bins.values()) if (!best || v.n > best.n) best = v;
+  if (!best) return;
+  const c = [Math.round(best.acc[0] / best.n), Math.round(best.acc[1] / best.n), Math.round(best.acc[2] / best.n), 255];
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) put(im, x, y, c);
+}
+
+/**
+ * 透明心:`hole = n` 把 art 盒四边各内缩 n 之内的像素 alpha 清零,只留一圈框。
+ * 给行板用 —— 主界面关卡行框下铺战场窗景、委托行框下铺风景带,框心必须透出去;
+ * 其余屏的行板透心后露出的是面板暗面,与示意图的暗蓝行面同调。n 取框线(金线 + 墨边)的厚度。
+ */
+function clearHole(art, n) {
+  for (let y = n; y < art.h - n; y++) for (let x = n; x < art.w - n; x++) art.rgba[(y * art.w + x) * 4 + 3] = 0;
+}
+
+/**
+ * 向上扩图:`extendTop = n` 在 art 之上再长 n 行,新行 = 顶带两侧天色与 art 顶行(横向盒滤后)按 t³ 渐混
+ * (夜空 / 暗面这类顶部近乎均匀的件用;建筑落在底部,扩出来的是天),量化在扩图之后跑,
+ * 拉伸出的过渡色都会落回色表,不留缝。用于把横幅比例的景填进更高的盒而主体仍贴底居中。
+ */
+function extendTop(art, n, band) {
+  const out = img(art.w, art.h + n);
+  const b = Math.max(1, Math.min(band, art.h));
+  // 天色:顶带两侧各 1/4 宽的像素均值(避开中央的塔尖 / 光柱)
+  const acc = [0, 0, 0];
+  let cnt = 0;
+  for (let y = 0; y < b; y++) for (let x = 0; x < art.w; x++) {
+    if (x >= art.w / 4 && x <= (art.w * 3) / 4) continue;
+    const p = get(art, x, y);
+    acc[0] += p[0]; acc[1] += p[1]; acc[2] += p[2]; cnt++;
+  }
+  const sky = cnt ? acc.map((v) => v / cnt) : [0, 0, 0];
+  // 新行:天色(越靠顶越暗 25%)与 art 顶行按 t² 混合 —— 接缝处 = 顶行原色,往上光柱渐隐进天色,不拉条纹
+  // 顶行先横向 13 格盒滤(窄条不再往上拉成细线),再按 t³ 渐混进天色
+  const R = 6;
+  const tops = [];
+  for (let x = 0; x < art.w; x++) {
+    const a = [0, 0, 0];
+    let m = 0;
+    for (let dx = -R; dx <= R; dx++) {
+      const xx = Math.min(art.w - 1, Math.max(0, x + dx));
+      const p = get(art, xx, 0);
+      a[0] += p[0]; a[1] += p[1]; a[2] += p[2]; m++;
+    }
+    tops.push([a[0] / m, a[1] / m, a[2] / m]);
+  }
+  for (let y = 0; y < n; y++) {
+    const t = (y + 1) / (n + 1);
+    const w = t * t * t;
+    const dark = 0.75 + 0.25 * t;
+    for (let x = 0; x < art.w; x++) {
+      const top = tops[x];
+      put(out, x, y, [
+        Math.round(sky[0] * dark * (1 - w) + top[0] * w),
+        Math.round(sky[1] * dark * (1 - w) + top[1] * w),
+        Math.round(sky[2] * dark * (1 - w) + top[2] * w),
+        255,
+      ]);
+    }
+  }
+  for (let y = 0; y < art.h; y++) for (let x = 0; x < art.w; x++) put(out, x, y + n, get(art, x, y));
+  return out;
+}
+
 function processOne(src, spec, sheetRect) {
   const base = decodePNG(fs.readFileSync(src));
   const r = sheetRect || { x0: 0, y0: 0, x1: base.w, y1: base.h };
   const im = { w: base.w, h: base.h, rgba: Buffer.from(base.rgba) };
   if (spec.wm !== false) inpaintRect(im, r, spec.wm || WM_DEFAULT, spec.wmFill || cfg.wmFill || "row");
-  if (spec.keyout !== false) {
+  if (spec.erase) eraseRect(im, r, spec.erase);
+  if (spec.keyout === "alpha") {
+    // 透明底源图(生成器自带去背景导出):不做色键,按 alpha 阈值硬化后走同一条腐蚀
+    alphaKey(im, r, spec.alphaMin ?? 128);
+    erodeAlpha(im, r, spec.erode ?? KEY_ERODE, spec.legacyErode === true);
+  } else if (spec.keyout !== false) {
     const bg = pickKeyColor(im, r, spec.keyColor ? hexToRgb(spec.keyColor) : KEY_RGB);
     keyOut(im, r, bg, spec.tolerance ?? KEY_TOL);
     if (spec.keyGlobal) keyGlobalOut(im, r, bg, spec.tolerance ?? KEY_TOL);
     erodeAlpha(im, r, spec.erode ?? KEY_ERODE, spec.legacyErode === true);
   }
-  const box = spec.cropBBox === false ? r : alphaBBox(im, r) || r;
+  let box = spec.cropBBox === false ? r : alphaBBox(im, r) || r;
+  /**
+   * `crop = [nx, ny, nw, nh]`:相对内容包围盒的归一化子框。同一张全身图既出战斗小人(整框)
+   * 又出半身像(上部子框),两枚贴图取自同一幅画,样貌天然一致;半身像配 fit=cover 铺满 art 盒。
+   */
+  if (spec.crop) {
+    const bw = box.x1 - box.x0, bh = box.y1 - box.y0;
+    const c = spec.crop;
+    box = {
+      x0: box.x0 + Math.round(bw * c[0]), y0: box.y0 + Math.round(bh * c[1]),
+      x1: box.x0 + Math.round(bw * (c[0] + c[2])), y1: box.y0 + Math.round(bh * (c[1] + c[3])),
+    };
+  }
   const bboxAspect = (box.x1 - box.x0) / (box.y1 - box.y0);
   let [artW, artH] = spec.art || [0, 0];
   if (spec.artH) {
     artH = spec.artH;
     artW = Math.max(2 * (spec.slice || 0) + 8, Math.round(bboxAspect * artH));
   }
-  const { im: art, coverage } = resample(im, box, artW, artH, spec.fit || "contain", spec.fillBox === true);
+  let { im: art, coverage } = resample(im, box, artW, artH, spec.fit || "contain", spec.fillBox === true);
+  if (spec.extendTop) {
+    art = extendTop(art, spec.extendTop, spec.extendBand ?? 48);
+    artH += spec.extendTop;
+  }
   quantize(art, spec.dither !== false);
+  /** `flipX`:水平镜像。基线单位件一律面朝右(引擎按朝向翻转),生成器偶尔给出朝左的角色,在此掰正 */
+  if (spec.flipX) {
+    for (let y = 0; y < art.h; y++) for (let x = 0; x < art.w >> 1; x++) {
+      const a = (y * art.w + x) * 4, b = (y * art.w + (art.w - 1 - x)) * 4;
+      for (let k = 0; k < 4; k++) { const t = art.rgba[a + k]; art.rgba[a + k] = art.rgba[b + k]; art.rgba[b + k] = t; }
+    }
+  }
   if (spec.slice) flattenSlices(art, spec.slice, spec.flatCenter === true);
+  if (spec.hole) clearHole(art, spec.hole);
   return { art, coverage, box, artW, artH, bboxAspect };
 }
 
@@ -467,10 +592,29 @@ for (const sheet of cfg.sheets || []) {
   // 相邻格共用一条外描边这类情形,均匀 grid + inset 对不上格线;用它直接钉格,
   // 免得为一次出图另存派生源件。缺省仍走 grid/inset 等分,既有批次逐字节不变。
   const rects = sheet.rects || null;
+  /**
+   * atlas 模式:`atlas: "anim_xxx"` + `cellArt: [w, h]`,不写 cells —— 网格里每一格都是同一角色的一帧,
+   * 全部按同一 art 盒、不裁内容框(cropBBox=false,否则各帧脚位会跳)处理,最后按 grid 原位拼成一张图集
+   * `<atlas>.png`(宽 = cols×w,高 = rows×h),不落单格文件。布局约定见 game/ui/spriteAnim.ts。
+   */
+  if (sheet.atlas && sheet.cells) {
+    // 显式 cells 的图集:补齐 atlas 缺省(同 art、不裁框、无水印),并允许键名省略
+    sheet.cells = sheet.cells.map((c, i) => ({ key: `${sheet.atlas}__${i}`, art: sheet.cellArt, cropBBox: false, wm: false, ...(sheet.cellSpec || {}), ...c }));
+  }
+  if (sheet.atlas && !sheet.cells) {
+    sheet.cells = Array.from({ length: cols * rows }, (_, i) => ({
+      key: `${sheet.atlas}__${i}`, art: sheet.cellArt, cropBBox: false, wm: false, ...(sheet.cellSpec || {}),
+    }));
+  }
   if (rects && rects.length !== sheet.cells.length) throw new Error(`${sheet.src}: rects 长度须与 cells 等齐(${sheet.cells.length})`);
   sheet.cells.forEach((cell, i) => {
     let rect;
-    if (rects) {
+    /** 逐格另指源图与框(`cell.src` / `cell.rect`):图集的各帧可以来自不同的生成结果(八方向图 + 走路帧图) */
+    const cellSrc = cell.src ? resolveSrc(path.resolve(ROOT, cell.src)) : src;
+    if (cell.rect) {
+      const q = cell.rect;
+      rect = { x0: q[0], y0: q[1], x1: q[2], y1: q[3] };
+    } else if (rects) {
       const q = rects[i];
       rect = { x0: q[0], y0: q[1], x1: q[2], y1: q[3] };
     } else {
@@ -484,7 +628,7 @@ for (const sheet of cfg.sheets || []) {
       };
     }
     const inherit = {};
-    for (const k of ["keyGlobal", "tolerance", "keyColor", "wm"]) if (sheet[k] !== undefined) inherit[k] = sheet[k];
+    for (const k of ["keyGlobal", "tolerance", "keyColor", "wm", "keyout", "alphaMin"]) if (sheet[k] !== undefined) inherit[k] = sheet[k];
     const spec = { ...inherit, ...cell };
     /**
      * `insetPx`：手钉 rects 常把生成器的品红抗锯齿晕一并框进来。晕色（如 #5a0647）离约定品红
@@ -492,7 +636,7 @@ for (const sheet of cfg.sheets || []) {
      */
     const ip = spec.insetPx ?? 0;
     const rect2 = ip ? { x0: rect.x0 + ip, y0: rect.y0 + ip, x1: rect.x1 - ip, y1: rect.y1 - ip } : rect;
-    jobs.push({ key: cell.key, src, spec, rect: rect2 });
+    jobs.push({ key: cell.key, src: cellSrc, spec, rect: rect2, atlas: sheet.atlas ? { key: sheet.atlas, cols, rows, index: i } : null });
   });
 }
 for (const one of cfg.singles || []) {
@@ -505,14 +649,23 @@ for (const one of cfg.singles || []) {
 
 const results = [];
 const warnings = [];
+/** atlas 键 → { cols, rows, parts: index → art } */
+const atlases = new Map();
 fs.mkdirSync(OUT_DIR, { recursive: true });
 for (const job of jobs) {
-  if (ONLY && !ONLY.includes(job.key) && !(job.spec.keys || []).some((k) => ONLY.includes(k))) continue;
+  if (ONLY && !ONLY.includes(job.key) && !(job.spec.keys || []).some((k) => ONLY.includes(k)) && !(job.atlas && ONLY.includes(job.atlas.key))) continue;
   if (job.spec.frozen) {
     console.log(`[frozen] ${job.key} 跳过：源图已冻结/丢失，保留已入库贴图`);
     continue;
   }
   const { art, coverage, bboxAspect, artW, artH } = processOne(job.src, job.spec, job.rect);
+  if (job.atlas) {
+    const a = atlases.get(job.atlas.key) || { cols: job.atlas.cols, rows: job.atlas.rows, parts: new Map() };
+    a.parts.set(job.atlas.index, art);
+    atlases.set(job.atlas.key, a);
+    if (coverage < 0.05) warnings.push(`${job.key}: 覆盖率 ${(coverage * 100).toFixed(1)}% 偏低,该帧疑似空格或被抠底吃掉`);
+    continue;
+  }
   const k = job.spec.export ?? EXPORT;
   const png = encodePNG(art.w * k, art.h * k, k === 1 ? art.rgba : upscale(art, k).rgba);
   const colors = new Set();
@@ -544,6 +697,29 @@ for (const job of jobs) {
     }
     console.log(`  ${names.join("/")}: art ${artW}x${artH} slice=${m} → 逻辑 border=${m * MODULE}px, flatCenter=${!!job.spec.flatCenter}, ${verdict}`);
   }
+}
+
+/* atlas 合成:各格按 grid 原位拼进一张图,格尺寸取该 atlas 的 cellArt(所有格同尺寸);缺帧留透明并告警 */
+for (const [key, a] of atlases) {
+  const any = a.parts.values().next().value;
+  if (!any) continue;
+  const cw = any.w, ch = any.h;
+  const sheet = img(a.cols * cw, a.rows * ch);
+  let missing = 0;
+  for (let i = 0; i < a.cols * a.rows; i++) {
+    const part = a.parts.get(i);
+    if (!part) { missing++; continue; }
+    if (part.w !== cw || part.h !== ch) throw new Error(`${key}: 第 ${i} 格 ${part.w}x${part.h} 与图集格 ${cw}x${ch} 不等`);
+    const ox = (i % a.cols) * cw, oy = ((i / a.cols) | 0) * ch;
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) put(sheet, ox + x, oy + y, get(part, x, y));
+  }
+  if (missing) warnings.push(`${key}: 图集缺 ${missing} 格(ONLY 只选了部分格?),缺格留透明`);
+  const png = encodePNG(sheet.w, sheet.h, sheet.rgba);
+  if (!flagOn("dry")) fs.writeFileSync(path.join(OUT_DIR, `${key}.png`), png);
+  const colors = new Set();
+  for (let i = 0; i < sheet.rgba.length; i += 4) if (sheet.rgba[i + 3]) colors.add(`${sheet.rgba[i]},${sheet.rgba[i + 1]},${sheet.rgba[i + 2]}`);
+  results.push({ key, art: sheet, bytes: png.length, colors: colors.size, coverage: 1 });
+  console.log(`  [atlas] ${key}: ${a.cols}×${a.rows} 格 × ${cw}x${ch} → ${sheet.w}x${sheet.h}`);
 }
 
 if (flagOn("contact") && results.length) {

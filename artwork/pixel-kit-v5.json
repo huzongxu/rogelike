@@ -1,0 +1,1303 @@
+{
+ "$comment": "v5:用户给的示意图素材表(artwork/ref-v5/11-11.png、22-22.png,白底)切件出图。切件坐标来自 scripts/sheet-slice.mjs 的 parts.json;带字的件用 erase(按外框比例圈出的文字区,以圈周众数色填平)抹字后再重采样,九宫格件再 flatCenter 平整中块。调色板 = 背景批 56 档(超集,含火族/苔绿/冰蓝)。出图 export=1(1 贴图像素 = 1 逻辑 px)。",
+ "module": 1,
+ "export": 1,
+ "palette": [
+  "#05070c",
+  "#0b0e14",
+  "#121826",
+  "#1a2233",
+  "#232e44",
+  "#2a3548",
+  "#38465e",
+  "#4a5a76",
+  "#62738f",
+  "#8391a8",
+  "#a9b4c4",
+  "#c8cdd6",
+  "#e8ecf4",
+  "#0e3b36",
+  "#17624f",
+  "#2e9e7f",
+  "#4dffc8",
+  "#0d3f3c",
+  "#17706a",
+  "#26a69a",
+  "#6fe0d4",
+  "#3f4a12",
+  "#6b7a1c",
+  "#a3b833",
+  "#d4e86a",
+  "#2b1f47",
+  "#4b3a7a",
+  "#8a6fd1",
+  "#c8b6ff",
+  "#4a4258",
+  "#7d6b8f",
+  "#b0a0c0",
+  "#4a3410",
+  "#8a6220",
+  "#d9a63c",
+  "#ffd76a",
+  "#3a2216",
+  "#6b4028",
+  "#b06a4a",
+  "#d69a70",
+  "#ff9a70",
+  "#3a1218",
+  "#7a1f2a",
+  "#a8202a",
+  "#c0374a",
+  "#e05040",
+  "#ff2d2d",
+  "#ff5a6e",
+  "#ff2d8f",
+  "#ff8fc0",
+  "#10294a",
+  "#1f4e8a",
+  "#2f7fd1",
+  "#4aa3ff",
+  "#7fd0ff",
+  "#a8e4ff"
+ ],
+ "quant": {
+  "distance": "lab"
+ },
+ "keyout": {
+  "color": "#ffffff",
+  "tolerance": 70,
+  "erode": 1,
+  "keyTolerance": 60
+ },
+ "singles": [
+  {
+   "key": "btn_primary",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1180,
+    21,
+    1513,
+    82
+   ],
+   "art": [
+    166,
+    30
+   ],
+   "wm": false,
+   "slice": 10,
+   "erase": [
+    0.12,
+    0.18,
+    0.76,
+    0.64
+   ],
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1
+  },
+  {
+   "key": "btn_minor",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    24,
+    22,
+    137,
+    72
+   ],
+   "art": [
+    68,
+    30
+   ],
+   "wm": false,
+   "slice": 10,
+   "erase": [
+    0.16,
+    0.18,
+    0.68,
+    0.64
+   ],
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1
+  },
+  {
+   "key": "menu_row_plate",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    24,
+    588,
+    269,
+    642
+   ],
+   "art": [
+    184,
+    40
+   ],
+   "wm": false,
+   "slice": 16,
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1,
+   "hole": 6
+  },
+  {
+   "key": "menu_row_plate_current",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1180,
+    21,
+    1513,
+    82
+   ],
+   "art": [
+    216,
+    40
+   ],
+   "wm": false,
+   "slice": 16,
+   "erase": [
+    0.12,
+    0.18,
+    0.76,
+    0.64
+   ],
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1,
+   "hole": 6
+  },
+  {
+   "key": "panel_dark_corners",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    24,
+    769,
+    254,
+    1007
+   ],
+   "art": [
+    128,
+    132
+   ],
+   "wm": false,
+   "slice": 32,
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1
+  },
+  {
+   "key": "btn_gold",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1229,
+    111,
+    1431,
+    165
+   ],
+   "art": [
+    112,
+    30
+   ],
+   "wm": false,
+   "slice": 10,
+   "erase": [
+    0.12,
+    0.18,
+    0.76,
+    0.64
+   ],
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1
+  },
+  {
+   "key": "btn_purple",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1456,
+    109,
+    1714,
+    165
+   ],
+   "art": [
+    138,
+    30
+   ],
+   "wm": false,
+   "slice": 10,
+   "erase": [
+    0.08,
+    0.18,
+    0.84,
+    0.64
+   ],
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1
+  },
+  {
+   "key": "btn_blue",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1760,
+    109,
+    2030,
+    163
+   ],
+   "art": [
+    140,
+    30
+   ],
+   "wm": false,
+   "slice": 10,
+   "erase": [
+    0.08,
+    0.18,
+    0.84,
+    0.64
+   ],
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "flatCenter": true,
+   "erode": 1
+  },
+  {
+   "key": "pass_progress_banner",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    24,
+    101,
+    545,
+    163
+   ],
+   "art": [
+    480,
+    58
+   ],
+   "wm": false,
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "erase": [
+    0.15,
+    0.18,
+    0.7,
+    0.64
+   ],
+   "erode": 1
+  },
+  {
+   "key": "ribbon_dark",
+   "src": "artwork/ref-v5/22-22.png",
+   "rect": [
+    207,
+    26,
+    446,
+    88
+   ],
+   "art": [
+    240,
+    48
+   ],
+   "wm": false,
+   "fit": "stretch",
+   "fillBox": true,
+   "cropBBox": false,
+   "erase": [
+    0.26,
+    0.18,
+    0.48,
+    0.64
+   ],
+   "erode": 1
+  },
+  {
+   "key": "pass_tier_1",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    26,
+    297,
+    98,
+    371
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "pass_tier_2",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    134,
+    298,
+    206,
+    371
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "pass_tier_3",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    243,
+    299,
+    313,
+    371
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "pass_tier_4",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    349,
+    298,
+    421,
+    371
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "pass_tier_5",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    458,
+    299,
+    527,
+    371
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "daily_box_wood",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    762,
+    300,
+    833,
+    366
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "daily_box_silver",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    659,
+    298,
+    730,
+    365
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "daily_box_gold",
+   "src": "artwork/ref-v5/22-22.png",
+   "rect": [
+    1522,
+    474,
+    1666,
+    604
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "daily_talent_1",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    315,
+    401,
+    378,
+    467
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "daily_talent_2",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    411,
+    401,
+    474,
+    467
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "daily_talent_3",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    508,
+    401,
+    571,
+    467
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "comm_region_1",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    864,
+    295,
+    935,
+    366
+   ],
+   "art": [
+    44,
+    44
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "comm_region_2",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    954,
+    296,
+    1023,
+    364
+   ],
+   "art": [
+    44,
+    44
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "comm_region_3",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1045,
+    296,
+    1114,
+    364
+   ],
+   "art": [
+    44,
+    44
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "comm_region_4",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1138,
+    296,
+    1206,
+    364
+   ],
+   "art": [
+    44,
+    44
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "comm_region_5",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1233,
+    296,
+    1302,
+    364
+   ],
+   "art": [
+    44,
+    44
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "comm_region_6",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1326,
+    296,
+    1395,
+    364
+   ],
+   "art": [
+    44,
+    44
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "rank_medal_1",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    31,
+    506,
+    79,
+    553
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "rank_medal_2",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    164,
+    506,
+    212,
+    553
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "rank_medal_3",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    294,
+    506,
+    342,
+    552
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "rank_medal_4",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    424,
+    505,
+    472,
+    552
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "rank_medal_5",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    554,
+    505,
+    602,
+    552
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "rank_medal_6",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    686,
+    505,
+    734,
+    552
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "rank_medal_7",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    819,
+    505,
+    867,
+    552
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "rank_medal_8",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    949,
+    505,
+    997,
+    552
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "rank_medal_9",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1080,
+    505,
+    1128,
+    552
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "rank_medal_10",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1213,
+    505,
+    1261,
+    552
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "rank_medal_11",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1351,
+    505,
+    1399,
+    552
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "energy_emblem",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1452,
+    192,
+    1687,
+    442
+   ],
+   "art": [
+    200,
+    212
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "victory_scene",
+   "src": "artwork/ref-v5/22-22.png",
+   "rect": [
+    960,
+    49,
+    1304,
+    309
+   ],
+   "art": [
+    400,
+    302
+   ],
+   "wm": false,
+   "fit": "cover",
+   "fillBox": true,
+   "cropBBox": false,
+   "keyout": false
+  },
+  {
+   "key": "gameover_scene",
+   "src": "artwork/ref-v5/22-22.png",
+   "rect": [
+    1353,
+    49,
+    1673,
+    308
+   ],
+   "art": [
+    380,
+    308
+   ],
+   "wm": false,
+   "fit": "cover",
+   "fillBox": true,
+   "cropBBox": false,
+   "keyout": false
+  },
+  {
+   "key": "entry_quests",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    58,
+    207,
+    104,
+    255
+   ],
+   "art": [
+    32,
+    32
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "entry_gacha",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    287,
+    207,
+    333,
+    255
+   ],
+   "art": [
+    32,
+    32
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "entry_talents",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    524,
+    206,
+    570,
+    255
+   ],
+   "art": [
+    32,
+    32
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "entry_pass",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    757,
+    207,
+    803,
+    255
+   ],
+   "art": [
+    32,
+    32
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "entry_forge",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1010,
+    207,
+    1056,
+    255
+   ],
+   "art": [
+    32,
+    32
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "entry_gearup",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    1236,
+    207,
+    1282,
+    255
+   ],
+   "art": [
+    32,
+    32
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "emblem_common",
+   "src": "artwork/ref-v5/22-22.png",
+   "rect": [
+    1199,
+    493,
+    1279,
+    573
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "emblem_rare",
+   "src": "artwork/ref-v5/22-22.png",
+   "rect": [
+    293,
+    495,
+    375,
+    576
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "emblem_epic",
+   "src": "artwork/ref-v5/22-22.png",
+   "rect": [
+    394,
+    495,
+    475,
+    575
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "emblem_legendary",
+   "src": "artwork/ref-v5/22-22.png",
+   "rect": [
+    1096,
+    494,
+    1178,
+    575
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "emblem_hidden",
+   "src": "artwork/ref-v5/22-22.png",
+   "rect": [
+    490,
+    495,
+    571,
+    575
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "wm": false,
+   "fit": "contain",
+   "erode": 1
+  },
+  {
+   "key": "daily_potion",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    574,
+    297,
+    622,
+    364
+   ],
+   "art": [
+    40,
+    40
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "emblem_a_1",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    24,
+    401,
+    87,
+    467
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "emblem_a_2",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    121,
+    401,
+    184,
+    467
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "emblem_a_3",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    218,
+    401,
+    281,
+    467
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "emblem_a_4",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    315,
+    401,
+    378,
+    467
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "emblem_a_5",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    411,
+    401,
+    474,
+    467
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "emblem_a_6",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    508,
+    401,
+    571,
+    467
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "emblem_a_7",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    606,
+    401,
+    669,
+    467
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "emblem_a_8",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    701,
+    401,
+    763,
+    466
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "emblem_a_9",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    796,
+    401,
+    857,
+    466
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "emblem_a_10",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    891,
+    401,
+    951,
+    466
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "emblem_a_11",
+   "src": "artwork/ref-v5/11-11.png",
+   "rect": [
+    980,
+    401,
+    1039,
+    465
+   ],
+   "art": [
+    36,
+    36
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "shop_chest_gold",
+   "src": "artwork/ref-v5/22-22.png",
+   "rect": [
+    1522,
+    474,
+    1666,
+    604
+   ],
+   "art": [
+    64,
+    64
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "shop_chest_purple",
+   "src": "artwork/ref-v5/22-22.png",
+   "rect": [
+    1690,
+    474,
+    1836,
+    605
+   ],
+   "art": [
+    64,
+    64
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  },
+  {
+   "key": "shop_chest_blue",
+   "src": "artwork/ref-v5/22-22.png",
+   "rect": [
+    1860,
+    472,
+    2010,
+    605
+   ],
+   "art": [
+    64,
+    64
+   ],
+   "fit": "contain",
+   "erode": 1,
+   "wm": false
+  }
+ ]
+}

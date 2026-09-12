@@ -71,16 +71,39 @@ class Txt {
       this.lb.fontSize = px;
       this.lb.lineHeight = Math.round(px * 1.25);
     }
-    if (this.lastAlign !== align) {
-      this.lastAlign = align;
-      this.lb.horizontalAlign = align === "center" ? Label.HorizontalAlign.CENTER : align === "right" ? Label.HorizontalAlign.RIGHT : Label.HorizontalAlign.LEFT;
-    }
+    this.hAlign(align);
     if (color && this.lastColor !== color) {
       this.lastColor = color;
       this.lb.color = hexToColor(color);
     }
     bindLabel(this.lb, fitOne(text, maxW, px));
     placeLine(this.lb.node, x, baseY, maxW, px, align);
+  }
+
+  /** 水平对齐的唯一写入点(set / box 共用) */
+  private hAlign(align: "left" | "center" | "right"): void {
+    if (this.lastAlign === align) return;
+    this.lastAlign = align;
+    this.lb.horizontalAlign = align === "center" ? Label.HorizontalAlign.CENTER : align === "right" ? Label.HorizontalAlign.RIGHT : Label.HorizontalAlign.LEFT;
+  }
+
+  /** 盒内对齐档(v4):节点 = 盒,CLAMP,水平随 align、垂直居中;文字中线严格对齐盒中线(与商店 / 英雄屏同一修法) */
+  box(r: GcRect, px: number, text: string, align: "left" | "center" | "right" = "left", color?: string): void {
+    if (this.lastPx !== px) {
+      this.lastPx = px;
+      this.lb.fontSize = px;
+    }
+    this.lb.lineHeight = Math.round(px * 1.3);
+    this.hAlign(align);
+    if (this.lb.overflow !== Label.Overflow.CLAMP) this.lb.overflow = Label.Overflow.CLAMP;
+    if (this.lb.enableWrapText) this.lb.enableWrapText = false;
+    if (this.lb.verticalAlign !== Label.VerticalAlign.CENTER) this.lb.verticalAlign = Label.VerticalAlign.CENTER;
+    if (color && this.lastColor !== color) {
+      this.lastColor = color;
+      this.lb.color = hexToColor(color);
+    }
+    bindLabel(this.lb, fitOne(text, r.w, px));
+    placeRect(this.lb.node, r);
   }
 
   get node(): Node {
@@ -112,6 +135,8 @@ interface RecentSlot {
 /** 收藏行的一件:纯代码底板 + 名字 + `Lv.` 段 + 「带入中」 */
 interface RowSlot {
   base: ReturnType<typeof flatBox>;
+  /** v4:铁框行板(选中 → 金框),压在暗面 base 之上 */
+  plate: Plate;
   name: Txt;
   level: Txt;
   badge: Txt;
@@ -152,6 +177,9 @@ export class GachaView {
   private collLabel: Txt;
   private collBonus: Txt;
   private collEmpty: Txt;
+  /** v4:顶带板 + 三条分区发丝线(保底 / 最近抽取 / 收藏) */
+  private band: Plate;
+  private lines: ReturnType<typeof flatBox>[] = [];
   /** 收藏行的父节点:建在 Capture 之前,于是行池增建永不会排到热区之后 */
   private rowsNode: Node;
   private rowSlots: RowSlot[] = [];
@@ -187,6 +215,9 @@ export class GachaView {
     this.collLabel = new Txt("CollLabel", this.root);
     this.collBonus = new Txt("CollBonus", this.root);
     this.collEmpty = new Txt("CollEmpty", this.root);
+    this.band = new Plate("BandV4", this.root, frames);
+    this.band.node.setSiblingIndex(3); // 压在暗底与面板之后、横幅之前
+    for (let i = 0; i < 3; i++) this.lines.push(flatBox("SectionLine" + i, this.root));
 
     this.rowsNode = makeNode("Rows", this.root);
     this.capture = makeNode("Capture", this.root);
@@ -222,6 +253,12 @@ export class GachaView {
     const p4 = viewTable().phase4;
     const L = this.hooks.layout();
     const c = this.hooks.content(L);
+    if (p3.gachaV4) {
+      this.syncV4(L, c);
+      return;
+    }
+    this.band.node.active = false;
+    for (const ln of this.lines) ln.node.active = false;
 
     // 覆盖底(整屏) + 面板底:几何层给的是九屏通用的 `panel_dark_corners`,外框与融合 / 委托 /
     // 体力 / 转生同一张蓝黑板。描边环是压在矩形边线**上**的(strokeRing 外扩半个线宽),所以
@@ -316,6 +353,130 @@ export class GachaView {
     }
   }
 
+  /**
+   * v4「深渊铭刻」:顶带(menu_title_plate 通栏 64)承标题 / 券数 / 返回钮;三枚钮与换券条铁框;
+   * 保底两行(标签 + 8 高条);最近抽取与收藏各一条分区标题(金字 + 发丝线);收藏行 = 暗面 + 铁框(选中金框)。
+   * 文字全部走 Txt.box(盒内对齐)。几何来自 gachaLayoutV4,命中与绘制同源。
+   */
+  private syncV4(L: GachaLayout, c: GachaContent): void {
+    const p3 = viewTable().phase3;
+    const p4 = viewTable().phase4;
+    const pad = 16;
+    const rx = DESIGN_W - pad;
+    this.paintDim(p4.gcDim);
+    this.panel.node.active = false;
+    this.panelBase.node.active = false;
+
+    /* 顶带 */
+    this.band.node.active = true;
+    this.band.show("menu_title_plate", L.headerBanner, "slice", p4.gcPanelFallbackBg, p3.detailStroke);
+    this.banner.show("");
+    placeRect(this.banner.node, ZERO);
+    this.title.bold(true);
+    setTextOutline(this.title.lb, 0, HEX.bgDeep);
+    this.title.box({ x: pad, y: 6, w: L.titleWithBanner.maxW, h: 28 }, 16, c.title, "left", p4.gcTitle);
+    const ticketIcon = this.ticketIcon.show(KEY_TICKET_ICON);
+    placeRect(this.ticketIcon.node, ticketIcon ? L.ticketIcon : ZERO);
+    this.ticketText.bold(true);
+    this.ticketText.box({ x: ticketIcon ? pad + 26 : pad, y: 36, w: 240, h: 22 }, FS.body, ticketIcon ? c.ticketText : `${p4.gcTicketGlyph} ${c.ticketText}`, "left", p4.gcTicketText);
+    this.back.base.draw(L.backBtn, p4.gcBackBg, p4.gcBackStroke);
+    const backIcon = this.back.icon.show(KEY_BACK);
+    placeRect(this.back.icon.node, backIcon ? L.backIcon : ZERO);
+    this.back.text.bold(true);
+    const bx0 = backIcon ? L.backIcon.x + L.backIcon.w : L.backBtn.x;
+    this.back.text.box({ x: bx0, y: L.backBtn.y, w: L.backBtn.x + L.backBtn.w - bx0, h: L.backBtn.h }, FS.muted, c.backText, "center", p4.gcBackText);
+
+    /* 三枚钮 + 换券条 */
+    this.single.base.show(c.canSingle ? KEY_SINGLE : "", L.singleBtn, "slice", c.canSingle ? p4.gcSingleBg : p4.gcBtnDisabledBg, c.canSingle ? p4.gcSingleStroke : p4.gcBtnDisabledStroke);
+    this.single.text.bold(true);
+    this.single.text.box(L.singleBtn, FS.body, c.singleText, "center", c.canSingle ? p4.gcSingleText : p4.gcBtnTextDisabled);
+    this.ten.base.show(c.canTen ? KEY_PRIMARY : "", L.tenBtn, "slice", c.canTen ? p4.gcTenBg : p4.gcBtnDisabledBg, c.canTen ? p4.gcTenStroke : p4.gcBtnDisabledStroke);
+    this.ten.text.bold(true);
+    this.ten.text.box(L.tenBtn, FS.body, c.tenText, "center", c.canTen ? p4.gcTenText : p4.gcBtnTextDisabled);
+    this.ad.base.show(c.canAd ? KEY_PRIMARY : "", L.adBtn, "slice", c.canAd ? p4.gcAdBg : p4.gcBtnDisabledBg, c.canAd ? p4.gcAdStroke : p4.gcPanelDisabledStroke);
+    this.ad.text.bold(true);
+    this.ad.text.box(L.adBtn, FS.body, c.adText, "center", c.canAd ? p4.gcAdText : p4.gcBtnTextDisabled);
+    this.swap.base.draw(L.ticketBtn, c.canTicket ? "rgba(11,14,20,0.78)" : p4.gcBtnDisabledBg, c.canTicket ? "#38465e" : p4.gcPanelDisabledStroke);
+    this.swap.text.bold(false);
+    this.swap.text.box(L.ticketBtn, FS.muted, c.swapText, "center", c.canTicket ? p4.gcSwapText : p4.gcBtnTextDisabled);
+
+    /* 保底两行:标签盒与条同中线 */
+    const eb = L.pityEpicBar;
+    const lb = L.pityLegendBar;
+    this.pityEpicLabel.bold(false);
+    this.pityEpicLabel.box({ x: pad, y: eb.y + eb.h / 2 - 11, w: eb.x - pad - 8, h: 22 }, FS.micro, c.pityEpicText, "left", p4.gcPityLabel);
+    this.pityLegendLabel.bold(false);
+    this.pityLegendLabel.box({ x: pad, y: lb.y + lb.h / 2 - 11, w: lb.x - pad - 8, h: 22 }, FS.micro, c.pityLegendText, "left", p4.gcPityLabel);
+    this.paintBar(this.pityEpicBar, eb, c.pityEpicFrac, p4.gcBarFillEpic);
+    this.paintBar(this.pityLegendBar, lb, c.pityLegendFrac, p4.gcBarFillLegend);
+
+    /* 最近抽取:分区标题 + 发丝线 + 行 */
+    const resHeadY = L.resLabel.baseY - 16;
+    this.resLabel.bold(true);
+    this.resLabel.box({ x: pad, y: resHeadY, w: 300, h: 22 }, FS.muted, c.recentLabel, "left", HEX.gold);
+    this.lines[0].node.active = true;
+    this.lines[0].draw({ x: pad, y: resHeadY + 22, w: rx - pad, h: 1 }, "#38465e");
+    for (let i = 0; i < this.recentSlots.length; i++) {
+      const slot = this.recentSlots[i];
+      const line = L.resRows[i];
+      const rc = c.recent[i];
+      if (!line || !rc) {
+        slot.name.active(false);
+        slot.dup.active(false);
+        continue;
+      }
+      const ry = line.name.baseY - L.resLineH + 6;
+      slot.name.active(true);
+      slot.name.bold(false);
+      slot.name.box({ x: line.name.x, y: ry, w: line.name.maxW, h: L.resLineH }, FS.muted, rc.name, "left", rc.color);
+      slot.dup.active(!!rc.dupText);
+      if (rc.dupText) {
+        slot.dup.bold(false);
+        slot.dup.box({ x: rx - line.dup.maxW, y: ry, w: line.dup.maxW, h: L.resLineH }, FS.micro, rc.dupText, "right", p4.gcDupText);
+      }
+    }
+
+    /* 收藏:分区标题(左标题 / 右加成)+ 发丝线 + 空态 / 行 */
+    const collHeadY = L.collLabel.baseY - 16;
+    this.collLabel.bold(true);
+    this.collLabel.box({ x: pad, y: collHeadY, w: 300, h: 22 }, FS.muted, c.collLabel, "left", HEX.gold);
+    this.collBonus.bold(false);
+    this.collBonus.box({ x: rx - 220, y: collHeadY, w: 220, h: 22 }, FS.micro, c.bonusText, "right", HEX.actionPrimary);
+    this.lines[1].node.active = true;
+    this.lines[1].draw({ x: pad, y: collHeadY + 22, w: rx - pad, h: 1 }, "#38465e");
+    this.lines[2].node.active = false;
+    this.collEmpty.active(L.empty);
+    if (L.empty) this.collEmpty.box({ x: pad, y: L.rowsTop, w: rx - pad, h: 52 }, FS.muted, c.emptyText, "center", HEX.textMuted);
+    this.ensureRows(L.rows.length);
+    for (let i = 0; i < this.rowSlots.length; i++) {
+      const slot = this.rowSlots[i];
+      const row = L.rows[i];
+      const rc = c.rows[i];
+      if (!row || !rc) this.hideRow(slot);
+      else this.paintRowV4(slot, row, rc);
+    }
+  }
+
+  /** v4 收藏行:暗面 + 铁框(选中金框)+ 名(品质色 13)/ Lv 段(灰 12)/ 「带入中」(翠 12) */
+  private paintRowV4(slot: RowSlot, row: GachaRowLayout, rc: { id: number; name: string; color: string; levelText: string; selected: boolean }): void {
+    const r = row.rect;
+    slot.base.node.active = true;
+    slot.base.draw(r, "rgba(11,14,20,0.78)");
+    slot.plate.node.active = true;
+    slot.plate.show(rc.selected ? "menu_row_plate_current" : viewTable().phase3.gachaV4 ? "row_thin" : "menu_row_plate", r, "slice");
+    slot.name.active(true);
+    slot.name.bold(true);
+    slot.name.box({ x: row.name.x, y: r.y, w: row.name.maxW, h: r.h }, FS.muted, rc.name, "left", rc.color);
+    slot.level.active(true);
+    slot.level.bold(false);
+    slot.level.box({ x: row.level.x, y: r.y, w: row.level.maxW, h: r.h }, FS.micro, rc.levelText, "left", HEX.textSecondary);
+    slot.badge.active(rc.selected);
+    if (rc.selected) {
+      slot.badge.bold(true);
+      slot.badge.box({ x: row.badge.x - row.badge.maxW, y: r.y, w: row.badge.maxW, h: r.h }, FS.micro, "带入中", "right", HEX.actionPrimary);
+    }
+  }
+
   /** 一枚钮文的两个色档(Web 的 enabled / #5a6a80 两档) */
   private paintBtnText(t: Txt, line: { x: number; baseY: number; maxW: number; px: number }, text: string, on: boolean, onColor: string, offColor: string): void {
     t.bold(true);
@@ -343,6 +504,7 @@ export class GachaView {
   private paintRow(slot: RowSlot, row: GachaRowLayout, rc: { id: number; name: string; color: string; levelText: string; selected: boolean }): void {
     const p4 = viewTable().phase4;
     slot.base.node.active = true;
+    slot.plate.node.active = false;
     slot.base.draw(row.rect, rc.selected ? p4.gcRowSelFill : p4.gcRowFill, rc.selected ? p4.gcRowSelStroke : p4.gcRowStroke);
     slot.name.active(true);
     slot.name.bold(false);
@@ -360,6 +522,7 @@ export class GachaView {
   /** 收起一行(反查落空的那一行,与件数少于池长的空槽) */
   private hideRow(slot: RowSlot): void {
     slot.base.node.active = false;
+    slot.plate.node.active = false;
     slot.name.active(false);
     slot.level.active(false);
     slot.badge.active(false);
@@ -371,6 +534,7 @@ export class GachaView {
       const i = this.rowSlots.length;
       this.rowSlots.push({
         base: flatBox("Gear" + i + "Base", this.rowsNode),
+        plate: new Plate("Gear" + i + "Plate", this.rowsNode, this.frames),
         name: new Txt("Gear" + i + "Name", this.rowsNode),
         level: new Txt("Gear" + i + "Level", this.rowsNode),
         badge: new Txt("Gear" + i + "Badge", this.rowsNode),

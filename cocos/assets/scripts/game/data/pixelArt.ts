@@ -45,6 +45,13 @@ const NINE_SLICE_KEYS: readonly string[] = [
   /* 图标批(artwork/pixel-kit-icons.json):危险钮与当前行底板,art 边 8 + export=2 */
   "btn_danger",
   "menu_row_plate_current",
+  /* 战斗 HUD v4(artwork/pixel-kit-chrome.json):底坞装备卡的铁框,art 边 8,透明心压在暗面上 */
+  "hud_card_frame",
+  /* v5 素材表(artwork/pixel-kit-v5.json):体力屏三钮 —— 金面 / 紫面 / 蓝面,art 边 10 */
+  "btn_gold",
+  "btn_tab", "btn_iron", "chip_eff", "btn_wide", "row_thin", "card_tall",
+  "btn_purple",
+  "btn_blue",
 ];
 
 /** 主菜单入口图标 */
@@ -200,6 +207,24 @@ const PLAYER_KEYS: readonly string[] = ["player", "player_pose_1", "player_pose_
 const UNIT_KEYS: readonly string[] = [...ENEMY_KEYS, ...PLAYER_KEYS];
 
 /**
+ * S1「回响苏醒」赛季怪 30 枚 + S1 三英雄战斗件(artwork/pixel-kit-s1.json,scripts/pixel-variants.mjs 派生):
+ * 由基线 enemy_<kind> / player 做 OKLCH 色相重映射 + 回响主题贴花得到,export=1、尺寸与基线件逐键相等,
+ * 战斗里随半径缩放,同样必须最近邻。渲染链 monster_<variantId> → enemy_<kind> 已就位,这批把 S1 的 30 个键填满。
+ */
+export const S1_MONSTER_KEYS: readonly string[] = [
+  "monster_echo_walker", "monster_resonance_body", "monster_hollow_hum", "monster_whisper_rot",
+  "monster_tremor_body", "monster_echo_shell", "monster_after_tone", "monster_first_awake",
+  "monster_vibrant_cadaver", "monster_afterimage_echo", "monster_harmonics_ghost", "monster_rapid_hum", "monster_echo_lurker",
+  "monster_resonant_carapace", "monster_reverb_rockmail", "monster_huming_shieldwalker", "monster_echo_giantshell", "monster_standing_wave_hulk",
+  "monster_splitting_tone", "monster_mute_hider", "monster_wound_reflector", "monster_sound_devourer", "monster_hum_wallguard", "monster_echo_seed",
+  "monster_tone_leader", "monster_abyss_herald", "monster_myriad_bone_marshal", "monster_first_echo",
+  "monster_primeval_echo", "monster_empty_valley_lord",
+];
+
+/** 出战英雄的战斗件 player_<heroId>(S1 三人;缺图回退通用 player) */
+export const PLAYER_HERO_KEYS: readonly string[] = ["player_vera", "player_kyle", "player_bran"];
+
+/**
  * 特效批(artwork/pixel-kit-fx.json)的贴花与弹道:export=2 把 art 网格按 2× 烘进 PNG,
  * 满张绘制盒恰好等于 PNG 尺寸(1 贴图像素 = 1 逻辑 px)。绘制盒随特效生命周期伸缩
  * (nova 从 0 涨到 200、爆炸反向收缩),缩放是设计意图,但采样档仍必须是最近邻。
@@ -217,8 +242,40 @@ const FX_KEYS: readonly string[] = [
 export const BATTLE_FIRST_PAINT_KEYS: readonly string[] = [
   ...PXNUM_KEYS,
   ...ENEMY_KEYS,
+  ...S1_MONSTER_KEYS,
   "player",
+  ...PLAYER_HERO_KEYS,
   ...FX_KEYS,
+];
+
+/**
+ * 主菜单 v4「深渊铭刻」新增件(artwork/pixel-kit-chrome.json):关卡行窗景(各关战场背景裁条,528×76,
+ * SIMPLE 拉伸铺满行框)、行序号勋章两档、英雄像框。都是 SIMPLE 件,贴图像素 = 逻辑 px。
+ */
+const MENU_V4_KEYS: readonly string[] = [
+  "menu_row_medal", "menu_row_medal_cur", "menu_port_frame",
+  "menu_scene_1", "menu_scene_2", "menu_scene_3", "menu_scene_4", "menu_scene_5", "menu_scene_6", "menu_scene_7",
+];
+
+/**
+ * v5 素材表(artwork/pixel-kit-v5.json,用户给的示意图素材切件):行图标 / 勋章 / 立绘 / 横幅,
+ * 全部 SIMPLE、export=1。chrome 覆盖件(btn_primary 等)沿用原键,不在此重复登记。
+ */
+/** v6:第二批示意图素材表(artwork/pixel-kit-v6.json)的整图件;切边件已在 NINE_SLICE_KEYS */
+const V6_KEYS: readonly string[] = [
+  "lv_emblem_1", "lv_emblem_2", "lv_emblem_3", "shop_art_1", "shop_art_2", "shop_art_3", "scene_menu_top", "scene_castle", "scene_castle_strip",
+];
+
+const V5_KEYS: readonly string[] = [
+  "pass_progress_banner", "ribbon_dark", "pass_tier_1", "pass_tier_2", "pass_tier_3", "pass_tier_4",
+  "pass_tier_5", "daily_box_wood", "daily_box_silver", "daily_box_gold", "daily_talent_1", "daily_talent_2",
+  "daily_talent_3", "comm_region_1", "comm_region_2", "comm_region_3", "comm_region_4", "comm_region_5",
+  "comm_region_6", "rank_medal_1", "rank_medal_2", "rank_medal_3", "rank_medal_4", "rank_medal_5",
+  "rank_medal_6", "rank_medal_7", "rank_medal_8", "rank_medal_9", "rank_medal_10", "rank_medal_11",
+  "energy_emblem", "victory_scene", "gameover_scene", "emblem_common", "emblem_rare", "emblem_epic",
+  "emblem_legendary", "emblem_hidden", "daily_potion", "emblem_a_1", "emblem_a_2", "emblem_a_3",
+  "emblem_a_4", "emblem_a_5", "emblem_a_6", "emblem_a_7", "emblem_a_8", "emblem_a_9",
+  "emblem_a_10", "emblem_a_11", "shop_chest_gold", "shop_chest_purple", "shop_chest_blue",
 ];
 
 export const PIXEL_ART_KEYS: readonly string[] = [
@@ -234,7 +291,12 @@ export const PIXEL_ART_KEYS: readonly string[] = [
   ...HERO_KEYS,
   ...ICON_KEYS,
   ...UNIT_KEYS,
+  ...S1_MONSTER_KEYS,
+  ...PLAYER_HERO_KEYS,
   ...FX_KEYS,
+  ...MENU_V4_KEYS,
+  ...V5_KEYS,
+  ...V6_KEYS,
 ];
 
 /**
@@ -284,4 +346,17 @@ export function isPixelNumFrameKey(key: string): boolean {
 export function isPixelNumText(text: string): boolean {
   // Array.from 而非 [...text]:构建把字符串展开 downlevel 成 [].concat(text),整串会变单元素
   return text.length > 0 && Array.from(text).every((ch) => pixelNumKey(ch) !== "");
+}
+
+/**
+ * 随赛季主题换色的 chrome 键(artwork/pixel-kit-chrome.json 里带 `seasonAccent` 的格子):
+ * 主题 0 用基名文件,主题 n≥1 用 `<key>_t<n>.png`。frames 里始终以**基名**登记,视图与
+ * viewTable.nineSlice.keys 都只认基名;文件名的选择只发生在 `GameShell.loadFrames()` 那一处。
+ * 主题下标 = `seasonThemeIndex(seasonId)`(game/data/seasonSets.ts),与主题表同序循环。
+ */
+export const SEASON_ACCENT_KEYS: readonly string[] = ["menu_title_plate", "menu_set_plate_selected"];
+
+export function seasonSkinFile(key: string, themeIndex: number): string {
+  if (themeIndex <= 0 || SEASON_ACCENT_KEYS.indexOf(key) < 0) return key;
+  return `${key}_t${Math.floor(themeIndex)}`;
 }
