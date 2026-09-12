@@ -636,7 +636,8 @@ for (const sheet of cfg.sheets || []) {
      */
     const ip = spec.insetPx ?? 0;
     const rect2 = ip ? { x0: rect.x0 + ip, y0: rect.y0 + ip, x1: rect.x1 - ip, y1: rect.y1 - ip } : rect;
-    jobs.push({ key: cell.key, src: cellSrc, spec, rect: rect2, atlas: sheet.atlas ? { key: sheet.atlas, cols, rows, index: i } : null });
+    // atlasCols / atlasRows:图集输出布局(缺省 = 源网格);技能特效分镜出的是 3×2 板,引擎要的是 1×6 帧带
+    jobs.push({ key: cell.key, src: cellSrc, spec, rect: rect2, atlas: sheet.atlas ? { key: sheet.atlas, cols: sheet.atlasCols ?? cols, rows: sheet.atlasRows ?? rows, index: i } : null });
   });
 }
 for (const one of cfg.singles || []) {

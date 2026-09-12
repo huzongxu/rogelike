@@ -70,6 +70,25 @@ plain solid background, no ground, no shadow, no text, no watermark, silhouette 
 | monster_primeval_echo | 初代回响 | `(boss, fill the frame) a hulking demon whose body is a network of glowing violet sound sacs linked by light veins, one master sac on the chest, sound-wave arcs around it` |
 | monster_empty_valley_lord | 空谷之主 | `(boss, fill the frame) an abyss behemoth with a wide flat maw spanning its whole head, pitch-black inside, curved horns on both sides` |
 
+## 六、S1 英雄八方向序列帧 + 攻击帧 + 技能特效帧动画(2026-09-12 已落地,三英雄)
+
+**布局约定**(`cocos/assets/scripts/game/ui/spriteAnim.ts`):单位图集 `anim_player_<hero>` = 5 行朝向 S / SE / E / NE / N × 7 列(行走 4 + 攻击 3),每格 44;朝西四向靠水平镜像东侧行。技能帧带 `anim_fx_<type>` = 1 行 × 6 列。渲染在 `battle/BattleWorldView.ts`:玩家按本帧位移方向选行(世界坐标 y 向下为正,与摇杆 / WASD 同向)、移动播行走 4 帧、静止停首帧并保持朝向;**玩家不播攻击帧**(技能自动施放,出手不该改写走位朝向;攻击 3 列现与站姿同源占位,留给日后手动技能);敌人按 facing 选行、接触冷却被重置时播攻击 3 帧;一次性特效按生命周期进度选帧,毒池 / 召唤阵按 elapsed 循环;缺图集一律回退单帧。
+
+**朝向核对(2026-09-12 二轮)**:生成器的八方向图**左右并不对称**,不能按「环形布局」推朝向,必须逐格实看(脸朝哪边、武器指哪边、背面看近侧是哪只手臂):薇拉中右 / 下右是 W / NW 不是 E / NE;凯尔上排四个全是正面、下排 1/3/4 才是背面;布兰上左是 SW 不是 SE。首版按环形假设选格,E / NE 行拿到了朝左的图,再被引擎按 E 不翻转、W 翻转 → 玩家往右走面朝左、往左走面朝右,即「朝向与操作相反」。修正后每位英雄的五格在 `artwork/pixel-kit-anim-s1.json` 的 `$comment` 里逐格写明。
+
+**Holopix 素材链(每位英雄)**:
+1. 「八方向行走模板图」(角色模板,35 算力):输入角色正面图 → 2400×1792 白底八朝向图。布局不稳定:薇拉 / 布兰第二版是 3-2-3 环形(上正面 / 中侧面 / 下背面),凯尔是 4-2-4(上背面 / 中侧面 / 下正面),布兰第一版没出背面 → 用「自定义动作」写明 top row must be the BACK views 重出。逐格用 `scripts/anim-cells.mjs` 探包围盒,再手钉 S/SE/E/NE/N 五个格。
+2. 「八方向行走动画」(视频模板,MiniMax H3 首尾帧,270 算力):首帧 = 尾帧 = 同一张八方向图 → 5 s 768P 视频里 8 个朝向原地行走。
+3. 「转序列帧」(25 算力,固定 8 fps):43 帧 1024×768,直链 `genai.holopix.cn/<日期>/Holopix<ts>-<hash>_000NN_.png`。行走 4 帧按东向格的自相似周期取(薇拉 17 帧 → f10/f14/f18/f23,凯尔 / 布兰 14 帧 → f07/f11/f14/f18、f08/f12/f15/f19),各帧用同一组固定框(视频格 = 八方向图框 × 1024/2400)。
+4. 攻击:「八方向行走模板图」+ 自定义动作(35 算力)出八朝向攻击姿势,攻击 3 列 = 站姿(蓄力)+ 攻击姿势 ×2。
+5. 「动作帧生成器」(角色图 + 动作模板 → 关键帧)试过一次:侧面走路 10 帧里 5 帧是灰色人偶,不可用,弃。
+
+**技能特效**:「技能特效分镜」(通用模板,35 算力,全能编辑 V3,6 镜 = 3×2 黑底分镜板;输入参考图必填,用页内 canvas 画的色块草图即可)。已出 nova / explosion / lightning(chain)/ shield / heal(drain)/ poison / summon 七种,规格 `artwork/pixel-kit-anim-fx.json`(色键黑 + keyGlobal,`atlasCols: 6, atlasRows: 1` 把 3×2 板重排成帧带)。
+
+**产线新能力**(`scripts/pixel-kit.mjs`):`atlas` / `cellArt` / `cellSpec`(网格 → 图集)、逐格 `src` / `rect`(一个图集多来源)、`atlasCols` / `atlasRows`(输出布局 ≠ 源网格)、`flipX`、白底色键;守卫 `tests/pixel-kit-atlas.test.ts`、`tests/spriteAnim.test.ts`。
+
+**本轮算力账**:1685 → 约 270(英雄 3 × (35 + 270 + 25 + 35) + 布兰重出 35 + 凯尔重复一张 35 + 技能 7 × 35 + 动作帧试验 35)。
+
 ## 五、落库步骤
 
 1. 图放进 `vibe_images/` 后先跑到暂存目录看接触表:

@@ -1,0 +1,203 @@
+{
+ "$comment": "S1 技能特效帧带(scripts/pixel-kit.mjs atlas 模式;引擎按 game/ui/spriteAnim.FX_FRAMES=6 的 1 行 × 6 列帧带取帧,键 anim_fx_<Fx.type>)。素材来自 Holopix「技能特效分镜」模板(全能编辑 V3,2K 16:9,6 镜 = 3×2 分镜板,黑底),每张 35 算力;色键黑 + keyGlobal 把黑底与暗部一起抠掉,特效本就是加色发光体。格尺寸对齐既有单帧贴花(fx_nova 200)。",
+ "module": 2,
+ "export": 1,
+ "keyout": {
+  "color": "#000000",
+  "tolerance": 70,
+  "erode": 0
+ },
+ "palette": [
+  "#05070c",
+  "#0b0e14",
+  "#121826",
+  "#1a2233",
+  "#232e44",
+  "#2a3548",
+  "#38465e",
+  "#4a5a76",
+  "#62738f",
+  "#8391a8",
+  "#a9b4c4",
+  "#c8cdd6",
+  "#e8ecf4",
+  "#0e3b36",
+  "#17624f",
+  "#2e9e7f",
+  "#4dffc8",
+  "#0d3f3c",
+  "#17706a",
+  "#26a69a",
+  "#6fe0d4",
+  "#3f4a12",
+  "#6b7a1c",
+  "#a3b833",
+  "#d4e86a",
+  "#1a1030",
+  "#2b1f47",
+  "#4b3a7a",
+  "#7a5cff",
+  "#8a6fd1",
+  "#c8b6ff",
+  "#4a4258",
+  "#7d6b8f",
+  "#b0a0c0",
+  "#4a3410",
+  "#8a6220",
+  "#d9a63c",
+  "#ffd76a",
+  "#3a2216",
+  "#6b4028",
+  "#b06a4a",
+  "#d69a70",
+  "#ff9a70",
+  "#3a1218",
+  "#7a1f2a",
+  "#a8202a",
+  "#c0374a",
+  "#e05040",
+  "#ff2d2d",
+  "#ff5a6e",
+  "#10294a",
+  "#1f4e8a",
+  "#2f7fd1",
+  "#4aa3ff",
+  "#7fd0ff",
+  "#a8e4ff"
+ ],
+ "sheets": [
+  {
+   "$comment": "火焰新星(Fx.type=nova):3×2 分镜 → 1×6 帧带",
+   "src": "vibe_images/fx/nova_sb.png",
+   "atlas": "anim_fx_nova",
+   "atlasCols": 6,
+   "atlasRows": 1,
+   "grid": {
+    "cols": 3,
+    "rows": 2
+   },
+   "inset": 0.02,
+   "cellArt": [
+    100,
+    100
+   ],
+   "keyColor": "#000000",
+   "tolerance": 70,
+   "keyGlobal": true
+  },
+  {
+   "$comment": "爆炸(Fx.type=explosion,单帧件 fx_blast 200)",
+   "src": "vibe_images/fx/blast_sb.png",
+   "atlas": "anim_fx_explosion",
+   "atlasCols": 6,
+   "atlasRows": 1,
+   "grid": {
+    "cols": 3,
+    "rows": 2
+   },
+   "inset": 0.02,
+   "cellArt": [
+    100,
+    100
+   ],
+   "keyColor": "#000000",
+   "tolerance": 70,
+   "keyGlobal": true
+  },
+  {
+   "$comment": "闪电链(Fx.type=lightning,单帧件 fx_chain 68)",
+   "src": "vibe_images/fx/chain_sb.png",
+   "atlas": "anim_fx_lightning",
+   "atlasCols": 6,
+   "atlasRows": 1,
+   "grid": {
+    "cols": 3,
+    "rows": 2
+   },
+   "inset": 0.02,
+   "cellArt": [
+    68,
+    68
+   ],
+   "keyColor": "#000000",
+   "tolerance": 70,
+   "keyGlobal": true
+  },
+  {
+   "$comment": "护盾(Fx.type=shield,单帧件 fx_shield 44;帧带取 64 留细节)",
+   "src": "vibe_images/fx/shield_sb.png",
+   "atlas": "anim_fx_shield",
+   "atlasCols": 6,
+   "atlasRows": 1,
+   "grid": {
+    "cols": 3,
+    "rows": 2
+   },
+   "inset": 0.02,
+   "cellArt": [
+    64,
+    64
+   ],
+   "keyColor": "#000000",
+   "tolerance": 70,
+   "keyGlobal": true
+  },
+  {
+   "$comment": "毒池 / 毒云(obstacle pool,单帧件 fx_poison 96;按 elapsed 循环)",
+   "src": "vibe_images/fx/poison_sb.png",
+   "atlas": "anim_fx_poison",
+   "atlasCols": 6,
+   "atlasRows": 1,
+   "grid": {
+    "cols": 3,
+    "rows": 2
+   },
+   "inset": 0.02,
+   "cellArt": [
+    96,
+    96
+   ],
+   "keyColor": "#000000",
+   "tolerance": 70,
+   "keyGlobal": true
+  },
+  {
+   "$comment": "召唤阵(minion 底座,单帧件 fx_summon 96;按 elapsed 循环)",
+   "src": "vibe_images/fx/summon_sb.png",
+   "atlas": "anim_fx_summon",
+   "atlasCols": 6,
+   "atlasRows": 1,
+   "grid": {
+    "cols": 3,
+    "rows": 2
+   },
+   "inset": 0.02,
+   "cellArt": [
+    96,
+    96
+   ],
+   "keyColor": "#000000",
+   "tolerance": 70,
+   "keyGlobal": true
+  },
+  {
+   "$comment": "生命汲取 / 治疗(Fx.type=heal,单帧件 fx_drain 68)",
+   "src": "vibe_images/fx/drain_sb.png",
+   "atlas": "anim_fx_heal",
+   "atlasCols": 6,
+   "atlasRows": 1,
+   "grid": {
+    "cols": 3,
+    "rows": 2
+   },
+   "inset": 0.02,
+   "cellArt": [
+    68,
+    68
+   ],
+   "keyColor": "#000000",
+   "tolerance": 70,
+   "keyGlobal": true
+  }
+ ]
+}

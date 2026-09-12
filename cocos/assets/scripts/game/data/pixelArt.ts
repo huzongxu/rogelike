@@ -225,6 +225,21 @@ export const S1_MONSTER_KEYS: readonly string[] = [
 export const PLAYER_HERO_KEYS: readonly string[] = ["player_vera", "player_kyle", "player_bran"];
 
 /**
+ * 序列帧图集 anim_<key>(artwork/pixel-kit-anim-s1.json,布局见 game/ui/spriteAnim):5 行朝向 × 7 列(行走 4 + 攻击 3),
+ * 每格 = 该单位贴图边长。战斗视图按 anim_player_<hero> / anim_monster_<id> / anim_enemy_<kind> 查表,缺图回退单帧。
+ * 只登记已落盘的图集(登记未落盘的键只会换来加载失败日志)。
+ */
+export const ANIM_KEYS: readonly string[] = ["anim_player_vera", "anim_player_kyle", "anim_player_bran"];
+
+/**
+ * 技能特效帧带 anim_fx_<Fx.type | poison | summon>(artwork/pixel-kit-anim-fx.json):1 行 × FX_FRAMES 列,
+ * 一次性特效按生命周期进度选帧,毒池 / 召唤阵按 elapsed 循环。缺帧带回退单帧贴花 fx_*。
+ */
+export const ANIM_FX_KEYS: readonly string[] = [
+  "anim_fx_nova", "anim_fx_explosion", "anim_fx_lightning", "anim_fx_shield", "anim_fx_heal", "anim_fx_poison", "anim_fx_summon",
+];
+
+/**
  * 特效批(artwork/pixel-kit-fx.json)的贴花与弹道:export=2 把 art 网格按 2× 烘进 PNG,
  * 满张绘制盒恰好等于 PNG 尺寸(1 贴图像素 = 1 逻辑 px)。绘制盒随特效生命周期伸缩
  * (nova 从 0 涨到 200、爆炸反向收缩),缩放是设计意图,但采样档仍必须是最近邻。
@@ -245,7 +260,9 @@ export const BATTLE_FIRST_PAINT_KEYS: readonly string[] = [
   ...S1_MONSTER_KEYS,
   "player",
   ...PLAYER_HERO_KEYS,
+  ...ANIM_KEYS,
   ...FX_KEYS,
+  ...ANIM_FX_KEYS,
 ];
 
 /**
@@ -293,7 +310,9 @@ export const PIXEL_ART_KEYS: readonly string[] = [
   ...UNIT_KEYS,
   ...S1_MONSTER_KEYS,
   ...PLAYER_HERO_KEYS,
+  ...ANIM_KEYS,
   ...FX_KEYS,
+  ...ANIM_FX_KEYS,
   ...MENU_V4_KEYS,
   ...V5_KEYS,
   ...V6_KEYS,

@@ -15,7 +15,7 @@ import { viewTable } from "../core/ViewTable";
 import { hexToColor, makeNode } from "../ui/Widgets";
 import { HUD_TOP_H } from "../game/ui/hud";
 import { clamp } from "../game/core/math";
-import { animCellRect, animCellSize, animCol, animDir, attackDuration } from "../game/ui/spriteAnim";
+import { FX_FRAMES, animCellRect, animCellSize, animCol, animDir, attackDuration, fxFrameIndex, stripCellRect } from "../game/ui/spriteAnim";
 import type { Enemy } from "../game/entities/enemy";
 import type { Projectile } from "../game/entities/projectile";
 import type { Cloud, Gem, Minion, Obstacle } from "../game/entities/objects";
@@ -55,16 +55,34 @@ export class BattleWorldView {
     private animCells = new Map<string, SpriteFrame>();
     /** 敌人动画状态:上一帧的接触冷却(冷却被重置 = 咬到玩家 = 起一次攻击动画)与攻击起始时刻 */
     private enemyAnim = new Map<number, { lastCd: number; attackT: number }>();
-    /** 玩家动画状态:上一帧位置 / 弹体与特效计数(新增 = 施放 = 起攻击动画)/ 朝向 / 攻击起始时刻 */
-    private playerAnim = { lastY: 0, lastProj: 0, lastFx: 0, dx: 0, dy: 1, attackT: -1 };
+    /** 玩家动画状态:上一帧 y 与朝向。玩家只播行走 / 待机,不播攻击帧(技能是自动施放的,出手不该改写走位朝向) */
+    private playerAnim = { lastY: 0, dx: 0, dy: 1 };
 
     /** 第一个在图集里有的键(整图 SpriteFrame 已加载且尺寸能按 7×5 整除) */
     private animKeyOf(keys: readonly string[]): string | null {
         for (const k of keys) {
             const sf = this.frames.get(k);
-            if (sf && animCellSize(sf.width, sf.height)) return k;
+            // 用纹理尺寸而非 SpriteFrame 尺寸:编辑器自动裁边会让整图 rect 小于 PNG,按 7×5 整除会误判为缺图
+            if (sf && sf.texture && animCellSize(sf.texture.width, sf.texture.height)) return k;
         }
         return null;
+    }
+
+    /** 技能特效帧带 anim_fx_<type>(1 行 × FX_FRAMES 列)的第 idx 帧;缺图集返回 undefined,调用方回退单帧贴花 */
+    private fxCell(type: string, idx: number): SpriteFrame | undefined {
+        const key = `anim_fx_${type}`;
+        const id = `${key}#${idx}`;
+        const hit = this.animCells.get(id);
+        if (hit) return hit;
+        const base = this.frames.get(key);
+        if (!base || !base.texture) return undefined;
+        const r = stripCellRect(idx, FX_FRAMES, base.texture.width, base.texture.height);
+        if (!r) return undefined;
+        const sf = new SpriteFrame();
+        sf.texture = base.texture;
+        sf.rect = new Rect(r.x, r.y, r.w, r.h);
+        this.animCells.set(id, sf);
+        return sf;
     }
 
     /** 图集子帧(懒建);图集缺失或布局不整除返回 undefined,调用方回退单帧 */
@@ -74,12 +92,13 @@ export class BattleWorldView {
         if (hit) return hit;
         const base = this.frames.get(key);
         if (!base || !base.texture) return undefined;
-        const cell = animCellSize(base.width, base.height);
+        const cell = animCellSize(base.texture.width, base.texture.height);
         if (!cell) return undefined;
+        // 子框直接落在纹理坐标上:图集 PNG 就是整张纹理,编辑器 trimType=auto 只会改整图 SpriteFrame 的 rect,不改纹理原点
         const r = animCellRect(row, col, cell.w, cell.h);
         const sf = new SpriteFrame();
         sf.texture = base.texture;
-        sf.rect = new Rect(base.rect.x + r.x, base.rect.y + r.y, r.w, r.h);
+        sf.rect = new Rect(r.x, r.y, r.w, r.h);
         this.animCells.set(id, sf);
         return sf;
     }
@@ -277,7 +296,10 @@ export class BattleWorldView {
             this.placeWorld(n, ob.pos.x, ob.pos.y, ob.radius * 2, ob.radius * 2);
             const spr = n.getChildByName("Spr")!;
             const g = n.getChildByName("Fill")!.getComponent(Graphics)!;
-            const poisonTex = ob.kind === "pool" && !ob.burn ? this.frames.get("fx_poison") : undefined;
+            // 毒池:帧带 anim_fx_poison 按 elapsed 循环(翻滚的毒云),缺帧带回退单帧 fx_poison
+            const poisonTex = ob.kind === "pool" && !ob.burn
+                ? (this.fxCell("poison", Math.floor(sim.elapsed * viewTable().battle.animWalkFps + ob.id) % FX_FRAMES) ?? this.frames.get("fx_poison"))
+                : undefined;
             spr.active = !!poisonTex;
             if (poisonTex) {
                 const sp = spr.getComponent(Sprite)!;
@@ -618,7 +640,8 @@ export class BattleWorldView {
             }
             const s = m.radius * t.minionSpriteScale;
             this.placeWorld(n, m.pos.x, m.pos.y, s, s);
-            const frame = this.frames.get("fx_summon");
+            // 召唤物:帧带 anim_fx_summon 按 elapsed 循环(脉动的召唤阵),缺帧带回退单帧 fx_summon
+            const frame = this.fxCell("summon", Math.floor(sim.elapsed * t.animWalkFps + m.id) % FX_FRAMES) ?? this.frames.get("fx_summon");
             const sprNode = n.getChildByName("Spr")!;
             const fillNode = n.getChildByName("Fill")!;
             sprNode.active = !!frame;
@@ -681,23 +704,10 @@ export class BattleWorldView {
         // 出战英雄专属战斗件 player_<heroId>,缺图回退通用 player;序列帧 anim_player_<heroId> → anim_player 优先
         const hero = sim.save.selectedHero;
         const pa = this.playerAnim;
-        // 朝向:移动时按本帧位移;静止时朝最近敌人;都没有则保持
+        // 朝向 = 本帧位移方向(与摇杆 / WASD 输入同向,世界坐标 y 向下为正),静止时保持上一帧朝向
         const mdx = p.pos.x - this.playerLastX, mdy = p.pos.y - pa.lastY;
         const moving = Math.abs(mdx) > 0.01 || Math.abs(mdy) > 0.01;
         if (moving) { pa.dx = mdx; pa.dy = mdy; }
-        // 施放检测:弹体或特效数量比上一帧多 = 本帧出手;攻击朝向取最近敌人
-        if (sim.projectiles.length > pa.lastProj || sim.fx.length > pa.lastFx) {
-            pa.attackT = sim.elapsed;
-            let best: { x: number; y: number } | null = null, bd = Infinity;
-            for (const e of sim.enemies) {
-                if (e.hidden) continue;
-                const d = (e.pos.x - p.pos.x) ** 2 + (e.pos.y - p.pos.y) ** 2;
-                if (d < bd) { bd = d; best = e.pos; }
-            }
-            if (best) { pa.dx = best.x - p.pos.x; pa.dy = best.y - p.pos.y; }
-        }
-        pa.lastProj = sim.projectiles.length;
-        pa.lastFx = sim.fx.length;
         if (p.pos.x < this.playerLastX - 0.01) this.playerFaceSx = -1;
         else if (p.pos.x > this.playerLastX + 0.01) this.playerFaceSx = 1;
         this.playerLastX = p.pos.x;
@@ -707,10 +717,7 @@ export class BattleWorldView {
         const animKey = this.animKeyOf(hero ? [`anim_player_${hero}`, "anim_player"] : ["anim_player"]);
         if (animKey) {
             const d = animDir(pa.dx, pa.dy);
-            const attacking = pa.attackT >= 0 && sim.elapsed - pa.attackT < attackDuration(t.animAttackFps);
-            const col = attacking
-                ? animCol("attack", sim.elapsed - pa.attackT, t.animAttackFps)
-                : animCol(moving ? "walk" : "idle", sim.elapsed, t.animWalkFps);
+            const col = animCol(moving ? "walk" : "idle", sim.elapsed, t.animWalkFps);
             frame = this.animCell(animKey, d.row, col);
             faceSx = d.flip ? -1 : 1;
         }
@@ -874,13 +881,17 @@ export class BattleWorldView {
             const t = 1 - f.ttl / f.maxTtl;
             const tex = FX_TEX[f.type];
             let r = tex ? tex.r : 40;
+            // 帧带优先:anim_fx_<type> 的 6 帧本身画了扩散 / 消散,绘制盒固定在最大半径,不再随 t 缩放
+            const animFrame = this.fxCell(f.type, fxFrameIndex(t));
             if (f.type === "nova" || f.type === "explosion") {
-                r = (f.radius ?? (tex ? tex.r : 100)) * (f.type === "nova" ? t : 1 - 0.4 * t);
+                const full = f.radius ?? (tex ? tex.r : 100);
+                r = animFrame ? full : full * (f.type === "nova" ? t : 1 - 0.4 * t);
             }
             r = Math.max(r, 8);
             this.placeWorld(n, f.pos.x, f.pos.y, r * 2, r * 2);
             n.getComponent(UIOpacity)!.opacity = Math.round(clamp(1 - t, 0, 1) * 255);
-            const frame = tex ? this.frames.get(tex.key) : undefined;
+            // 帧动画优先:anim_fx_<type> 帧带按生命周期进度选帧;缺帧带回退单帧贴花,再缺回退代码描形
+            const frame = animFrame ?? (tex ? this.frames.get(tex.key) : undefined);
             const sprNode = n.getChildByName("Spr")!;
             const fillNode = n.getChildByName("Fill")!;
             sprNode.active = !!frame;

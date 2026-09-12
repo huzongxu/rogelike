@@ -28,6 +28,8 @@ function cocosOnlyAssets() {
     for (const spec of specs) {
         const cfg = JSON.parse(readFileSync(join(ART_DIR, spec), "utf8"));
         for (const sheet of cfg.sheets || []) {
+            // atlas 模式的产物是一张图集(键 = sheet.atlas),格子本身不落盘
+            if (sheet.atlas) keys.add(sheet.atlas);
             for (const cell of sheet.cells || []) {
                 if (cell.key) keys.add(cell.key);
                 for (const k of cell.keys || []) keys.add(k);

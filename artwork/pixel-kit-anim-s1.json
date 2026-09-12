@@ -1,0 +1,1069 @@
+{
+ "$comment": "S1 英雄序列帧图集(scripts/pixel-kit.mjs atlas 模式;布局 = game/ui/spriteAnim:5 行朝向 S/SE/E/NE/N × 7 列 = 行走 4 + 攻击 3,每格 44)。素材来自 Holopix:八方向行走模板图(2400×1792 白底,8 朝向围成一圈)→ 八方向行走动画(MiniMax H3 首尾帧 = 同一张八方向图,5 s 768P)→ 转序列帧(8 fps,43 帧 1024×768)。行走 4 帧按东向格的自相似周期(≈17 帧)在一个完整步幅里等距取 f10/f14/f18/f23(f10、f18 为两次触地极值)。各帧用固定框(视频格 = 八方向图框 × 1024/2400)、cropBBox=false,保证比例与脚位一致;白底走色键 #ffffff。攻击 3 列 = 八方向站姿(蓄力)+ 八方向攻击姿势图 ×2(八方向行走模板图 · 自定义动作「dagger attack, lunging forward」,同一环形布局、同一组框)。",
+ "module": 2,
+ "export": 1,
+ "keyout": {
+  "color": "#ffffff",
+  "tolerance": 52,
+  "erode": 1
+ },
+ "palette": [
+  "#05070c",
+  "#0b0e14",
+  "#121826",
+  "#1a2233",
+  "#232e44",
+  "#2a3548",
+  "#38465e",
+  "#4a5a76",
+  "#62738f",
+  "#8391a8",
+  "#a9b4c4",
+  "#c8cdd6",
+  "#e8ecf4",
+  "#0e3b36",
+  "#17624f",
+  "#2e9e7f",
+  "#4dffc8",
+  "#0d3f3c",
+  "#17706a",
+  "#26a69a",
+  "#6fe0d4",
+  "#3f4a12",
+  "#6b7a1c",
+  "#a3b833",
+  "#d4e86a",
+  "#1a1030",
+  "#2b1f47",
+  "#4b3a7a",
+  "#7a5cff",
+  "#8a6fd1",
+  "#c8b6ff",
+  "#4a4258",
+  "#7d6b8f",
+  "#b0a0c0",
+  "#4a3410",
+  "#8a6220",
+  "#d9a63c",
+  "#ffd76a",
+  "#3a2216",
+  "#6b4028",
+  "#b06a4a",
+  "#d69a70",
+  "#ff9a70",
+  "#3a1218",
+  "#7a1f2a",
+  "#a8202a",
+  "#c0374a",
+  "#e05040",
+  "#ff2d2d",
+  "#ff5a6e",
+  "#10294a",
+  "#1f4e8a",
+  "#2f7fd1",
+  "#4aa3ff",
+  "#7fd0ff",
+  "#a8e4ff"
+ ],
+ "sheets": [
+  {
+   "$comment": "薇拉:八方向图逐格实看朝向(生成器的环形布局左右并不对称)= 上中 S / 上右 SE(脸转向画面右)/ 中左 E(侧面朝右,匕首指右)/ 下左 NE / 下中 N;中右与下右是朝左(W / NW),不用。行走帧 f10/f14/f18/f23(周期 17),视频格 = 图框 × 1024/2400。玩家不播攻击帧,攻击 3 列与站姿同源占位。",
+   "src": "vibe_images/anim/vera_walk_f10.png",
+   "atlas": "anim_player_vera",
+   "grid": {
+    "cols": 7,
+    "rows": 5
+   },
+   "cellArt": [
+    44,
+    44
+   ],
+   "keyColor": "#ffffff",
+   "tolerance": 52,
+   "keyGlobal": true,
+   "cells": [
+    {
+     "src": "vibe_images/anim/vera_walk_f10.png",
+     "rect": [
+      390,
+      10,
+      635,
+      255
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f14.png",
+     "rect": [
+      390,
+      10,
+      635,
+      255
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f18.png",
+     "rect": [
+      390,
+      10,
+      635,
+      255
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f23.png",
+     "rect": [
+      390,
+      10,
+      635,
+      255
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      913,
+      23,
+      1488,
+      598
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      913,
+      23,
+      1488,
+      598
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      913,
+      23,
+      1488,
+      598
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f10.png",
+     "rect": [
+      737,
+      10,
+      983,
+      255
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f14.png",
+     "rect": [
+      737,
+      10,
+      983,
+      255
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f18.png",
+     "rect": [
+      737,
+      10,
+      983,
+      255
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f23.png",
+     "rect": [
+      737,
+      10,
+      983,
+      255
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      1728,
+      23,
+      2303,
+      598
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      1728,
+      23,
+      2303,
+      598
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      1728,
+      23,
+      2303,
+      598
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f10.png",
+     "rect": [
+      46,
+      263,
+      291,
+      508
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f14.png",
+     "rect": [
+      46,
+      263,
+      291,
+      508
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f18.png",
+     "rect": [
+      46,
+      263,
+      291,
+      508
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f23.png",
+     "rect": [
+      46,
+      263,
+      291,
+      508
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      108,
+      616,
+      683,
+      1191
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      108,
+      616,
+      683,
+      1191
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      108,
+      616,
+      683,
+      1191
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f10.png",
+     "rect": [
+      48,
+      512,
+      294,
+      757
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f14.png",
+     "rect": [
+      48,
+      512,
+      294,
+      757
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f18.png",
+     "rect": [
+      48,
+      512,
+      294,
+      757
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f23.png",
+     "rect": [
+      48,
+      512,
+      294,
+      757
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      113,
+      1200,
+      688,
+      1775
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      113,
+      1200,
+      688,
+      1775
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      113,
+      1200,
+      688,
+      1775
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f10.png",
+     "rect": [
+      390,
+      508,
+      635,
+      753
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f14.png",
+     "rect": [
+      390,
+      508,
+      635,
+      753
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f18.png",
+     "rect": [
+      390,
+      508,
+      635,
+      753
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_walk_f23.png",
+     "rect": [
+      390,
+      508,
+      635,
+      753
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      913,
+      1191,
+      1488,
+      1766
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      913,
+      1191,
+      1488,
+      1766
+     ]
+    },
+    {
+     "src": "vibe_images/anim/vera_8dir.png",
+     "rect": [
+      913,
+      1191,
+      1488,
+      1766
+     ]
+    }
+   ]
+  },
+  {
+   "$comment": "凯尔:八方向图(4-2-4)逐格实看 = 上排四个全是正面(面甲可见),下排 1/3/4 是背面、下排 2 是正面;取 S = 下 2(正面、弩在左手边)/ SE = 上 4(正面转向右,弩指右)/ E = 中左(侧面朝右)/ NE = 下 4(背面转向右,弩指右)/ N = 下 3(背面方正)。行走帧 f07/f11/f14/f18(周期 14)。弩弓弓臂围出的封闭白底洪水抠不到,开 keyGlobal。",
+   "src": "vibe_images/anim/kyle_walk_f07.png",
+   "atlas": "anim_player_kyle",
+   "grid": {
+    "cols": 7,
+    "rows": 5
+   },
+   "cellArt": [
+    44,
+    44
+   ],
+   "keyColor": "#ffffff",
+   "tolerance": 52,
+   "keyGlobal": true,
+   "cells": [
+    {
+     "src": "vibe_images/anim/kyle_walk_f07.png",
+     "rect": [
+      259,
+      495,
+      498,
+      734
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f11.png",
+     "rect": [
+      259,
+      495,
+      498,
+      734
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f14.png",
+     "rect": [
+      259,
+      495,
+      498,
+      734
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f18.png",
+     "rect": [
+      259,
+      495,
+      498,
+      734
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      608,
+      1160,
+      1168,
+      1720
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      608,
+      1160,
+      1168,
+      1720
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      608,
+      1160,
+      1168,
+      1720
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f07.png",
+     "rect": [
+      765,
+      12,
+      993,
+      240
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f11.png",
+     "rect": [
+      765,
+      12,
+      993,
+      240
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f14.png",
+     "rect": [
+      765,
+      12,
+      993,
+      240
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f18.png",
+     "rect": [
+      765,
+      12,
+      993,
+      240
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      1794,
+      29,
+      2327,
+      562
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      1794,
+      29,
+      2327,
+      562
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      1794,
+      29,
+      2327,
+      562
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f07.png",
+     "rect": [
+      26,
+      253,
+      253,
+      481
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f11.png",
+     "rect": [
+      26,
+      253,
+      253,
+      481
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f14.png",
+     "rect": [
+      26,
+      253,
+      253,
+      481
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f18.png",
+     "rect": [
+      26,
+      253,
+      253,
+      481
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      61,
+      594,
+      594,
+      1127
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      61,
+      594,
+      594,
+      1127
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      61,
+      594,
+      594,
+      1127
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f07.png",
+     "rect": [
+      760,
+      495,
+      999,
+      734
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f11.png",
+     "rect": [
+      760,
+      495,
+      999,
+      734
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f14.png",
+     "rect": [
+      760,
+      495,
+      999,
+      734
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f18.png",
+     "rect": [
+      760,
+      495,
+      999,
+      734
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      1782,
+      1160,
+      2342,
+      1720
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      1782,
+      1160,
+      2342,
+      1720
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      1782,
+      1160,
+      2342,
+      1720
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f07.png",
+     "rect": [
+      529,
+      512,
+      756,
+      739
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f11.png",
+     "rect": [
+      529,
+      512,
+      756,
+      739
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f14.png",
+     "rect": [
+      529,
+      512,
+      756,
+      739
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_walk_f18.png",
+     "rect": [
+      529,
+      512,
+      756,
+      739
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      1240,
+      1200,
+      1773,
+      1733
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      1240,
+      1200,
+      1773,
+      1733
+     ]
+    },
+    {
+     "src": "vibe_images/anim/kyle_8dir.png",
+     "rect": [
+      1240,
+      1200,
+      1773,
+      1733
+     ]
+    }
+   ]
+  },
+  {
+   "$comment": "布兰:八方向图第二版 3-2-3 = 上排正面 / 中排侧面 / 下排背面;逐格实看取 S = 上中 / SE = 上右(身体转向画面右、迈右腿)/ E = 中右(侧面朝右)/ NE = 下右(左臂纹身在近侧、披风甩向右)/ N = 下中。行走帧 f08/f12/f15/f19(周期 14)。",
+   "src": "vibe_images/anim/bran_walk_f08.png",
+   "atlas": "anim_player_bran",
+   "grid": {
+    "cols": 7,
+    "rows": 5
+   },
+   "cellArt": [
+    44,
+    44
+   ],
+   "keyColor": "#ffffff",
+   "tolerance": 52,
+   "keyGlobal": true,
+   "cells": [
+    {
+     "src": "vibe_images/anim/bran_walk_f08.png",
+     "rect": [
+      392,
+      18,
+      634,
+      260
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f12.png",
+     "rect": [
+      392,
+      18,
+      634,
+      260
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f15.png",
+     "rect": [
+      392,
+      18,
+      634,
+      260
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f19.png",
+     "rect": [
+      392,
+      18,
+      634,
+      260
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      918,
+      42,
+      1485,
+      609
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      918,
+      42,
+      1485,
+      609
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      918,
+      42,
+      1485,
+      609
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f08.png",
+     "rect": [
+      726,
+      16,
+      968,
+      258
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f12.png",
+     "rect": [
+      726,
+      16,
+      968,
+      258
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f15.png",
+     "rect": [
+      726,
+      16,
+      968,
+      258
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f19.png",
+     "rect": [
+      726,
+      16,
+      968,
+      258
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      1701,
+      38,
+      2268,
+      605
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      1701,
+      38,
+      2268,
+      605
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      1701,
+      38,
+      2268,
+      605
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f08.png",
+     "rect": [
+      711,
+      241,
+      953,
+      483
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f12.png",
+     "rect": [
+      711,
+      241,
+      953,
+      483
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f15.png",
+     "rect": [
+      711,
+      241,
+      953,
+      483
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f19.png",
+     "rect": [
+      711,
+      241,
+      953,
+      483
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      1666,
+      565,
+      2233,
+      1132
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      1666,
+      565,
+      2233,
+      1132
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      1666,
+      565,
+      2233,
+      1132
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f08.png",
+     "rect": [
+      727,
+      487,
+      969,
+      729
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f12.png",
+     "rect": [
+      727,
+      487,
+      969,
+      729
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f15.png",
+     "rect": [
+      727,
+      487,
+      969,
+      729
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f19.png",
+     "rect": [
+      727,
+      487,
+      969,
+      729
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      1704,
+      1142,
+      2271,
+      1709
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      1704,
+      1142,
+      2271,
+      1709
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      1704,
+      1142,
+      2271,
+      1709
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f08.png",
+     "rect": [
+      389,
+      487,
+      631,
+      729
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f12.png",
+     "rect": [
+      389,
+      487,
+      631,
+      729
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f15.png",
+     "rect": [
+      389,
+      487,
+      631,
+      729
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_walk_f19.png",
+     "rect": [
+      389,
+      487,
+      631,
+      729
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      912,
+      1141,
+      1479,
+      1708
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      912,
+      1141,
+      1479,
+      1708
+     ]
+    },
+    {
+     "src": "vibe_images/anim/bran_8dir.png",
+     "rect": [
+      912,
+      1141,
+      1479,
+      1708
+     ]
+    }
+   ]
+  }
+ ]
+}

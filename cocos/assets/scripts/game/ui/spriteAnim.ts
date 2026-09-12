@@ -66,6 +66,18 @@ export function animCellSize(texW: number, texH: number): { w: number; h: number
   return { w: texW / ANIM_COLS, h: texH / ANIM_ROWS };
 }
 
+/** 单行帧带(技能特效 anim_fx_<type>:1 行 × FX_FRAMES 列):按进度 0..1 选帧,末帧停住 */
+export const FX_FRAMES = 6;
+export function fxFrameIndex(progress: number, count: number = FX_FRAMES): number {
+  return Math.max(0, Math.min(count - 1, Math.floor(progress * count)));
+}
+/** 帧带第 idx 格的像素框;宽不能被 count 整除即布局错了,返回 null */
+export function stripCellRect(idx: number, count: number, texW: number, texH: number): { x: number; y: number; w: number; h: number } | null {
+  if (texW % count !== 0) return null;
+  const w = texW / count;
+  return { x: idx * w, y: 0, w, h: texH };
+}
+
 /** 第 row 行第 col 列在图集上的像素框(左上原点) */
 export function animCellRect(row: number, col: number, cellW: number, cellH: number): { x: number; y: number; w: number; h: number } {
   return { x: col * cellW, y: row * cellH, w: cellW, h: cellH };
