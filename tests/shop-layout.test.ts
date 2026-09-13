@@ -155,9 +155,9 @@ describe("商店布局形状语义", () => {
     }
   });
 
-  it("工具钮恒四枚:刷新/融合/重开/主页,等宽一行、右缘收进内容列", () => {
+  it("工具钮恒四枚:刷新/被动/重开/主页,等宽一行、右缘收进内容列", () => {
     const L = shopLayoutPure(3, 1);
-    expect(L.toolBtns.map((b) => b.id)).toEqual(["refresh", "fusion", "restart", "home"]);
+    expect(L.toolBtns.map((b) => b.id)).toEqual(["refresh", "passive", "restart", "home"]);
     for (const b of L.toolBtns) {
       expect(b.w).toBe(126);
       expect(b.h).toBe(L.toolBtns[0].h);

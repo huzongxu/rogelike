@@ -79,7 +79,7 @@ export class MenuLayoutView {
   private heroLines: Label[] = [];
   private noteLines: Label[] = [];
   private insetCache = new Map<string, SpriteFrame>();
-  private cur: MenuLayout | null = null;
+  private cur: MenuLayout | null = null;
 
   /** v6:标题带 / 英雄带框下的窗景(素材表两幅横景,cover 裁条) */
 
@@ -442,8 +442,8 @@ export class MenuLayoutView {
       this.rows.delete(id);
     }
 
-    /* --- ③ 六个场外入口(78×44,图标 2× + 右侧文字列)+ 两枚红点 --- */
-    [L.commissionBtn, L.gachaBtn, L.talentBtn, L.passBtn, L.dailyBtn, L.gearupBtn].forEach((b, i) => {
+    /* --- ③ 七个场外入口(66×44,图标 2× + 右侧文字列)+ 两枚红点 --- */
+    [L.commissionBtn, L.gachaBtn, L.talentBtn, L.passBtn, L.dailyBtn, L.gearupBtn, L.fusionBtn].forEach((b, i) => {
       const slot = this.entries[i] ?? this.addEntry();
       const src = c.entries[i];
       // v6:入口钮换素材表的页签小板(缺图退内容层给的键)

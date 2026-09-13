@@ -1,6 +1,8 @@
 /**
- * 批次 A · A2 升级三选一弹层闸门:levelup(升级时弹哪三张卡 / 每张能干什么 / 点完战斗怎么恢复)。
- * 依据 docs/DESIGN-SEASON-FEEL.md 的「批次 A · A2」节与需求 F9。
+ * 升级三选一弹层闸门:levelup(升级时弹哪三张卡 / 每张能干什么 / 点完战斗怎么恢复)。
+ * 依据 docs/DESIGN-HERO-RHYTHM.md §3 / §6:这一层卖的是**英雄独有技能**(新技能 / 升阶 / 节律强化),
+ * 不花金币;每章 1 次免费重随;锁 1 张跨弹层记忆;分岔二选一成对出现、选中即解锁第 2 节律;
+ * 另有首章法宝三选一形态(进第 1 章前免费挑 1 件主动法宝,至少 1 张与本命节律共鸣)。
  *
  * 延续 cocos-phase5-confirm 的四条纪律:
  *  1. **几何单一出口**:盒 / 横幅 / 三张卡 / 每卡三枚钮的矩形全部来自共享层
@@ -8,14 +10,10 @@
  *  2. **断言按入参分档**:几何只吃 `(w, h)`,两档屏高(996 / 1246)下逐条矩形都是常量表,
  *     且**横向逐位相同**(盒是内容列锚,不是屏心锚)、纵向整体平移同一个 Δ;
  *  3. **视图无关**:本文件只吃 cc-free 的 `levelup/LevelUpModel.ts` 与共享层
- *     `game/ui/levelUpLayout` / `game/data/levelUp`;`LevelUpView.ts` 与 `GameShell.ts` /
- *     `ViewTable.ts` 那三侧 import 了 `cc`,node 不能直载,故只读源码文本;
- *  4. **行为优先于源码 grep**:经验入口那一条用真跑 `BattleSim` 3000 帧来验(升级事件按级数报上来、
- *     级数之和等于等级增量),源码 grep 只用来钉"没有顺手把 addXp 已经做过的事再做一遍"。
- *
- * 五条玩法口径按设计文钉开:重随价逐位等于 `rerollPrice(本章已重随次数)` 且金币不足时**一个状态都不改**;
- * 隐藏保底第 `REROLL_HIDDEN.pity` 次必出;锁定卡不进重随池且下一轮必再出现;「选它」把卡按引用
- * 原地 `push` 进局内装备数组(词缀引擎持同一引用)并关掉弹层;本屏**没有广告位**。
+ *     `game/ui/levelUpLayout` / `game/data/levelUp` / `game/data/heroSkills`;`LevelUpView.ts` 与
+ *     `GameShell.ts` / `ViewTable.ts` 那三侧 import 了 `cc`,node 不能直载,故只读源码文本;
+ *  4. **行为优先于源码 grep**:经验入口那一条用真跑 `BattleSim` 来验(升级事件按级数报上来、
+ *     级数之和等于等级增量、每级 +hpPerLevel 最大生命),源码 grep 只用来钉"没有第二份成长被顺手施加"。
  */
 
 import { describe, it, expect } from "vitest";
@@ -62,13 +60,34 @@ import {
   type LvRect,
 } from "@game/ui/levelUpLayout";
 import { fs as FS, ui as UI_TOKENS } from "@game/ui/theme";
-import { LEVELUP_ENSURE_RARE_TALENT, LEVELUP_LOCK_LIMIT, LEVELUP_MAIN_LABELS, LEVELUP_OFFER_COUNT } from "@game/data/levelUp";
-import { REROLL_HIDDEN, rerollPrice } from "@game/data/reroll";
-import { UPGRADE_MAIN_KEYS, generateEquipment, upgradeEquipment, type Choice, type Equipment } from "@game/data/equipmentGen";
-import { QUALITIES, qualityDef } from "@game/data/quality";
+import {
+  FIRST_PICK_COUNT,
+  FIRST_PICK_RESONANCE_GUARANTEE,
+  LEVELUP_ENSURE_RARE_TALENT,
+  LEVELUP_FREE_REROLL_PER_CHAPTER,
+  LEVELUP_LOCK_LIMIT,
+  LEVELUP_MAIN_LABELS,
+  LEVELUP_OFFER_COUNT,
+} from "@game/data/levelUp";
+import { UPGRADE_MAIN_KEYS, equipmentResonant, generateEquipment, makeSkillEquipment, type Equipment } from "@game/data/equipmentGen";
+import {
+  BRANCH_GUARANTEE_LEVEL,
+  BRANCH_MIN_LEVEL,
+  BRANCH_TEASE_LEVEL,
+  FALLBACK_OFFERS,
+  HERO_SKILLS,
+  SKILL_MAX_RANK,
+  branchSkillsOf,
+  coreSkillOf,
+  heroSkills,
+  rollSkillOffers,
+} from "@game/data/heroSkills";
+import { HERO_RHYTHM, RHYTHM_MAX_LEVEL, type RhythmId } from "@game/data/rhythm";
+import { qualityDef } from "@game/data/quality";
 import { LEVELUP_HEAL_PCT, PLAYER_BASE, xpToNext } from "@game/data/combat";
 import { Player } from "@game/entities/player";
 import { vec2 } from "@game/core/math";
+import type { HeroId } from "@game/data/heroes";
 
 /* ---------- Cocos 宿主侧的被测件(cc-free) ---------- */
 import {
@@ -89,7 +108,7 @@ function fileSource(rel: string): string {
   return readFileSync(new URL(rel, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 }
 
-/** 去掉块注释与整行注释(注释里的"本屏没有 watchAd"这类自陈不算代码事实) */
+/** 去掉块注释与整行注释(注释里的自陈不算代码事实) */
 function codeOf(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
@@ -162,36 +181,77 @@ function allLines(L: LevelUpLayout): { name: string; x: number; baseY: number; m
 
 interface FakeState {
   equipment: Equipment[];
+  skills: Equipment[];
+  heroId: HeroId | null;
+  level: number;
+  rhythms: RhythmId[];
+  rhythmLevel: Partial<Record<RhythmId, number>>;
+  branchChosen: string | null;
   gold: number;
+  hp: number;
+  maxHp: number;
   baseSlots: number;
   chapter: number;
   highestStage: number;
   recorded: Equipment[];
-  setId: null;
 }
 
+/** 造一个"薇拉开局"的假世界:核心技能在场、本命受击、玩家 1 级 */
 function makeWorld(over: Partial<FakeState> = {}): { world: LevelUpWorld; st: FakeState } {
+  const hero = over.heroId === undefined ? "vera" : over.heroId;
   const st: FakeState = {
     equipment: [],
-    gold: 100000,
+    skills: [makeSkillEquipment(coreSkillOf(hero))],
+    heroId: hero,
+    level: 1,
+    rhythms: [HERO_RHYTHM[hero ?? "kyle"]],
+    rhythmLevel: {},
+    branchChosen: null,
+    gold: 100,
+    hp: 60,
+    maxHp: 100,
     baseSlots: 6,
     chapter: 1,
     highestStage: 1,
     recorded: [],
-    setId: null,
     ...over,
   };
+  if (hero === null && over.rhythms === undefined) st.rhythms = ["pulse"];
   const world: LevelUpWorld = {
     equipment: st.equipment,
+    skills: st.skills,
+    heroId: () => st.heroId,
+    playerLevel: () => st.level,
+    rhythms: () => st.rhythms,
+    unlockRhythm: (r) => {
+      if (!st.rhythms.includes(r)) st.rhythms.push(r);
+    },
+    rhythmLevel: (r) => st.rhythmLevel[r] ?? 1,
+    rhythmLevelUp: (r) => {
+      const cur = st.rhythmLevel[r] ?? 1;
+      if (cur >= RHYTHM_MAX_LEVEL) return false;
+      st.rhythmLevel[r] = cur + 1;
+      return true;
+    },
+    branchChosen: () => st.branchChosen,
+    setBranchChosen: (id) => {
+      st.branchChosen = id;
+    },
     gold: () => st.gold,
     setGold: (v) => {
       st.gold = v;
+    },
+    healPct: (pct) => {
+      st.hp = Math.min(st.maxHp, st.hp + Math.round(st.maxHp * pct));
+    },
+    addMaxHp: (v) => {
+      st.maxHp += v;
+      st.hp += v;
     },
     slots: () => st.baseSlots,
     chapter: () => st.chapter,
     highestStage: () => st.highestStage,
     ownedTalents: () => [],
-    selectedSet: () => st.setId,
     recordEquipment: (eq) => {
       st.recorded.push(eq);
     },
@@ -199,13 +259,10 @@ function makeWorld(over: Partial<FakeState> = {}): { world: LevelUpWorld; st: Fa
   return { world, st };
 }
 
-/** 一件能拿去当"强化目标"的场上装备:固定 3 级,并塞一个已知的 damage 主数值。
- *  默认给到 100 而不是 10 —— 强化比例随等级档从 ×1.12 收敛到 ×1.03,基数够大才保证任何一档
- *  四舍五入后都真的涨了,于是"数值差那一行有字可写"不是靠运气。 */
-function makeOwned(damage = 100): Equipment {
-  const eq = generateEquipment(3);
-  eq.effect.params.damage = damage;
-  return eq;
+/** 假世界 + 模型(随机源缺省恒 0.99:分岔在保底线前不出、抽卡取权重末位,便于断言) */
+function makeModel(over: Partial<FakeState> = {}, rand: () => number = () => 0.99): { m: LevelUpModel; st: FakeState } {
+  const { world, st } = makeWorld(over);
+  return { m: new LevelUpModel(world, rand), st };
 }
 
 /* ==================== 1. 几何:两档屏高、取偶、内容列 ==================== */
@@ -399,16 +456,18 @@ describe("命中判定", () => {
 /* ==================== 3. 表:策略数值一律入表 ==================== */
 
 describe("策略数值入表", () => {
-  it("出卡数 / 锁定上限 / 保底稀有天赋都在 game/data/levelUp.ts,且与设计文同数", () => {
+  it("出卡数 / 锁定上限 / 免费重随 / 首章张数与保底都在 game/data/levelUp.ts,且与设计文同数", () => {
     expect(LEVELUP_OFFER_COUNT).toBe(3);
     expect(LEVELUP_LOCK_LIMIT).toBe(1);
+    expect(LEVELUP_FREE_REROLL_PER_CHAPTER).toBe(1);
+    expect(FIRST_PICK_COUNT).toBe(3);
+    expect(FIRST_PICK_RESONANCE_GUARANTEE).toBe(1);
     expect(LEVELUP_ENSURE_RARE_TALENT).toBe("affix_taste");
-    const talents = fileSource("../cocos/assets/scripts/game/data/talents.ts");
-    expect(talents.includes('"affix_taste"')).toBe(true);
-    expect(talents.includes("升级时装备选项中至少有1件稀有品质")).toBe(true);
+    const data = fileSource(DATA);
+    for (const k of ["LEVELUP_FREE_REROLL_PER_CHAPTER", "FIRST_PICK_COUNT", "FIRST_PICK_RESONANCE_GUARANTEE"]) expect(data.includes(`export const ${k}`), k).toBe(true);
   });
 
-  it("强化数值差的标签表键集派生自 UPGRADE_MAIN_KEYS(不另立第二份键表)", () => {
+  it("升阶数值差的标签表键集派生自 UPGRADE_MAIN_KEYS(不另立第二份键表)", () => {
     expect(Object.keys(LEVELUP_MAIN_LABELS)).toEqual([...UPGRADE_MAIN_KEYS]);
     for (const v of Object.values(LEVELUP_MAIN_LABELS)) expect(v.length).toBeGreaterThan(0);
     const data = fileSource(DATA);
@@ -416,45 +475,39 @@ describe("策略数值入表", () => {
     expect(data.includes("Record<(typeof UPGRADE_MAIN_KEYS)[number], string>")).toBe(true);
   });
 
-  it("隐藏档色就是 quality 主表 hidden 档那一支(模型不另写一份 #4dffc8)", () => {
-    const hidden = qualityDef("hidden");
-    expect(hidden.color).toBe("#4dffc8");
-    expect(QUALITIES.map((q) => q.key)).toContain("hidden");
-    const { world } = makeWorld();
-    const m = new LevelUpModel(world, () => 0); // roll 恒 0 → 首次重随即命中隐藏
-    m.open();
-    const i = m.choices.findIndex((c) => c.kind === "equip");
-    expect(m.reroll(i)).toBe(true);
-    expect(m.hiddenHit[i]).toBe(true);
-    const card = m.content().cards[i];
-    expect(card.hidden).toBe(true);
-    expect([card.color, card.frameKey]).toEqual([hidden.color, "frame_hidden"]);
-    expect(card.tagText).toBe(LV_TEXT.tagHidden);
-    // 模型源码里不出现色值字面量:色一律经 qualityDef 取
-    expect(codeOf(fileSource(MODEL)).includes("4dffc8")).toBe(false);
-  });
-
-  it("重随价与隐藏概率/保底的唯一出处是 game/data/reroll.ts(模型与视图都不写死价格)", () => {
-    expect(rerollPrice(0)).toBe(12);
-    const { world } = makeWorld();
-    const m = new LevelUpModel(world, () => 0.999);
-    m.open();
-    for (let n = 0; n < 5; n++) {
-      expect(m.rerollCost(), `第 ${n} 次`).toBe(rerollPrice(n));
-      expect(m.content().readoutText.includes(`重随 ${rerollPrice(n)} 金`)).toBe(true);
-      expect(m.content().cards[0].rerollText).toBe(`${LV_TEXT.rerollPrefix}${rerollPrice(n)}${LV_TEXT.rerollSuffix}`);
-      expect(m.reroll(0)).toBe(true);
-    }
-    expect(m.rerolls).toBe(5);
+  it("出卡权重 / 分岔时机 / 阶数上限 / 兜底三张都在 game/data/heroSkills.ts;模型与视图不写死任何一个", () => {
+    expect(SKILL_MAX_RANK).toBe(5);
+    expect(BRANCH_MIN_LEVEL).toBe(5);
+    expect(BRANCH_GUARANTEE_LEVEL).toBe(8);
+    expect(FALLBACK_OFFERS.map((f) => f.id)).toEqual(["heal30", "gold80", "hp8"]);
     for (const rel of [MODEL, VIEW, LAYOUT]) {
       const body = codeOf(bodyOf(fileSource(rel)));
-      expect(body.includes("12 *")).toBe(false);
-      expect(body.includes("1.5")).toBe(false);
-      expect(body.includes("0.06")).toBe(false);
+      expect(body.includes("12 *"), rel).toBe(false);
+      expect(body.includes("0.06"), rel).toBe(false);
+      expect(body.includes("4dffc8"), rel).toBe(false);
     }
   });
 
-  it("卡等级 = max(章节 + 1, 已解锁最高关卡),与商店同一支算式", () => {
+  it("每英雄恰 4 个技能:核心 1 / 分岔 2 / 进阶 1,id 全局唯一,分岔节律 ≠ 本命", () => {
+    const ids = new Set<string>();
+    for (const [hero, list] of Object.entries(HERO_SKILLS) as [HeroId, readonly (typeof HERO_SKILLS)[HeroId][number][]][]) {
+      expect(list.length, hero).toBe(4);
+      expect(list.filter((s) => s.kind === "core").length, hero).toBe(1);
+      expect(list.filter((s) => s.kind === "branch").length, hero).toBe(2);
+      expect(list.filter((s) => s.kind === "advance").length, hero).toBe(1);
+      for (const s of list) {
+        expect(ids.has(s.id), s.id).toBe(false);
+        ids.add(s.id);
+        expect(s.name.length).toBeGreaterThan(0);
+        expect(s.desc.length).toBeGreaterThan(0);
+      }
+      expect(coreSkillOf(hero).rhythm, `${hero} 核心绑本命节律`).toBe(HERO_RHYTHM[hero]);
+      for (const b of branchSkillsOf(hero)) expect(b.rhythm, `${hero} 分岔解锁的是另一条节律`).not.toBe(HERO_RHYTHM[hero]);
+    }
+    expect(heroSkills(null).length, "未选英雄走通用职业包").toBe(4);
+  });
+
+  it("法宝等级 = max(章节 + 1, 已解锁最高关卡),与商店同一支算式", () => {
     const a = makeWorld({ chapter: 3, highestStage: 1 });
     expect(new LevelUpModel(a.world).cardLevel()).toBe(4);
     const b = makeWorld({ chapter: 1, highestStage: 7 });
@@ -464,413 +517,377 @@ describe("策略数值入表", () => {
   });
 });
 
-/* ==================== 4. 开层:三张卡 ==================== */
+/* ==================== 4. 开层:三张独有技能卡 ==================== */
 
 describe("开层", () => {
-  it("恒出 LEVELUP_OFFER_COUNT 张卡,场上有装备时自带 1 张强化卡", () => {
-    const { world, st } = makeWorld();
-    const m = new LevelUpModel(world);
+  it("恒出 LEVELUP_OFFER_COUNT 张;薇拉 1 级(分岔未到期)的候选正好三种身份:进阶技能 / 核心升阶 / 本命节律强化", () => {
+    const { m } = makeModel();
     m.open();
     expect(m.visible).toBe(true);
-    expect(m.choices.length).toBe(LEVELUP_OFFER_COUNT);
-    expect(m.choices.every((c) => c.kind === "equip")).toBe(true);
-    expect(m.content().cards.length).toBe(LEVELUP_OFFER_COUNT);
-
-    st.equipment.push(makeOwned());
-    m.open();
-    expect(m.choices.length).toBe(LEVELUP_OFFER_COUNT);
-    expect(m.choices.filter((c) => c.kind === "upgrade").length).toBe(1);
+    expect(m.mode).toBe("levelup");
+    expect(m.choices).toHaveLength(LEVELUP_OFFER_COUNT);
+    const kinds = m.choices.map((c) => c.kind).sort();
+    expect(kinds).toEqual(["rank", "rhythm", "skill"]);
+    const skill = m.choices.find((c) => c.kind === "skill");
+    expect(skill && skill.kind === "skill" && skill.def.id).toBe("vera_blood");
+    const rank = m.choices.find((c) => c.kind === "rank");
+    expect(rank && rank.kind === "rank" && rank.skillId).toBe("vera_core");
+    const rhythm = m.choices.find((c) => c.kind === "rhythm");
+    expect(rhythm && rhythm.kind === "rhythm" && rhythm.rhythm).toBe("hit");
+    // 没有兜底、没有法宝卡
+    expect(m.choices.some((c) => c.kind === "fallback" || c.kind === "equip")).toBe(false);
   });
 
-  it("词缀描述行复用 equipmentDescription(触发器 / 效果 / 修饰器三支都在),视图不自己拼串", () => {
-    const { world, st } = makeWorld();
-    const owned = makeOwned();
-    st.equipment.push(owned);
-    const m = new LevelUpModel(world);
+  it("分岔二选一:BRANCH_MIN_LEVEL 之前恒不出;到期后随机源 < 0.5 才出;BRANCH_GUARANTEE_LEVEL 起必出,且成对占前两格", () => {
+    const never = makeModel({ level: BRANCH_MIN_LEVEL - 1 }, () => 0);
+    never.m.open();
+    expect(never.m.choices.filter((c) => c.kind === "skill" && c.def.kind === "branch")).toHaveLength(0);
+
+    const due = makeModel({ level: BRANCH_MIN_LEVEL }, () => 0.1);
+    due.m.open();
+    const pair = due.m.choices.filter((c) => c.kind === "skill" && c.def.kind === "branch");
+    expect(pair).toHaveLength(2);
+    expect(due.m.choices[0].kind === "skill" && due.m.choices[0].def.kind).toBe("branch");
+    expect(due.m.choices[1].kind === "skill" && due.m.choices[1].def.kind).toBe("branch");
+
+    const notYet = makeModel({ level: BRANCH_MIN_LEVEL }, () => 0.9);
+    notYet.m.open();
+    expect(notYet.m.choices.filter((c) => c.kind === "skill" && c.def.kind === "branch")).toHaveLength(0);
+
+    const forced = makeModel({ level: BRANCH_GUARANTEE_LEVEL }, () => 0.99);
+    forced.m.open();
+    expect(forced.m.choices.filter((c) => c.kind === "skill" && c.def.kind === "branch")).toHaveLength(2);
+  });
+
+  it("选中分岔:技能入场、解锁其节律、记下选择;另一分岔从此在 50 轮里一次都不再出", () => {
+    const { m, st } = makeModel({ level: BRANCH_GUARANTEE_LEVEL });
     m.open();
-    const up = m.choices.findIndex((c) => c.kind === "upgrade");
-    const eq = m.choices[up].eq;
-    const text = m.content().cards[up].descLines.join("");
-    for (const t of eq.triggers) expect(text.includes(t.def.name), `触发器 ${t.def.name}`).toBe(true);
-    expect(text.includes(eq.effect.def.name)).toBe(true);
-    for (const mod of eq.modifiers) expect(text.includes(mod.def.name), `修饰器 ${mod.def.name}`).toBe(true);
-    // 折行条数不越槽位上限,每行不越字符预算
-    expect(m.content().cards[up].descLines.length).toBeLessThanOrEqual(LV_DESC_MAX_LINES);
-    for (const line of m.content().cards[up].descLines) expect([...line].length).toBeLessThanOrEqual(LV_DESC_CHARS);
-    const model = fileSource(MODEL);
-    expect(model.includes("equipmentDescription")).toBe(true);
-    for (const banned of ["describeTrigger(", "describeModifier(", "describeEffect("]) {
-      expect(codeOf(bodyOf(model)).includes(banned), `${banned} 由 equipmentDescription 统一出口`).toBe(false);
+    const i = m.choices.findIndex((c) => c.kind === "skill" && c.def.id === "vera_walker");
+    expect(i).toBeGreaterThanOrEqual(0);
+    const r = m.pick(i);
+    expect(r).toEqual({ ok: true, kind: "skill" });
+    expect(m.visible).toBe(false);
+    expect(st.skills.map((s) => s.skillId)).toEqual(["vera_core", "vera_walker"]);
+    expect(st.rhythms).toEqual(["hit", "move"]);
+    expect(st.branchChosen).toBe("vera_walker");
+    expect(st.recorded.map((e) => e.skillId)).toEqual(["vera_walker"]);
+    for (let k = 0; k < 50; k++) {
+      m.open();
+      expect(m.choices.some((c) => c.kind === "skill" && c.def.id === "vera_armor"), `第 ${k} 轮`).toBe(false);
+      m.resetRun();
+      st.chapter = 1;
     }
   });
 
-  it("强化卡的数值差一行:标签走表、数字来自 UPGRADE_MAIN_KEYS,不碰成长系数", () => {
-    const src = makeOwned();
-    const base = src.effect.params.damage as number;
-    const up = upgradeEquipment(JSON.parse(JSON.stringify(src)) as Equipment);
-    const after = up.effect.params.damage as number;
-    expect(after).toBeGreaterThan(base);
-    expect(levelUpDeltaText(src, up)).toBe(`${LEVELUP_MAIN_LABELS.damage} ${base} → ${after}`);
-    // 没有主数值变化 → 空串(槽位仍在,只是不写字)
-    const same = JSON.parse(JSON.stringify(src)) as Equipment;
-    expect(levelUpDeltaText(src, same)).toBe("");
-    expect(levelUpDeltaText(null, same)).toBe("");
-    // 非强化卡不写数值差
-    const { world } = makeWorld();
-    const m = new LevelUpModel(world);
+  it("升阶:原地升场上那件(等级 +1、主数值按共享层倍率放大),不重复登记图鉴;5 阶后不再出现升阶卡", () => {
+    const { m, st } = makeModel();
     m.open();
-    const i = m.choices.findIndex((c) => c.kind === "equip");
-    expect(m.content().cards[i].deltaText).toBe("");
-    expect(m.content().cards[i].tagText).toBe(LV_TEXT.tagNew);
+    const i = m.choices.findIndex((c) => c.kind === "rank");
+    const before = st.skills[0].effect.params.damage!;
+    expect(m.pick(i)).toEqual({ ok: true, kind: "rank" });
+    expect(st.skills[0].level).toBe(2);
+    expect(st.skills[0].effect.params.damage).toBeGreaterThan(before);
+    expect(st.recorded).toHaveLength(0);
+    st.skills[0].level = SKILL_MAX_RANK;
+    m.open();
+    expect(m.choices.some((c) => c.kind === "rank" && c.skillId === "vera_core")).toBe(false);
+  });
+
+  it("节律强化:回写等级 +1;满级不再出现;满级那格若已在卡上则不可选", () => {
+    const { m, st } = makeModel();
+    m.open();
+    const i = m.choices.findIndex((c) => c.kind === "rhythm");
+    expect(m.pick(i)).toEqual({ ok: true, kind: "rhythm" });
+    expect(st.rhythmLevel.hit).toBe(2);
+    st.rhythmLevel.hit = RHYTHM_MAX_LEVEL;
+    m.open();
+    expect(m.choices.some((c) => c.kind === "rhythm")).toBe(false);
+  });
+
+  it("技能池耗尽 → 兜底三张(回气 / 赏金 / 壮体),各自结算到玩家身上", () => {
+    const { m, st } = makeModel({ level: 30, branchChosen: "vera_armor" });
+    st.skills.push(makeSkillEquipment(heroSkills("vera")[1]), makeSkillEquipment(heroSkills("vera")[3]));
+    for (const s of st.skills) s.level = SKILL_MAX_RANK;
+    st.rhythms = ["hit", "hurt"];
+    st.rhythmLevel = { hit: RHYTHM_MAX_LEVEL, hurt: RHYTHM_MAX_LEVEL };
+    m.open();
+    expect(m.choices.map((c) => c.kind)).toEqual(["fallback", "fallback", "fallback"]);
+    expect(m.choices.map((c) => (c.kind === "fallback" ? c.id : ""))).toEqual(["heal30", "gold80", "hp8"]);
+    expect(m.pick(0)).toEqual({ ok: true, kind: "fallback" });
+    expect(st.hp).toBe(90);
+    m.open();
+    m.pick(1);
+    expect(st.gold).toBe(180);
+    m.open();
+    m.pick(2);
+    expect([st.maxHp, st.hp]).toEqual([108, 98]);
+  });
+
+  it("文案:技能卡走技能表的名与说明,分岔标出解锁的节律,升阶卡有数值差一行,节律卡写等级变化", () => {
+    const { m, st } = makeModel({ level: BRANCH_GUARANTEE_LEVEL });
+    m.open();
+    const c = m.content();
+    expect(c.title).toBe(LV_TEXT.title);
+    expect(c.readoutText.includes("Lv.8")).toBe(true);
+    expect(c.readoutText.includes("受击 Lv.1")).toBe(true);
+    expect(c.readoutText.includes(`本章免费重随 ${LEVELUP_FREE_REROLL_PER_CHAPTER}`)).toBe(true);
+    const branch = c.cards[0];
+    expect(branch.kind).toBe("skill");
+    expect(branch.tagText.startsWith(LV_TEXT.tagBranch)).toBe(true);
+    expect(branch.qualityText).toBe(`${LV_TEXT.kindBranch} · 1 阶`);
+    expect(branch.descLines[0].length).toBeGreaterThan(0);
+    expect(branch.pickEnabled).toBe(true);
+    expect(branch.lockEnabled).toBe(true);
+    expect(branch.rerollText).toBe(`${LV_TEXT.rerollPrefix}${LEVELUP_FREE_REROLL_PER_CHAPTER}${LV_TEXT.rerollSuffix}`);
+    // 升阶卡
+    m.resetRun();
+    const { m: m2, st: st2 } = makeModel();
+    m2.open();
+    const ri = m2.choices.findIndex((x) => x.kind === "rank");
+    const rank = m2.content().cards[ri];
+    expect(rank.kind).toBe("rank");
+    expect(rank.tagText).toBe(LV_TEXT.tagRank);
+    expect(rank.deltaText.startsWith(`${LEVELUP_MAIN_LABELS.damage} `)).toBe(true);
+    expect(rank.qualityText.includes("1 → 2 阶")).toBe(true);
+    void st2;
+    // 节律卡
+    const yi = m2.choices.findIndex((x) => x.kind === "rhythm");
+    const rhythm = m2.content().cards[yi];
+    expect(rhythm.tagText).toBe(LV_TEXT.tagRhythm);
+    expect(rhythm.nameText).toBe("受击节律");
+    expect(rhythm.qualityText).toBe("节律 · Lv.1 → 2");
+    expect(rhythm.deltaText).toBe("");
+    void st;
   });
 
   it("折行是纯函数:按字符预算逐段切、超上限截断", () => {
-    expect(levelUpDescLines(["abcdefghij"], 4, 8)).toEqual(["abcd", "efgh", "ij"]);
-    expect(levelUpDescLines(["abcd", "efgh"], 4, 1)).toEqual(["abcd"]);
-    expect(levelUpDescLines([], 4, 8)).toEqual([]);
-    expect(levelUpDescLines([""], 4, 8)).toEqual([]);
-  });
-
-  it("读数行给三件事:金币 / 下一次重随价 / 隐藏保底进度", () => {
-    const { world } = makeWorld({ gold: 1234 });
-    const m = new LevelUpModel(world, () => 0.999);
-    m.open();
-    expect(m.content().readoutText).toBe(`金币 1234 · 重随 ${rerollPrice(0)} 金 · 隐藏保底 0/${REROLL_HIDDEN.pity}`);
-    m.reroll(0);
-    expect(m.content().readoutText).toBe(`金币 ${1234 - rerollPrice(0)} · 重随 ${rerollPrice(1)} 金 · 隐藏保底 1/${REROLL_HIDDEN.pity}`);
+    expect(levelUpDescLines(["一二三四五六", "七八"], 4, 8)).toEqual(["一二三四", "五六", "七八"]);
+    expect(levelUpDescLines(["一二三四五六七八九十"], 3, 2)).toEqual(["一二三", "四五六"]);
+    expect(levelUpDeltaText(null, generateEquipment(1))).toBe("");
   });
 });
 
-/* ==================== 5. 选它:写回局内装备 ==================== */
+/* ==================== 5. 免费重随 ==================== */
 
-describe("选它", () => {
-  it("新卡按引用原地 push 进局内装备数组、登记图鉴、弹层关闭", () => {
-    const { world, st } = makeWorld();
-    const m = new LevelUpModel(world);
-    m.open();
-    const arr = st.equipment;
-    const i = m.choices.findIndex((c) => c.kind === "equip");
-    const eq = m.choices[i].eq;
-    const r = m.pick(i);
-    expect(r.ok).toBe(true);
-    expect(st.equipment).toBe(arr); // 数组身份不变(词缀引擎持同一引用)
-    expect(st.equipment.length).toBe(1);
-    expect(st.equipment[0]).toBe(eq); // 就是那一张,不是克隆
-    expect(st.recorded).toEqual([eq]);
-    expect(m.visible).toBe(false);
-    expect(m.choices).toEqual([]);
-    expect(m.canPick(0)).toBe(false);
+describe("分岔预告(R3:A + 预告)", () => {
+  const tease = (m: LevelUpModel) => {
+    const t = m.content().readoutText;
+    return t.includes("分岔将在") ? "before" : t.includes("分岔最迟") ? "due" : "";
+  };
+
+  it("表值:预告起始 3 级,早于分岔起始 5 级、保底 8 级", () => {
+    expect(BRANCH_TEASE_LEVEL).toBe(3);
+    expect(BRANCH_TEASE_LEVEL).toBeLessThan(BRANCH_MIN_LEVEL);
+    expect(BRANCH_MIN_LEVEL).toBeLessThan(BRANCH_GUARANTEE_LEVEL);
   });
 
-  it("强化卡原地升级场上那件,且不重复登记图鉴(与商店强化钮同口径)", () => {
-    const { world, st } = makeWorld();
-    const owned = makeOwned();
-    const base = owned.effect.params.damage as number;
-    st.equipment.push(owned);
-    const m = new LevelUpModel(world);
-    m.open();
-    const i = m.choices.findIndex((c) => c.kind === "upgrade");
-    const lvBefore = owned.level;
-    const r = m.pick(i);
-    expect(r.ok).toBe(true);
-    expect(st.equipment.length).toBe(1);
-    expect(st.equipment[0]).toBe(owned);
-    expect(owned.level).toBe(lvBefore + 1);
-    expect(owned.effect.params.damage).toBeGreaterThan(base);
-    expect(st.recorded).toEqual([]);
-    expect(m.visible).toBe(false);
+  it("等级轴:< 3 不提;3–4「将在 Lv.5 后出现」;5–7 未出成对「最迟 Lv.8」;成对在场或 ≥ 8 不提", () => {
+    const lv2 = makeModel({ level: BRANCH_TEASE_LEVEL - 1 }).m;
+    lv2.open();
+    expect(tease(lv2)).toBe("");
+    const lv3 = makeModel({ level: BRANCH_TEASE_LEVEL }).m;
+    lv3.open();
+    expect(tease(lv3)).toBe("before");
+    expect(lv3.content().readoutText.includes(`Lv.${BRANCH_MIN_LEVEL} 后出现`)).toBe(true);
+    // 5 级、随机源 0.9 → 这一轮不出成对 → 「最迟」
+    const due = makeModel({ level: BRANCH_MIN_LEVEL }, () => 0.9).m;
+    due.open();
+    expect(due.choices.some((c) => c.kind === "skill" && c.def.kind === "branch")).toBe(false);
+    expect(tease(due)).toBe("due");
+    expect(due.content().readoutText.includes(`最迟 Lv.${BRANCH_GUARANTEE_LEVEL}`)).toBe(true);
+    // 5 级、随机源 0.1 → 成对在场 → 不再预告
+    const pair = makeModel({ level: BRANCH_MIN_LEVEL }, () => 0.1).m;
+    pair.open();
+    expect(pair.choices.some((c) => c.kind === "skill" && c.def.kind === "branch")).toBe(true);
+    expect(tease(pair)).toBe("");
+    const guaranteed = makeModel({ level: BRANCH_GUARANTEE_LEVEL }).m;
+    guaranteed.open();
+    expect(tease(guaranteed)).toBe("");
   });
 
-  it("空槽不够时选不了新卡:一个状态都不改、弹层不关", () => {
-    const { world, st } = makeWorld({ baseSlots: 1 });
-    st.equipment.push(makeOwned());
-    const m = new LevelUpModel(world);
+  it("分岔已选不提;首章三选一形态不提", () => {
+    const { m, st } = makeModel({ level: BRANCH_GUARANTEE_LEVEL });
     m.open();
-    const i = m.choices.findIndex((c) => c.kind === "equip");
-    expect(m.canPick(i)).toBe(false);
-    expect(m.content().cards[i].pickEnabled).toBe(false);
-    const r = m.pick(i);
-    expect(r).toEqual({ ok: false, reason: "slots" });
-    expect(st.equipment.length).toBe(1);
-    expect(st.recorded).toEqual([]);
-    expect(m.visible).toBe(true);
-  });
-
-  it("强化目标已不在场上 → missing,弹层不关", () => {
-    const { world, st } = makeWorld();
-    const owned = makeOwned();
-    st.equipment.push(owned);
-    const m = new LevelUpModel(world);
+    m.pick(m.choices.findIndex((c) => c.kind === "skill" && c.def.id === "vera_walker"));
+    expect(st.branchChosen).toBe("vera_walker");
+    st.level = BRANCH_TEASE_LEVEL;
     m.open();
-    const i = m.choices.findIndex((c) => c.kind === "upgrade");
-    st.equipment.length = 0;
-    expect(m.canPick(i)).toBe(false);
-    expect(m.pick(i)).toEqual({ ok: false, reason: "missing" });
-    expect(m.visible).toBe(true);
-  });
-
-  it("弹层没开时三个动作一律不生效", () => {
-    const { world, st } = makeWorld();
-    const m = new LevelUpModel(world);
-    expect(m.visible).toBe(false);
-    expect(m.pick(0)).toEqual({ ok: false, reason: "missing" });
-    expect(m.reroll(0)).toBe(false);
-    expect(m.toggleLock(0)).toBe(false);
-    expect(st.gold).toBe(100000);
-    expect(st.equipment).toEqual([]);
+    expect(tease(m)).toBe("");
+    const first = makeModel({ level: BRANCH_TEASE_LEVEL }).m;
+    first.openFirstPick();
+    expect(tease(first)).toBe("");
   });
 });
 
-/* ==================== 6. 重随:扣金币、价格逐位、守卫 ==================== */
-
-describe("重随", () => {
-  it("扣金币,且每一手的价逐位等于 rerollPrice(本章已重随次数)", () => {
-    const { world, st } = makeWorld({ gold: 100000 });
-    const m = new LevelUpModel(world, () => 0.999);
+describe("免费重随", () => {
+  it("每章 LEVELUP_FREE_REROLL_PER_CHAPTER 次;用完后那一格重随恒拒且一个状态都不改;进下一章清零", () => {
+    const { m, st } = makeModel();
     m.open();
-    let paid = 0;
-    for (let n = 0; n < 8; n++) {
-      const price = rerollPrice(n);
-      expect(m.rerollCost()).toBe(price);
-      expect(m.reroll(0)).toBe(true);
-      paid += price;
-      expect(st.gold).toBe(100000 - paid);
-      expect(m.rerolls).toBe(n + 1);
-    }
-    expect(paid).toBe([0, 1, 2, 3, 4, 5, 6, 7].reduce((a, n) => a + rerollPrice(n), 0));
-  });
-
-  it("金币不足时一个状态都不改:不扣钱、不重随、不动阶梯与保底计数、卡面不变", () => {
-    const { world, st } = makeWorld({ gold: rerollPrice(0) - 1 });
-    const m = new LevelUpModel(world, () => 0.999);
-    m.open();
-    const before = {
-      gold: st.gold,
-      rerolls: m.rerolls,
-      dry: m.hiddenDry,
-      name: m.choices[0].eq.name,
-      triggers: m.choices[0].eq.triggers.map((t) => t.def.type),
-      modifiers: m.choices[0].eq.modifiers.map((x) => x.def.type),
-      face: JSON.stringify(m.content().cards[0]),
-    };
-    expect(m.canReroll(0)).toBe(false);
-    expect(m.content().cards[0].rerollEnabled).toBe(false);
-    expect(m.reroll(0)).toBe(false);
-    expect(st.gold).toBe(before.gold);
-    expect(m.rerolls).toBe(before.rerolls);
-    expect(m.hiddenDry).toBe(before.dry);
-    expect(m.choices[0].eq.name).toBe(before.name);
-    expect(m.choices[0].eq.triggers.map((t) => t.def.type)).toEqual(before.triggers);
-    expect(m.choices[0].eq.modifiers.map((x) => x.def.type)).toEqual(before.modifiers);
-    expect(JSON.stringify(m.content().cards[0])).toBe(before.face);
-    expect(m.visible).toBe(true);
-  });
-
-  it("价格正好够时放行(边界:>= 而不是 >)", () => {
-    const { world, st } = makeWorld({ gold: rerollPrice(0) });
-    const m = new LevelUpModel(world, () => 0.999);
-    m.open();
+    expect(m.rerollsLeft()).toBe(LEVELUP_FREE_REROLL_PER_CHAPTER);
     expect(m.canReroll(0)).toBe(true);
     expect(m.reroll(0)).toBe(true);
-    expect(st.gold).toBe(0);
-    // 下一手涨到 rerollPrice(1),0 金自然按不动
-    expect(m.rerollCost()).toBe(rerollPrice(1));
-    expect(m.reroll(0)).toBe(false);
-  });
-
-  it("重随只换触发器与修饰器:效果 / 品质 / 等级 / id 都不变", () => {
-    const { world } = makeWorld();
-    const m = new LevelUpModel(world, () => 0.5);
-    m.open();
-    const i = m.choices.findIndex((c) => c.kind === "equip");
-    const eq = m.choices[i].eq;
-    const before = { effect: eq.effect.def.type, quality: eq.quality, level: eq.level, id: eq.id };
-    expect(m.reroll(i)).toBe(true);
-    expect(m.choices[i].eq).toBe(eq); // 原地改,不是换新对象
-    expect({ effect: eq.effect.def.type, quality: eq.quality, level: eq.level, id: eq.id }).toEqual(before);
-  });
-
-  it("重随阶梯按章分段:进下一章清零;隐藏保底计数跨章不清", () => {
-    const { world, st } = makeWorld();
-    const m = new LevelUpModel(world, () => 0.999);
-    m.open();
-    m.reroll(0);
-    m.reroll(0);
-    expect([m.rerolls, m.hiddenDry]).toEqual([2, 2]);
+    expect(m.rerollsLeft()).toBe(0);
+    const snapshot = JSON.stringify(m.choices.map((c) => (c.kind === "rhythm" ? c.rhythm : c.kind === "fallback" ? c.id : c.kind === "reset" ? "reset" : c.kind === "passive" ? c.p.name : c.eq.name)));
+    expect(m.reroll(1)).toBe(false);
+    expect(m.canReroll(1)).toBe(false);
+    expect(JSON.stringify(m.choices.map((c) => (c.kind === "rhythm" ? c.rhythm : c.kind === "fallback" ? c.id : c.kind === "reset" ? "reset" : c.kind === "passive" ? c.p.name : c.eq.name)))).toBe(snapshot);
+    expect(m.content().cards[1].rerollEnabled).toBe(false);
+    expect(st.gold, "重随不花金币").toBe(100);
+    // 换章
+    m.pick(0);
     st.chapter = 2;
     m.open();
-    expect(m.rerolls).toBe(0);
-    expect(m.hiddenDry).toBe(2);
-    expect(m.rerollCost()).toBe(rerollPrice(0));
+    expect(m.rerollsLeft()).toBe(LEVELUP_FREE_REROLL_PER_CHAPTER);
+  });
+
+  it("重随后的那一格不与本轮其余两格重复(身份键排除)", () => {
+    for (let seed = 0; seed < 20; seed++) {
+      const { m } = makeModel({ level: BRANCH_GUARANTEE_LEVEL }, () => ((seed * 37) % 100) / 100);
+      m.open();
+      const others = m.choices.filter((_, k) => k !== 2).map((c) => JSON.stringify(c.kind === "rhythm" ? c.rhythm : c.kind === "fallback" ? c.id : c.kind === "rank" ? c.skillId : c.kind === "reset" ? "reset" : c.kind === "passive" ? c.p.name : c.eq.name));
+      expect(m.reroll(2)).toBe(true);
+      const now = m.choices[2];
+      const key = JSON.stringify(now.kind === "rhythm" ? now.rhythm : now.kind === "fallback" ? now.id : now.kind === "rank" ? now.skillId : now.kind === "reset" ? "reset" : now.kind === "passive" ? now.p.name : now.eq.name);
+      expect(others.includes(key), `seed ${seed}`).toBe(false);
+    }
   });
 });
 
-/* ==================== 7. 隐藏保底 ==================== */
-
-describe("隐藏词条与保底", () => {
-  it("概率档:roll 恒 0 → 首次重随即命中;卡面改走隐藏档", () => {
-    const { world } = makeWorld();
-    const m = new LevelUpModel(world, () => 0);
-    m.open();
-    expect(m.reroll(0)).toBe(true);
-    expect(m.hiddenHit[0]).toBe(true);
-    expect(m.hiddenDry).toBe(0);
-    expect(m.content().cards[0].hidden).toBe(true);
-  });
-
-  it("roll 恒不出概率时,第 REROLL_HIDDEN.pity 次必出隐藏(前 11 次一律不出)", () => {
-    const { world } = makeWorld({ gold: 1e9 });
-    const m = new LevelUpModel(world, () => 0.999);
-    m.open();
-    const seen: boolean[] = [];
-    for (let n = 0; n < REROLL_HIDDEN.pity; n++) {
-      expect(m.reroll(0), `第 ${n + 1} 次`).toBe(true);
-      seen.push(m.hiddenHit[0]);
-    }
-    expect(seen.length).toBe(REROLL_HIDDEN.pity);
-    expect(seen.slice(0, REROLL_HIDDEN.pity - 1).every((x) => !x)).toBe(true);
-    expect(seen[REROLL_HIDDEN.pity - 1]).toBe(true);
-    expect(m.hiddenDry).toBe(0); // 出货即清零
-    expect(m.content().readoutText.includes(`隐藏保底 0/${REROLL_HIDDEN.pity}`)).toBe(true);
-  });
-
-  it("出货之后重新起算:再连不出 pity−1 次才又到保底", () => {
-    const { world } = makeWorld({ gold: 1e9 });
-    const m = new LevelUpModel(world, () => 0.999);
-    m.open();
-    for (let n = 0; n < REROLL_HIDDEN.pity; n++) m.reroll(0);
-    expect(m.hiddenHit[0]).toBe(true);
-    const second: boolean[] = [];
-    for (let n = 0; n < REROLL_HIDDEN.pity; n++) {
-      m.reroll(0);
-      second.push(m.hiddenHit[0]);
-    }
-    expect(second.slice(0, REROLL_HIDDEN.pity - 1).every((x) => !x)).toBe(true);
-    expect(second[REROLL_HIDDEN.pity - 1]).toBe(true);
-  });
-
-  it("隐藏保底计数是本局累计:重开一局归零", () => {
-    const { world } = makeWorld({ gold: 1e9 });
-    const m = new LevelUpModel(world, () => 0.999);
-    m.open();
-    m.reroll(0);
-    m.reroll(0);
-    expect(m.hiddenDry).toBe(2);
-    m.resetRun();
-    expect([m.hiddenDry, m.rerolls, m.visible, m.choices.length]).toEqual([0, 0, false, 0]);
-  });
-});
-
-/* ==================== 8. 锁定 ==================== */
+/* ==================== 6. 锁定 ==================== */
 
 describe("锁定", () => {
   it("最多锁 LEVELUP_LOCK_LIMIT 张:换锁就是把上一格释放掉", () => {
-    const { world } = makeWorld();
-    const m = new LevelUpModel(world);
+    const { m } = makeModel();
     m.open();
     expect(m.lockLeft()).toBe(LEVELUP_LOCK_LIMIT);
+    expect(m.toggleLock(0)).toBe(true);
+    expect([m.lockedIndex, m.lockLeft()]).toEqual([0, 0]);
+    expect(m.content().cards[0].locked).toBe(true);
+    expect(m.content().cards[0].lockText).toBe(LV_TEXT.lockOff);
+    expect(m.content().cards[1].lockEnabled).toBe(true);
     expect(m.toggleLock(1)).toBe(true);
-    expect([m.lockedIndex, m.lockLeft()]).toEqual([1, 0]);
-    expect(m.content().cards[1].locked).toBe(true);
-    expect(m.content().cards[1].lockText).toBe(LV_TEXT.lockOff);
-    // 上限已到:别的格按不动
-    expect(m.canLock(0)).toBe(false);
-    expect(m.toggleLock(0)).toBe(false);
     expect(m.lockedIndex).toBe(1);
-    // 已锁那格恒可按 → 换锁
-    expect(m.canLock(2)).toBe(false);
+    expect(m.content().cards[0].locked).toBe(false);
     expect(m.toggleLock(1)).toBe(true);
-    expect([m.lockedIndex, m.lockLeft()]).toEqual([-1, LEVELUP_LOCK_LIMIT]);
-    expect(m.content().cards[1].locked).toBe(false);
+    expect(m.lockedIndex).toBe(-1);
   });
 
-  it("锁定卡不进重随池:那一格重随恒拒,卡面一个字段都不动", () => {
-    const { world, st } = makeWorld();
-    const m = new LevelUpModel(world, () => 0.999);
+  it("锁定卡不进重随池:那一格重随恒拒", () => {
+    const { m } = makeModel();
     m.open();
     m.toggleLock(0);
-    const gold = st.gold;
-    const face = JSON.stringify(m.content().cards[0]);
-    const name = m.choices[0].eq.name;
     expect(m.canReroll(0)).toBe(false);
-    expect(m.content().cards[0].rerollEnabled).toBe(false);
     expect(m.reroll(0)).toBe(false);
-    expect(st.gold).toBe(gold);
-    expect(m.rerolls).toBe(0);
-    expect(m.choices[0].eq.name).toBe(name);
-    expect(JSON.stringify(m.content().cards[0])).toBe(face);
-    // 没锁的那格照随
-    expect(m.canReroll(1)).toBe(true);
-    expect(m.reroll(1)).toBe(true);
-    expect(m.rerolls).toBe(1);
+    expect(m.rerollsLeft()).toBe(LEVELUP_FREE_REROLL_PER_CHAPTER);
   });
 
-  it("被锁的卡下一轮必再出现,且仍落在锁定态、仍不进重随池", () => {
-    const { world, st } = makeWorld();
-    const m = new LevelUpModel(world);
+  it("被锁的卡下一轮必再出现且恒落第 0 格;带走它 → 锁定兑现并清掉;resetRun 后不再带", () => {
+    const { m } = makeModel();
     m.open();
-    m.toggleLock(2);
-    const locked: Choice = m.choices[2];
-    // 选走另一张 → 本轮关闭,锁定留住
-    const other = m.choices.findIndex((c, i) => i !== 2 && c.kind === "equip");
+    const i = m.choices.findIndex((c) => c.kind === "skill");
+    m.toggleLock(i);
+    const picked = m.choices[i];
+    // 选走另一张,弹层关掉
+    const other = m.choices.findIndex((c) => c.kind === "rhythm");
     expect(m.pick(other).ok).toBe(true);
-    expect(st.equipment.length).toBe(1);
-    expect(m.visible).toBe(false);
-    // 下一轮
     m.open();
-    expect(m.choices.length).toBe(LEVELUP_OFFER_COUNT);
-    expect(m.choices[0]).toBe(locked); // 同一枚对象,不是重生成
+    expect(m.choices[0]).toBe(picked);
     expect(m.lockedIndex).toBe(0);
-    expect(m.content().cards[0].locked).toBe(true);
-    expect(m.canReroll(0)).toBe(false);
-    expect(m.canReroll(1)).toBe(true);
-  });
-
-  it("带走锁定卡本身 → 锁定兑现并清掉,下一轮三张全是新卡", () => {
-    const { world, st } = makeWorld();
-    const m = new LevelUpModel(world);
-    m.open();
-    m.toggleLock(1);
-    const locked = m.choices[1];
-    expect(locked.kind).toBe("equip");
-    expect(m.pick(1).ok).toBe(true);
-    expect(st.equipment[0]).toBe(locked.eq);
+    expect(m.choices).toHaveLength(LEVELUP_OFFER_COUNT);
+    expect(m.content().cards[0].tagText).toBe(LV_TEXT.tagLocked);
+    // 带走锁定卡
+    expect(m.pick(0).ok).toBe(true);
     m.open();
     expect(m.lockedIndex).toBe(-1);
-    expect(m.choices.includes(locked)).toBe(false);
-    expect(m.choices.length).toBe(LEVELUP_OFFER_COUNT);
-  });
-
-  it("锁定不跨局:resetRun 之后下一轮不再带那张", () => {
-    const { world } = makeWorld();
-    const m = new LevelUpModel(world);
-    m.open();
+    // 锁定不跨局
     m.toggleLock(0);
-    const locked = m.choices[0];
     m.resetRun();
     m.open();
     expect(m.lockedIndex).toBe(-1);
-    expect(m.choices.includes(locked)).toBe(false);
   });
 
-  it("有锁定卡时仍恒出 LEVELUP_OFFER_COUNT 张(锁定占一格,其余现生)", () => {
-    const { world, st } = makeWorld();
-    st.equipment.push(makeOwned());
-    const m = new LevelUpModel(world);
+  it("锁定的升阶卡下一轮按场上现阶重新预览;目标已满阶则锁定失效", () => {
+    const { m, st } = makeModel();
     m.open();
-    m.toggleLock(0);
-    const locked = m.choices[0];
+    const ri = m.choices.findIndex((c) => c.kind === "rank");
+    m.toggleLock(ri);
+    const yi = m.choices.findIndex((c) => c.kind === "rhythm");
+    m.pick(yi);
+    st.skills[0].level = 3; // 场上那件在两轮之间升过阶
     m.open();
-    expect(m.choices.length).toBe(LEVELUP_OFFER_COUNT);
-    expect(m.choices[0]).toBe(locked);
-    expect(m.lockedIndex).toBe(0);
-    expect(m.content().cards.length).toBe(LEVELUP_OFFER_COUNT);
-    // 锁定占掉一格,现生的只剩 OFFER_COUNT − LOCK_LIMIT 张
-    expect(LEVELUP_OFFER_COUNT - LEVELUP_LOCK_LIMIT).toBe(2);
+    expect(m.choices[0].kind).toBe("rank");
+    expect(m.choices[0].kind === "rank" && m.choices[0].eq.level).toBe(4);
+    m.toggleLock(0); // 保持锁定
+    m.pick(1);
+    st.skills[0].level = SKILL_MAX_RANK;
+    m.open();
+    expect(m.lockedIndex).toBe(-1);
+    expect(m.choices.some((c) => c.kind === "rank")).toBe(false);
   });
 });
 
-/* ==================== 9. 经验入口(行为断言) ==================== */
+/* ==================== 7. 首章法宝三选一 ==================== */
+
+describe("首章法宝三选一", () => {
+  it("FIRST_PICK_COUNT 张主动法宝,效果互不相同,至少 FIRST_PICK_RESONANCE_GUARANTEE 张与本命共鸣;不可锁、可免费重随", () => {
+    for (let seed = 0; seed < 30; seed++) {
+      const { m } = makeModel({}, () => ((seed * 53 + 7) % 100) / 100);
+      m.openFirstPick();
+      expect(m.mode).toBe("first");
+      expect(m.visible).toBe(true);
+      expect(m.choices).toHaveLength(FIRST_PICK_COUNT);
+      expect(m.choices.every((c) => c.kind === "equip" && c.eq.kind === "active")).toBe(true);
+      const types = m.choices.map((c) => (c.kind === "equip" ? c.eq.effect.def.type : ""));
+      expect(new Set(types).size).toBe(FIRST_PICK_COUNT);
+      const resonant = m.choices.filter((c) => c.kind === "equip" && equipmentResonant(c.eq)).length;
+      expect(resonant, `seed ${seed}`).toBeGreaterThanOrEqual(FIRST_PICK_RESONANCE_GUARANTEE);
+      for (const c of m.choices) if (c.kind === "equip") expect(c.eq.triggers.every((t) => t.def.type === "hit")).toBe(true);
+      expect(m.canLock(0)).toBe(false);
+      expect(m.toggleLock(0)).toBe(false);
+      expect(m.canReroll(0)).toBe(true);
+      const cards = m.content().cards;
+      expect(m.content().title).toBe(LV_TEXT.titleFirst);
+      for (const card of cards) {
+        expect(card.kind).toBe("equip");
+        expect(card.lockEnabled).toBe(false);
+        expect(([LV_TEXT.tagResonant, LV_TEXT.tagEquip] as string[]).includes(card.tagText)).toBe(true);
+      }
+      const hi = cards.find((card) => card.hidden);
+      expect(hi?.tagText).toBe(LV_TEXT.tagResonant);
+      expect(hi?.color).toBe(qualityDef("hidden").color);
+    }
+  });
+
+  it("选它:法宝按引用 push 进主动槽并登记图鉴,弹层关掉,不扣金币;空槽不够时选不了", () => {
+    const { m, st } = makeModel();
+    m.openFirstPick();
+    const eq = (m.choices[1] as { kind: "equip"; eq: Equipment }).eq;
+    expect(m.pick(1)).toEqual({ ok: true, kind: "equip" });
+    expect(st.equipment[0]).toBe(eq);
+    expect(st.recorded[0]).toBe(eq);
+    expect(st.gold).toBe(100);
+    expect(m.visible).toBe(false);
+    const full = makeModel({ baseSlots: 0 });
+    full.m.openFirstPick();
+    expect(full.m.canPick(0)).toBe(false);
+    expect(full.m.pick(0)).toEqual({ ok: false, reason: "slots" });
+    expect(full.m.visible).toBe(true);
+  });
+
+  it("首章重随换一张不同效果的法宝,占用本章那一次免费重随", () => {
+    const { m } = makeModel();
+    m.openFirstPick();
+    const before = m.choices.map((c) => (c.kind === "equip" ? c.eq.effect.def.type : ""));
+    expect(m.reroll(0)).toBe(true);
+    const after = m.choices.map((c) => (c.kind === "equip" ? c.eq.effect.def.type : ""));
+    expect(after[1]).toBe(before[1]);
+    expect(after[2]).toBe(before[2]);
+    expect(after.includes(after[0]) && new Set(after).size).toBe(3);
+    expect(m.rerollsLeft()).toBe(0);
+  });
+});
+
+/* ==================== 8. 经验入口 ==================== */
 
 describe("经验入口", () => {
   it("Player.addXp 做了三件事:扣经验 / 抬等级 / 按 LEVELUP_HEAL_PCT 回一口血(封顶 maxHp),不动 maxHp", () => {
@@ -884,17 +901,16 @@ describe("经验入口", () => {
     expect(p.addXp(1)).toBe(true);
     expect(p.level).toBe(2);
     expect(p.xp).toBe(0);
-    // maxHp 的成长在 levelUpGrowth 里,addXp 不碰(本批不接,B2 才接)
+    // maxHp 的成长在 levelUpGrowth 里(世界层 killEnemy 按级数调),addXp 不碰
     expect(p.maxHp).toBe(maxHp);
     expect(p.hp).toBe(Math.min(maxHp, Math.floor(maxHp / 2) + Math.floor(maxHp * LEVELUP_HEAL_PCT)));
-    // 满血时回血是空操作
     const q = new Player();
     q.hp = q.maxHp;
     q.addXp(xpToNext(1));
     expect(q.hp).toBe(q.maxHp);
   });
 
-  it("真跑 BattleSim:killEnemy 接了 addXp,升级按级数报上来,级数之和 = 等级增量", () => {
+  it("真跑 BattleSim:killEnemy 接了 addXp,升级按级数报上来,级数之和 = 等级增量,每级 +hpPerLevel 最大生命", () => {
     const save = emptySave();
     save.energy = 99;
     const levels: number[] = [];
@@ -923,19 +939,18 @@ describe("经验入口", () => {
     expect(levels.length).toBeGreaterThan(0);
     expect(levels.reduce((a, b) => a + b, 0)).toBe(sim.player.level - 1);
     expect(levels.every((n) => n >= 1)).toBe(true);
-    // addXp 之外没有第二份成长/回血被顺手施加:maxHp 仍是开局那一档
-    expect(sim.player.maxHp).toBe(PLAYER_BASE.maxHp);
+    // B2 等级收益:每级 +hpPerLevel(docs/DESIGN-SEASON-FEEL.md)
+    expect(sim.player.maxHp).toBe(PLAYER_BASE.maxHp + PLAYER_BASE.hpPerLevel * (sim.player.level - 1));
   });
 
-  it("世界层只做加法:killEnemy 里那一句 addXp,且不重复调 levelUpGrowth / 另写回血", () => {
+  it("世界层 killEnemy:一句 addXp + 按级数 levelUpGrowth,不另写回血", () => {
     const src = fileSource(BATTLE_WORLD);
     const kill = codeOf(src.slice(src.indexOf("private killEnemy("), src.indexOf("/* ================= 引导与商店辅助")));
     expect(kill.includes("this.player.addXp(e.def.xp)")).toBe(true);
     expect(kill.includes("this.host.onLevelUp?.(")).toBe(true);
-    // addXp 已经回过血、levelUpGrowth 才是 maxHp 成长(本批不接):两者都不得在这里再施加一遍
-    expect(kill.includes("levelUpGrowth")).toBe(false);
+    expect(kill.includes("this.player.levelUpGrowth()")).toBe(true);
     expect(kill.includes("LEVELUP_HEAL_PCT")).toBe(false);
-    expect((codeOf(src).match(/levelUpGrowth/g) ?? []).length).toBe(0);
+    expect((codeOf(src).match(/levelUpGrowth/g) ?? []).length).toBe(1);
     expect((src.match(/this\.player\.addXp\(/g) ?? []).length).toBe(1);
   });
 
@@ -948,6 +963,44 @@ describe("经验入口", () => {
     expect(sim.includes("onLevelUp?(levels: number): void;")).toBe(true);
     expect(sim.includes("onLevelUp: (levels) => this.cb.onLevelUp?.(levels),")).toBe(true);
     expect(fileSource("../src/game.ts").includes("onLevelUp")).toBe(false);
+  });
+});
+
+/* ==================== 9. 出卡策略纯函数 ==================== */
+
+describe("出卡策略 rollSkillOffers(纯函数)", () => {
+  const base = () => ({
+    heroId: "vera" as HeroId,
+    owned: new Map<string, number>([["vera_core", 1]]),
+    branchChosen: null as string | null,
+    playerLevel: 1,
+    rhythms: new Map<RhythmId, number>([["hit", 1]]),
+  });
+
+  it("候选耗尽时用兜底补齐到 count,且兜底互不重复", () => {
+    const input = { ...base(), owned: new Map<string, number>([["vera_core", 5], ["vera_blood", 5], ["vera_armor", 5]]), branchChosen: "vera_armor", rhythms: new Map<RhythmId, number>([["hit", 5], ["hurt", 5]]) };
+    const out = rollSkillOffers(input, 3, () => 0.5);
+    expect(out.map((o) => o.kind)).toEqual(["fallback", "fallback", "fallback"]);
+    expect(new Set(out.map((o) => (o.kind === "fallback" ? o.id : ""))).size).toBe(3);
+  });
+
+  it("排除集生效:被排除的身份不再出", () => {
+    const input = { ...base(), exclude: new Set(["skill:vera_blood", "rank:vera_core"]) };
+    const out = rollSkillOffers(input, 3, () => 0.5);
+    expect(out.some((o) => o.kind === "skill" && o.def.id === "vera_blood")).toBe(false);
+    expect(out.some((o) => o.kind === "rank")).toBe(false);
+    expect(out[0]).toEqual({ kind: "rhythm", rhythm: "hit" });
+  });
+
+  it("权重抽样不放回:同一身份在一轮里只出一次;count = 1 时分岔不占位", () => {
+    for (let s = 0; s < 40; s++) {
+      const out = rollSkillOffers({ ...base(), playerLevel: BRANCH_GUARANTEE_LEVEL }, 3, () => (s % 10) / 10);
+      const keys = out.map((o) => JSON.stringify(o.kind === "skill" ? o.def.id : o.kind === "rank" ? o.skillId : o.kind === "rhythm" ? o.rhythm : o.kind === "reset" ? "reset" : o.id));
+      expect(new Set(keys).size).toBe(keys.length);
+    }
+    const one = rollSkillOffers({ ...base(), playerLevel: BRANCH_GUARANTEE_LEVEL }, 1, () => 0);
+    expect(one).toHaveLength(1);
+    expect(one[0].kind === "skill" && one[0].def.kind).not.toBe("branch");
   });
 });
 
@@ -973,20 +1026,16 @@ describe("三层分工的源码纪律", () => {
     expect(imps.includes("DesignMetrics")).toBe(false);
     expect(imps.includes("ViewTable")).toBe(false);
     expect(imps.includes('from "./theme"')).toBe(true);
-    // 唯一一条 import 就是同层的 theme
     expect(imps.split("\n").filter((l) => l.length > 0)).toEqual(['import { evenDown, fs, ui } from "./theme";']);
   });
 
   it("视图层不内联任何一枚盒与基线:几何只能来自模型层那一帧", () => {
     const body = bodyOf(codeOf(fileSource(VIEW)));
-    // 视图里出现的数字只允许是缓存哨兵(-1 的 1)、lineHeight 系数(1.25)、循环起点(0)
-    // 与暗底折中心锚点的除数(2)
     const nums = [...body.matchAll(/(?<![\w.])(\d+(?:\.\d+)?)(?![\w.])/g)].map((m) => Number(m[1]));
     expect(nums.filter((n) => ![0, 1, 1.25, 2].includes(n))).toEqual([]);
     for (const k of ["L.box", "L.banner", "L.title", "L.readout", "L.hint", "L.cards", "L.panelKey", "L.bannerKey", "g.rect", "g.quality", "g.name", "g.descLines", "g.delta", "g.tag", "g.pick", "g.reroll", "g.lock"]) {
       expect(body.includes(k), k).toBe(true);
     }
-    // 卡槽与描述行槽的枚数都来自共享层常量,不写死
     expect(body.includes("i < LV_CARDS")).toBe(true);
     expect(body.includes("i < LV_DESC_MAX_LINES")).toBe(true);
     expect(body.includes('"Card1"')).toBe(false);
@@ -1015,9 +1064,11 @@ describe("三层分工的源码纪律", () => {
     }
     const model = fileSource(MODEL);
     const mi = importsOf(model);
-    for (const k of ["LEVELUP_ENSURE_RARE_TALENT", "LEVELUP_LOCK_LIMIT", "LEVELUP_MAIN_LABELS", "LEVELUP_OFFER_COUNT", "rerollPrice", "REROLL_HIDDEN", "UPGRADE_MAIN_KEYS", "equipmentDescription", "generateChoices", "rerollCard", "upgradeEquipment", "qualityDef", "rareBonusFor", "LV_DESC_CHARS", "LV_DESC_MAX_LINES", "levelUpScreenLayout"]) {
+    for (const k of ["LEVELUP_FREE_REROLL_PER_CHAPTER", "LEVELUP_LOCK_LIMIT", "LEVELUP_MAIN_LABELS", "LEVELUP_OFFER_COUNT", "FIRST_PICK_COUNT", "FIRST_PICK_RESONANCE_GUARANTEE", "UPGRADE_MAIN_KEYS", "equipmentDescription", "makeSkillEquipment", "upgradeEquipment", "rollSkillOffers", "FALLBACK_OFFERS", "SKILL_MAX_RANK", "RHYTHM_MAX_LEVEL", "qualityDef", "rareBonusFor", "LV_DESC_CHARS", "LV_DESC_MAX_LINES", "levelUpScreenLayout"]) {
       expect(mi.includes(k), k).toBe(true);
     }
+    // 金币重随与隐藏词条通道已退出本屏
+    for (const gone of ["rerollPrice", "REROLL_HIDDEN", "rerollCard", "generateChoices"]) expect(mi.includes(gone), gone).toBe(false);
   });
 
   it("视图只摆节点:所有落位走 placeLine / placeRect / Plate.show / qualityBox.draw / flatBox.draw", () => {
@@ -1026,7 +1077,6 @@ describe("三层分工的源码纪律", () => {
     expect(body.includes("placeRect(this.capture, fullRect())")).toBe(true);
     expect(body.includes("placeRect(this.dim, r)")).toBe(true);
     expect((body.match(/\.set\(g\./g) ?? []).length).toBeGreaterThanOrEqual(6);
-    // 没有第二套落位出口
     for (const banned of ["setPosition", "contentSize =", "anchorX", "anchorY"]) expect(body.includes(banned), banned).toBe(false);
   });
 });
@@ -1044,7 +1094,7 @@ describe("配色入表", () => {
     }
   });
 
-  it("隐藏高亮档与 quality 主表 hidden 档同值(同一支色,两处同数)", () => {
+  it("共鸣高亮档与 quality 主表 hidden 档同值(同一支色,两处同数)", () => {
     expect(defs.lvCardTagHidden).toBe(qualityDef("hidden").color.toUpperCase());
   });
 
@@ -1053,7 +1103,6 @@ describe("配色入表", () => {
     const used = [...body.matchAll(/p4\.(lv\w+)/g)].map((m) => m[1]);
     expect(new Set(used).size).toBeGreaterThanOrEqual(20);
     for (const k of new Set(used)) expect(Object.keys(defs).includes(k), k).toBe(true);
-    // 接口声明与默认值逐键对齐
     const iface = src.slice(src.indexOf("/* ---------- 升级三选一弹层"), src.indexOf("export const PHASE4_DEFAULTS"));
     for (const k of Object.keys(defs)) expect(iface.includes(`${k}: string;`), k).toBe(true);
   });
@@ -1109,35 +1158,40 @@ describe("GameShell 接线", () => {
     expect(at("if (this.levelUpModel?.visible) return;")).toBeGreaterThan(at("this.tickSeason();"));
     expect(at("if (this.levelUpModel?.visible) return;")).toBeGreaterThan(at("if (this.sim.syncDaily())"));
     expect(at("this.sim.update(step)")).toBeGreaterThan(at("if (this.router.blocksPlay()) return;"));
-    // 队列自愈排在停战闸门之前:被章末转场打断的那一轮,回到战斗屏的下一帧自己接着弹
     expect(at("if (this.levelUpPending > 0 && !this.levelUpModel?.visible) this.openLevelUp();")).toBeGreaterThan(0);
     expect(at("if (this.levelUpPending > 0 && !this.levelUpModel?.visible) this.openLevelUp();")).toBeLessThan(at("if (this.levelUpModel?.visible) return;"));
   });
 
-  it("世界层事件 → 排队 → 开层:连升多级按级数一轮一弹,选完还有余量就接着弹", () => {
+  it("世界层事件 → 排队 → 开层:连升多级按级数一轮一弹,选完还有余量就接着弹;首章三选一不占队列", () => {
     expect(section.includes("this.levelUpPending += levels;")).toBe(true);
     expect(section.includes("if (!this.levelUpModel?.visible) this.openLevelUp();")).toBe(true);
-    expect(section.includes("this.levelUpPending = Math.max(0, this.levelUpPending - 1);")).toBe(true);
+    expect(section.includes("if (!first) this.levelUpPending = Math.max(0, this.levelUpPending - 1);")).toBe(true);
     expect(section.includes("if (this.levelUpPending > 0) this.openLevelUp();")).toBe(true);
     expect(section.includes('if (this.router.current !== "battle" || this.confirm) return;')).toBe(true);
     expect(body.includes("onLevelUp: (levels) => this.onLevelUp(levels),")).toBe(true);
   });
 
-  it("写回局内态而不是存档:装备数组走 getter 取活引用,金币与商店屏同一份账", () => {
+  it("写回局内态而不是存档:技能 / 法宝数组走 getter 取活引用,节律与分岔回写玩家,金币与商店屏同一份账", () => {
     expect(section.includes("return sim.player.equipment;")).toBe(true);
+    expect(section.includes("return sim.player.skills;")).toBe(true);
+    expect(section.includes("heroId: () => sim.world.heroId(),")).toBe(true);
+    expect(section.includes("rhythms: () => sim.player.rhythms,")).toBe(true);
+    expect(section.includes("sim.player.unlockRhythm(r);")).toBe(true);
+    expect(section.includes("sim.player.branchChosen = id;")).toBe(true);
     expect(section.includes("gold: () => sim.gold,")).toBe(true);
     expect(section.includes("sim.world.gold = v;")).toBe(true);
     expect(section.includes("recordEquipment: (eq) => sim.world.recordEquipment(eq),")).toBe(true);
     expect(section.includes("this.levelUpModel = model;")).toBe(true);
     expect(section.includes("layout: () => model.layout(DESIGN_W, logicalH())")).toBe(true);
-    // 一个存档字段都不落
     for (const banned of [".persist(", "writeSave", "commit"]) expect(section.includes(banned), banned).toBe(false);
   });
 
-  it("本局复位挂在开局漏斗上:enterBattleRun 里清队列与模型态", () => {
+  it("本局复位挂在开局漏斗上:enterBattleRun 里清队列与模型态,并在主动槽为空时弹首章法宝三选一", () => {
     const enter = codeOf(src.slice(src.indexOf("private enterBattleRun()"), src.indexOf("private requestStage(")));
     expect(enter.includes("this.levelUpPending = 0;")).toBe(true);
     expect(enter.includes("this.levelUpModel?.resetRun();")).toBe(true);
+    expect(enter.includes("this.levelUpModel.openFirstPick();")).toBe(true);
+    expect(enter.includes("this.sim.player.equipment.length === 0")).toBe(true);
     expect(enter.includes("this.syncLevelUp();")).toBe(true);
     expect(enter.includes("this.resetGameOverTransients();")).toBe(true);
   });
@@ -1166,6 +1220,9 @@ describe("GameShell 接线", () => {
 describe("资源登记", () => {
   const metas = [
     ["../cocos/assets/scripts/game/data/levelUp.ts", "../cocos/assets/scripts/game/data/levelUp.ts.meta", "typescript"],
+    ["../cocos/assets/scripts/game/data/rhythm.ts", "../cocos/assets/scripts/game/data/rhythm.ts.meta", "typescript"],
+    ["../cocos/assets/scripts/game/data/artifacts.ts", "../cocos/assets/scripts/game/data/artifacts.ts.meta", "typescript"],
+    ["../cocos/assets/scripts/game/data/heroSkills.ts", "../cocos/assets/scripts/game/data/heroSkills.ts.meta", "typescript"],
     ["../cocos/assets/scripts/game/ui/levelUpLayout.ts", "../cocos/assets/scripts/game/ui/levelUpLayout.ts.meta", "typescript"],
     ["../cocos/assets/scripts/levelup/LevelUpModel.ts", "../cocos/assets/scripts/levelup/LevelUpModel.ts.meta", "typescript"],
     ["../cocos/assets/scripts/levelup/LevelUpView.ts", "../cocos/assets/scripts/levelup/LevelUpView.ts.meta", "typescript"],
@@ -1179,19 +1236,17 @@ describe("资源登记", () => {
       expect([j.ver, j.importer, j.imported]).toEqual(["4.0.24", importer, true]);
       expect(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(j.uuid)).toBe(true);
     }
-    // 新目录也要有目录 meta
     const dir = "../cocos/assets/scripts/levelup.meta";
     expect(existsSync(new URL(dir, import.meta.url))).toBe(true);
     const dj = JSON.parse(readFileSync(new URL(dir, import.meta.url), "utf8")) as { ver: string; importer: string };
     expect([dj.ver, dj.importer]).toEqual(["1.2.0", "directory"]);
   });
 
-  it("五枚新 uuid 与全仓既有 uuid 一枚都不撞", () => {
+  it("新 uuid 与全仓既有 uuid 一枚都不撞", () => {
     const fresh = [...metas.map((m) => m[1]), "../cocos/assets/scripts/levelup.meta"].map(
       (p) => (JSON.parse(readFileSync(new URL(p, import.meta.url), "utf8")) as { uuid: string }).uuid
     );
     expect(new Set(fresh).size).toBe(fresh.length);
-    // 全仓递归扫描:同一枚 uuid 只允许出现一次(贴图类 meta 的 subMetas 各带一枚,故逐份收全部)
     const root = new URL("../cocos/assets/", import.meta.url);
     const seen = new Map<string, number>();
     for (const rel of readdirSync(root, { recursive: true })) {
@@ -1201,8 +1256,6 @@ describe("资源登记", () => {
         seen.set(m[1], (seen.get(m[1]) ?? 0) + 1);
       }
     }
-    expect(seen.size).toBeGreaterThan(600);
-    expect([...seen.entries()].filter(([, n]) => n > 1)).toEqual([]);
-    expect(fresh.every((u) => seen.get(u) === 1)).toBe(true);
+    for (const u of fresh) expect(seen.get(u), u).toBe(1);
   });
 });

@@ -103,10 +103,28 @@ import {
   DEATH_CHAIN_KNOCKBACK,
   type EnvAffixType,
 } from "../data/envAffixes";
-import { setBonusState, setDef, type SetId } from "../data/sets";
+import { setDef, type SetId } from "../data/sets";
 import { comboStates } from "../data/combos";
 import { setMutation } from "../data/seasonSets";
-import { buildHasThorn, buildHasHeal, condemnedMultOf, equipmentHasThornTrigger, makeSetStarterEquipment, type Equipment } from "../data/equipmentGen";
+import {
+  buildHasThorn,
+  buildHasHeal,
+  condemnedMultOf,
+  equipmentDisplayName,
+  equipmentHasThornTrigger,
+  equipmentResonance,
+  makeSkillEquipment,
+  normalizeArtifact,
+  skillTriggers,
+  passiveCondemnedMult,
+  resonanceBonusState,
+  skillResonant,
+  type Equipment,
+} from "../data/equipmentGen";
+import { coreSkillOf, heroSkillDef } from "../data/heroSkills";
+import { AI_PROFILE_PARAMS, heroAiProfile, heroRhythm, heroRhythmOptions, rhythmDef, type AiProfile, type RhythmId } from "../data/rhythm";
+import { heroOfSetOrNull, type HeroId } from "../data/heroes";
+import { DISCOVERY, RELIC_VALUES, isSeasonFeatured, relicStack } from "../data/artifacts";
 import { qualityUpgrade, type Quality } from "../data/quality";
 import {
   cdrScaleFor,
@@ -117,6 +135,7 @@ import {
   maxHpMultFor,
   startShieldFor,
   slotBonusFor,
+  passiveSlotBonusFor,
   firstXpScaleFor,
   autoPickupFor,
   TALENT_VALUES,
@@ -227,6 +246,15 @@ export interface BattleRunInputs {
   seasonId(): number
   /** 本局出战套组(null = 通用卡池) */
   selectedSet(): SetId | null
+  /**
+   * 本局出战英雄(docs/DESIGN-HERO-RHYTHM.md:本命节律与独有技能池的键)。可选:老宿主 / 老测试不给时
+   * 由 selectedSet 反查(英雄 ≡ 套组双射),都没有 = 未选英雄(通用职业包 + 周期节律)。
+   */
+  selectedHero?(): HeroId | null
+  /** 本局选用的本命节律(S2 第二本命;null / 不给 = 表内本命;不在该英雄可选集里的值被忽略) */
+  startRhythm?(): RhythmId | null
+  /** 首次达成某条共鸣 → 图鉴(键 `art:<效果>:<节律>` / `skill:<技能 id>`) */
+  recordResonanceSeen?(key: string): void
   /** 开局带入的收藏装备(宿主按 selectedGearId 查表并深拷贝;null = 用初始武器) */
   selectedGearForRun(): Equipment | null
   /** 初始武器(宿主决定蓝图画布效果;无收藏件时使用) */
@@ -321,6 +349,12 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
   bossDead = false;
   /** Boss 阶段横幅(P2/P3 切换提示) */
   bossBanner: { text: string; ttl: number } | null = null;
+  /** 共鸣发现横幅(docs/DESIGN-HERO-RHYTHM.md §5:首次达成某条共鸣) */
+  discoveryBanner: { text: string; ttl: number } | null = null;
+  /** 时停剩余(秒):发现共鸣时战斗停 DISCOVERY.hitStop */
+  hitStop = 0;
+  /** 本局已达成的共鸣键(横幅只在首次) */
+  private resonancesSeen = new Set<string>();
   /** 当前关卡(null = 无限关) */
   currentStage: StageDef | null = null;
   /** 本局环境词缀 */
@@ -329,6 +363,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
   selectedSet: SetId | null = null;
   /** 自主控制(挂机):手动输入可覆盖 */
   autoMove = true;
+  /** 挂机档位(按本命节律,开局写入;见 ../data/rhythm 的 RHYTHM_AI_PROFILE) */
+  aiProfile: AiProfile = "kite";
   /** 一局是否已开始 */
   started = false;
   /** 本局是否已结束(宿主在死亡/通关结算时置位;宿主推进闸门) */
@@ -370,17 +406,25 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       clouds: world.clouds,
       minions: world.minions,
       globalPulseMult: 1,
-      // 套组生效状态实时结算(买卡/升品/销毁后自动更新)
+      // 联动加成实时结算:套装件数退役 → 本局共鸣数(docs/DESIGN-HERO-RHYTHM.md §5),买卡 / 切节律 / 买被动后自动更新
       get setBonus() {
-        return setBonusState(world.player.equipment, world.selectedSet);
+        return resonanceBonusState(world.player.castList, world.player.passives, world.selectedSet, world.inputs.seasonId());
+      },
+      // 赛季序号:赛季共鸣格 / 过季回响(R5)
+      get seasonId() {
+        return world.inputs.seasonId();
       },
       // 赛季联动词缀:同 setBonus 口径实时结算
       get seasonMutation() {
         return setMutation(world.inputs.seasonId(), world.selectedSet);
       },
-      // 跨套组合技激活状态:同 setBonus 口径实时结算
+      // 跨套组合技激活状态:同 setBonus 口径实时结算(技能与法宝同列)
       get comboActive() {
-        return comboStates(world.player.equipment);
+        return comboStates(world.player.castList);
+      },
+      // 世界层连杀数:共鸣变形「连杀飞刃 / 连杀雷链」的输入
+      get comboCount() {
+        return world.comboCount;
       },
       addFx: (f) => world.emitFx(f),
       damageEnemy: (e, dmg, o) => world.damageEnemy(e, dmg, o.source, o.lifesteal ?? 0, o.knockbackPower ?? 0, o.from),
@@ -422,7 +466,13 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
 
   /** 荆棘反伤回血流:同时拥有 受击/受伤触发 + 吸血/汲取/护盾 时激活 */
   isThornBuild(): boolean {
-    return buildHasThorn(this.player.equipment) && buildHasHeal(this.player.equipment);
+    const list = this.player.castList;
+    return buildHasThorn(list) && buildHasHeal(list);
+  }
+
+  /** 本局出战英雄:宿主直给 > 由套组反查(双射) > null(未选英雄) */
+  heroId(): HeroId | null {
+    return this.inputs.selectedHero?.() ?? heroOfSetOrNull(this.selectedSet)?.id ?? null;
   }
 
   /* ================= 竞技场与几何 ================= */
@@ -457,6 +507,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
   applyTalentBonuses(): void {
     const talents = this.inputs.ownedTalents();
     this.player.slotBonus = slotBonusFor(talents);
+    this.player.passiveSlotBonus = passiveSlotBonusFor(talents);
     this.player.firstXpScale = firstXpScaleFor(talents);
     // 基础生命 = 基础 × 生命强化天赋 × 收藏图鉴 × 每日天赋「坚韧」
     const cb = collectionBonus(this.inputs.ownedGear());
@@ -509,23 +560,39 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     this.poolTickAcc = 0;
     // 出战套组(主菜单选择,场外配置带入)
     this.selectedSet = this.inputs.selectedSet();
-    // 开局装备:开发演示覆盖 > 收藏选中件 > 套组初始武器 > 默认/蓝图初始武器
+    // 本命节律(docs/DESIGN-HERO-RHYTHM.md §2):选英雄那一下就定了;第 2 条由分岔技能解锁。
+    // S2 第二本命:宿主给的 startRhythm 落在该英雄可选集里才生效(未解锁 / 脏值 → 表内本命)
+    const hero = this.heroId();
+    const wanted = this.inputs.startRhythm?.() ?? null;
+    const start: RhythmId = hero && wanted && heroRhythmOptions(hero).includes(wanted) ? wanted : heroRhythm(hero);
+    this.player.rhythms = [start];
+    this.aiProfile = heroAiProfile(hero, start);
+    this.discoveryBanner = null;
+    this.hitStop = 0;
+    this.resonancesSeen.clear();
+    // 开局装备:开发演示覆盖 > (核心技能 + 收藏选中件) > 核心技能
     const override = this.inputs.openingEquipmentOverride();
     if (override) {
+      // 开发演示通道:世界直接用该清单,不发核心技能(标定 / 演示要的就是这份清单本身)
       for (const eq of override) {
         this.player.equipment.push(eq);
         this.recordEquipment(eq);
       }
     } else {
+      // 核心技能(§3):英雄有专属 / 通用职业包时实例化技能表;未选英雄走宿主初始武器(蓝图画布可定向)并标为技能
+      const core: Equipment = hero
+        ? makeSkillEquipment(coreSkillOf(hero))
+        : { ...this.inputs.makeStarterEquipment(), kind: "skill", skillId: coreSkillOf(null).id };
+      // 选了第二本命:核心技能跟着挂到所选节律上(核心永远在本命上发动)
+      // 调率跟着核心走(R6):第二本命上也按这一招的节拍发动
+      if (core.triggers[0]?.def.type !== start) core.triggers = skillTriggers(coreSkillOf(hero), start);
+      this.player.skills.push(core);
+      this.recordEquipment(core);
+      // 收藏选中件随身带入主动槽,按本局已解锁节律归一化
       const sel = this.inputs.selectedGearForRun();
       if (sel) {
-        this.player.equipment.push(sel);
+        this.player.equipment.push(normalizeArtifact(sel, this.player.rhythms, undefined, this.inputs.seasonId()));
         this.recordEquipment(sel);
-      } else {
-        // 套组初始武器(选套组即定本局基调);无套组走宿主初始武器(蓝图画布可定向)
-        const starter = this.selectedSet ? makeSetStarterEquipment(this.selectedSet) : this.inputs.makeStarterEquipment();
-        this.player.equipment.push(starter);
-        this.recordEquipment(starter);
       }
     }
     this.started = true;
@@ -592,6 +659,12 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
    * 与本方法同序出现在宿主 update 中。
    */
   advance(dt: number): void {
+    // 共鸣发现时停(§5):战斗整体停住,只让横幅倒计时
+    if (this.hitStop > 0) {
+      this.hitStop -= dt;
+      this.tickBanners(dt);
+      return;
+    }
     this.updatePlayer(dt);
     // 连杀狂潮:连杀 3 秒无新击杀则断连;每 10 连杀触发 2 秒狂潮(全装备触发加速)
     this.comboTimer -= dt;
@@ -610,6 +683,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       (this.frenzyTimer > 0 ? FRENZY_PULSE_MULT : 1) *
       this.dailyCdrMult();
     this.engine.update(this.ctx, dt);
+    this.detectResonance();
     this.updateEnemies(dt);
     // 批 4 技能预警:倒计时/引爆/余烬(独立于 Boss 三阶段的附加层管线)
     this.tickTelegraphs(dt);
@@ -663,15 +737,94 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
 
     this.tickFx(dt);
     this.tickDmg(dt);
-    if (this.bossBanner) {
-      this.bossBanner.ttl -= dt;
-      if (this.bossBanner.ttl <= 0) this.bossBanner = null;
-    }
+    this.tickBanners(dt);
 
     // 限制敌人数量
     if (this.enemies.length > LIMITS.enemies) {
       this.enemies.splice(0, this.enemies.length - LIMITS.enemies);
     }
+  }
+
+  /** 两条横幅倒计时(Boss 阶段 / 共鸣发现) */
+  private tickBanners(dt: number): void {
+    if (this.bossBanner) {
+      this.bossBanner.ttl -= dt;
+      if (this.bossBanner.ttl <= 0) this.bossBanner = null;
+    }
+    if (this.discoveryBanner) {
+      this.discoveryBanner.ttl -= dt;
+      if (this.discoveryBanner.ttl <= 0) this.discoveryBanner = null;
+    }
+  }
+
+  /**
+   * 共鸣发现(docs/DESIGN-HERO-RHYTHM.md §5):每帧扫一遍技能 + 法宝,首次达成的共鸣 → 横幅 + 时停 + 图鉴。
+   * 键:法宝 `art:<效果>:<节律>`(切节律再挂回同一条不重复报);技能 `skill:<技能 id>`。
+   */
+  private detectResonance(): void {
+    const p = this.player;
+    const season = this.inputs.seasonId();
+    for (const eq of p.castList) {
+      let key: string | null = null;
+      // 赛季角标(R5):当季新格 / 过季回响格 / 本季首发基础格;图鉴键变体法宝用变体 id
+      let tag = "";
+      if (eq.kind === "skill") {
+        if (eq.skillId && skillResonant(eq, p.passives)) key = `skill:${eq.skillId}`;
+      } else {
+        const info = equipmentResonance(eq, season);
+        if (info) {
+          const r = eq.triggers[0]?.def.type ?? "";
+          key = `art:${eq.variant ?? eq.effect.def.type}:${r}`;
+          tag = info.kind === "season" ? DISCOVERY.seasonNew : info.kind === "echo" ? DISCOVERY.seasonEcho : !eq.variant && r && isSeasonFeatured(eq.effect.def.type, r, season) ? DISCOVERY.seasonFeatured : "";
+        }
+      }
+      if (!key || this.resonancesSeen.has(key)) continue;
+      this.resonancesSeen.add(key);
+      const name = eq.kind === "skill" ? heroSkillDef(eq.skillId!)?.resonanceName ?? equipmentDisplayName(eq, p.passives) : equipmentDisplayName(eq, undefined, season);
+      const rhythm = eq.triggers[0] ? rhythmDef(eq.triggers[0].def.type as RhythmId)?.name ?? "" : "";
+      this.discoveryBanner = { text: `共鸣 · ${name}${rhythm && eq.kind !== "skill" ? `(${rhythm}节律)` : ""}${tag ? ` · ${tag}` : ""}`, ttl: DISCOVERY.bannerSec };
+      this.hitStop = DISCOVERY.hitStop;
+      this.emitFx({ type: "nova", pos: vec2(p.pos.x, p.pos.y), radius: 90, ttl: 0.5, maxTtl: 0.5 });
+      this.inputs.recordResonanceSeen?.(key);
+    }
+  }
+
+  /**
+   * 重置分岔(§6):撤掉已选分岔技能与它解锁的节律,挂在那条节律上的法宝按剩余已解锁节律重挂。
+   * 次数与价由升级弹层管(表在 ../data/shop);返回 false = 没有分岔可撤。
+   */
+  resetBranch(): boolean {
+    const r = this.player.resetBranch();
+    if (!r) return false;
+    for (const eq of this.player.equipment) normalizeArtifact(eq, this.player.rhythms, undefined, this.inputs.seasonId());
+    return true;
+  }
+
+  /* ---------- 玩家受伤统一入口(遗物「护心镜」/「假命」的结算位) ---------- */
+
+  /** 接触类伤害倍率:护心镜 ×0.85(叠加按表衰减) */
+  private contactMult(): number {
+    const k = relicStack(this.player.passives, "mirror");
+    return k > 0 ? 1 - (1 - RELIC_VALUES.mirror.contactMult) * k : 1;
+  }
+
+  /** 玩家受伤:走 Player.takeDamage,致死时给「假命」一次机会 */
+  private hurtPlayer(dmg: number): number {
+    const dealt = this.player.takeDamage(dmg);
+    if (!this.player.alive) this.trySpareLife();
+    return dealt;
+  }
+
+  private trySpareLife(): void {
+    const p = this.player;
+    if (p.spareLifeUsed || relicStack(p.passives, "spare_life") <= 0) return;
+    if (Math.random() >= RELIC_VALUES.spare_life.chance) return;
+    p.spareLifeUsed = true;
+    p.alive = true;
+    p.hp = Math.max(1, Math.round(p.maxHp * RELIC_VALUES.spare_life.healPct));
+    p.addShield(Math.round(p.maxHp * 0.1), 1);
+    this.discoveryBanner = { text: "假命 · 免死一次", ttl: DISCOVERY.bannerSec };
+    this.emitFx({ type: "heal", pos: vec2(p.pos.x, p.pos.y), radius: 60, ttl: 0.5, maxTtl: 0.5 });
   }
 
   /** 章节结束条件判定:末章按关底规则判通关/判负,其余记进度后进章间商店 */
@@ -720,11 +873,24 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       p.pos.x = clamp(p.pos.x + mv.x * PLAYER_BASE.speed * p.speedMult * dt, a.x0 + 30, a.x1 - 30);
       p.pos.y = clamp(p.pos.y + mv.y * PLAYER_BASE.speed * p.speedMult * dt, yMin, yMax);
     } else if (this.autoMove) {
-      // 自主控制(挂机):贴身才躲(避免小竞技场里自陷包围),平时顺时针巡场
+      // 自主控制(挂机):按本命节律取档位(docs/DESIGN-HERO-RHYTHM.md §2.3)——
+      // kite:贴身才躲(避免小竞技场里自陷包围),平时顺时针巡场;
+      // hold:允许被围(受击 / 低血节律要挨打才有输出),围数过多或血量过低才躲;
+      // orbit:持续绕场(移动节律靠走位触发),敌人贴到很近才躲
       const nearest = this.nearestEnemy(p.pos, 110);
+      let dodge = !!nearest;
+      if (nearest && this.aiProfile === "hold") {
+        let around = 0;
+        for (const e of this.enemies) if (e.hp > 0 && Math.hypot(e.pos.x - p.pos.x, e.pos.y - p.pos.y) <= 110) around += 1;
+        dodge = around >= AI_PROFILE_PARAMS.hold.maxContacts || p.hp / p.maxHp < AI_PROFILE_PARAMS.hold.fleeHpPct;
+      } else if (nearest && this.aiProfile === "orbit") {
+        dodge = Math.hypot(nearest.pos.x - p.pos.x, nearest.pos.y - p.pos.y) <= AI_PROFILE_PARAMS.orbit.dodgeRadius;
+      }
       let mvx = 0;
       let mvy = 0;
-      if (nearest) {
+      if (nearest && !dodge && this.aiProfile === "hold") {
+        // 站桩承伤:原地不动
+      } else if (nearest && dodge) {
         const dx = p.pos.x - nearest.pos.x;
         const dy = p.pos.y - nearest.pos.y;
         const d = Math.hypot(dx, dy) || 1;
@@ -757,7 +923,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       this.poolTickAcc += dt;
       while (this.poolTickAcc >= OBSTACLE.poolTick) {
         this.poolTickAcc -= OBSTACLE.poolTick;
-        p.takeDamage(OBSTACLE.poolDps * OBSTACLE.poolTick);
+        this.hurtPlayer(OBSTACLE.poolDps * OBSTACLE.poolTick);
       }
     } else {
       this.poolTickAcc = 0;
@@ -795,8 +961,9 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
         },
         onTelegraph: (t) => this.skillTelegraphs.push({ t, total: t.charge, src: e }),
         // 冲锋单次撞击:走受击管线(触发受击类装备)+ 可选减速/落点燃池(撞击点快照)
-        onChargeHit: (dmg, pos, slow, ignite) => {
-          this.player.takeDamage(dmg);
+        onChargeHit: (raw, pos, slow, ignite) => {
+          const dmg = Math.max(1, Math.round(raw * this.contactMult()));
+          this.hurtPlayer(dmg);
           this.engine.onHurt(this.ctx, dmg, e);
           this.spawnDmg(p.pos, dmg, e.def.color);
           if (slow) this.player.applySlow(slow.factor, slow.duration);
@@ -835,8 +1002,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       if (d <= rr && e.hitCooldown <= 0) {
         e.hitCooldown = CONTACT_HIT_CD;
         // 光环伤害派生乘数:乘数 = 1 时与基线一致
-        const cdmg = Math.max(1, Math.round(e.def.contactDmg * (aura?.dmg ?? 1)));
-        this.player.takeDamage(cdmg);
+        const cdmg = Math.max(1, Math.round(e.def.contactDmg * (aura?.dmg ?? 1) * this.contactMult()));
+        this.hurtPlayer(cdmg);
         this.engine.onHurt(this.ctx, cdmg, e);
         this.spawnDmg(p.pos, cdmg, "#ff6b6b");
         // 撕咬反馈:玩家身边红色血屑 + 轻震屏
@@ -875,7 +1042,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
   }
 
   /** 通用震击引爆:冲击波 + 碎屑 + 震屏,半径内玩家走受击管线(触发受击类装备)。Boss 三阶段与批 4 技能预警共用 */
-  private detonateSlam(pos: Vec2, radius: number, dmg: number, src: Enemy | null, burstColor: string): void {
+  private detonateSlam(pos: Vec2, radius: number, rawDmg: number, src: Enemy | null, burstColor: string): void {
+    const dmg = Math.max(1, Math.round(rawDmg * this.contactMult()));
     this.emitFx({ type: "nova", pos: vec2(pos.x, pos.y), radius, ttl: 0.4, maxTtl: 0.4 });
     this.fxLayer.burst({
       x: pos.x, y: pos.y, count: 18, color: burstColor,
@@ -884,7 +1052,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     this.fxLayer.addShake(6);
     const p = this.player;
     if (Math.hypot(p.pos.x - pos.x, p.pos.y - pos.y) <= radius + PLAYER_BASE.radius) {
-      p.takeDamage(dmg);
+      this.hurtPlayer(dmg);
       this.engine.onHurt(this.ctx, dmg, src);
       this.spawnDmg(p.pos, dmg, "#ff6b6b");
       if (this.isThornBuild()) p.heal(Math.max(1, Math.round(p.maxHp * THORN_HEAL_PCT)));
@@ -1161,7 +1329,9 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
   private updateGems(dt: number): void {
     const p = this.player;
     const autoPick = autoPickupFor(this.inputs.ownedTalents()); // 自动拾取:全屏吸附
-    const magnetR = autoPick ? 99999 : GEM_MAGNET_RADIUS;
+    // 遗物「磁轭」:拾取半径 ×1.4(叠加按表衰减)
+    const yoke = relicStack(p.passives, "yoke");
+    const magnetR = autoPick ? 99999 : GEM_MAGNET_RADIUS * (1 + (RELIC_VALUES.yoke.magnetMult - 1) * yoke);
     for (const gem of this.gems) {
       if (gem.delay > 0) {
         gem.delay -= dt;
@@ -1202,7 +1372,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     const taken = Math.max(0, Math.min(dmg, this.reflectBudget));
     this.reflectBudget -= taken;
     if (taken > 0) {
-      this.player.takeDamage(taken);
+      this.hurtPlayer(taken);
       this.spawnDmg(this.player.pos, taken, "#4fc3f7");
     }
   }
@@ -1226,7 +1396,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       mult *= desperateMultFor(this.inputs.ownedTalents());
     }
     const crit = critFor(this.inputs.ownedTalents());
-    const critRate = crit.rate + (this.hasDailyTalent("crit10") ? dailyTalentOf("crit10").value : 0);
+    // 暴击率 = 天赋 + 每日天赋「暴击」+ 遗物「裂核」(叠加按表衰减)
+    const critRate = crit.rate + (this.hasDailyTalent("crit10") ? dailyTalentOf("crit10").value : 0) + RELIC_VALUES.core.critRate * relicStack(this.player.passives, "core");
     if (critRate > 0 && Math.random() < critRate) {
       mult *= crit.mult;
       this.spawnDmg(e.pos, 0, "#ff2d8f"); // 暴击标记(伤害数字上方)
@@ -1240,7 +1411,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       mult *= 1.5;
     }
     // 隐藏修饰器「送葬」:对残血目标增伤;依赖目标当前血量,故只能在结算侧乘(引擎的 statsOf 拿不到目标)
-    mult *= condemnedMultOf(source, e.hp / e.maxHp);
+    mult *= condemnedMultOf(source, e.hp / e.maxHp) * passiveCondemnedMult(this.player.passives, e.hp / e.maxHp);
     dmg = Math.round(dmg * mult);
     if (dmg <= 0) return;
     // 反伤领域:敌人受击时反弹固定比例伤害(反射者自带比例不叠加)
@@ -1348,7 +1519,11 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     // addXp 自己会扣经验、抬等级、并按 LEVELUP_HEAL_PCT 回一口血(封顶 maxHp),故这里不重复施加
     // 任何成长或回血;它内部是 while 循环却只返回 boolean,连升级数由前后等级之差得出。
     const lvBefore = this.player.level;
-    if (this.player.addXp(e.def.xp)) this.host.onLevelUp?.(this.player.level - lvBefore);
+    if (this.player.addXp(e.def.xp)) {
+      // B2 等级收益(docs/DESIGN-SEASON-FEEL.md):每级 +hpPerLevel 最大生命;三选一由宿主弹
+      for (let i = lvBefore; i < this.player.level; i++) this.player.levelUpGrowth();
+      this.host.onLevelUp?.(this.player.level - lvBefore);
+    }
     this.engine.onKill(this.ctx, e, { fromSplit, source });
   }
 

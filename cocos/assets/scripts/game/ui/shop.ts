@@ -78,7 +78,8 @@ export function cardIconSize(h: number): number {
 }
 
 export interface ShopToolBtn extends ShopRect {
-  id: "refresh" | "fusion" | "restart" | "home";
+  /** passive = 被动法宝管理(docs/DESIGN-HERO-RHYTHM.md R2:融合钮退出商店、移到主菜单,这一格改给被动) */
+  id: "refresh" | "passive" | "restart" | "home";
   label: string;
 }
 
@@ -296,7 +297,7 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
   /* 工具钮行:4 钮等宽 126、间距 8(16 + 4×126 + 3×8 = 544) */
   const toolDefs: { id: ShopToolBtn["id"]; label: string }[] = [
     { id: "refresh", label: "刷新" },
-    { id: "fusion", label: "融合" },
+    { id: "passive", label: "被动" },
     { id: "restart", label: "重开" },
     { id: "home", label: "主页" },
   ];

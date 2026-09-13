@@ -67,7 +67,7 @@ export interface MenuLayoutOrigin {
   phantomH: number;
   /** 含义:入口钮横向间距。单位:设计 px。依据:同套组卡间距。出处:竖屏翻版 v2 */
   entryGap: number;
-  /** 含义:入口钮个数(entryW = (屏宽 − 2pad − entryGap×(本值−1)) / 本值)。单位:个。依据:扭蛋/天赋/通行证/委托/每日/升级。出处:装备系统重构 */
+  /** 含义:入口钮个数(entryW = (屏宽 − 2pad − entryGap×(本值−1)) / 本值)。单位:个。依据:委托/扭蛋/天赋/通行证/每日/升级/融合(融合自 R2 由商店移入)。出处:装备系统重构 → 英雄节律 R2 */
   entryCount: number;
   /** 含义:套组卡横向间距。单位:设计 px。依据:与入口行同节奏。出处:需求优化 v2 */
   setGap: number;
@@ -310,7 +310,7 @@ export const MENU_LAYOUT_DEFAULTS: MenuLayoutTable = {
     phantomY: 96,
     phantomH: 44,
     entryGap: 12,
-    entryCount: 6,
+    entryCount: 7,
     setGap: 8,
     rowPlateF: 0.35,
     setBandNum: 20,
@@ -444,7 +444,7 @@ export const MENU_LAYOUT_RANGE: Record<keyof MenuLayoutOrigin, [number, number]>
   phantomAnchor: [60, 560],
   phantomY: [20, 160],
   phantomH: [14, 60],
-  entryGap: [0, 24],
+  entryGap: [0, 32],
   entryCount: [1, 12],
   setGap: [0, 20],
   rowPlateF: [0.05, 0.5],

@@ -10,9 +10,10 @@
  */
 
 import type { SetId } from "./sets";
-import { allSets, setDef, setReleaseSeason, SET_PIECE_TIERS } from "./sets";
-import { isSeasonBoosted, seasonThemeIndex, setMutation } from "./seasonSets";
-import { SET_STARTERS } from "./equipmentGen";
+import { allSets, setReleaseSeason } from "./sets";
+import { isSeasonBoosted, seasonThemeIndex } from "./seasonSets";
+import { heroSkills } from "./heroSkills";
+import { heroRhythm, heroRhythmOptions, rhythmDef, type RhythmId } from "./rhythm";
 
 export type HeroId =
   | "vera"
@@ -229,7 +230,7 @@ export function showcaseHero(save: HeroSelection): HeroDef | null {
 
 /* ---------- 技能详情(英雄页下半区,恒 4 条) ---------- */
 
-export type HeroSkillTag = "初始武器" | "三件套" | "六件套" | "赛季联动";
+export type HeroSkillTag = "核心技能" | "分岔" | "进阶" | "本命节律";
 
 export interface HeroSkillLine {
   tag: HeroSkillTag;
@@ -237,23 +238,31 @@ export interface HeroSkillLine {
   desc: string;
 }
 
+/** 英雄页第 4 行的可选输入:本局选用的本命(S2 第二本命)与是否已解锁第二本命 */
+export interface HeroSkillLineOpts {
+  rhythm?: RhythmId;
+  unlocked?: boolean;
+}
+
 /**
- * 英雄的四条技能说明:开局那一下 / 两个联动档 / 当季词缀。
- * 全部从 SET_STARTERS、SETS(含件数档)与 seasonSets 读,本函数不落地任何数值。
+ * 英雄的四条技能说明(docs/DESIGN-HERO-RHYTHM.md §3):核心 / 两个互斥分岔 / 进阶 / 本命节律。
+ * 全部从 heroSkills 与 rhythm 两张表读,本函数不落地任何数值。第 4 行在已解锁第二本命时提示可点行轮转。
  */
-export function heroSkillLines(id: HeroId, seasonId: number): readonly HeroSkillLine[] {
-  const hero = heroDef(id);
-  const set = setDef(hero.setId);
-  const starter = SET_STARTERS[hero.setId];
-  const mut = setMutation(seasonId, hero.setId);
+export function heroSkillLines(id: HeroId, _seasonId: number, opts: HeroSkillLineOpts = {}): readonly HeroSkillLine[] {
+  const skills = heroSkills(id);
+  const core = skills.find((s) => s.kind === "core")!;
+  const branches = skills.filter((s) => s.kind === "branch");
+  const advance = skills.find((s) => s.kind === "advance")!;
+  const native = heroRhythm(id);
+  const chosen = opts.rhythm ?? native;
+  const options = heroRhythmOptions(id);
+  const rhythmDesc = opts.unlocked
+    ? `可选:${options.map((r) => rhythmDef(r).name).join(" / ")} · 点此行切换`
+    : `${rhythmDef(native).desc} · 任一关 3 星通关解锁第二本命`;
   return [
-    { tag: "初始武器", label: starter.name, desc: starter.desc },
-    { tag: "三件套", label: set.bonus3.name, desc: `${SET_PIECE_TIERS.tier1} 件 · ${set.bonus3.desc}` },
-    { tag: "六件套", label: set.bonus6.name, desc: `${SET_PIECE_TIERS.tier2} 件 · ${set.bonus6.desc}` },
-    {
-      tag: "赛季联动",
-      label: mut ? mut.name : "当季无联动",
-      desc: mut ? mut.desc : `S${hero.releaseSeason} 发布当季生效,过季后回落套组本身联动`,
-    },
+    { tag: "核心技能", label: core.name, desc: core.desc },
+    { tag: "分岔", label: `${branches[0].name} / ${branches[1].name}`, desc: `${branches[0].desc};${branches[1].desc}` },
+    { tag: "进阶", label: advance.name, desc: advance.desc },
+    { tag: "本命节律", label: `${rhythmDef(chosen).name}节律${chosen !== native ? "(第二本命)" : ""}`, desc: rhythmDesc },
   ];
 }

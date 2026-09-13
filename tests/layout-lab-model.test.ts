@@ -257,7 +257,7 @@ describe("dragValue / nudgeValue", () => {
     const prev = readValues().deco.crestOffX;
     expect(clampValue("deco", "crestOffX", 9999)).toBe(200);
     expect(clampValue("deco", "crestOffX", -9999)).toBe(-200);
-    expect(clampValue("origin", "entryGap", 9999)).toBe(24);
+    expect(clampValue("origin", "entryGap", 9999)).toBe(32);
     expect(clampValue("origin", "pad", NaN)).toBe(16);
     expect(clampValue("origin", "rowPlateF", 0.37)).toBeCloseTo(0.35, 6);
     let last = -9999;

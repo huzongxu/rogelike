@@ -1359,7 +1359,7 @@ export class Game {
     for (const b of L.toolBtns) {
       const isRefresh = b.id === "refresh";
       const refreshAvail = isRefresh ? this.gold >= this.shopRefreshCost() : true;
-      const enabled = b.id === "fusion" ? this.player.equipment.length >= 2 : isRefresh ? refreshAvail : true;
+      const enabled = (b.id as string) === "fusion" ? this.player.equipment.length >= 2 : isRefresh ? refreshAvail : true;
       if (b.id === "restart" || b.id === "home") {
         dangerButton(g, b.x, b.y, b.w, b.h, b.label, this.assets);
         continue;
@@ -1561,7 +1561,7 @@ export class Game {
         if (b.id === "refresh") {
           // 售罄制:刷新走金币(成本随章节与本章已刷次数递增)
           this.refreshShopForGold();
-        } else if (b.id === "fusion") {
+        } else if ((b.id as string) === "fusion") {
           if (this.player.equipment.length >= 2) this.openFusion("shop");
         } else if (b.id === "restart") {
           this.openConfirm("确定重开本局?当前章节进度与金币将丢失。", () => this.restart());

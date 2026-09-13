@@ -19,9 +19,10 @@ import {
   showcaseHero,
   type HeroSelection,
 } from "@game/data/heroes";
-import { allSets, setDef, setReleaseSeason, SET_PIECE_TIERS } from "@game/data/sets";
-import { isSeasonBoosted, seasonThemeIndex, setMutation } from "@game/data/seasonSets";
-import { SET_STARTERS } from "@game/data/equipmentGen";
+import { allSets, setDef, setReleaseSeason } from "@game/data/sets";
+import { isSeasonBoosted, seasonThemeIndex } from "@game/data/seasonSets";
+import { heroSkills } from "@game/data/heroSkills";
+import { HERO_RHYTHM, heroRhythmOptions, rhythmDef } from "@game/data/rhythm";
 
 const SEASONS = [1, 2, 3, 4] as const;
 const PER_SEASON = 3;
@@ -202,8 +203,8 @@ describe("applyHeroSelection / showcaseHero / normalizeHeroId", () => {
 describe("heroSkillLines", () => {
   const SEASON_RANGE = [0, ...SEASONS, 5, 6];
 
-  it("12 英雄 × 全部赛季恒 4 条,tag 顺序固定", () => {
-    const TAGS = ["初始武器", "三件套", "六件套", "赛季联动"];
+  it("12 英雄 × 全部赛季恒 4 条,tag 顺序固定(核心 / 分岔 / 进阶 / 本命节律)", () => {
+    const TAGS = ["核心技能", "分岔", "进阶", "本命节律"];
     for (const h of allHeroes()) {
       for (const s of SEASON_RANGE) {
         const lines = heroSkillLines(h.id, s);
@@ -224,42 +225,37 @@ describe("heroSkillLines", () => {
     }
   });
 
-  it("初始武器/件数档/联动名逐条取自源表,本模块不另立文案", () => {
+  it("核心 / 分岔 / 进阶 / 本命节律逐条取自技能表与节律表,本模块不另立文案", () => {
     for (const h of allHeroes()) {
-      const set = setDef(h.setId);
-      const starter = SET_STARTERS[h.setId];
+      const skills = heroSkills(h.id);
+      const core = skills.find((s) => s.kind === "core")!;
+      const [b1, b2] = skills.filter((s) => s.kind === "branch");
+      const adv = skills.find((s) => s.kind === "advance")!;
       const [l1, l2, l3, l4] = heroSkillLines(h.id, h.releaseSeason);
-      expect(l1.label).toBe(starter.name);
-      expect(l1.desc).toBe(starter.desc);
-      expect(l2.label).toBe(set.bonus3.name);
-      expect(l2.desc).toBe(`${SET_PIECE_TIERS.tier1} 件 · ${set.bonus3.desc}`);
-      expect(l3.label).toBe(set.bonus6.name);
-      expect(l3.desc).toBe(`${SET_PIECE_TIERS.tier2} 件 · ${set.bonus6.desc}`);
-      expect(l4.label).not.toBe(l2.label);
+      expect(l1.label).toBe(core.name);
+      expect(l1.desc).toBe(core.desc);
+      expect(l2.label).toBe(`${b1.name} / ${b2.name}`);
+      expect(l2.desc).toBe(`${b1.desc};${b2.desc}`);
+      expect(l3.label).toBe(adv.name);
+      expect(l3.desc).toBe(adv.desc);
+      expect(l4.label).toBe(`${rhythmDef(HERO_RHYTHM[h.id]).name}节律`);
+      expect(l4.desc).toContain("解锁第二本命");
     }
   });
 
-  it("赛季联动:常驻三套逐季轮换恒有词缀,赛季新套仅发布当季有词缀、过季回落", () => {
+  it("本命节律行:未解锁提示 3 星解锁;解锁后列出可选节律并标出第二本命;赛季号不影响四行", () => {
     for (const h of allHeroes()) {
-      const inSeason = heroSkillLines(h.id, h.releaseSeason)[3];
-      const mut = setMutation(h.releaseSeason, h.setId);
-      expect(inSeason.label).toBe(mut ? mut.name : "当季无联动");
-      if (h.releaseSeason === 1) {
-        // 常驻三套走 MUTATION_POOLS 逐季轮换 → 第 4 条任何赛季都不空转
-        const names = new Set<string>();
-        for (const s of [1, 2, 3, 4, 5, 6]) {
-          const line = heroSkillLines(h.id, s)[3];
-          expect(line.label, `${h.id} S${s} 常驻套应恒有轮换词缀`).not.toBe("当季无联动");
-          expect(line.desc).toBe(setMutation(s, h.setId)!.desc);
-          names.add(line.label);
-        }
-        expect(names.size, `${h.id} 词缀未随赛季轮换`).toBeGreaterThan(1);
-      } else {
-        // S2~S4 每季三个新套全部带当季专属词缀 → 英雄页第 4 条不会整季空转
-        expect(mut, `${h.id} 发布当季应有赛季词缀`).not.toBeNull();
-        // 过季:该套组不再受益,第 4 条回落为"当季无联动"
-        expect(heroSkillLines(h.id, h.releaseSeason + 1)[3].label, `${h.id} 过季后联动未回落`).toBe("当季无联动");
-      }
+      const base = heroSkillLines(h.id, 1);
+      for (const s of [2, 3, 4, 5, 6]) expect(heroSkillLines(h.id, s)).toEqual(base);
+      const opts = heroRhythmOptions(h.id);
+      expect(opts[0]).toBe(HERO_RHYTHM[h.id]);
+      expect(opts.length).toBeGreaterThanOrEqual(2);
+      const second = opts[1];
+      const line = heroSkillLines(h.id, 1, { rhythm: second, unlocked: true })[3];
+      expect(line.label).toBe(`${rhythmDef(second).name}节律(第二本命)`);
+      for (const r of opts) expect(line.desc).toContain(rhythmDef(r).name);
+      // 传了本命自己:不带「第二本命」后缀
+      expect(heroSkillLines(h.id, 1, { rhythm: opts[0], unlocked: true })[3].label).toBe(`${rhythmDef(opts[0]).name}节律`);
     }
   });
 });

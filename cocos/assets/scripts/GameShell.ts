@@ -121,6 +121,7 @@ import {
 } from "./confirm/ConfirmModel";
 import { LevelUpView } from "./levelup/LevelUpView";
 import { LevelUpModel, type LevelUpAction, type LevelUpWorld } from "./levelup/LevelUpModel";
+import { rhythmDef } from "./game/data/rhythm";
 import { Plate, approxW } from "./ui/PanelKit";
 import { HUD_BOT_H, HUD_BOT_H_V4 } from "./game/ui/hud";
 import type { TripleMode } from "./game/data/fusion";
@@ -405,7 +406,7 @@ export class GameShell extends Component {
     /** 还没弹出去的升级次数(选完一轮减 1,归零即恢复战斗) */
     private levelUpPending = 0;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
-    private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1 };
+    private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1, heroRhythmUnlock: {}, heroRhythmChoice: {} };
     /** 赛季切片同样被 `tickSeason` 逐帧读,故与 heroSlice 同性质地复用同一枚对象 */
     private seasonSlice: SeasonSaveView = { seasonId: 1, seasonStartAt: 0, stageStars: [], seasonBest: 0, stardust: 0 };
     private overlay: Node | null = null;
@@ -743,8 +744,12 @@ export class GameShell extends Component {
             case "phantom":
                 this.openLeaderboard();
                 return;
-            // 六个入口就是 MenuEntryId 的全集,逐个换成真实开屏(商店的融合工具钮走 onShopAction)
+            // 七个入口就是 MenuEntryId 的全集,逐个换成真实开屏(融合自 R2 起从商店移到这里)
             case "entry":
+                if (a.entry === "fusion") {
+                    this.openFusion();
+                    return;
+                }
                 if (a.entry === "daily") {
                     this.openDaily();
                     return;
@@ -888,6 +893,12 @@ export class GameShell extends Component {
             get equipment() {
                 return sim.player.equipment;
             },
+            // 被动法宝与已解锁节律(docs/DESIGN-HERO-RHYTHM.md §4):同样走 getter 取活引用
+            get passives() {
+                return sim.player.passives;
+            },
+            passiveSlots: () => sim.player.passiveSlots,
+            rhythms: () => sim.player.rhythms,
             gold: () => sim.gold,
             setGold: (v) => {
                 sim.world.gold = v;
@@ -938,8 +949,14 @@ export class GameShell extends Component {
             case "tool":
                 if (a.id === "refresh") {
                     if (!m.refresh()) this.toast("金币不足,刷新不了");
-                } else if (a.id === "fusion") {
-                    this.openFusion();
+                } else if (a.id === "passive") {
+                    // 被动法宝管理(R2):复用升级弹层的三卡几何,列出被动、可销毁回收半价;弹层关掉后商店重排
+                    if (sim.player.passives.length === 0) this.toast("还没有被动法宝");
+                    else if (this.levelUpModel) {
+                        this.levelUpModel.openPassives();
+                        this.syncLevelUp();
+                    }
+                    break;
                 } else if (a.id === "restart") {
                     // Web src/game.ts:1567:破坏性操作先弹二次确认,确认后才执行原来那一发
                     this.openConfirm(CONFIRM_PROMPT_RESTART, () => this.restartRun());
@@ -966,12 +983,18 @@ export class GameShell extends Component {
                     () => this.toast("广告未看完,槽位未开")
                 );
                 return;
-            case "card":
-                if (!m.buy(a.index)) this.toast(sim && m.freeSlots() <= 0 ? "槽位已满,先销毁一件" : "金币不足");
+            case "card": {
+                const why = m.buyBlocker(a.index);
+                if (!m.buy(a.index)) this.toast(why === "slots" ? "槽位已满,先销毁一件" : why === "passiveSlots" ? "被动槽已满" : "金币不足");
                 break;
-            case "weapon":
-                m.selectWeapon(a.id);
+            }
+            case "weapon": {
+                // 解锁了第 2 条节律后,点行 = 切换这件法宝所挂的节律(免费、不限次);只有 1 条时退化为点选
+                const next = m.switchRhythm(a.id);
+                if (next) this.toast(`已切到【${rhythmDef(next).name}】节律`);
+                else m.selectWeapon(a.id);
                 break;
+            }
             case "destroy":
                 m.destroy(a.id);
                 break;
@@ -1033,6 +1056,8 @@ export class GameShell extends Component {
         this.heroSlice.selectedHero = s.selectedHero;
         this.heroSlice.selectedSet = s.selectedSet;
         this.heroSlice.seasonId = s.seasonId;
+        this.heroSlice.heroRhythmUnlock = s.heroRhythmUnlock;
+        this.heroSlice.heroRhythmChoice = s.heroRhythmChoice;
         return this.heroSlice;
     }
 
@@ -1060,6 +1085,7 @@ export class GameShell extends Component {
                 return;
             case "row":
             case "clear":
+            case "rhythm":
                 if (m.apply(a)) this.syncHeroes();
                 return;
             case "confirm":
@@ -1752,18 +1778,20 @@ export class GameShell extends Component {
     }
 
     /**
-     * 本屏操作的装备列表是**局内态**(Web 的 `this.player.equipment`,战斗层持有),
-     * 不是存档里的永久收藏 `ownedGear`;getter 现取,与商店屏的 ShopWorld 同一条口。
+     * 本屏操作的装备列表是存档里的**永久收藏** `ownedGear`(docs/DESIGN-HERO-RHYTHM.md R2:融合是场外养成,
+     * 花星尘把两件收藏合成一件,产物可作开局收藏件带进局);getter 现取,与装备升级屏同一份账。
      */
     private fusionEquipment(): Equipment[] {
-        return this.sim ? this.sim.player.equipment : [];
+        return this.save().ownedGear;
     }
 
-    /** 进屏:清空选中与三选一暂存再切屏(Web openFusion 同序;tripleMode 不清,跨开屏保留) */
+    /** 进屏(主菜单入口):清空选中与三选一暂存再切屏(tripleMode 不清,跨开屏保留) */
     private openFusion(): void {
-        const sim = this.sim;
-        // Web openFusion 首行守卫:不足 2 件装备不开屏,全程静默
-        if (!sim || sim.player.equipment.length < 2) return;
+        // 首行守卫:收藏不足 2 件不开屏
+        if (this.fusionEquipment().length < 2) {
+            this.toast("收藏装备不足 2 件,先通关或抽扭蛋");
+            return;
+        }
         this.fusSel = { ...FUSION_DEFAULT_SELECTION };
         this.fusPending = null;
         this.router.show("fusion");
@@ -1784,7 +1812,7 @@ export class GameShell extends Component {
      */
     private onFusionAction(a: FusionAction): void {
         if (a.kind === "back") {
-            this.router.show("shop");
+            this.router.show("menu");
             return;
         }
         const claim = fusionClaim(this.fusionSave(), this.fusionEquipment(), this.fusSel, this.fusMode, this.fusPending, a);
@@ -1815,6 +1843,8 @@ export class GameShell extends Component {
             save.fusionPity = claim.fusionPityTo;
             const eq = this.fusionEquipment();
             for (let i = eq.length - 1; i >= 0; i--) if (claim.removeIds.includes(eq[i].id)) eq.splice(i, 1);
+            // 素材里有正在"带入开局"的那件 → 取消带入(收藏里已经没有它了)
+            if (save.selectedGearId !== null && claim.removeIds.includes(save.selectedGearId)) save.selectedGearId = null;
             if (claim.pending) {
                 this.fusPending = claim.pending;
             } else if (claim.result) {
@@ -2242,6 +2272,9 @@ export class GameShell extends Component {
         // (锁定是"本局内跨弹层记忆",不跨局),再补排一次把可能还开着的弹层收起
         this.levelUpPending = 0;
         this.levelUpModel?.resetRun();
+        // 首章法宝三选一(docs/DESIGN-HERO-RHYTHM.md §6):进第 1 章前免费挑 1 件主动法宝;
+        // 随身带了收藏件的局不弹(开局已有法宝)。弹层开着 = 战斗停住,与升级弹层同一道闸门
+        if (this.sim && this.sim.player.equipment.length === 0 && this.levelUpModel) this.levelUpModel.openFirstPick();
         this.syncLevelUp();
         this.refreshBackdrop();
         this.router.show("battle");
@@ -2408,15 +2441,41 @@ export class GameShell extends Component {
             get equipment() {
                 return sim.player.equipment;
             },
+            get skills() {
+                return sim.player.skills;
+            },
+            get passives() {
+                return sim.player.passives;
+            },
+            heroId: () => sim.world.heroId(),
+            playerLevel: () => sim.player.level,
+            rhythms: () => sim.player.rhythms,
+            unlockRhythm: (r) => {
+                sim.player.unlockRhythm(r);
+            },
+            rhythmLevel: (r) => sim.player.rhythmLevelOf(r),
+            rhythmLevelUp: (r) => sim.player.rhythmLevelUp(r),
+            branchChosen: () => sim.player.branchChosen,
+            setBranchChosen: (id) => {
+                sim.player.branchChosen = id;
+            },
+            // 重置分岔:撤技能 + 收节律 + 法宝重挂都在世界层(它知道归一化规则),这里只转调
+            resetBranch: () => sim.world.resetBranch(),
+            branchResets: () => sim.player.branchResets,
             gold: () => sim.gold,
             setGold: (v) => {
                 sim.world.gold = v;
             },
+            healPct: (pct) => sim.player.heal(Math.max(1, Math.round(sim.player.maxHp * pct))),
+            addMaxHp: (v) => {
+                sim.player.maxHp += v;
+                sim.player.heal(v);
+            },
             slots: () => sim.player.slots,
             chapter: () => sim.chapter,
+            seasonId: () => sim.save.seasonId,
             highestStage: () => sim.save.highestStage,
             ownedTalents: () => sim.save.ownedTalents,
-            selectedSet: () => sim.save.selectedSet ?? null,
             recordEquipment: (eq) => sim.world.recordEquipment(eq),
         };
         const model = new LevelUpModel(world);
@@ -2475,23 +2534,34 @@ export class GameShell extends Component {
     private onLevelUpAction(a: LevelUpAction): void {
         const m = this.levelUpModel;
         if (!m || !m.visible) return;
+        if (m.mode === "passives") {
+            // 被动管理(商店「被动」钮借用本弹层):选它 = 销毁回收、重随 = 翻页、锁定 = 关闭;商店随手重排
+            if (a.kind === "reroll") m.reroll(a.index);
+            else if (a.kind === "lock") m.toggleLock(a.index);
+            else if (!m.pick(a.index).ok) this.toast("这枚被动已不在身上");
+            this.syncLevelUp();
+            this.shopView?.sync();
+            return;
+        }
         if (a.kind === "reroll") {
-            if (!m.reroll(a.index)) this.toast(m.lockedIndex === a.index ? "锁定的卡不能重随" : "金币不足,重随不了");
+            if (!m.reroll(a.index)) this.toast(m.lockedIndex === a.index ? "锁定的卡不能重随" : "本章免费重随已用完");
             this.syncLevelUp();
             return;
         }
         if (a.kind === "lock") {
-            m.toggleLock(a.index);
+            if (!m.toggleLock(a.index)) this.toast("开局法宝不能锁定");
             this.syncLevelUp();
             return;
         }
+        const first = m.mode === "first";
         const r = m.pick(a.index);
         if (!r.ok) {
-            this.toast(r.reason === "slots" ? "槽位已满,选不了新卡" : "这件已不在场上");
+            this.toast(r.reason === "slots" ? "槽位已满,选不了新法宝" : r.reason === "maxed" ? "这条节律已满级" : "这一项已不可选");
             this.syncLevelUp();
             return;
         }
-        this.levelUpPending = Math.max(0, this.levelUpPending - 1);
+        // 首章法宝三选一不占升级队列
+        if (!first) this.levelUpPending = Math.max(0, this.levelUpPending - 1);
         this.syncLevelUp();
         // 连升多级:选完这一轮还有余量就接着弹(弹层不关到底,战斗也就一直停着)
         if (this.levelUpPending > 0) this.openLevelUp();

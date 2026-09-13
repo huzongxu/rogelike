@@ -24,9 +24,17 @@ import { CHAPTER_ARENA } from "@game/data/stages";
 import { chapterIntel } from "@game/data/intel";
 import { chapterTypeInfo } from "@game/data/chapters";
 import type { Equipment } from "@game/data/equipmentGen";
-import { makeSetStarterEquipment, generateEquipment, generateSetEquipment, qualityBasePrice, slotExpandCost, SHOP_SLOT_CAP, qualityUpgrade, qualityPowerRatio, _resetEquipmentUid } from "@game/data/equipmentGen";
+import { makeSetStarterEquipment, generateEquipment, generateSetEquipment, generatePassive, qualityBasePrice, SHOP_SLOT_CAP, qualityUpgrade, qualityPowerRatio, canUpgrade, upgradeCost, _resetEquipmentUid } from "@game/data/equipmentGen";
+import { PASSIVE_SLOTS, type PassiveArtifact } from "@game/data/artifacts";
+import { AI_PROFILE_PARAMS, RHYTHM_AI_PROFILE, isRhythm, type RhythmId } from "@game/data/rhythm";
+import { RUN_AD_SLOT_LIMIT, shopCardPrice } from "@game/data/shop";
+import { BOSS_GOLD, ELITE_GEM_COUNT, GOLD_PER_XP } from "@game/data/combat";
 import { makeTrigger, makeEffect, makeModifier, type EffectType } from "@game/data/affixes";
-import { setBonusState, type SetId } from "@game/data/sets";
+import { makeSkillEquipment, resonanceBonusState, upgradeEquipment } from "@game/data/equipmentGen";
+import { FALLBACK_OFFERS, SKILL_MAX_RANK, coreSkillOf, rollSkillOffers, type SkillOffer } from "@game/data/heroSkills";
+import type { HeroId } from "@game/data/heroes";
+import { RHYTHM_MAX_LEVEL } from "@game/data/rhythm";
+import type { SetId } from "@game/data/sets";
 import { comboStates, COMBO_OFF } from "@game/data/combos";
 import { vec2, type Vec2 } from "@game/core/math";
 
@@ -100,8 +108,10 @@ export interface SimReport {
   totalDamage: number;
   /** 毒池对玩家累计伤害(地形标定用;未开障碍为 0) */
   poolDamage: number;
-  /** 局末装备(供单标定测试复用,如 Boss 单目标 DPS 探针) */
+  /** 局末装备 = 技能 + 主动法宝(供单标定测试复用,如 Boss 单目标 DPS 探针) */
   finalEquipment: Equipment[];
+  /** 局末被动法宝(全局乘区;Boss DPS 探针要一起带上,否则终局输出被低估) */
+  finalPassives: PassiveArtifact[];
 }
 
 export function buildEquipment(build: SimOptions["build"]): Equipment[] {
@@ -261,6 +271,26 @@ export function buildEquipment(build: SimOptions["build"]): Equipment[] {
   }
 }
 
+/**
+ * 单件初始武器 build → 出战英雄(docs/DESIGN-HERO-RHYTHM.md §3:核心技能与独有技能池的键)。
+ * 多件锚点 build(chain / turret / godly / *4 / combo_*)不在表内 = 不走升级三选一,保持旧标定语义。
+ */
+const HERO_BY_BUILD: Partial<Record<SimOptions["build"], HeroId | null>> = {
+  starter: null, // 未选英雄:通用职业包 + 周期节律
+  set_thorn: "vera",
+  set_barrage: "kyle",
+  set_ember: "bran",
+  set_frost: "sia",
+  set_glacier: "nora",
+  set_blizzard: "loka",
+  set_magma: "doran",
+  set_plague: "sally",
+  set_cinderfang: "rayne",
+  set_phantom: "willow",
+  set_requiem: "oden",
+  set_veil: "mu",
+};
+
 /** 深拷贝一张卡并换新 id(模拟商店"刷已持卡同款",供进化凑组) */
 function cloneCard(src: Equipment, id: number): Equipment {
   return {
@@ -271,6 +301,8 @@ function cloneCard(src: Equipment, id: number): Equipment {
     triggers: src.triggers.map((t) => ({ def: t.def, params: { ...t.params } })),
     effect: { def: src.effect.def, params: { ...src.effect.params }, level: src.effect.level },
     modifiers: src.modifiers.map((m) => ({ def: m.def, params: { ...m.params } })),
+    kind: src.kind,
+    skillId: src.skillId,
   };
 }
 
@@ -300,6 +332,70 @@ function runSimInner(opts: SimOptions): SimReport {
   _resetEquipmentUid(1000);
   const player = new Player();
   player.equipment = buildEquipment(opts.build);
+  // 节律体系(docs/DESIGN-HERO-RHYTHM.md):单件初始武器的 build 把那一件当核心技能(不占主动槽),
+  // 本命节律 = 它的触发器;多件锚点 build 保留为主动法宝,已解锁节律 = 其触发器集合
+  const heroId = HERO_BY_BUILD[opts.build];
+  const levelUps = heroId !== undefined;
+  if (levelUps) {
+    // 与游戏同口径(battleWorld.startRun):选了英雄 → 核心技能按技能表实例化(节律表 × 调率,R6);
+    // 未选英雄(starter)→ 沿用宿主初始武器当核心。此前直接把套组旧初始武器当核心,节拍比真机快一倍,复审数据失真
+    const core = heroId ? makeSkillEquipment(coreSkillOf(heroId)) : { ...player.equipment[0], kind: "skill" as const, skillId: coreSkillOf(null).id };
+    player.skills = [core];
+    player.equipment = [];
+  } else {
+    // 多件锚点 build 就是玩家手里的主动法宝:标 active 才参与共鸣(变形 + 共鸣里程碑),与真实商店货同口径
+    for (const eq of player.equipment) if (!eq.kind) eq.kind = "active";
+  }
+  const rhythmSet = new Set<RhythmId>();
+  // 技能只看首条触发器(第二条是核心的「底拍」慢周期,不算已解锁节律);法宝看全部
+  for (const eq of player.castList) for (const t of eq.kind === "skill" ? eq.triggers.slice(0, 1) : eq.triggers) if (isRhythm(t.def.type)) rhythmSet.add(t.def.type);
+  player.rhythms = rhythmSet.size > 0 ? [...rhythmSet] : ["pulse"];
+  /**
+   * 升级三选一的自动选择(镜像游戏:升级 → 三张独有技能卡 → 选一张)。策略固定可复现:
+   * 分岔(首个)> 新技能 > 核心升阶 > 其余升阶 > 节律强化 > 兜底回血。
+   */
+  const autoPick = (): void => {
+    const owned = new Map<string, number>();
+    for (const s of player.skills) if (s.skillId) owned.set(s.skillId, s.level);
+    const rhythms = new Map<RhythmId, number>();
+    for (const r of player.rhythms) rhythms.set(r, player.rhythmLevelOf(r));
+    const offers = rollSkillOffers({ heroId: heroId ?? null, owned, branchChosen: player.branchChosen, playerLevel: player.level, rhythms }, 3);
+    const rank = (o: SkillOffer): number => {
+      if (o.kind === "skill") return o.def.kind === "branch" ? 0 : 1;
+      if (o.kind === "rank") return o.skillId === coreSkillOf(heroId ?? null).id ? 2 : 3;
+      if (o.kind === "rhythm") return 4;
+      return 5;
+    };
+    const pick = [...offers].sort((a, b) => rank(a) - rank(b))[0];
+    if (!pick) return;
+    switch (pick.kind) {
+      case "skill": {
+        player.skills.push(makeSkillEquipment(pick.def));
+        if (pick.def.kind === "branch") {
+          player.unlockRhythm(pick.def.rhythm);
+          player.branchChosen = pick.def.id;
+        }
+        break;
+      }
+      case "rank": {
+        const live = player.skills.find((s) => s.skillId === pick.skillId);
+        if (live && live.level < SKILL_MAX_RANK) upgradeEquipment(live);
+        break;
+      }
+      case "rhythm":
+        if (player.rhythmLevelOf(pick.rhythm) < RHYTHM_MAX_LEVEL) player.rhythmLevelUp(pick.rhythm);
+        break;
+      case "fallback": {
+        const fb = FALLBACK_OFFERS.find((f) => f.id === pick.id)!;
+        if ("healPct" in fb) player.heal(Math.round(player.maxHp * fb.healPct));
+        if ("maxHp" in fb) {
+          player.maxHp += fb.maxHp;
+          player.heal(fb.maxHp);
+        }
+        break;
+      }
+    }
+  };
   const engine = new EquipmentEngine();
   const waves = new WaveManager();
   const enemies: ReturnType<typeof spawnEnemy>[] = [];
@@ -343,8 +439,8 @@ function runSimInner(opts: SimOptions): SimReport {
     if (critOn && Math.random() < 0.1) mult *= 1.25;
     if (elemental(source.effect.def.type)) mult *= elementMult;
     // 荆棘套 4 件「反伤回响」:受击/受伤触发伤害再 +50%(与游戏 Game.damageEnemy 一致)
-    const sb = setBonusState(player.equipment, opts.set ?? null);
-    if (sb && sb.id === "thorn" && sb.pieces >= 4 && source.triggers.some((t) => t.def.type === "hurt" || t.def.type === "hit")) {
+    const sb = resonanceBonusState(player.castList, player.passives, opts.set ?? null);
+    if (sb && sb.id === "thorn" && sb.bonus6 && source.triggers.some((t) => t.def.type === "hurt" || t.def.type === "hit")) {
       mult *= 1.5;
     }
     dmg = Math.round(dmg * mult);
@@ -364,13 +460,24 @@ function runSimInner(opts: SimOptions): SimReport {
     for (const b of splitBabies(e)) {
       if (enemies.length < 340) enemies.push(spawnEnemy(b.kind, b.pos, waves.wave));
     }
-    const n = e.isElite ? 8 : 1;
-    const goldValue = e.kind === "boss" ? 60 : e.def.xp * 2;
+    // 金币口径与游戏同表(A4 重标后:GOLD_PER_XP 1 / Boss 45 / 精英 6 堆)
+    const n = e.isElite ? ELITE_GEM_COUNT : 1;
+    const goldValue = e.kind === "boss" ? BOSS_GOLD : e.def.xp * GOLD_PER_XP;
     gold += n * goldValue;
     for (let i = 0; i < n; i++) {
       gems.push(spawnGem(vec2(e.pos.x + (Math.random() - 0.5) * 20, e.pos.y + (Math.random() - 0.5) * 20), goldValue));
     }
     if (gems.length > 300) gems.splice(0, gems.length - 300);
+    // 经验入口(镜像 battleWorld.killEnemy):升级 → +hpPerLevel 最大生命 → 自动选一张独有技能卡
+    if (levelUps) {
+      const lvBefore = player.level;
+      if (player.addXp(e.def.xp)) {
+        for (let i = lvBefore; i < player.level; i++) {
+          player.levelUpGrowth();
+          autoPick();
+        }
+      }
+    }
     engine.onKill(ctx, e, { fromSplit, source });
   }
 
@@ -381,10 +488,14 @@ function runSimInner(opts: SimOptions): SimReport {
     clouds,
     minions,
     globalPulseMult: 1,
-    setBonus: setBonusState(player.equipment, opts.set ?? null),
+    setBonus: resonanceBonusState(player.castList, player.passives, opts.set ?? null),
     // 组合技结算:默认关闭(已标定基线逐帧不变);开启时实时结算(同游戏 getter 口径)
     get comboActive() {
-      return opts.combos ? comboStates(player.equipment) : COMBO_OFF;
+      return opts.combos ? comboStates(player.castList) : COMBO_OFF;
+    },
+    // 连杀数:共鸣变形「连杀飞刃 / 连杀雷链」的输入(同游戏 getter 口径)
+    get comboCount() {
+      return comboCount;
     },
     addFx: () => {},
     damageEnemy: (e, dmg, o) => damageEnemy(e, dmg, o.source, o.lifesteal ?? 0, o.knockbackPower ?? 0, o.from),
@@ -443,23 +554,36 @@ function runSimInner(opts: SimOptions): SimReport {
       if (shopTimer <= 0) {
         shopTimer = 60;
         const chapter = Math.floor(t / 60) + 1;
-        const priceOf = (eq: Equipment) => Math.round(qualityBasePrice(eq.quality) * (1 + totalBought * 0.12) * (1 + chapter * 0.03));
-        // 1) 槽位扩展(金币出口):能买就买到上限
-        while (player.slots < SHOP_SLOT_CAP && gold >= slotExpandCost(player.runSlotBonus)) {
-          gold -= slotExpandCost(player.runSlotBonus);
-          player.runSlotBonus += 1;
-        }
-        // 2) 买卡:有空槽且买得起就买(最多 3 张/章;选套后 60% 刷本套卡对应游戏,40% 刷已持卡同款)
+        // 卡价与游戏同表(A4 重标后的曲线;被动法宝同价)
+        const priceOf = (eq: { quality: Equipment["quality"] }) => shopCardPrice(qualityBasePrice(eq.quality), totalBought, chapter);
+        // 1) 槽位扩展:游戏里是广告解锁(每局 RUN_AD_SLOT_LIMIT 次、不花金币,docs/DESIGN-SEASON-FEEL.md A3;R7 后 1 次),
+        //    模拟按"每进一次商店看一次广告"近似 —— 首章 +1 槽,金币全留给法宝与强化
+        if (player.runSlotBonus < RUN_AD_SLOT_LIMIT && player.slots < SHOP_SLOT_CAP) player.runSlotBonus += 1;
+        // 2) 买卡:有空槽且买得起就买(最多 3 张/章;选套后 60% 刷本套卡对应游戏,40% 刷已持卡同款;
+        //    每三次尝试约一次是被动法宝 —— 对应商店三格里恒有一格被动(SHOP_PASSIVE_SLOTS),被动槽满就跳过那一格)
         const buyUpTo3 = () => {
           let bought = 0;
-          while (player.freeSlots > 0 && bought < 3) {
-            const setOffer = opts.set && Math.random() < 0.6 ? generateSetEquipment(opts.set, chapter) : null;
+          let tries = 0;
+          while (player.freeSlots > 0 && bought < 3 && tries < 6) {
+            tries += 1;
+            if (Math.random() < 1 / 3) {
+              if (player.passives.length >= PASSIVE_SLOTS) continue;
+              const pa = generatePassive(chapter);
+              const pp = priceOf(pa);
+              if (gold < pp) break;
+              gold -= pp;
+              player.passives.push(pa);
+              totalBought += 1;
+              bought += 1;
+              continue;
+            }
+            const setOffer = opts.set && Math.random() < 0.6 ? generateSetEquipment(opts.set, chapter, 0, undefined, player.rhythms) : null;
             const offer =
               setOffer
                 ? cloneCard(setOffer, ++simCardId)
                 : player.equipment.length > 0 && Math.random() < 0.4
                   ? cloneCard(player.equipment[Math.floor(Math.random() * player.equipment.length)], ++simCardId)
-                  : generateEquipment(chapter);
+                  : generateEquipment(chapter, undefined, false, 0, player.rhythms);
             const p = priceOf(offer);
             if (gold < p) break;
             gold -= p;
@@ -477,7 +601,18 @@ function runSimInner(opts: SimOptions): SimReport {
           gold -= rcost;
           buyUpTo3();
         }
-        // 3) 强化已移除(装备系统重构:场内只买不强化);余钱留给刷新/槽位
+        // 3) 强化(A1 保留、对象改法宝,docs/DESIGN-HERO-RHYTHM.md §9;商店「法宝管理 · 强化」同一份 upgradeCost / canUpgrade):
+        //    余钱按「最便宜的一次强化」逐次买,每章最多 3 次(真实玩家一次进店点几下),留一手下章买卡钱(基础价 × 2)。
+        //    R7 收槽后金币出口不再是铺槽,不建模强化会让 sim 玩家比真人弱一大截(20 章囤 1.8 万金)
+        for (let u = 0; u < 3; u++) {
+          const cands = player.equipment.filter((e) => canUpgrade(e));
+          if (cands.length === 0) break;
+          const target = cands.reduce((a, b) => (upgradeCost(a) <= upgradeCost(b) ? a : b));
+          const cost = upgradeCost(target);
+          if (gold < cost + qualityBasePrice("common") * 2) break;
+          gold -= cost;
+          upgradeEquipment(target);
+        }
         // 4) 进化(形态跃迁):2 张同效果同品质 → 升档(补基础价×2),3 张免费
         // 只在槽位已满时进化:进化 2 合 1 会缩面板,槽位没满时应先铺满宽度(真实玩家也是卡满才进化)
         let evolved = true;
@@ -519,17 +654,27 @@ function runSimInner(opts: SimOptions): SimReport {
             break;
           }
         }
-        ctx.setBonus = setBonusState(player.equipment, opts.set ?? null);
+        ctx.setBonus = resonanceBonusState(player.castList, player.passives, opts.set ?? null);
       }
     }
     // 玩家移动:挂机不动 / 绕圈风筝(有限竞技场,框定区域)
     player.movedThisFrame = 0;
     if (opts.move === "kite") {
-      // 与游戏挂机 AI 一致:贴身才躲(110px),平时顺时针巡场
+      // 与游戏挂机 AI 一致:按本命节律取挂机档位(docs/DESIGN-HERO-RHYTHM.md §2.3)——
+      // kite 贴身才躲(110px)平时巡场;hold 允许被围、只在围数过多或血量过低时才躲;orbit 持续绕场
+      const profile = RHYTHM_AI_PROFILE[player.rhythms[0] ?? "pulse"];
       const near = nearest(player.pos, 110);
+      let dodge = !!near;
+      if (near && profile === "hold") {
+        const around = enemies.filter((e) => e.hp > 0 && Math.hypot(e.pos.x - player.pos.x, e.pos.y - player.pos.y) <= 110).length;
+        dodge = around >= AI_PROFILE_PARAMS.hold.maxContacts || player.hp / player.maxHp < AI_PROFILE_PARAMS.hold.fleeHpPct;
+      }
+      if (near && profile === "orbit") {
+        dodge = Math.hypot(near.pos.x - player.pos.x, near.pos.y - player.pos.y) <= AI_PROFILE_PARAMS.orbit.dodgeRadius;
+      }
       let mvx = 0;
       let mvy = 0;
-      if (near) {
+      if (near && dodge) {
         const dx = player.pos.x - near.pos.x;
         const dy = player.pos.y - near.pos.y;
         const d = Math.hypot(dx, dy) || 1;
@@ -541,15 +686,21 @@ function runSimInner(opts: SimOptions): SimReport {
         const l = Math.hypot(mvx, mvy) || 1;
         mvx /= l;
         mvy /= l;
+      } else if (profile === "hold" && near) {
+        // 站桩承伤:不躲(受击节律要挨打才有输出)
+        mvx = 0;
+        mvy = 0;
       } else {
         const ang = t * 0.4;
         mvx = Math.cos(ang);
         mvy = Math.sin(ang);
       }
       const sp = 240;
-      player.pos.x = Math.min(arena.x1 - 30, Math.max(arena.x0 + 30, player.pos.x + mvx * sp * dt));
-      player.pos.y = Math.min(arena.y1 - 30, Math.max(arena.y0 + 30, player.pos.y + mvy * sp * dt));
-      player.movedThisFrame = sp * dt; // 实际移动距离
+      if (mvx !== 0 || mvy !== 0) {
+        player.pos.x = Math.min(arena.x1 - 30, Math.max(arena.x0 + 30, player.pos.x + mvx * sp * dt));
+        player.pos.y = Math.min(arena.y1 - 30, Math.max(arena.y0 + 30, player.pos.y + mvy * sp * dt));
+        player.movedThisFrame = sp * dt; // 实际移动距离
+      }
     }
     // 地形:石柱推挤 + 毒池 DoT(与游戏 updatePlayer 同款;不走受击管线)
     if (obstacles.length > 0) {
@@ -790,7 +941,22 @@ function runSimInner(opts: SimOptions): SimReport {
     }
   }
 
-  return { seconds: Math.round(t), wave: waves.wave, kills, level: player.level, died: !player.alive, perMinute, finalGold: gold, finalSlots: player.slots, finalCards: player.equipment.length, totalDamage: totalDmg, poolDamage: Math.round(poolDamage), finalEquipment: player.equipment.map((e) => JSON.parse(JSON.stringify(e))) };
+  // finalEquipment = 技能 + 主动法宝(Boss 单目标 DPS 探针要连核心技能一起量)
+  return {
+    seconds: Math.round(t),
+    wave: waves.wave,
+    kills,
+    level: player.level,
+    died: !player.alive,
+    perMinute,
+    finalGold: gold,
+    finalSlots: player.slots,
+    finalCards: player.equipment.length,
+    totalDamage: totalDmg,
+    poolDamage: Math.round(poolDamage),
+    finalEquipment: player.castList.map((e) => JSON.parse(JSON.stringify(e))),
+    finalPassives: player.passives.map((p) => JSON.parse(JSON.stringify(p))),
+  };
 }
 
 /** 打印一份友好的曲线报告 */
@@ -822,7 +988,7 @@ export interface BossDpsResult {
  */
 export function measureBossDps(
   equipment: Equipment[],
-  opts?: { set?: SetId | null; boosted?: boolean; seconds?: number; seed?: number }
+  opts?: { set?: SetId | null; boosted?: boolean; seconds?: number; seed?: number; passives?: PassiveArtifact[] }
 ): BossDpsResult {
   const origRandom = Math.random;
   let s = opts?.seed ?? 1;
@@ -839,7 +1005,7 @@ export function measureBossDps(
 
 function measureBossDpsInner(
   equipment: Equipment[],
-  opts?: { set?: SetId | null; boosted?: boolean; seconds?: number; seed?: number }
+  opts?: { set?: SetId | null; boosted?: boolean; seconds?: number; seed?: number; passives?: PassiveArtifact[] }
 ): BossDpsResult {
   _resetEnemyUid();
   _resetProjectileUid();
@@ -847,6 +1013,7 @@ function measureBossDpsInner(
   const seconds = opts?.seconds ?? 45;
   const player = new Player();
   player.equipment = JSON.parse(JSON.stringify(equipment));
+  player.passives = JSON.parse(JSON.stringify(opts?.passives ?? []));
   // 木桩血量池:玩家不会死,比例类触发器不受干扰(风筝走位下 Boss 本就难以贴身)
   player.maxHp = 1_000_000;
   player.hp = player.maxHp;
@@ -882,8 +1049,8 @@ function measureBossDpsInner(
     let mult = damageMult;
     if (critOn && Math.random() < 0.1) mult *= 1.25;
     if (elemental(source.effect.def.type)) mult *= elementMult;
-    const sb = setBonusState(player.equipment, opts?.set ?? null);
-    if (sb && sb.id === "thorn" && sb.pieces >= 4 && source.triggers.some((t) => t.def.type === "hurt" || t.def.type === "hit")) {
+    const sb = resonanceBonusState(player.castList, player.passives, opts?.set ?? null);
+    if (sb && sb.id === "thorn" && sb.bonus6 && source.triggers.some((t) => t.def.type === "hurt" || t.def.type === "hit")) {
       mult *= 1.5;
     }
     dmg = Math.round(dmg * mult);
@@ -901,7 +1068,7 @@ function measureBossDpsInner(
     clouds,
     minions,
     globalPulseMult: 1,
-    setBonus: setBonusState(player.equipment, opts?.set ?? null),
+    setBonus: resonanceBonusState(player.castList, player.passives, opts?.set ?? null),
     // Boss DPS 标定基线不结算组合技(口径稳定;组合技强度走 runSim 对照)
     comboActive: COMBO_OFF,
     addFx: () => {},

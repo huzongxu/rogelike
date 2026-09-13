@@ -379,19 +379,32 @@ describe("出战写入:selectedHero → selectedSet 的唯一同步点", () => {
     expect(sel).toEqual({ selectedHero: null, selectedSet: null });
   });
 
-  it("详情区四行技能恒在,且只读共享表(英雄自身不产生数值)", () => {
+  it("详情区四行技能恒在,且只读共享表(核心 / 分岔 / 进阶 / 本命节律;英雄自身不产生数值)", () => {
     const m = new HeroSelectModel();
     m.preview = "vera";
     const d = m.detail();
     expect(d.empty).toBe(false);
-    expect(d.skills.map((s) => s.tag)).toEqual(["初始武器", "三件套", "六件套", "赛季联动"]);
+    expect(d.skills.map((s) => s.tag)).toEqual(["核心技能", "分岔", "进阶", "本命节律"]);
+    expect(d.skills[0].label).toBe("荆棘圆环");
+    expect(d.skills[3].label).toBe("受击节律");
     expect(d.color).toBe(setDef("thorn").color);
-    m.preview = "mu";
-    expect(m.detail().skills[3].label).toBe("当季无联动"); // S1 下 S4 英雄无当季联动
-    const m4 = new HeroSelectModel();
-    m4.preview = "mu";
-    m4.layout({ selectedHero: "mu", selectedSet: "veil", seasonId: 4 }, W, 996);
-    expect(m4.detail().skills[3].label).not.toBe("当季无联动");
+    // 未解锁第二本命:第 4 行不产热区,rhythm 动作无效
+    const L = m.layout({ selectedHero: "vera", selectedSet: "thorn", seasonId: 1 }, W, 996);
+    const r = L.skillRows[3].rect;
+    expect(m.hit(L, r.x + r.w / 2, r.y + r.h / 2)).toBeNull();
+    expect(m.apply({ kind: "rhythm" })).toBe(false);
+    // 已解锁:点第 4 行在 受击 → 低血 → 移动 → 受击 间轮转,confirm 才落盘
+    const m2 = new HeroSelectModel();
+    const save = { selectedHero: "vera" as const, selectedSet: "thorn" as const, seasonId: 1, heroRhythmUnlock: { vera: true }, heroRhythmChoice: {} as Record<string, "hit"> };
+    m2.open(save, W, 996);
+    const L2 = m2.layout(save, W, 996);
+    const r2 = L2.skillRows[3].rect;
+    expect(m2.hit(L2, r2.x + r2.w / 2, r2.y + r2.h / 2)).toEqual({ kind: "rhythm" });
+    expect(m2.apply({ kind: "rhythm" })).toBe(true);
+    expect(m2.detail().skills[3].label).toBe("低血节律(第二本命)");
+    expect(save.heroRhythmChoice).toEqual({});
+    m2.commit(save);
+    expect(save.heroRhythmChoice).toEqual({ vera: "hurt" });
   });
 
   it("两端归一化同一份老档 → 得到同一对镜像字段", () => {
@@ -523,43 +536,42 @@ describe("商店账本(纯逻辑输入 → 输出)", () => {
     expect(c.cards.filter((x) => !x.soldOut)).toHaveLength(2);
   });
 
-  it("槽位闸门与广告扩容:满槽买不了卡;开槽不花金币,本局 2 次封顶,总上限仍是 8", () => {
-    const eqs = Array.from({ length: 6 }, () => generateEquipment(3, "common"));
-    const { world, st } = makeWorld({ gold: 0, baseSlots: 6, equipment: eqs });
+  it("槽位闸门与广告扩容:满槽买不了卡;开槽不花金币,本局 1 次封顶(R7),总上限 6", () => {
+    const eqs = Array.from({ length: 4 }, () => generateEquipment(3, "common"));
+    const { world, st } = makeWorld({ gold: 0, baseSlots: 4, equipment: eqs });
     const m = new ShopModel(world, () => 0.99);
     m.offers = [generateEquipment(3, "common"), null, null];
     expect(m.freeSlots()).toBe(0);
     expect(m.buy(0)).toBe(false);
     expect(m.content().cards[0].afford).toBe(false);
-    expect(m.content().weaponHeader.right).toBe("槽已满,销毁武器腾槽");
+    expect(m.content().weaponHeader.right).toBe("槽已满,销毁法宝腾槽");
     // 金币为 0 也照样能开槽:这颗钮已经不走金币通道
     expect(m.adSlotLeft()).toBe(RUN_AD_SLOT_LIMIT);
     expect(m.content().slotBtn.enabled).toBe(true);
     expect(m.content().slotBtn.text).not.toContain("金");
     expect(m.grantSlotByAd()).toBe(true);
-    expect(m.grantSlotByAd()).toBe(true);
-    expect(st.runSlotBonus).toBe(2);
-    expect(st.gold, "开槽一分金币都不该动").toBe(0);
-    expect(world.slots()).toBe(SHOP_SLOT_CAP);
-    expect(m.adSlotLeft()).toBe(0);
     expect(m.grantSlotByAd()).toBe(false);
-    // 6 基础槽 + 2 次广告正好撞到总上限:两个限制同时到,文案优先说"已满"(无天赋玩家的常态路径)
-    expect(m.slotMaxed()).toBe(true);
-    expect(m.content().slotBtn).toEqual({ text: `槽位已满 ${SHOP_SLOT_CAP}/${SHOP_SLOT_CAP}`, enabled: false });
-    expect(m.freeSlots()).toBe(2);
+    expect(st.runSlotBonus).toBe(RUN_AD_SLOT_LIMIT);
+    expect(st.gold, "开槽一分金币都不该动").toBe(0);
+    // 4 基础槽 + 1 次广告 = 5,离硬顶 6 还差天赋那一格:文案走「本局已用完」
+    expect(world.slots()).toBe(4 + RUN_AD_SLOT_LIMIT);
+    expect(m.adSlotLeft()).toBe(0);
+    expect(m.slotMaxed()).toBe(false);
+    expect(m.content().slotBtn).toEqual({ text: `本局广告开槽已用完(${RUN_AD_SLOT_LIMIT}/${RUN_AD_SLOT_LIMIT})`, enabled: false });
+    expect(m.freeSlots()).toBe(1);
     expect(m.buy(0)).toBe(false); // 仍买不起:金币 0,与槽位无关
   });
 
-  it("广告次数用完但槽位还没满:文案走「本局已用完」而不是「槽位已满」", () => {
-    const { world, st } = makeWorld({ gold: 0, baseSlots: 4, runSlotBonus: 0 });
+  it("天赋 +1 后再看一次广告正好撞硬顶:两个限制同时到,文案优先说「槽位已满」", () => {
+    const { world, st } = makeWorld({ gold: 0, baseSlots: 5, runSlotBonus: 0 });
     const m = new ShopModel(world);
     expect(m.grantSlotByAd()).toBe(true);
-    expect(m.grantSlotByAd()).toBe(true);
-    expect(world.slots()).toBe(6); // 4 + 2,离总上限 8 还差两格
-    expect(m.slotMaxed()).toBe(false);
+    expect(m.grantSlotByAd()).toBe(false);
+    expect(world.slots()).toBe(SHOP_SLOT_CAP); // 5 + 1 = 硬顶 6
+    expect(m.slotMaxed()).toBe(true);
     expect(m.adSlotLeft()).toBe(0);
     expect(st.gold).toBe(0);
-    expect(m.content().slotBtn).toEqual({ text: `本局广告开槽已用完(${RUN_AD_SLOT_LIMIT}/${RUN_AD_SLOT_LIMIT})`, enabled: false });
+    expect(m.content().slotBtn).toEqual({ text: `槽位已满 ${SHOP_SLOT_CAP}/${SHOP_SLOT_CAP}`, enabled: false });
   });
 
   it("天赋槽已占满总上限时:广告开槽直接不可用,文案走「槽位已满」而不是「次数用完」", () => {
@@ -617,7 +629,7 @@ describe("商店账本(纯逻辑输入 → 输出)", () => {
     expect(m.destroy(keep.id)).toBe(true);
     expect(st.gold).toBe(1000 + Math.round(qualityBasePrice("rare") * 0.5));
     expect(m.destroy(keep.id)).toBe(false);
-    expect(m.content().weaponEmpty).toBe("还没有武器,先从商店购买吧");
+    expect(m.content().weaponEmpty).toBe("还没有法宝,先从商店购买吧");
   });
 
   it("shopLayoutPure 行数 = 实际持有量;底部带 948..996 与卡区不相交;几何不收屏高", () => {
@@ -810,7 +822,7 @@ describe("主菜单内容模型(解锁 / 减淡档位 / 红点 / 实时数值)",
     expect(none.accent).toBe(null);
     expect(none.heroLines[1]).toBe("点右侧「更换英雄」,套组构筑随英雄出战");
     expect(none.noteLines).toEqual([]);
-    expect(content(menuSave()).entries.map((e) => e.label)).toEqual(["委托", "扭蛋", "天赋", "通行证", "每日", "升级"]);
+    expect(content(menuSave()).entries.map((e) => e.label)).toEqual(["委托", "扭蛋", "天赋", "通行证", "每日", "升级", "融合"]);
     expect(content(menuSave({ premiumPassSeason: 1 })).entries.map((e) => e.label)).toContain("通行证★");
   });
 });

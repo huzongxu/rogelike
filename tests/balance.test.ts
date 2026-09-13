@@ -4,7 +4,9 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { runSim, formatReport } from "../scripts/balance-sim";
+import { runSim, formatReport, measureBossDps, buildEquipment } from "../scripts/balance-sim";
+import { PLAYER_BASE } from "@game/data/combat";
+import { RUN_AD_SLOT_LIMIT } from "@game/data/shop";
 
 describe("长局数值平衡", () => {
   it("初始武器(自动风筝):第 1 关前 5 章新手区可随意通过(数值墙台阶在第 5-6 章)", () => {
@@ -39,19 +41,24 @@ describe("长局数值平衡", () => {
     // 击杀数被刷怪/敌人上限封顶、噪声主导,不能用作强度信号;
     // 高压场(场子始终打满)下累计伤害 = 有效 DPS × 时长,是确定性输出信号。
     // 天赋增伤/暴击/元素 → 总伤害与存活都显著更高。
+    // 节律体系下锚点 build 带共鸣变形后,×3 / ×6 场子都会被清空(累计伤害饱和为总怪血,两臂只差 RNG 噪声),
+    // 输出强度改用木桩单目标 DPS 探针(不饱和、确定性):天赋增伤 ×1.25 + 暴击 + 元素 → 至少 +15%;存活仍看长局
     const base = runSim({ build: "godly", move: "kite", maxSeconds: 900, seed: 5, spawnScale: 3 });
     const boosted = runSim({ build: "godly", move: "kite", maxSeconds: 900, seed: 5, boosted: true, spawnScale: 3 });
     console.log("[godly/kite 高压]\n" + formatReport(base) + `\n  总伤害 ${Math.round(base.totalDamage)}`);
     console.log("[godly/kite+boost 高压]\n" + formatReport(boosted) + `\n  总伤害 ${Math.round(boosted.totalDamage)}`);
     expect(boosted.seconds).toBeGreaterThanOrEqual(base.seconds);
-    expect(boosted.totalDamage).toBeGreaterThan(base.totalDamage * 1.03);
+    const dpsBase = measureBossDps(buildEquipment("godly"), { seconds: 45, seed: 5 }).dps;
+    const dpsBoost = measureBossDps(buildEquipment("godly"), { seconds: 45, seed: 5, boosted: true }).dps;
+    console.log(`  木桩 DPS 基线 ${Math.round(dpsBase)} · 天赋 ${Math.round(dpsBoost)}`);
+    expect(dpsBoost).toBeGreaterThan(dpsBase * 1.15);
   }, 120000);
 
   it("新手局(初始武器+商店成长):金币出口生效后应推过数值墙到达 20 章", () => {
     const r = runSim({ build: "starter", move: "kite", shopGrowth: true, maxSeconds: 1200, seed: 21 });
     console.log("[starter+shop/新手全程式]\n" + formatReport(r));
-    // 金币出口(槽位扩展)应真正参与:槽位明显高于旧基础 4
-    expect(r.finalSlots).toBeGreaterThanOrEqual(6);
+    // 广告开槽应真正参与:基础 4 + 本局 RUN_AD_SLOT_LIMIT 次(R7:4 起步、6 硬顶)
+    expect(r.finalSlots).toBeGreaterThanOrEqual(PLAYER_BASE.slots + RUN_AD_SLOT_LIMIT);
     // 能走完全程 20 章(不再中途被数值墙压死)
     expect(r.wave).toBeGreaterThanOrEqual(20);
   }, 240000);
@@ -78,12 +85,14 @@ describe("武器套组数值平衡(需求优化 v2:2/4 件套联动)", () => {
     expect(r.seconds).toBeGreaterThanOrEqual(60);
   }, 60000);
 
-  it("同 Build 开 4 件套应强于不开套组(套组联动有效)", () => {
-    const noSet = runSim({ build: "barrage4", move: "kite", maxSeconds: 120, seed: 9 });
-    const withSet = runSim({ build: "barrage4", move: "kite", set: "barrage", maxSeconds: 120, seed: 9 });
-    console.log("[barrage4 no-set]\n" + formatReport(noSet));
-    console.log("[barrage4 +set]\n" + formatReport(withSet));
-    expect(withSet.kills).toBeGreaterThan(noSet.kills);
+  it("同 Build 开套组(共鸣里程碑)应强于不开套组(联动有效)", () => {
+    // 联动加成改挂共鸣数(docs/DESIGN-HERO-RHYTHM.md §5):barrage4 里齐射飞刀 / 冰霜射线挂周期即共鸣 2 处 → 一档「齐射」。
+    // 常规密度下 120s 的怪已被两边都清空(击杀饱和),用高压场比累计伤害
+    const noSet = runSim({ build: "barrage4", move: "kite", maxSeconds: 120, seed: 9, spawnScale: 4 });
+    const withSet = runSim({ build: "barrage4", move: "kite", set: "barrage", maxSeconds: 120, seed: 9, spawnScale: 4 });
+    console.log("[barrage4 no-set]\n" + formatReport(noSet) + `\n  总伤害 ${Math.round(noSet.totalDamage)}`);
+    console.log("[barrage4 +set]\n" + formatReport(withSet) + `\n  总伤害 ${Math.round(withSet.totalDamage)}`);
+    expect(withSet.totalDamage).toBeGreaterThan(noSet.totalDamage);
   }, 60000);
 });
 

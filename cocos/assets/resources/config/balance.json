@@ -31,7 +31,7 @@
     },
     "slotExpandBase": 100,
     "slotExpandGrowth": 2.3,
-    "slotCap": 8
+    "slotCap": 6
   },
   "battle": {
     "chapterSeconds": 60,

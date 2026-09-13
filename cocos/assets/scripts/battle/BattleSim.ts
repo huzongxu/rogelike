@@ -138,6 +138,21 @@ export class BattleSim {
             dailyTalentClaimed: () => sim.save.dailyTalentClaimed,
             seasonId: () => sim.save.seasonId,
             selectedSet: () => sim.save.selectedSet ?? null,
+            // 出战英雄(本命节律与独有技能池的键;存档里 selectedHero 是唯一事实源,selectedSet 只是镜像)
+            selectedHero: () => sim.save.selectedHero ?? null,
+            // 跨局解锁的第二本命(S2):已解锁且存档里选了才生效;否则表内本命
+            startRhythm: () => {
+                const h = sim.save.selectedHero;
+                if (!h || !sim.save.heroRhythmUnlock[h]) return null;
+                return sim.save.heroRhythmChoice[h] ?? null;
+            },
+            // 共鸣图鉴(docs/DESIGN-HERO-RHYTHM.md §5):首次达成即入档
+            recordResonanceSeen: (key) => {
+                const seen = sim.save.collection.resonances;
+                if (seen.includes(key)) return;
+                seen.push(key);
+                sim.persist();
+            },
             selectedGearForRun: () => {
                 const sel = sim.save.ownedGear.find((g) => g.id === sim.save.selectedGearId);
                 return sel ? (JSON.parse(JSON.stringify(sel)) as Equipment) : null;
@@ -203,6 +218,7 @@ export class BattleSim {
     get bossSpawned() { return this.world.bossSpawned; }
     get bossDead() { return this.world.bossDead; }
     get bossBanner() { return this.world.bossBanner; }
+    get discoveryBanner() { return this.world.discoveryBanner; }
     get currentStage() { return this.world.currentStage; }
     get envAffixes() { return this.world.envAffixes; }
     get selectedSet() { return this.world.selectedSet; }
@@ -439,6 +455,8 @@ export class BattleSim {
         const stars = calcStars(this.world.player.hp / this.world.player.maxHp, this.world.reviveUsed);
         const prevStars = this.save.stageStars[st.id] ?? 0;
         this.save.stageStars[st.id] = Math.max(prevStars, stars);
+        // 第二本命解锁(docs/DESIGN-HERO-RHYTHM.md Q7 / S2):该英雄任一关 3 星通关 → 开局可在本命与分岔节律间选
+        if (stars === 3 && this.save.selectedHero) this.save.heroRhythmUnlock[this.save.selectedHero] = true;
         const rewardGrowth = 1 + CLEAR_REWARD_GROWTH * Math.max(0, this.save.highestStage - 1);
         let tickets = Math.round(r.tickets * rewardGrowth);
         let echo = Math.round((r.points > 0 ? r.points : stageEchoReward(st.id)) * rewardGrowth);
@@ -467,7 +485,7 @@ export class BattleSim {
         let drops = 0;
         const dropCount = stageDropCount(st.id);
         for (let i = 0; i < dropCount; i++) {
-            const eq = generateEquipment(stageDropLevel(st.id), undefined, true, rareBonusFor(this.save.ownedTalents));
+            const eq = generateEquipment(stageDropLevel(st.id), undefined, true, rareBonusFor(this.save.ownedTalents), undefined, this.save.seasonId);
             const dup = this.save.ownedGear.some((g) => g.name === eq.name && g.quality === eq.quality);
             if (dup) {
                 this.save.stardust += DUPLICATE_STARDUST[eq.quality];

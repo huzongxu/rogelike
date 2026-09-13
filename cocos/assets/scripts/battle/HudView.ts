@@ -19,6 +19,7 @@ import { strokeRing } from "../ui/PanelKit";
 import { hexA } from "../game/ui/theme";
 import { clamp } from "../game/core/math";
 import { COMBOS, comboStates } from "../game/data/combos";
+import { equipmentDisplayName } from "../game/data/equipmentGen";
 import { chapterIntel } from "../game/data/intel";
 import { chapterTypeInfo, chapterTypeLabel } from "../game/data/chapters";
 import { CHAPTER_SECONDS } from "../game/data/stages";
@@ -495,7 +496,7 @@ export class HudView {
         bindLabel(this.hpText, this.fitOne(`${Math.ceil(p.hp)} / ${p.maxHp}`, 96, h.pxMain));
 
         // R1 中:组合技圆钮
-        const cs = comboStates(p.equipment);
+        const cs = comboStates(p.castList);
         const comboSig = COMBOS.map((c) => (cs[c.id] ? 1 : 0)).join("");
         if (comboSig !== this.comboSig) {
             this.comboSig = comboSig;
@@ -669,7 +670,8 @@ export class HudView {
         // 装备横排:布局签名变化时整体重建;每帧只刷 CD 条与文字
         const rightW = boss ? 260 : viewTable().phase3.hudV4 ? 136 : 190;
         const zoneW = DESIGN_W - HUD_PAD * 2 - rightW - 8;
-        const eqs = sim.player.equipment;
+        // 独有技能在前、主动法宝在后(与引擎结算列同序;技能不占槽但要看得见)
+        const eqs = sim.player.castList;
         const L = equipGridLayout(eqs.length, boss, zoneW, this.botH, viewTable().phase3.hudV4 ? 2 : 1);
         const sig =
             `${boss ? 1 : 0}|${L.shown}|${L.rows}|${L.cardW}|${L.chip ? L.hidden : 0}|${this.frames.has("hud_card_frame") ? 1 : 0}|` +
@@ -697,7 +699,8 @@ export class HudView {
                 }
             }
             const cdTxt = cd ? ` · ${cd.left.toFixed(1)}s` : "";
-            const name = eq.hiddenAffix ? `【隐藏】${eq.effect.def.name}` : eq.effect.def.name;
+            // 技能 / 法宝走共鸣改名(技能看被动列),老装备仍写效果名
+            const name = eq.hiddenAffix ? `【隐藏】${eq.effect.def.name}` : eq.kind ? equipmentDisplayName(eq, sim.player.passives, sim.save.seasonId) : eq.effect.def.name;
             if (boss) {
                 bindLabel(this.cardName[i], this.fitOne(name + cdTxt, L.cardW - 38, h.pxCard));
             } else {
@@ -715,7 +718,7 @@ export class HudView {
         const lx = HUD_PAD;
         const rightW = boss ? 260 : viewTable().phase3.hudV4 ? 136 : 190;
         const zoneW = DESIGN_W - HUD_PAD * 2 - rightW - 8;
-        const eqs = sim.player.equipment;
+        const eqs = sim.player.castList;
         // v4:两排网格(张数 ≤ 每排上限单排、否则双排,满 8 / 6 之外收 +N);旧档 rowsMax=1 即原横排口径
         const L = equipGridLayout(eqs.length, boss, zoneW, this.botH, viewTable().phase3.hudV4 ? 2 : 1);
         const cy = dy + L.y0;
@@ -828,7 +831,8 @@ export class HudView {
 
     private syncBanners(sim: BattleSim): void {
         // Boss 阶段横幅
-        const bb = sim.bossBanner;
+        // Boss 阶段横幅优先;共鸣发现横幅(docs/DESIGN-HERO-RHYTHM.md §5)复用同一枚横幅节点
+        const bb = sim.bossBanner ?? sim.discoveryBanner;
         this.bossBanner.active = !!bb && bb.ttl > 0;
         if (bb) {
             this.bossBanner.getComponent(UIOpacity)!.opacity = Math.round(clamp(bb.ttl, 0, 1) * 255);

@@ -16,18 +16,30 @@ import { SHOP_ROW_BOTTOM, shopLayoutPure, type ShopLayoutPure, type ShopRect, ty
 import {
   SHOP_SLOT_CAP,
   UPGRADE_MAIN_KEYS,
+  assignRhythm,
   canUpgrade,
+  describeModifier,
+  equipmentDisplayName,
+  equipmentResonance,
+  equipmentResonant,
+  equipmentRhythm,
   generateEquipment,
+  generatePassive,
   generateSetEquipment,
+  nextRhythmOf,
+  normalizeArtifact,
   qualityBasePrice,
   thornPairOffer,
   upgradeCost,
   upgradeEquipment,
   type Equipment,
 } from "../game/data/equipmentGen";
+import { ARTIFACT_DEFS, PASSIVE_DEFS, RELIC_VALUES, SHOP_PASSIVE_SLOTS, isRelicType, relicStack, type PassiveArtifact } from "../game/data/artifacts";
+import { rhythmDef, type RhythmId } from "../game/data/rhythm";
+import { makeModifier } from "../game/data/affixes";
 import { DESTROY_REFUND_RATE, DUPLICATE_OFFER_CHANCE, MERGE_FEE_MULT, RUN_AD_SLOT_LIMIT, SET_OFFER_BIAS, shopCardPrice, shopRefreshPrice } from "../game/data/shop";
 import { QUALITY_MAX_LEVEL, qualityDef, qualityPowerRatio, qualityUpgrade, type Quality } from "../game/data/quality";
-import { isSetPiece, setDef } from "../game/data/sets";
+import { setDef } from "../game/data/sets";
 import type { SetId } from "../game/data/sets";
 import { isSeasonBoosted, setMutation } from "../game/data/seasonSets";
 import { rareBonusFor } from "../game/data/talents";
@@ -37,10 +49,23 @@ import { chapterIntel } from "../game/data/intel";
 /** 商店三张卡位(售罄后为 null;只有刷新才有新货) */
 export const SHOP_CARD_SLOTS = 3;
 
+/** 一张货:主动法宝(Equipment)或被动法宝 */
+export type ShopOffer = Equipment | PassiveArtifact;
+
+export function isPassiveOffer(o: ShopOffer): o is PassiveArtifact {
+  return (o as PassiveArtifact).kind === "passive" && !("effect" in o);
+}
+
 /** 宿主注入的战场侧账本(BattleSim 与 BattleWorld 的窄切片;装备数组按引用原地改) */
 export interface ShopWorld {
-  /** 玩家场上装备(原地 push/splice,不重新赋值 —— 词缀引擎持有同一引用) */
+  /** 玩家场上主动法宝(原地 push/splice,不重新赋值 —— 词缀引擎持有同一引用) */
   readonly equipment: Equipment[];
+  /** 玩家被动法宝(原地 push;引擎 statsOf 持同一引用)。可选:老宿主 / 老测试不给 = 商店不出被动 */
+  readonly passives?: PassiveArtifact[];
+  /** 被动槽总数(表值);缺省 = 不出被动 */
+  passiveSlots?(): number;
+  /** 本局已解锁节律(法宝进货默认分配 / 行内切换);缺省 = 只有周期 */
+  rhythms?(): readonly RhythmId[];
   gold(): number;
   setGold(v: number): void;
   slots(): number;
@@ -161,7 +186,7 @@ const INTEL_ICON: Record<string, string> = { 尸潮: "intel_horde", 重甲: "int
 /** 商店工具钮的固定语义(顺序与 shopLayoutPure 的 toolBtns 同) */
 const TOOL_DEFS: { id: ShopToolBtn["id"]; kind: "minor" | "danger" }[] = [
   { id: "refresh", kind: "minor" },
-  { id: "fusion", kind: "minor" },
+  { id: "passive", kind: "minor" },
   { id: "restart", kind: "danger" },
   { id: "home", kind: "danger" },
 ];
@@ -186,8 +211,8 @@ export type ShopAction =
 export class ShopModel {
   private w: ShopWorld;
   private rand: () => number;
-  /** 三张可购卡(null = 该位已售罄) */
-  offers: (Equipment | null)[] = [];
+  /** 三张可购卡(主动 / 被动法宝;null = 该位已售罄) */
+  offers: (ShopOffer | null)[] = [];
   /** 本章已手动刷新次数(进店清零,成本按指数抬升) */
   refreshes = 0;
   /** 武器管理里点选的那件(仅影响选中框与文案,不改战场) */
@@ -207,8 +232,23 @@ export class ShopModel {
     return Math.max(this.w.chapter() + 1, this.w.highestStage());
   }
 
-  priceOf(eq: Equipment): number {
+  priceOf(eq: ShopOffer): number {
     return shopCardPrice(qualityBasePrice(eq.quality), this.w.totalBought(), this.w.chapter());
+  }
+
+  /** 本局已解锁节律(老宿主不给时视作只有周期) */
+  rhythms(): readonly RhythmId[] {
+    return this.w.rhythms?.() ?? ["pulse"];
+  }
+
+  /** 被动槽:数组与上限都在时才"有被动这回事" */
+  private passiveOn(): boolean {
+    return !!this.w.passives && !!this.w.passiveSlots;
+  }
+
+  freePassiveSlots(): number {
+    if (!this.passiveOn()) return 0;
+    return Math.max(0, this.w.passiveSlots!() - this.w.passives!.length);
   }
 
   refreshCost(): number {
@@ -255,15 +295,23 @@ export class ShopModel {
     const setId = this.w.selectedSet();
     const modBias = setId ? setMutation(this.w.seasonId(), setId)?.modifierBias : undefined;
     const bias = setId && isSeasonBoosted(this.w.seasonId(), setId) ? SET_OFFER_BIAS.seasonBoosted : SET_OFFER_BIAS.normal;
-    const offers: Equipment[] = [];
+    const unlocked = this.rhythms();
+    const offers: ShopOffer[] = [];
     for (let i = 0; i < SHOP_CARD_SLOTS; i++) {
-      offers.push(setId && this.rand() < bias ? generateSetEquipment(setId, level, rareBonus, modBias) : generateEquipment(level, undefined, false, rareBonus));
+      // 末 SHOP_PASSIVE_SLOTS 格恒为被动(docs/DESIGN-HERO-RHYTHM.md R1:每章必见一张被动);没有被动槽的宿主全出主动
+      if (this.passiveOn() && i >= SHOP_CARD_SLOTS - SHOP_PASSIVE_SLOTS) {
+        // 遗物「命运骰」:每枚(按叠加衰减)给稀有被动概率 +15%
+        const diceBonus = RELIC_VALUES.dice.rareChance * relicStack(this.w.passives!, "dice");
+        offers.push(generatePassive(level, rareBonus, this.rand, undefined, diceBonus));
+        continue;
+      }
+      offers.push(setId && this.rand() < bias ? generateSetEquipment(setId, level, rareBonus, modBias, unlocked) : generateEquipment(level, undefined, false, rareBonus, unlocked, this.w.seasonId()));
     }
     if (this.w.ownedTalents().includes("affix_taste") && !offers.some((o) => o.quality !== "common")) {
-      offers[0] = generateEquipment(level, "rare");
+      offers[0] = generateEquipment(level, "rare", false, 0, unlocked, this.w.seasonId());
     }
     const pair = thornPairOffer(this.w.equipment, level);
-    if (pair) offers[0] = pair;
+    if (pair) offers[0] = normalizeArtifact(pair, unlocked, undefined, this.w.seasonId());
     if (this.w.equipment.length > 0 && this.rand() < DUPLICATE_OFFER_CHANCE) {
       const src = this.w.equipment[Math.floor(this.rand() * this.w.equipment.length)];
       offers[1] = cloneAsOffer(src, -(this.w.chapter() * 100 + 1));
@@ -287,6 +335,15 @@ export class ShopModel {
     if (!eq) return false;
     const price = this.priceOf(eq);
     if (this.w.gold() < price) return false;
+    if (isPassiveOffer(eq)) {
+      // 被动法宝:进被动槽(可与已有同 id 叠加,叠加衰减在引擎侧),不登记装备图鉴(它不是装备身份)
+      if (this.freePassiveSlots() <= 0) return false;
+      this.w.setGold(this.w.gold() - price);
+      this.w.passives!.push(eq);
+      this.w.addTotalBought();
+      this.offers[index] = null;
+      return true;
+    }
     if (this.freeSlots() <= 0) return false;
     this.w.setGold(this.w.gold() - price);
     this.w.equipment.push(eq);
@@ -294,6 +351,29 @@ export class ShopModel {
     this.w.recordEquipment(eq);
     this.offers[index] = null;
     return true;
+  }
+
+  /** 这一格买不了的原因(宿主提示用):null = 能买 */
+  buyBlocker(index: number): "gold" | "slots" | "passiveSlots" | null {
+    const eq = this.offers[index];
+    if (!eq) return null;
+    if (this.w.gold() < this.priceOf(eq)) return "gold";
+    if (isPassiveOffer(eq)) return this.freePassiveSlots() <= 0 ? "passiveSlots" : null;
+    return this.freeSlots() <= 0 ? "slots" : null;
+  }
+
+  /**
+   * 行内「切换节律」(docs/DESIGN-HERO-RHYTHM.md §4.1):按已解锁顺序轮转到下一条,免费、不限次。
+   * 只解锁 1 条节律时无事可做(返回 null,宿主退化为点选)。
+   */
+  switchRhythm(id: number): RhythmId | null {
+    const eq = this.w.equipment.find((e) => e.id === id);
+    if (!eq) return null;
+    const unlocked = this.rhythms();
+    const next = nextRhythmOf(eq, unlocked);
+    if (!next) return null;
+    assignRhythm(eq, next, unlocked, undefined, this.w.seasonId());
+    return next;
   }
 
   /** 空槽数:总槽位 − 场上件数(Web 侧 player.freeSlots 的同一算式) */
@@ -423,13 +503,20 @@ export class ShopModel {
     const iconKey = INTEL_ICON[intel.title] ?? null;
     const setId = w.selectedSet();
     const set = setId ? setDef(setId) : null;
-    const pieces = set ? eqs.filter((e) => isSetPiece(e, set.id)).length : 0;
+    // 套组件数退役 → 共鸣数(docs/DESIGN-HERO-RHYTHM.md §5):挂在共鸣节律上的主动法宝数
+    const pieces = eqs.filter((e) => equipmentResonant(e, w.seasonId())).length;
     const slotMaxed = w.slots() >= SHOP_SLOT_CAP;
+    const unlocked = this.rhythms();
+    const passives = this.w.passives ?? [];
+    const passiveText = this.passiveOn()
+      ? `被动 ${passives.length}/${this.w.passiveSlots!()}${passives.length ? ":" + passives.map((p) => p.name).join("·") : ""}`
+      : "";
     const tools: ShopToolView[] = TOOL_DEFS.map((t) => ({
       id: t.id,
       kind: t.kind,
-      text: t.id === "refresh" ? `刷新 ${this.refreshCost()}金` : t.id === "fusion" ? "融合" : t.id === "restart" ? "重开" : "主页",
-      enabled: t.id === "refresh" ? gold >= this.refreshCost() : t.id === "fusion" ? eqs.length >= 2 : true,
+      text: t.id === "refresh" ? `刷新 ${this.refreshCost()}金` : t.id === "passive" ? (this.passiveOn() ? `被动 ${passives.length}/${this.w.passiveSlots!()}` : "被动") : t.id === "restart" ? "重开" : "主页",
+      // 被动管理:有被动才可点(没接被动槽的老宿主恒禁)
+      enabled: t.id === "refresh" ? gold >= this.refreshCost() : t.id === "passive" ? passives.length > 0 : true,
     }));
 
     const cards: ShopCardView[] = [];
@@ -441,20 +528,41 @@ export class ShopModel {
       }
       const q = qualityDef(eq.quality);
       const price = this.priceOf(eq);
-      const trig = eq.triggers.map((t) => t.def.name).join("/");
-      const mod = eq.modifiers.map((m) => m.def.name).join("/");
+      if (isPassiveOffer(eq)) {
+        const afford = gold >= price && this.freePassiveSlots() > 0;
+        cards.push({
+          soldOut: false,
+          name: eq.name,
+          qualityName: q.name,
+          color: q.color,
+          frameKey: `frame_${eq.quality}`,
+          iconKey: null,
+          sub: `被动 · ${isRelicType(eq.type) ? PASSIVE_DEFS[eq.type].desc : describeModifier(makeModifier(eq.type, eq.params))}`,
+          priceText: afford ? `购买 ${price}金` : `¥${price}`,
+          afford,
+          setBadge: PASSIVE_DEFS[eq.type].rare ? "稀有" : "被动",
+          setBadgeColor: PASSIVE_DEFS[eq.type].rare ? qualityDef("hidden").color : null,
+        });
+        continue;
+      }
+      const r = equipmentRhythm(eq);
+      const info = equipmentResonance(eq, this.w.seasonId());
+      const resonant = info !== null;
+      // 赛季角标(R5):当季新格「本季新」、过季回响格「回响」、赛季法宝「赛季」
+      const seasonTag = info?.kind === "season" ? " · 本季新" : info?.kind === "echo" ? " · 回响" : eq.variant ? " · 赛季" : "";
+      const afford = gold >= price && this.freeSlots() > 0;
       cards.push({
         soldOut: false,
-        name: eq.effect.def.name,
+        name: equipmentDisplayName(eq, undefined, this.w.seasonId()),
         qualityName: q.name,
         color: q.color,
         frameKey: `frame_${eq.quality}`,
         iconKey: `icon_fx_${eq.effect.def.type}`,
-        sub: `${trig}${mod ? "·" + mod : ""}`,
-        priceText: gold >= price && this.freeSlots() > 0 ? `购买 ${price}金` : `¥${price}`,
-        afford: gold >= price && this.freeSlots() > 0,
-        setBadge: setId && isSetPiece(eq, setId) ? setDef(setId).name.slice(0, 3) : null,
-        setBadgeColor: setId && isSetPiece(eq, setId) ? setDef(setId).color : null,
+        sub: `${r ? rhythmDef(r).name + "节律" : ""}${resonant ? " · 共鸣" : ""}${seasonTag}`,
+        priceText: afford ? `购买 ${price}金` : `¥${price}`,
+        afford,
+        setBadge: resonant ? "共鸣" : null,
+        setBadgeColor: resonant ? qualityDef("hidden").color : null,
       });
     }
 
@@ -466,11 +574,11 @@ export class ShopModel {
       intelText: `第 ${w.chapter()} 章 · 敌情:${intel.title}(${intel.desc})`,
       intelIconKey: iconKey,
       slotText: `槽位 ${this.w.equipment.length}/${w.slots()}`,
-      setText: set ? `套组:${set.name} ${pieces}/4` : null,
-      setProgress: pieces / 6,
+      setText: set ? `${set.name} · 共鸣 ${pieces}` : null,
+      setProgress: Math.min(1, pieces / 6),
       setColor: set ? set.color : null,
-      bonusText: set ? `3件·${set.bonus3.name} / 6件·${set.bonus6.name}` : null,
-      recText: set ? "" : `未选套组(通用卡池)${intel.recommended ? ` · 推荐:${setDef(intel.recommended).name}` : ""}`,
+      bonusText: set ? `节律:${unlocked.map((r) => rhythmDef(r).name).join("/")}${passiveText ? " · " + passiveText : ""}` : null,
+      recText: set ? "" : `未选英雄(通用职业包)${passiveText ? " · " + passiveText : ""}${intel.recommended ? ` · 推荐:${setDef(intel.recommended).name}` : ""}`,
       priceHint: "卡价随购买递增",
       tools,
       cards,
@@ -483,7 +591,10 @@ export class ShopModel {
         // 不再看金币:这颗钮已经不走金币通道,金币不足不该让它变灰
         enabled: !slotMaxed && this.adSlotLeft() > 0,
       },
-      weaponHeader: { title: "武器管理(点选 · 强化 · 销毁)", right: this.freeSlots() > 0 ? `空槽 ${this.freeSlots()}` : "槽已满,销毁武器腾槽" },
+      weaponHeader: {
+        title: unlocked.length > 1 ? "法宝管理(点行切节律 · 强化 · 销毁)" : "法宝管理(点选 · 强化 · 销毁)",
+        right: this.freeSlots() > 0 ? `空槽 ${this.freeSlots()}` : "槽已满,销毁法宝腾槽",
+      },
       weapons: eqs.map((eq) => {
         const q = qualityDef(eq.quality);
         const maxLv = QUALITY_MAX_LEVEL[eq.quality];
@@ -493,10 +604,12 @@ export class ShopModel {
         const preview = upgradable ? upgradeEquipment(cloneAsOffer(eq, -1)) : null;
         const now = upgradable ? mainValueOf(eq) : null;
         const next = preview ? mainValueOf(preview) : null;
+        const r = equipmentRhythm(eq);
+        const resonant = equipmentResonant(eq, w.seasonId());
         return {
           id: eq.id,
-          name: eq.effect.def.name + (this.selectedWeaponId === eq.id ? " ✓" : ""),
-          sub: `${q.name} · ${eq.level >= maxLv ? `Lv.${eq.level} 满` : `Lv.${eq.level}/${maxLv}`}`,
+          name: equipmentDisplayName(eq, undefined, w.seasonId()) + (this.selectedWeaponId === eq.id ? " ✓" : ""),
+          sub: `${r ? rhythmDef(r).name : q.name}${resonant ? "·共鸣" : ""} · ${eq.level >= maxLv ? `Lv.${eq.level} 满` : `Lv.${eq.level}/${maxLv}`}`,
           color: this.selectedWeaponId === eq.id ? "#5AC8FA" : q.color,
           iconKey: `icon_fx_${eq.effect.def.type}`,
           selected: this.selectedWeaponId === eq.id,
@@ -508,7 +621,7 @@ export class ShopModel {
           affordUpgrade: upgradable && gold >= cost,
         };
       }),
-      weaponEmpty: eqs.length === 0 ? "还没有武器,先从商店购买吧" : null,
+      weaponEmpty: eqs.length === 0 ? "还没有法宝,先从商店购买吧" : null,
       mergeHeaderTitle: "进化(2 张同款 → 升档;3 张免费)",
       merges: this.merges().map((g) => {
         const q = qualityDef(g.quality);
@@ -545,5 +658,13 @@ function cloneAsOffer(src: Equipment, id: number): Equipment {
     triggers: src.triggers.map((t) => ({ def: t.def, params: { ...t.params } })),
     effect: { def: src.effect.def, params: { ...src.effect.params }, level: src.effect.level },
     modifiers: src.modifiers.map((m) => ({ def: m.def, params: { ...m.params } })),
+    kind: src.kind,
+    skillId: src.skillId,
+    variant: src.variant,
   };
+}
+
+/** 主动法宝的图鉴名(供测试与提示复用) */
+export function artifactNameOf(effect: Equipment["effect"]["def"]["type"]): string {
+  return ARTIFACT_DEFS[effect].name;
 }

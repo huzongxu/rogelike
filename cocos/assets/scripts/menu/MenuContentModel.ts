@@ -126,8 +126,8 @@ export interface MenuContentInput {
   stageIds: number[];
 }
 
-/** 场外入口身份(顺序与 menuLayoutPure 的六钮一致) */
-export type MenuEntryId = "commission" | "gacha" | "talent" | "pass" | "daily" | "gearup";
+/** 场外入口身份(顺序与 menuLayoutPure 的七钮一致;fusion 自 docs/DESIGN-HERO-RHYTHM.md R2 起由商店移入) */
+export type MenuEntryId = "commission" | "gacha" | "talent" | "pass" | "daily" | "gearup" | "fusion";
 
 /** 一次点击落到的热区;宿主只负责把它翻译成动作,判定几何不在宿主重算 */
 export type MenuAction =
@@ -151,7 +151,7 @@ export interface MenuRowState {
 const inRect = (r: MenuRect, x: number, y: number): boolean => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
 
 /** 入口顺序:与 menuEntryRects /视图 entries 三者同序 */
-export const MENU_ENTRY_IDS: readonly MenuEntryId[] = ["commission", "gacha", "talent", "pass", "daily", "gearup"];
+export const MENU_ENTRY_IDS: readonly MenuEntryId[] = ["commission", "gacha", "talent", "pass", "daily", "gearup", "fusion"];
 
 /** 关卡是否解锁(进度制:通关前关,或前关打到 STAGE_UNLOCK_PROGRESS 比例章节) */
 export function menuStageOpen(save: MenuSaveView, id: number): boolean {
@@ -199,9 +199,9 @@ export function menuChipRects(L: MenuLayout): MenuRect[] {
   return d.chipXs.map((x) => ({ x, y: d.chipY, w: d.chipW, h: d.chipH }));
 }
 
-/** 六个场外入口矩形(顺序即 entries 数组顺序,与视图一致) */
+/** 七个场外入口矩形(顺序即 entries 数组顺序,与视图一致) */
 export function menuEntryRects(L: MenuLayout): MenuRect[] {
-  return [L.commissionBtn, L.gachaBtn, L.talentBtn, L.passBtn, L.dailyBtn, L.gearupBtn];
+  return [L.commissionBtn, L.gachaBtn, L.talentBtn, L.passBtn, L.dailyBtn, L.gearupBtn, L.fusionBtn];
 }
 
 /**
@@ -314,9 +314,9 @@ export function buildMenuContent(o: MenuContentInput): MenuTextContent {
   };
 }
 
-/** 六个入口的图标键与文案(顺序同 MENU_ENTRY_IDS;缺图走视图的代码回退底板) */
-const ENTRY_ICON_KEYS = ["entry_quests", "entry_gacha", "entry_talents", "entry_pass", "entry_forge", "entry_gearup"] as const;
-const ENTRY_LABELS = ["委托", "扭蛋", "天赋", "通行证", "每日", "升级"] as const;
+/** 七个入口的图标键与文案(顺序同 MENU_ENTRY_IDS;缺图走视图的代码回退底板;融合暂借锻炉图标,专属图待美术) */
+const ENTRY_ICON_KEYS = ["entry_quests", "entry_gacha", "entry_talents", "entry_pass", "entry_forge", "entry_gearup", "entry_forge"] as const;
+const ENTRY_LABELS = ["委托", "扭蛋", "天赋", "通行证", "每日", "升级", "融合"] as const;
 
 /** 通行证高级轨是否生效(存档字段,与 Web premiumActive 同判据) */
 function premiumActive(save: MenuSaveView): boolean {

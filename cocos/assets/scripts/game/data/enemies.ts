@@ -318,14 +318,16 @@ export const FRONT_GUARD_MULT_BOSS = 0.6;
 
 /**
  * Boss 独立血量曲线(关卡维度,与波次缩放分离):
- * 标定依据 = 单目标木桩 DPS 锚点(measureBossDps,确定性口径):
- * 第 1 关到达态(初始武器+商店成长)≈48 dps、终局态(神装+成长+天赋)≈191 dps;
+ * 标定依据 = 单目标木桩 DPS 锚点(measureBossDps,确定性口径,tests/boss.test.ts 守窗口):
+ * 第 1 关到达态(凯尔核心 16 束 × 1.2s 齐射 + 20 章商店成长 + 强化)≈103 dps、终局态(神装 + 成长 + 天赋)≈448 dps
+ * (R7 / R6 重标,2026-09-14:主动槽 4 起步 / 6 硬顶后金币出口转到强化与进化,sim 补「每章最多 3 次最便宜强化」;
+ *  R6 起 sim 的核心技能与真机同口径由技能表实例化,不再拿套组旧初始武器当核心;R7 前锚点为 ≈65 / ≈384 dps、base 2.0)。
  * 旧版所有关卡统一 473hp → 到达态 ~10s、终局 ~2.5s 击杀,三阶段机制毫无存在感。
- * 目标:第 1 关 TTK ≈20s(×2.0)、第 7 关 ≈40s(×16),第 20 章 60s 超时判负留足裕量;
+ * 目标:第 1 关 TTK ≈16s(×3.5 → 1656hp)、第 7 关 ≈30s(×28 → 13244hp),第 20 章 60s 超时判负留足裕量;
  * 中间关卡每关 ×√2(+41%)几何增长 —— 玩家战力随局内商店/跨局成长近似乘性增长,
  * 相对难度平滑爬坡。
  */
-export const BOSS_HP_CURVE = { base: 2.0, growth: Math.SQRT2 } as const;
+export const BOSS_HP_CURVE = { base: 3.5, growth: Math.SQRT2 } as const;
 
 export function bossHpMult(stageId: number): number {
   const s = Math.max(1, Math.floor(stageId));

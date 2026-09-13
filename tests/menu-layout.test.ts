@@ -79,7 +79,7 @@ function bandOracle(w: number, h: number, env: LegacyEnv) {
   const strip = { x: phantomBtn.x - 12 - 84, y: 96, w: 84, h: 44 };
   const chipXs = [0, 1, 2].map((i) => strip.x - 12 - 96 * (3 - i) - 12 * (2 - i));
   const entryGap = 12;
-  const entryW = Math.floor((w - pad * 2 - entryGap * 5) / 6);
+  const entryW = even((w - pad * 2 - entryGap * 6) / 7);
   const entryX = (i: number) => pad + i * (entryW + entryGap);
   const commissionBtn = { x: entryX(0), y: entryY, w: entryW, h: entryH };
   const gachaBtn = { x: entryX(1), y: entryY, w: entryW, h: entryH };
@@ -87,6 +87,7 @@ function bandOracle(w: number, h: number, env: LegacyEnv) {
   const passBtn = { x: entryX(3), y: entryY, w: entryW, h: entryH };
   const dailyBtn = { x: entryX(4), y: entryY, w: entryW, h: entryH };
   const gearupBtn = { x: entryX(5), y: entryY, w: entryW, h: entryH };
+  const fusionBtn = { x: entryX(6), y: entryY, w: entryW, h: entryH };
   const setW = (w - pad * 2 - 8 * (env.setIds.length - 1)) / env.setIds.length;
   const setBtns = env.setIds.map((id, i) => ({ id, x: pad + i * (setW + 8), y: setY, w: setW, h: setH }));
   const nine = legacyNineMargin(env.rowPlate, rowW, rowH);
@@ -95,7 +96,7 @@ function bandOracle(w: number, h: number, env: LegacyEnv) {
   const noteBand = Math.round(setDescH * (8 / 45));
   const heroBtn = { x: heroBand.x + heroBand.w - 16 - 96, y: Math.round(heroBand.y + heroBand.h / 2 - 22), w: 96, h: 44 };
   return {
-    rows, endlessBtn, phantomBtn, strip, chipXs, gachaBtn, talentBtn, passBtn, commissionBtn, dailyBtn, gearupBtn,
+    rows, endlessBtn, phantomBtn, strip, chipXs, gachaBtn, talentBtn, passBtn, commissionBtn, dailyBtn, gearupBtn, fusionBtn,
     setBtns, setY, setH, setDescH, sectionH, sectionW, sectionX, stageHdrY, setHdrY, rowMargin, setBand, noteBand,
     heroBand, heroBtn, listY, gapAboveSet, rowW, rowH, gap, entryW, entryGap, setW, pad, entryH, entryY,
   };
@@ -104,7 +105,7 @@ function bandOracle(w: number, h: number, env: LegacyEnv) {
 /** 预言机覆盖的字段名(新增字段由 B 的锚点与不变量单独约束) */
 const LEGACY_KEYS = [
   "rows", "endlessBtn", "phantomBtn", "strip", "chipXs", "gachaBtn", "talentBtn", "passBtn", "commissionBtn", "dailyBtn",
-  "gearupBtn", "setBtns", "setY", "setH", "setDescH", "sectionH", "sectionW", "sectionX", "stageHdrY", "setHdrY",
+  "gearupBtn", "fusionBtn", "setBtns", "setY", "setH", "setDescH", "sectionH", "sectionW", "sectionX", "stageHdrY", "setHdrY",
   "rowMargin", "setBand", "noteBand", "heroBand", "heroBtn", "listY", "gapAboveSet", "rowW", "rowH", "gap",
   "entryW", "entryGap", "setW", "pad", "entryH", "entryY",
 ] as const;
@@ -226,10 +227,10 @@ describe("B. 锚点:560×996 满态(七条带逐带走查表验算)", () => {
     expect(L.d.seasonPos).toEqual({ x: 536, y: 84 });
   });
 
-  it("③ 入口带:6 枚 78×44 @148,x = 16/106/196/286/376/466,末枚右缘 544(6×78+5×12=528)", () => {
-    expect({ w: L.entryW, h: L.entryH, y: L.entryY, gap: L.entryGap }).toEqual({ w: 78, h: 44, y: 148, gap: 12 });
-    const btns = [L.commissionBtn, L.gachaBtn, L.talentBtn, L.passBtn, L.dailyBtn, L.gearupBtn];
-    expect(btns.map((b) => b.x)).toEqual([16, 106, 196, 286, 376, 466]);
+  it("③ 入口带:7 枚 64×44 @148,x = 16/92/168/244/320/396/472,末枚右缘 536(floor(456/7)=65 取偶 64,余 8 归容器)", () => {
+    expect({ w: L.entryW, h: L.entryH, y: L.entryY, gap: L.entryGap }).toEqual({ w: 64, h: 44, y: 148, gap: 12 });
+    const btns = [L.commissionBtn, L.gachaBtn, L.talentBtn, L.passBtn, L.dailyBtn, L.gearupBtn, L.fusionBtn];
+    expect(btns.map((b) => b.x)).toEqual([16, 92, 168, 244, 320, 396, 472]);
     for (const b of btns) expect(b.x + b.w).toBeLessThanOrEqual(544);
   });
 
@@ -309,9 +310,9 @@ function menuChipRectsOf(L: MenuLayout) {
   return L.d.chipXs.map((x) => ({ x, y: L.d.chipY, w: L.d.chipW, h: L.d.chipH }));
 }
 
-/** 六个场外入口热区(顺序与 MenuContentModel.menuEntryRects 一致) */
+/** 七个场外入口热区(顺序与 MenuContentModel.menuEntryRects 一致) */
 function menuEntryRectsOf(L: MenuLayout) {
-  return [L.commissionBtn, L.gachaBtn, L.talentBtn, L.passBtn, L.dailyBtn, L.gearupBtn];
+  return [L.commissionBtn, L.gachaBtn, L.talentBtn, L.passBtn, L.dailyBtn, L.gearupBtn, L.fusionBtn];
 }
 
 describe("B. 锚点:560×1246 高屏(富余全给列表带,列表下方不长空洞)", () => {
@@ -355,9 +356,9 @@ describe("B. 锚点:分区条缺贴图(退回无条口径)", () => {
 describe("C. 规范表默认值即分带规范值(改默认 = 改画面,须走锚点评审)", () => {
   const o = MENU_LAYOUT_DEFAULTS.origin;
   const dc = MENU_LAYOUT_DEFAULTS.deco;
-  it("页边距与入口带(44 高、间距 12、6 枚铺满 528)", () => {
+  it("页边距与入口带(44 高、间距 12、7 枚含融合入口)", () => {
     expect({ pad: o.pad, entryH: o.entryH, entryY: o.entryY, entryGap: o.entryGap, entryCount: o.entryCount }).toEqual({
-      pad: 16, entryH: 44, entryY: 148, entryGap: 12, entryCount: 6,
+      pad: 16, entryH: 44, entryY: 148, entryGap: 12, entryCount: 7,
     });
   });
 

@@ -204,6 +204,18 @@ export const SET_PIECE_TIERS = {
 } as const;
 
 /**
+ * 共鸣里程碑(docs/DESIGN-HERO-RHYTHM.md §5:套装件数退役,联动加成改挂"本局共鸣数"):
+ * 共鸣数 = 挂在共鸣节律上的主动法宝数 + 拿到共鸣被动的独有技能数。
+ * 2 处 → 原 bonus3 那一档;4 处 → 原 bonus6 那一档。SET_BONUSES 表内容不变,只换触发条件。
+ */
+export const RESONANCE_TIERS = {
+  /** 一档所需共鸣数(处) */
+  tier1: 2,
+  /** 二档所需共鸣数(处) */
+  tier2: 4,
+} as const;
+
+/**
  * 套组联动效果数值(唯一事实源;消费方:装备引擎结算/受击回血)。
  * SETS/FEATURED_SETS 里的 desc 为玩家展示文案,与本表同源;改数值只改这里。
  * 出处:需求优化 v2(常驻三套)+ DESIGN-SEASON-SETS(赛季套);单位/依据逐项备注。

@@ -55,7 +55,7 @@ export const BUILDER_ROUTE: readonly TalentNode[] = [
   { id: "targeted_search", name: "定向搜索", cost: 8, tier: 3, desc: "开局指定1种触发器,首次升级必定出现" },
   { id: "affix_preview", name: "词缀预览", cost: 7, tier: 3, desc: "升级选装备时显示词缀图鉴收录标记" },
   { id: "reforge", name: "词缀重铸", cost: 12, tier: 4, desc: "每局1次,重铸一张装备卡的修饰器" },
-  { id: "slot2", name: "槽位扩展II", cost: 10, tier: 4, desc: "装备槽上限+1(累计+2)" },
+  { id: "slot2", name: "被动槽扩展", cost: 10, tier: 4, desc: "被动法宝槽上限+1(4 → 5)" },
   { id: "universal", name: "万能适配", cost: 20, tier: 5, desc: "装备槽满时新装备不再受同触发器类型冲突限制" },
   { id: "blueprint", name: "完美蓝图", cost: 18, tier: 5, desc: "开局可从已解锁词缀中选择1个效果作为初始武器" },
 ];
@@ -157,12 +157,17 @@ export const TALENT_VALUES = {
 
 /* ---------- 天赋效果推导(纯函数,便于单测;数值一律读 TALENT_VALUES) ---------- */
 
+/** 主动法宝槽加成(R7:基础 4,天赋最多 +2 = 额外武装 + 槽位扩展 I;硬顶 SHOP_SLOT_CAP 6 由商店侧钳) */
 export function slotBonusFor(owned: readonly TalentId[]): number {
   let b = 0;
   if (owned.includes("extra_gear")) b += 1;
   if (owned.includes("slot1")) b += 1;
-  if (owned.includes("slot2")) b += 1;
   return b;
+}
+
+/** 被动法宝槽加成(R7:原「槽位扩展 II」改为被动槽 +1,天赋 id 不变以兼容存档) */
+export function passiveSlotBonusFor(owned: readonly TalentId[]): number {
+  return owned.includes("slot2") ? 1 : 0;
 }
 
 export function firstXpScaleFor(owned: readonly TalentId[]): number {

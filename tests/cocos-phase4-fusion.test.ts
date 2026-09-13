@@ -1396,10 +1396,13 @@ describe("GameShell 的词缀融合屏接线", () => {
     expect(src.includes("PENDING_SCREEN")).toBe(false);
     expect(src.includes("融合尚未开放")).toBe(false);
     expect(src.includes("尚未开放")).toBe(false);
-    // 商店工具钮的 fusion 分支换成真实开屏
+    // 融合入口自 R2 起在主菜单(第 7 枚入口),商店工具钮那一格改给被动管理
     const shop = src.slice(src.indexOf("private onShopAction"), src.indexOf("private restartRun"));
-    expect(shop.includes('} else if (a.id === "fusion") {')).toBe(true);
-    expect(shop.includes("this.openFusion();")).toBe(true);
+    expect(shop.includes('a.id === "fusion"')).toBe(false);
+    expect(shop.includes('} else if (a.id === "passive") {')).toBe(true);
+    expect(shop.includes("this.levelUpModel.openPassives();")).toBe(true);
+    expect(src.includes('if (a.entry === "fusion") {')).toBe(true);
+    expect(src.includes("this.openFusion();")).toBe(true);
     expect(shop.includes("this.toast(PENDING")).toBe(false);
   });
 
@@ -1418,9 +1421,10 @@ describe("GameShell 的词缀融合屏接线", () => {
     for (const f of ["stardust: s.stardust", "fusionPity: s.fusionPity", "ownedTalentCount: s.ownedTalents.length"]) {
       expect(slice.includes(f), f).toBe(true);
     }
-    // 装备列表读的是战斗层的局内态(与商店屏 ShopWorld 同一条 getter 口径)
+    // 装备列表读的是存档收藏(R2:融合在主菜单操作 ownedGear,不再碰局内态)
     const eqSeg = src.slice(src.indexOf("private fusionEquipment"), src.indexOf("private openFusion"));
-    expect(eqSeg.includes("this.sim.player.equipment")).toBe(true);
+    expect(eqSeg.includes("this.save().ownedGear")).toBe(true);
+    expect(eqSeg.includes("sim.player.equipment")).toBe(false);
   });
 
   it("三份瞬时态挂在宿主上且不入档;入档的只有 fusionPity(读档兜底已在 SaveModel)", () => {
@@ -1437,21 +1441,21 @@ describe("GameShell 的词缀融合屏接线", () => {
 
   it("进屏守卫与两份瞬时态的重置节奏(Web openFusion 同序:清选中与暂存,tripleMode 不清)", () => {
     const seg = src.slice(src.indexOf("private openFusion"), src.indexOf("private syncFusion"));
-    expect(seg.includes("if (!sim || sim.player.equipment.length < 2) return;")).toBe(true);
+    expect(seg.includes("if (this.fusionEquipment().length < 2) {")).toBe(true);
     expect(seg.includes("this.fusSel = { ...FUSION_DEFAULT_SELECTION };")).toBe(true);
     expect(seg.includes("this.fusPending = null;")).toBe(true);
     expect(seg.includes("fusMode")).toBe(false);
     expect(seg.includes('this.router.show("fusion")')).toBe(true);
   });
 
-  it("动作处理里不直接改存档字段:写入全集中在 commit 函数里,返回钮回商店", () => {
+  it("动作处理里不直接改存档字段:写入全集中在 commit 函数里,返回钮回主菜单", () => {
     const act = codeOf(src.slice(src.indexOf("private onFusionAction"), src.indexOf("private commitFusionClaim")));
     for (const bad of ["save.stardust", "save.fusionPity", "this.save()", "persist(", "recordEquipment", ".splice(", ".push("]) {
       expect(act.includes(bad), bad).toBe(false);
     }
     expect(act.includes("fusionClaim(this.fusionSave(), this.fusionEquipment(), this.fusSel, this.fusMode, this.fusPending, a)")).toBe(true);
     expect(act.includes("this.commitFusionClaim(claim)")).toBe(true);
-    expect(act.includes('this.router.show("shop")')).toBe(true);
+    expect(act.includes('this.router.show("menu")')).toBe(true);
     const commit = codeOf(src.slice(src.indexOf("private commitFusionClaim"), src.indexOf("/* ================= 赛季结算屏")));
     expect(commit.includes("save.stardust -= claim.stardustCost;")).toBe(true);
     expect(commit.includes("save.fusionPity = claim.fusionPityTo;")).toBe(true);

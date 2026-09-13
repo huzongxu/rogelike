@@ -2,6 +2,9 @@
 
 import { type Vec2, vec2, clamp } from "../core/math";
 import type { Equipment } from "../data/equipmentGen";
+import type { PassiveArtifact } from "../data/artifacts";
+import { PASSIVE_SLOTS } from "../data/artifacts";
+import { RHYTHM_MAX_LEVEL, type RhythmId } from "../data/rhythm";
 import { PLAYER_BASE, xpToNext, LEVELUP_HEAL_PCT } from "../data/combat";
 
 // 策划规范表符号经本模块再导出(历史导入路径兼容;唯一出处在 ../data/combat)
@@ -16,10 +19,26 @@ export class Player {
   /** 护盾:吸收量 + 剩余时间 */
   shield: number;
   shieldTtl: number;
-  /** 装备槽 */
+  /** 主动法宝槽(docs/DESIGN-HERO-RHYTHM.md §4.3;历史名 equipment,引擎与商店持同一引用) */
   equipment: Equipment[] = [];
-  /** 天赋提供的额外装备槽 */
+  /** 英雄独有技能(kind = skill;不占槽,升级三选一产出;引擎与主动法宝同列结算) */
+  skills: Equipment[] = [];
+  /** 被动法宝(全局生效;引擎 statsOf 折入,同 id 叠加按表衰减) */
+  passives: PassiveArtifact[] = [];
+  /** 已解锁节律(首条 = 英雄本命;分岔技能解锁第 2 条;开局由世界层写入) */
+  rhythms: RhythmId[] = [];
+  /** 节律等级(升级三选一「节律强化」卡提升;缺省 1) */
+  rhythmLevel: Partial<Record<RhythmId, number>> = {};
+  /** 已选分岔技能 id(null = 未选;选中即另一分岔永久消失) */
+  branchChosen: string | null = null;
+  /** 本局已重置分岔次数(上限见 ../data/shop 的 RESET_BRANCH_LIMIT) */
+  branchResets = 0;
+  /** 遗物「假命」本局是否已用 */
+  spareLifeUsed = false;
+  /** 天赋提供的额外主动法宝槽(额外武装 / 槽位扩展 I) */
   slotBonus = 0;
+  /** 天赋提供的额外被动法宝槽(被动槽扩展) */
+  passiveSlotBonus = 0;
   /** 本局内商店购买的额外装备槽(金币出口;每局清零) */
   runSlotBonus = 0;
   /** 首次升级经验缩放(快速启动:-20%) */
@@ -45,6 +64,63 @@ export class Player {
   /** 剩余装备槽位 */
   get freeSlots(): number {
     return Math.max(0, this.slots - this.equipment.length);
+  }
+
+  /** 被动法宝槽总数 = 表值 + 天赋「被动槽扩展」 */
+  get passiveSlots(): number {
+    return PASSIVE_SLOTS + this.passiveSlotBonus;
+  }
+
+  /** 剩余被动槽 */
+  get freePassiveSlots(): number {
+    return Math.max(0, this.passiveSlots - this.passives.length);
+  }
+
+  /** 引擎结算列:独有技能在前、主动法宝在后(同一套触发 / 效果 / 修饰器管线) */
+  get castList(): Equipment[] {
+    return this.skills.length === 0 ? this.equipment : [...this.skills, ...this.equipment];
+  }
+
+  /** 某条节律的等级(未解锁 / 未强化 = 1) */
+  rhythmLevelOf(r: RhythmId): number {
+    return this.rhythmLevel[r] ?? 1;
+  }
+
+  /** 解锁一条节律(重复解锁无副作用);返回是否新增 */
+  unlockRhythm(r: RhythmId): boolean {
+    if (this.rhythms.includes(r)) return false;
+    this.rhythms.push(r);
+    return true;
+  }
+
+  /** 节律强化一级(到上限返回 false) */
+  rhythmLevelUp(r: RhythmId): boolean {
+    const cur = this.rhythmLevelOf(r);
+    if (cur >= RHYTHM_MAX_LEVEL) return false;
+    this.rhythmLevel[r] = cur + 1;
+    return true;
+  }
+
+  /**
+   * 撤掉已选分岔:移除那件技能、收回它解锁的节律(本命不动)、分岔选择归零。
+   * 返回被收回的节律(null = 没有分岔可撤)。法宝的重新挂节律由世界层做(它知道归一化规则)。
+   */
+  resetBranch(): { skillId: string; rhythm: RhythmId | null } | null {
+    if (!this.branchChosen) return null;
+    const idx = this.skills.findIndex((s) => s.skillId === this.branchChosen);
+    const skill = idx >= 0 ? this.skills[idx] : null;
+    if (idx >= 0) this.skills.splice(idx, 1);
+    const r = (skill?.triggers[0]?.def.type ?? null) as RhythmId | null;
+    let removed: RhythmId | null = null;
+    if (r && this.rhythms.indexOf(r) > 0) {
+      this.rhythms.splice(this.rhythms.indexOf(r), 1);
+      delete this.rhythmLevel[r];
+      removed = r;
+    }
+    const id = this.branchChosen;
+    this.branchChosen = null;
+    this.branchResets += 1;
+    return { skillId: id, rhythm: removed };
   }
 
   addXp(v: number): boolean {

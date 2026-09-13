@@ -9,6 +9,8 @@ import { spawnEnemy } from "@game/entities/enemy";
 import { EquipmentEngine, type BattleContext, type Fx } from "@game/systems/equipmentEngine";
 import { makeTrigger, makeEffect, type EffectType } from "@game/data/affixes";
 import { generateSetEquipment, GENERIC_EFFECT_TYPES, type Equipment } from "@game/data/equipmentGen";
+import { ARTIFACT_DEFS } from "@game/data/artifacts";
+import type { RhythmId } from "@game/data/rhythm";
 import { SETS, setDef, setOfEffect, setsOfEffect, allSets, seasonNewSets, setReleaseSeason, isSetPiece, setPieces, setBonusState, releasedSets, type SetId } from "@game/data/sets";
 import { chapterIntel } from "@game/data/intel";
 import { EFFECTS } from "@game/data/affixes";
@@ -82,12 +84,12 @@ describe("套组定义与效果归属", () => {
     expect(releasedSets(1).map((s) => s.id)).toEqual(["thorn", "barrage", "ember"]);
     expect(releasedSets(2).map((s) => s.id)).toContain("frost");
     expect(releasedSets(5).length).toBe(12); // 发布后永久保留(四季 12 套)
-    // 赛季套组的卡也全部归属本套
+    // 赛季套组的卡也全部归属本套;触发器 = 所挂节律(共鸣表),修饰器层已升格为被动法宝
     for (let i = 0; i < 40; i++) {
       const eq = generateSetEquipment("frost", 5);
       expect(isSetPiece(eq, "frost")).toBe(true);
-      for (const t of eq.triggers) expect(frost.triggers.includes(t.def.type)).toBe(true);
-      for (const m of eq.modifiers) expect(frost.modifiers.includes(m.def.type)).toBe(true);
+      for (const t of eq.triggers) expect(ARTIFACT_DEFS[eq.effect.def.type].resonance.includes(t.def.type as RhythmId)).toBe(true);
+      expect(eq.modifiers).toHaveLength(0);
     }
   });
   it("效果不在本套时不计件", () => {
@@ -119,17 +121,16 @@ describe("件数与档位", () => {
 });
 
 describe("套组专属卡池(generateSetEquipment)", () => {
-  it("效果/触发器/修饰器都来自本套定义(全部 12 套)", () => {
+  it("效果来自本套定义(全部 12 套);触发器 = 所挂节律,给了已解锁节律就只落在其中", () => {
     for (const setId of allSets().map((s) => s.id)) {
       for (let i = 0; i < 40; i++) {
-        const eq = generateSetEquipment(setId, 5);
+        const eq = generateSetEquipment(setId, 5, 0, undefined, ["kill", "move"]);
         expect(isSetPiece(eq, setId), `${eq.name} 效果应属于 ${setId}`).toBe(true);
+        expect(eq.kind).toBe("active");
         for (const t of eq.triggers) {
-          expect(setDef(setId).triggers.includes(t.def.type), `${t.def.name} 应在 ${setId} 亲和池`).toBe(true);
+          expect(["kill", "move"].includes(t.def.type), `${t.def.name} 应是已解锁节律之一`).toBe(true);
         }
-        for (const m of eq.modifiers) {
-          expect(setDef(setId).modifiers.includes(m.def.type), `${m.def.name} 应在 ${setId} 亲和池`).toBe(true);
-        }
+        expect(eq.modifiers, "修饰器层已升格为全局被动法宝").toHaveLength(0);
       }
     }
   });

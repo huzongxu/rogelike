@@ -6,7 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { seasonTheme, setMutation, featuredSetId, isSeasonBoosted } from "@game/data/seasonSets";
-import { SETS, setBonusState, allSets, releasedSets, seasonNewSets, type SetId } from "@game/data/sets";
+import { SETS, setBonusState, setDef, allSets, releasedSets, seasonNewSets, type SetId } from "@game/data/sets";
 import { generateSetEquipment, type Equipment } from "@game/data/equipmentGen";
 import { makeTrigger, makeEffect, type EffectType } from "@game/data/affixes";
 import { Player } from "@game/entities/player";
@@ -381,20 +381,19 @@ describe("赛季联动词缀落地(EquipmentEngine)", () => {
 
 /* ---------- 商店修饰器倾向 ---------- */
 
-describe("套组卡池修饰器倾向(generateSetEquipment modBias)", () => {
-  it("有修饰器的本套卡,首修饰器定向为倾向类型", () => {
+describe("套组卡池与修饰器倾向(generateSetEquipment modBias)", () => {
+  it("修饰器层已升格为全局被动法宝(docs/DESIGN-HERO-RHYTHM.md §4.2):本套卡不再自带修饰器,倾向参数不产生修饰器", () => {
     for (let i = 0; i < 60; i++) {
       const eq = generateSetEquipment("thorn", 5, 0, "explode");
-      if (eq.modifiers.length > 0) {
-        expect(eq.modifiers[0].def.type).toBe("explode");
-      }
+      expect(eq.modifiers).toHaveLength(0);
     }
   });
-  it("无倾向时保持本套亲和池随机", () => {
+  it("本套卡的效果仍来自本套定义,触发器落在该效果的共鸣节律上", () => {
     const seen = new Set<string>();
     for (let i = 0; i < 60; i++) {
       const eq = generateSetEquipment("ember", 5);
-      for (const m of eq.modifiers) seen.add(m.def.type);
+      seen.add(eq.effect.def.type);
+      expect(setDef("ember").effects.includes(eq.effect.def.type)).toBe(true);
     }
     expect(seen.size).toBeGreaterThan(1);
   });

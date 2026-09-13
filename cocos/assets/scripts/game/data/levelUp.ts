@@ -52,3 +52,19 @@ export const LEVELUP_MAIN_LABELS: Record<(typeof UPGRADE_MAIN_KEYS)[number], str
   heal: "治疗",
   amount: "护盾",
 };
+
+/**
+ * 每章免费重随次数(次)。
+ * 含义:升级弹层里「重随」钮一章内能按几次;进下一章清零;
+ * 依据:docs/DESIGN-HERO-RHYTHM.md §6 —— 独有技能不花金币,金币重随退役,
+ *      保留一次免费重随作为"三张全是烂牌"的补救。
+ */
+export const LEVELUP_FREE_REROLL_PER_CHAPTER = 1;
+
+/**
+ * 首章法宝三选一的张数(张)与共鸣保底(张)。
+ * 含义:进第 1 章前从 N 张主动法宝里免费挑 1 张,其中至少 M 张与本命节律共鸣;
+ * 依据:docs/DESIGN-HERO-RHYTHM.md §6 / Q7 裁定(开局选择要具体、可见、带这局的信息)。
+ */
+export const FIRST_PICK_COUNT = 3;
+export const FIRST_PICK_RESONANCE_GUARANTEE = 1;

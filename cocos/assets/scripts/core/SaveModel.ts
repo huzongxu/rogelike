@@ -12,6 +12,7 @@ import type { CommissionState } from "../game/data/commissions";
 import type { Equipment } from "../game/data/equipmentGen";
 import type { SetId } from "../game/data/sets";
 import type { HeroId } from "../game/data/heroes";
+import type { RhythmId } from "../game/data/rhythm";
 import { applyHeroSelection, heroOfSetOrNull, normalizeHeroId } from "../game/data/heroes";
 import { ENERGY_MAX } from "../game/data/daily";
 
@@ -22,6 +23,8 @@ export interface Collection {
     modifiers: string[];
     /** 已遭遇过的敌人:基线怪 = Enemy.kind,赛季主题怪 = variantId */
     enemies: string[];
+    /** 已达成过的共鸣(docs/DESIGN-HERO-RHYTHM.md §5):`art:<效果>:<节律>` / `skill:<技能 id>` */
+    resonances: string[];
 }
 
 export interface SaveModel {
@@ -50,6 +53,10 @@ export interface SaveModel {
     commission2: CommissionState | null;
     selectedHero: HeroId | null;
     selectedSet: SetId | null;
+    /** 跨局解锁的第二本命(docs/DESIGN-HERO-RHYTHM.md Q7/S2):该英雄通关 3 星后可在开局二选一 */
+    heroRhythmUnlock: Partial<Record<HeroId, boolean>>;
+    /** 该英雄当前选用的本命节律(缺省 = 表内本命;只在已解锁时生效) */
+    heroRhythmChoice: Partial<Record<HeroId, RhythmId>>;
     tutorialDone: boolean;
     energy: number;
     lastEnergyAt: number;
@@ -93,6 +100,7 @@ export function normalizeSave(parsed: any): SaveModel {
             effects: parsed?.collection?.effects ?? [],
             modifiers: parsed?.collection?.modifiers ?? [],
             enemies: parsed?.collection?.enemies ?? [],
+            resonances: Array.isArray(parsed?.collection?.resonances) ? parsed.collection.resonances : [],
         },
         bestRun: parsed?.bestRun ?? null,
         bestWave: Number(parsed?.bestWave) || 0,
@@ -119,6 +127,8 @@ export function normalizeSave(parsed: any): SaveModel {
         commission2: parsed?.commission2 ?? null,
         selectedHero: normalizeHeroId(parsed?.selectedHero),
         selectedSet: parsed?.selectedSet ?? null,
+        heroRhythmUnlock: parsed?.heroRhythmUnlock && typeof parsed.heroRhythmUnlock === "object" ? parsed.heroRhythmUnlock : {},
+        heroRhythmChoice: parsed?.heroRhythmChoice && typeof parsed.heroRhythmChoice === "object" ? parsed.heroRhythmChoice : {},
         tutorialDone: !!parsed?.tutorialDone,
         energy: Number(parsed?.energy) || ENERGY_MAX,
         lastEnergyAt: Number(parsed?.lastEnergyAt) || Date.now(),

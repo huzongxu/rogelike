@@ -35,6 +35,32 @@ import { pick, rand, randInt, pickWeighted } from "../core/math";
 import { AFFINITY_WEIGHT, HIDDEN_MODIFIERS, HIDDEN_TRIGGERS, REROLL_HIDDEN, SKILL_AFFINITY } from "./reroll";
 import { hiddenAffixDef } from "./fusion";
 import { setDef, type SetId } from "./sets";
+import {
+  ARTIFACT_DEFS,
+  PASSIVE_NORMAL_TYPES,
+  PASSIVE_RARE_CHANCE,
+  PASSIVE_RARE_TYPES,
+  PASSIVE_RELIC_RATIO,
+  RELIC_TYPES,
+  SEASON_ECHO_MULT,
+  SEASON_FACE_OFFER_CHANCE,
+  defaultRhythmFor,
+  echoMorph,
+  makePassive,
+  resonanceRhythmsOf,
+  seasonArtifactDef,
+  seasonArtifactsAvailable,
+  seasonFace,
+  seasonPairOf,
+  type ArtifactKind,
+  type MorphPatch,
+  type PassiveArtifact,
+  type SeasonArtifactDef,
+  type SeasonArtifactId,
+} from "./artifacts";
+import { isRhythm, rhythmTriggerParams, type RhythmId } from "./rhythm";
+import { baselineInterval, heroSkillDef, needsBaseline, skillTriggerParams, type HeroSkillDef } from "./heroSkills";
+import { RESONANCE_TIERS, type SetBonusState } from "./sets";
 
 let uid = 0;
 
@@ -49,6 +75,10 @@ export interface Equipment {
   level: number;
   quality: Quality;
   name: string;
+  /**
+   * 触发器 = 这件挂在哪条节律上(docs/DESIGN-HERO-RHYTHM.md §2):`triggers[0].def.type` 就是所挂节律,
+   * 参数由 ./rhythm 的节律表给,不再随机;传奇档(品质 triggers = 2)可同时挂两条已解锁节律。
+   */
   triggers: TriggerInstance[];
   effect: EffectInstance;
   modifiers: ModifierInstance[];
@@ -56,6 +86,139 @@ export interface Equipment {
   fromDrop?: boolean;
   /** 隐藏词缀(仅融合产出,彩虹品质) */
   hiddenAffix?: HiddenAffixType;
+  /** 物品种类:缺省 = active(主动法宝);skill = 英雄独有技能(不占槽,升级三选一产出) */
+  kind?: ArtifactKind;
+  /** 独有技能 id(kind = skill 时必填;查 ./heroSkills) */
+  skillId?: string;
+  /** 赛季法宝变体(R5;查 ./artifacts SEASON_ARTIFACTS):名字 / 内置冷却 / 共鸣节律 / 变形都改读变体表 */
+  variant?: SeasonArtifactId;
+}
+
+/** 物品种类(缺省视作主动法宝;老存档 / 老测试构造的装备都落到这一档) */
+export function equipmentKind(eq: Equipment): ArtifactKind {
+  return eq.kind ?? "active";
+}
+
+/** 这件当前挂的节律(首条触发器);隐藏触发器不是节律,返回 null */
+export function equipmentRhythm(eq: Equipment): RhythmId | null {
+  const t = eq.triggers[0]?.def.type;
+  return t && t !== "crit" && t !== "elite" ? (t as RhythmId) : null;
+}
+
+/** 共鸣来源:base = 基础格(法宝表 / 赛季法宝自带格);season = 当季新格;echo = 过季回响格(补丁减半) */
+export type ResonanceKind = "base" | "season" | "echo";
+
+export interface ResonanceInfo {
+  /** 变形名(卡面 / HUD 改名) */
+  name: string;
+  desc: string;
+  morph: MorphPatch;
+  kind: ResonanceKind;
+  /** 赛季格所属赛季(base 无) */
+  season?: number;
+}
+
+/** 法宝底名:赛季变体读变体表,否则法宝表 */
+export function artifactBaseName(eq: Equipment): string {
+  return seasonArtifactDef(eq.variant)?.name ?? ARTIFACT_DEFS[eq.effect.def.type].name;
+}
+
+/** 事件型节律内置冷却(秒):赛季变体读变体表,否则法宝表 */
+export function artifactInnerCd(eq: Equipment): number {
+  return seasonArtifactDef(eq.variant)?.innerCd ?? ARTIFACT_DEFS[eq.effect.def.type].innerCd;
+}
+
+/** 这件的全部共鸣节律(赛季变体 = 变体表;否则基础 2 格 + 到该赛季为止的赛季格) */
+export function artifactResonanceRhythms(eq: Equipment, seasonId?: number): readonly RhythmId[] {
+  const v = seasonArtifactDef(eq.variant);
+  return v ? v.resonance : resonanceRhythmsOf(eq.effect.def.type, seasonId);
+}
+
+/**
+ * 这件当前命中的共鸣(docs/DESIGN-HERO-RHYTHM.md §5 表 1 + §5.1 赛季格):按触发器序取第一条命中;
+ * 技能与被动不参与;只有显式标了 active 的法宝参与(老档 / 老测试直接构造的装备无 kind → 不变形;开局归一化会补上 kind)。
+ * 不给 seasonId = 只看基础格(老宿主 / 老测试口径)。
+ */
+export function equipmentResonance(eq: Equipment, seasonId?: number): ResonanceInfo | null {
+  if (eq.kind !== "active" || eq.hiddenAffix) return null;
+  const type = eq.effect.def.type;
+  const v = seasonArtifactDef(eq.variant);
+  for (const t of eq.triggers) {
+    const r = t.def.type;
+    if (!isRhythm(r)) continue;
+    if (v) {
+      if (v.resonance.includes(r)) return { name: v.morphName, desc: v.morphDesc, morph: v.morph, kind: "base" };
+      continue;
+    }
+    const d = ARTIFACT_DEFS[type];
+    if (d.resonance.includes(r)) return { name: d.morphName, desc: d.morphDesc, morph: d.morph, kind: "base" };
+    const sp = seasonPairOf(type, r, seasonId);
+    if (sp) return { name: sp.pair.name, desc: sp.pair.desc, morph: sp.echo ? echoMorph(sp.pair.morph, SEASON_ECHO_MULT) : sp.pair.morph, kind: sp.echo ? "echo" : "season", season: sp.season };
+  }
+  return null;
+}
+
+/** 这件是否挂在共鸣节律上(任一触发器共鸣即算;技能与被动不参与) */
+export function equipmentResonant(eq: Equipment, seasonId?: number): boolean {
+  return equipmentResonance(eq, seasonId) !== null;
+}
+
+/** 被动法宝里的「回响」规格(取第一枚;无则 null)—— 与装备自带修饰器的 echoSpecOf 二选一,装备优先 */
+export function passiveEchoSpec(passives: readonly PassiveArtifact[]): { sec: number; mult: number } | null {
+  const p = passives.find((x) => x.type === "echo");
+  return p ? { sec: p.params.echoSec ?? 0, mult: p.params.echoMult ?? 0 } : null;
+}
+
+/** 被动法宝里的「送葬」增伤(多枚叠乘;无则 1),与 condemnedMultOf 同语义 */
+export function passiveCondemnedMult(passives: readonly PassiveArtifact[], targetHpFrac: number): number {
+  let mult = 1;
+  for (const p of passives) {
+    if (p.type !== "condemned") continue;
+    if (targetHpFrac < (p.params.condemnHp ?? 0)) mult *= p.params.condemnMult ?? 1;
+  }
+  return mult;
+}
+
+/**
+ * 独有技能是否拿到了共鸣被动(docs/DESIGN-HERO-RHYTHM.md §5 表 2):
+ * 技能表标的那一枚被动法宝在玩家被动列里 → 技能改名 + 叠 `resonanceMorph`。
+ */
+export function skillResonant(eq: Equipment, passives: readonly PassiveArtifact[]): boolean {
+  if (eq.kind !== "skill" || !eq.skillId) return false;
+  const def = heroSkillDef(eq.skillId);
+  return !!def && passives.some((p) => p.type === def.resonancePassive);
+}
+
+/**
+ * 卡面主名:主动法宝 = 法宝名,共鸣时改走变形名;技能 = 技能名,拿到共鸣被动时改走共鸣名(需给 passives);
+ * 其余沿用 name。
+ */
+export function equipmentDisplayName(eq: Equipment, passives?: readonly PassiveArtifact[], seasonId?: number): string {
+  if (eq.kind === "skill") {
+    if (passives && eq.skillId && skillResonant(eq, passives)) return heroSkillDef(eq.skillId)!.resonanceName;
+    return eq.name;
+  }
+  if (equipmentKind(eq) !== "active" || eq.hiddenAffix) return eq.name;
+  return equipmentResonance(eq, seasonId)?.name ?? artifactBaseName(eq);
+}
+
+/** 本局共鸣数(§5):挂在共鸣节律上的主动法宝 + 拿到共鸣被动的独有技能 */
+export function resonanceCount(castList: readonly Equipment[], passives: readonly PassiveArtifact[], seasonId?: number): number {
+  let n = 0;
+  for (const eq of castList) {
+    if (eq.kind === "skill" ? skillResonant(eq, passives) : equipmentResonant(eq, seasonId)) n += 1;
+  }
+  return n;
+}
+
+/**
+ * 共鸣里程碑版的套组生效状态(替代按效果计件的 `setBonusState`):pieces = 共鸣数,
+ * 两档门槛读 ./sets 的 RESONANCE_TIERS;SET_BONUSES 数值原样复用。
+ */
+export function resonanceBonusState(castList: readonly Equipment[], passives: readonly PassiveArtifact[], id: SetBonusState["id"] | null, seasonId?: number): SetBonusState | null {
+  if (!id) return null;
+  const pieces = resonanceCount(castList, passives, seasonId);
+  return { id, pieces, bonus3: pieces >= RESONANCE_TIERS.tier1, bonus6: pieces >= RESONANCE_TIERS.tier2 };
 }
 
 /** 随机品质:按掉落权重曲线(见 ./quality 的 QUALITY_DROP_CURVE);rareBonus 为稀有额外加成(战利品嗅觉) */
@@ -69,19 +232,7 @@ export function randomQuality(level: number, rareBonus = 0): Quality {
  */
 export const NORMAL_TRIGGERS: readonly TriggerType[] = NORMAL_TRIGGER_DEFS.map((d) => d.type);
 
-function randomTriggers(q: Quality, level: number): TriggerInstance[] {
-  const n = qualityDef(q).triggers;
-  // 受击触发参与"荆棘反伤回血流"(受击+回血联动),保留在池中
-  const types = shuffle<TriggerType>([...NORMAL_TRIGGERS]);
-  const out: TriggerInstance[] = [];
-  for (let i = 0; i < n; i++) {
-    const t = types[i % types.length];
-    out.push(makeTrigger(t, triggerParams(t, level)));
-  }
-  return out;
-}
-
-/** 生成指定触发器的数值参数(供定向搜索等外部使用) */
+/** 生成指定触发器的数值参数(供定向搜索等外部使用;节律体系下法宝触发参数改读 ./rhythm,本函数留给重随与定向搜索) */
 export function triggerParamsOf(t: TriggerType, level: number): Record<string, number> {
   return triggerParams(t, level);
 }
@@ -209,13 +360,155 @@ function modifierParams(m: ModifierType, level: number): Record<string, number> 
   }
 }
 
-export function generateEquipment(level: number, quality?: Quality, fromDrop = false, rareBonus = 0): Equipment {
+/**
+ * 主动法宝的触发器列:第 1 条 = 默认分配的节律(已解锁里的共鸣者,否则本命),品质允许双触发(传奇)
+ * 且还有第二条已解锁节律时再挂一条。未给 unlocked(收藏掉落 / 扭蛋 / 融合这类"随身带走"的产物)
+ * 时按共鸣表序填满品质件数 —— 开局带入时 `normalizeArtifact` 会按本局已解锁节律重新分配。
+ */
+function artifactTriggers(effect: EffectType, q: Quality, unlocked?: readonly RhythmId[], rhythmLevels?: Partial<Record<RhythmId, number>>, resonance?: readonly RhythmId[]): TriggerInstance[] {
+  const n = Math.max(1, qualityDef(q).triggers);
+  const res = resonance ?? ARTIFACT_DEFS[effect].resonance;
+  const pool: RhythmId[] = unlocked && unlocked.length > 0 ? [...unlocked] : [...res];
+  const first = unlocked && unlocked.length > 0 ? (res.find((r) => unlocked.includes(r)) ?? unlocked[0]) : pool[0];
+  const order = [first, ...pool.filter((r) => r !== first)];
+  const out: TriggerInstance[] = [];
+  for (let i = 0; i < n && i < order.length; i++) {
+    const r = order[i];
+    out.push(makeTrigger(r, rhythmTriggerParams(r, rhythmLevels?.[r] ?? 1)));
+  }
+  return out;
+}
+
+/**
+ * 生成一件主动法宝(docs/DESIGN-HERO-RHYTHM.md §4.1):效果 = 通用池 8 种之一,**不带修饰器**
+ * (修饰器层已升格为全局被动法宝,见 ./artifacts),触发器 = 所挂节律(见 artifactTriggers)。
+ * `unlocked` = 本局已解锁节律(商店进货给;收藏 / 扭蛋等场外产物不给)。
+ */
+export function generateEquipment(level: number, quality?: Quality, fromDrop = false, rareBonus = 0, unlocked?: readonly RhythmId[], seasonId?: number): Equipment {
   const q = quality ?? randomQuality(level, rareBonus);
-  const triggers = randomTriggers(q, level);
-  const effect = randomEffect(q, level);
-  const modifiers = randomModifiers(q, level);
-  const name = buildName(triggers, effect, modifiers);
-  return { id: ++uid, level, quality: q, name, triggers, effect, modifiers, fromDrop };
+  const v = seasonId === undefined ? null : rollSeasonVariant(seasonId);
+  const effect = v ? makeEffect(v.effect, effectParams(v.effect, level), level) : randomEffect(q, level);
+  const triggers = artifactTriggers(effect.def.type, q, unlocked, undefined, v ? v.resonance : resonanceRhythmsOf(effect.def.type, seasonId));
+  const modifiers: ModifierInstance[] = [];
+  const eq: Equipment = { id: ++uid, level, quality: q, name: "", triggers, effect, modifiers, fromDrop, kind: "active" };
+  if (v) eq.variant = v.id;
+  eq.name = equipmentDisplayName(eq, undefined, seasonId);
+  return eq;
+}
+
+/**
+ * 赛季法宝掷点(R5):当季「脸」先按 SEASON_FACE_OFFER_CHANCE 偏向;不中则已上市的全部赛季法宝与通用池 8 种按件数均摊
+ * (n 枚变体 → n / (8 + n));都不中 = 通用池。S1 无赛季法宝 → 恒 null。
+ */
+function rollSeasonVariant(seasonId: number): SeasonArtifactDef | null {
+  const face = seasonFace(seasonId);
+  if (face && Math.random() < SEASON_FACE_OFFER_CHANCE) return face;
+  const avail = seasonArtifactsAvailable(seasonId);
+  if (avail.length === 0) return null;
+  if (Math.random() < avail.length / (GENERIC_EFFECT_TYPES.length + avail.length)) return pick(avail as SeasonArtifactDef[]);
+  return null;
+}
+
+/**
+ * 把一件主动法宝挂到指定节律上(商店「切换节律」/ 开局归一化):首条触发器换成该节律,
+ * 传奇档的第二条保留为另一条已解锁节律;名字随共鸣与否重算。技能与被动不接受切换(原样返回)。
+ */
+export function assignRhythm(eq: Equipment, rhythm: RhythmId, unlocked: readonly RhythmId[], rhythmLevels?: Partial<Record<RhythmId, number>>, seasonId?: number): Equipment {
+  if (equipmentKind(eq) !== "active" || eq.hiddenAffix) return eq;
+  const n = Math.max(1, qualityDef(eq.quality).triggers);
+  const others = unlocked.filter((r) => r !== rhythm);
+  const order = [rhythm, ...others];
+  const triggers: TriggerInstance[] = [];
+  for (let i = 0; i < n && i < order.length; i++) {
+    const r = order[i];
+    triggers.push(makeTrigger(r, rhythmTriggerParams(r, rhythmLevels?.[r] ?? 1)));
+  }
+  eq.triggers = triggers;
+  eq.name = equipmentDisplayName(eq, undefined, seasonId);
+  return eq;
+}
+
+/** 开局归一化:随身带入的法宝(收藏件 / 扭蛋件)按本局已解锁节律重新分配;已挂在合法节律上的不动 */
+export function normalizeArtifact(eq: Equipment, unlocked: readonly RhythmId[], rhythmLevels?: Partial<Record<RhythmId, number>>, seasonId?: number): Equipment {
+  if (equipmentKind(eq) !== "active" || eq.hiddenAffix) return eq;
+  eq.kind = "active";
+  const cur = equipmentRhythm(eq);
+  const legal = eq.triggers.length > 0 && eq.triggers.every((t) => (unlocked as readonly string[]).includes(t.def.type));
+  if (cur && legal) {
+    eq.name = equipmentDisplayName(eq, undefined, seasonId);
+    return eq;
+  }
+  return assignRhythm(eq, defaultRhythmOf(eq, unlocked, seasonId), unlocked, rhythmLevels, seasonId);
+}
+
+/** 这件的默认节律:赛季变体按变体共鸣表挑已解锁者,否则走法宝表(含赛季格) */
+export function defaultRhythmOf(eq: Equipment, unlocked: readonly RhythmId[], seasonId?: number): RhythmId {
+  const v = seasonArtifactDef(eq.variant);
+  if (!v) return defaultRhythmFor(eq.effect.def.type, unlocked, seasonId);
+  return v.resonance.find((r) => unlocked.includes(r)) ?? unlocked[0] ?? "pulse";
+}
+
+/** 商店「切换节律」的下一档:按已解锁顺序轮转到当前节律的下一条 */
+export function nextRhythmOf(eq: Equipment, unlocked: readonly RhythmId[]): RhythmId | null {
+  if (unlocked.length <= 1) return null;
+  const cur = equipmentRhythm(eq);
+  const i = cur ? unlocked.indexOf(cur) : -1;
+  return unlocked[(i + 1) % unlocked.length];
+}
+
+/**
+ * 生成一枚被动法宝(§4.2):常规池 8 种按 `rand` 均匀取;`PASSIVE_RARE_CHANCE` 命中时取稀有池(旧隐藏修饰器)。
+ * 数值走修饰器参数那一支(`modifierParams`),品质走掉落曲线(与主动法宝同口径)。
+ */
+export function generatePassive(level: number, rareBonus = 0, rand: () => number = Math.random, quality?: Quality, rareChanceBonus = 0): PassiveArtifact {
+  const q = quality ?? randomQuality(level, rareBonus);
+  const rare = rand() < PASSIVE_RARE_CHANCE + rareChanceBonus;
+  if (rare) {
+    const type = PASSIVE_RARE_TYPES[Math.min(PASSIVE_RARE_TYPES.length - 1, Math.floor(rand() * PASSIVE_RARE_TYPES.length))];
+    return makePassive(++uid, type, q, level, modifierParams(type, level));
+  }
+  // 常规池:修饰器类 : 遗物类 = 2 : 1(PASSIVE_RELIC_RATIO);遗物数值读 RELIC_VALUES,实例不带 params
+  if (rand() < PASSIVE_RELIC_RATIO) {
+    const relic = RELIC_TYPES[Math.min(RELIC_TYPES.length - 1, Math.floor(rand() * RELIC_TYPES.length))];
+    return makePassive(++uid, relic, q, level, {});
+  }
+  const type = PASSIVE_NORMAL_TYPES[Math.min(PASSIVE_NORMAL_TYPES.length - 1, Math.floor(rand() * PASSIVE_NORMAL_TYPES.length))];
+  return makePassive(++uid, type, q, level, modifierParams(type, level));
+}
+
+/** 英雄独有技能 id 段:9100 起(避开初始武器 9000–9012 与商店负 id) */
+let skillUid = 9100;
+export function _resetSkillUid(start = 9100): void {
+  skillUid = start;
+}
+
+/**
+ * 把技能定义实例化为一件 kind = "skill" 的装备(§3):效果 / 1 阶参数 / 自带修饰器来自技能表,
+ * 触发器 = 技能自己的节律(参数读节律表)。阶数就是 `level`,升阶走 `upgradeEquipment`。
+ */
+/**
+ * 技能的触发器列(R6):首条 = 所挂节律(节律表参数 × 这一招的调率);核心技能挂事件节律时再带一条「底拍」慢周期
+ * (CORE_BASELINE_INTERVAL,保证冷启动)。世界层第二本命换节律也走这里,保证两处一致。
+ */
+export function skillTriggers(def: Pick<HeroSkillDef, "kind" | "rhythmTune">, rhythm: RhythmId, rhythmLevel = 1): TriggerInstance[] {
+  const out = [makeTrigger(rhythm, skillTriggerParams(def, rhythm, rhythmLevel))];
+  if (needsBaseline(def, rhythm)) out.push(makeTrigger("pulse", { interval: baselineInterval(def) }));
+  return out;
+}
+
+export function makeSkillEquipment(def: HeroSkillDef, rhythmLevel = 1): Equipment {
+  const effect = makeEffect(def.effect, { ...def.params }, 1);
+  return {
+    id: ++skillUid,
+    level: 1,
+    quality: "common",
+    name: def.name,
+    triggers: skillTriggers(def, def.rhythm, rhythmLevel),
+    effect,
+    modifiers: (def.modifiers ?? []).map((m) => makeModifier(m, modifierParams(m, 1))),
+    kind: "skill",
+    skillId: def.id,
+  };
 }
 
 /**
@@ -223,28 +516,16 @@ export function generateEquipment(level: number, quality?: Quality, fromDrop = f
  * 商店刷卡时偏向本套,玩家凑 2/4 件套联动。
  * modBias = 赛季联动词缀的修饰器倾向(DESIGN-SEASON-SETS L2):有修饰器时首件定向为该类型。
  */
-export function generateSetEquipment(setId: SetId, level: number, rareBonus = 0, modBias?: ModifierType): Equipment {
+export function generateSetEquipment(setId: SetId, level: number, rareBonus = 0, _modBias?: ModifierType, unlocked?: readonly RhythmId[]): Equipment {
   const s = setDef(setId);
   const q = randomQuality(level, rareBonus);
   const effectType = pick(s.effects);
   const effect = makeEffect(effectType, effectParams(effectType, level), level);
-  const triggers: TriggerInstance[] = [];
-  const trigPool = shuffle<TriggerType>([...s.triggers]);
-  for (let i = 0; i < qualityDef(q).triggers; i++) {
-    const t = trigPool[i % trigPool.length];
-    triggers.push(makeTrigger(t, triggerParams(t, level)));
-  }
-  const modifiers: ModifierInstance[] = [];
-  const modPool = shuffle<ModifierType>([...s.modifiers]);
-  for (let i = 0; i < qualityDef(q).modifiers; i++) {
-    const m = modPool[i % modPool.length];
-    modifiers.push(makeModifier(m, modifierParams(m, level)));
-  }
-  if (modBias && modifiers.length > 0) {
-    modifiers[0] = makeModifier(modBias, modifierParams(modBias, level));
-  }
-  const name = buildName(triggers, effect, modifiers);
-  return { id: ++uid, level, quality: q, name, triggers, effect, modifiers };
+  // 套组卡池只决定"出哪个效果";触发器 = 所挂节律、修饰器层已升格为被动法宝(docs/DESIGN-HERO-RHYTHM.md §4)
+  const triggers = artifactTriggers(effectType, q, unlocked);
+  const eq: Equipment = { id: ++uid, level, quality: q, name: "", triggers, effect, modifiers: [], kind: "active" };
+  eq.name = equipmentDisplayName(eq);
+  return eq;
 }
 
 /** 等级放大的主数值键(强化与商店预览共用一份;勿在视图层再抄一遍) */
@@ -784,8 +1065,8 @@ export let QUALITY_BASE_PRICE: Record<Quality, number> = { ...QUALITY_BASE_PRICE
 /** 槽位扩展价格:第 n 次购买 = base × growth^n */
 export let SLOT_EXPAND_BASE = 100;
 export let SLOT_EXPAND_GROWTH = 2.3;
-/** 场内装备槽总数上限(基础 4 + 天赋 + 商店槽位购买,合计不超过此值;设计目标 6-8 槽) */
-export let SHOP_SLOT_CAP = 8;
+/** 场内主动法宝槽硬顶(基础 4 + 天赋 ≤2 + 本局广告 1,合计钳到此值;docs/DESIGN-HERO-RHYTHM.md §4.3 / R7:4 起步、6 封顶) */
+export let SHOP_SLOT_CAP = 6;
 
 const num = (v: unknown, min: number, max: number, fallback: number): number => {
   const n = typeof v === "number" ? v : Number(v);
@@ -804,7 +1085,7 @@ export function applyBalance(cfg?: Record<string, unknown>): void {
   }
   SLOT_EXPAND_BASE = num(c.slotExpandBase, 0, 999999, 100);
   SLOT_EXPAND_GROWTH = num(c.slotExpandGrowth, 1, 10, 2.3);
-  SHOP_SLOT_CAP = num(c.slotCap, 4, 32, 8);
+  SHOP_SLOT_CAP = num(c.slotCap, 4, 32, 6);
 }
 
 /** 品质基础价(商店卡价/销毁回收/进化费用共用) */

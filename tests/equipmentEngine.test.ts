@@ -11,6 +11,7 @@ import { spawnEnemy, type Enemy } from "@game/entities/enemy";
 import { EquipmentEngine, type BattleContext, type Fx } from "@game/systems/equipmentEngine";
 import { makeTrigger, makeEffect, makeModifier } from "@game/data/affixes";
 import { generateEquipment, generateChoices, type Equipment } from "@game/data/equipmentGen";
+import { ARTIFACT_DEFS } from "@game/data/artifacts";
 import { qualityDef } from "@game/data/quality";
 import { vec2 } from "@game/core/math";
 
@@ -40,26 +41,35 @@ beforeEach(() => {
   ctx = makeContext(player);
 });
 
-describe("装备品质构成(策划案 3.2)", () => {
-  it("普通 = 1触发器 + 1效果 + 0修饰器", () => {
-    const eq = generateEquipment(1, "common");
-    expect(eq.triggers).toHaveLength(1);
-    expect(eq.modifiers).toHaveLength(0);
+describe("主动法宝构成(docs/DESIGN-HERO-RHYTHM.md §4.1:效果 + 所挂节律,修饰器层已升格为被动法宝)", () => {
+  it("普通 / 稀有 / 史诗 = 1 条节律 + 1 效果 + 0 修饰器(法宝不再自带修饰器)", () => {
+    for (const q of ["common", "rare", "epic"] as const) {
+      const eq = generateEquipment(1, q);
+      expect(eq.kind).toBe("active");
+      expect(eq.triggers).toHaveLength(1);
+      expect(eq.modifiers).toHaveLength(0);
+    }
   });
-  it("稀有 = 1触发器 + 1效果 + 1修饰器", () => {
-    const eq = generateEquipment(1, "rare");
-    expect(eq.triggers).toHaveLength(1);
-    expect(eq.modifiers).toHaveLength(1);
-  });
-  it("史诗 = 1触发器 + 1效果 + 2修饰器", () => {
-    const eq = generateEquipment(1, "epic");
-    expect(eq.triggers).toHaveLength(1);
-    expect(eq.modifiers).toHaveLength(2);
-  });
-  it("传奇 = 2触发器 + 1效果 + 2修饰器", () => {
+  it("传奇 = 2 条节律(品质 triggers = 2 → 可同时挂两条)+ 1 效果 + 0 修饰器", () => {
     const eq = generateEquipment(1, "legendary");
     expect(eq.triggers).toHaveLength(2);
-    expect(eq.modifiers).toHaveLength(2);
+    expect(eq.modifiers).toHaveLength(0);
+  });
+  it("未给已解锁节律时,触发器按该效果的共鸣表序填(随身产物开局再归一化)", () => {
+    for (let i = 0; i < 30; i++) {
+      const eq = generateEquipment(1, "legendary");
+      const res = ARTIFACT_DEFS[eq.effect.def.type].resonance;
+      expect(eq.triggers.map((t) => t.def.type)).toEqual([...res].slice(0, 2));
+    }
+  });
+  it("给了已解锁节律时,首条 = 共鸣者优先、否则本命;传奇的第二条取另一条已解锁节律", () => {
+    for (let i = 0; i < 30; i++) {
+      const eq = generateEquipment(1, "legendary", false, 0, ["hit", "move"]);
+      const res = ARTIFACT_DEFS[eq.effect.def.type].resonance;
+      const first = res.find((r) => r === "hit" || r === "move") ?? "hit";
+      expect(eq.triggers[0].def.type).toBe(first);
+      expect(eq.triggers[1].def.type).toBe(first === "hit" ? "move" : "hit");
+    }
   });
   it("三选一生成 3 个不同装备", () => {
     const choices = generateChoices(5);

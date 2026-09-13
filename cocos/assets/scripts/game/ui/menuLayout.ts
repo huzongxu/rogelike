@@ -159,6 +159,8 @@ export interface MenuLayout {
   commissionBtn: MenuRect;
   dailyBtn: MenuRect;
   gearupBtn: MenuRect;
+  /** 融合入口(docs/DESIGN-HERO-RHYTHM.md R2:自商店移入主菜单,第 7 枚) */
+  fusionBtn: MenuRect;
   setBtns: MenuSetBtn[];
   setY: number;
   setH: number;
@@ -276,7 +278,8 @@ export function menuLayoutPure(w: number, h: number, env: MenuLayoutEnv): MenuLa
   });
   const phantomBtn: MenuRect = { x: w - o.phantomAnchor, y: o.phantomY, w: o.phantomAnchor - pad, h: o.phantomH };
   const entryGap = o.entryGap;
-  const entryW = Math.floor((w - pad * 2 - entryGap * (o.entryCount - 1)) / o.entryCount);
+  // 落偶数:7 枚时 floor 给 65,会把第 2/4/6 枚的 x 推到奇数格;取偶后右侧余 8px 空白由容器吃掉
+  const entryW = evenGrid(Math.floor((w - pad * 2 - entryGap * (o.entryCount - 1)) / o.entryCount));
   const entryX = (i: number) => pad + i * (entryW + entryGap);
   const commissionBtn: MenuRect = { x: entryX(0), y: entryY, w: entryW, h: entryH };
   const gachaBtn: MenuRect = { x: entryX(1), y: entryY, w: entryW, h: entryH };
@@ -284,7 +287,8 @@ export function menuLayoutPure(w: number, h: number, env: MenuLayoutEnv): MenuLa
   const passBtn: MenuRect = { x: entryX(3), y: entryY, w: entryW, h: entryH };
   const dailyBtn: MenuRect = { x: entryX(4), y: entryY, w: entryW, h: entryH };
   const gearupBtn: MenuRect = { x: entryX(5), y: entryY, w: entryW, h: entryH };
-  const setW = (w - pad * 2 - o.setGap * (env.setIds.length - 1)) / env.setIds.length;
+  const fusionBtn: MenuRect = { x: entryX(6), y: entryY, w: entryW, h: entryH };
+  const setW =(w - pad * 2 - o.setGap * (env.setIds.length - 1)) / env.setIds.length;
   const setBtns: MenuSetBtn[] = env.setIds.map((id, i) => ({ id, x: pad + i * (setW + o.setGap), y: setY, w: setW, h: setH }));
   const nineMargin = nineMarginPure(env.rowPlateSize?.w ?? 0, env.rowPlateSize?.h ?? 0, rowW, rowH, o.rowPlateF);
   const rowMargin = env.rowPlateBorder && env.rowPlateBorder > 0 ? Math.min(env.rowPlateBorder, rowH / 2, rowW / 2) : nineMargin;
@@ -460,6 +464,7 @@ export function menuLayoutPure(w: number, h: number, env: MenuLayoutEnv): MenuLa
     commissionBtn,
     dailyBtn,
     gearupBtn,
+    fusionBtn,
     setBtns,
     setY,
     setH,

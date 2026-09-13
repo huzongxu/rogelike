@@ -19,6 +19,7 @@ import { seasonTheme } from "../game/data/seasonSets";
 import { setDef } from "../game/data/sets";
 import { clamp } from "../game/core/math";
 import { theme } from "../game/ui/theme";
+import { heroRhythm, heroRhythmOptions, type RhythmId } from "../game/data/rhythm";
 
 /** 一次滚动的几何输入:内容高与视口高(都由 heroSelectLayout 给出,这里不另算) */
 export interface ScrollGeometry {
@@ -110,10 +111,14 @@ export class ScrollModel {
 /** 本屏的存档切片 */
 export interface HeroSaveView extends HeroSelection {
   seasonId: number;
+  /** 跨局解锁的第二本命(docs/DESIGN-HERO-RHYTHM.md Q7 / S2);老宿主不给 = 全未解锁 */
+  heroRhythmUnlock?: Partial<Record<HeroId, boolean>>;
+  /** 该英雄当前选用的本命节律 */
+  heroRhythmChoice?: Partial<Record<HeroId, RhythmId>>;
 }
 
-/** 一次点击落到的热区 */
-export type HeroAction = { kind: "back" } | { kind: "row"; id: HeroId } | { kind: "clear" } | { kind: "confirm" };
+/** 一次点击落到的热区(rhythm = 详情区第 4 行「本命节律」,已解锁第二本命时轮转) */
+export type HeroAction = { kind: "back" } | { kind: "row"; id: HeroId } | { kind: "clear" } | { kind: "confirm" } | { kind: "rhythm" };
 
 /** 列表行的展示数据(几何仍由 layout 的行给,这里只补"写什么、什么色") */
 export interface HeroRowView {
@@ -137,12 +142,17 @@ export class HeroSelectModel {
   preview: HeroId | null = null;
   private selected: HeroId | null = null;
   private seasonId = 1;
+  /** 第二本命解锁与选择(存档切片的镜像;`rhythm` 动作只改 choice 预览,confirm 才落盘) */
+  private rhythmUnlock: Partial<Record<HeroId, boolean>> = {};
+  private rhythmChoice: Partial<Record<HeroId, RhythmId>> = {};
 
   /** 进入本页:预览对齐存档,并把已出战那行滚进视口居中 */
   open(save: HeroSaveView, w: number, h: number): void {
     this.selected = save.selectedHero;
     this.seasonId = save.seasonId;
     this.preview = save.selectedHero;
+    this.rhythmUnlock = save.heroRhythmUnlock ?? {};
+    this.rhythmChoice = { ...(save.heroRhythmChoice ?? {}) };
     this.scroll.vel = 0;
     const L = this.layout(save, w, h);
     const id = save.selectedHero;
@@ -171,7 +181,22 @@ export class HeroSelectModel {
     }
     if (inRect(L.clearBtn)) return { kind: "clear" };
     if (inRect(L.confirm)) return { kind: "confirm" };
+    // 详情区第 4 行「本命节律」:已解锁第二本命的英雄可点行轮转(未解锁 / 不出战时不产热区)
+    const rhythmRow = L.skillRows[3];
+    if (rhythmRow && this.preview && this.rhythmOptions(this.preview).length > 1 && inRect(rhythmRow.rect)) return { kind: "rhythm" };
     return null;
+  }
+
+  /** 该英雄可选的本命节律:未解锁 = [本命];已解锁 = [本命, ...分岔节律] */
+  rhythmOptions(id: HeroId): readonly RhythmId[] {
+    return this.rhythmUnlock[id] ? heroRhythmOptions(id) : [heroRhythm(id)];
+  }
+
+  /** 该英雄当前选用的本命(预览态;不合法的存档值回落表内本命) */
+  rhythmOf(id: HeroId): RhythmId {
+    const opts = this.rhythmOptions(id);
+    const c = this.rhythmChoice[id];
+    return c && opts.includes(c) ? c : opts[0];
   }
 
   /** 热区 → 状态变化;返回是否需要重排画面 */
@@ -185,13 +210,24 @@ export class HeroSelectModel {
       this.preview = null;
       return true;
     }
+    if (a.kind === "rhythm") {
+      if (!this.preview) return false;
+      const opts = this.rhythmOptions(this.preview);
+      if (opts.length <= 1) return false;
+      const cur = this.rhythmOf(this.preview);
+      this.rhythmChoice[this.preview] = opts[(opts.indexOf(cur) + 1) % opts.length];
+      return true;
+    }
     return false;
   }
 
-  /** 确定出战 / 确认不出战:唯一写入路径,派生镜像 selectedSet 由 applyHeroSelection 同步 */
-  commit(save: HeroSelection): HeroId | null {
+  /** 确定出战 / 确认不出战:唯一写入路径,派生镜像 selectedSet 由 applyHeroSelection 同步;本命选择一并落盘 */
+  commit(save: HeroSelection & { heroRhythmChoice?: Partial<Record<HeroId, RhythmId>> }): HeroId | null {
     applyHeroSelection(save, this.preview);
     this.selected = this.preview;
+    if (save.heroRhythmChoice) {
+      for (const [id, r] of Object.entries(this.rhythmChoice) as [HeroId, RhythmId | undefined][]) if (r) save.heroRhythmChoice[id] = r;
+    }
     return this.preview;
   }
 
@@ -234,7 +270,7 @@ export class HeroSelectModel {
       name: hero.name,
       title: `${hero.title} · ${setDef(hero.setId).name}`,
       lore: hero.lore,
-      skills: heroSkillLines(this.preview, this.seasonId).map((l) => ({ tag: l.tag, label: l.label, desc: l.desc })),
+      skills: heroSkillLines(this.preview, this.seasonId, { rhythm: this.rhythmOf(this.preview), unlocked: !!this.rhythmUnlock[this.preview] }).map((l) => ({ tag: l.tag, label: l.label, desc: l.desc })),
       color: hero.accentColor,
     };
   }

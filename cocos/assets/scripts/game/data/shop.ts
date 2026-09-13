@@ -36,7 +36,7 @@ export const MERGE_FEE_MULT = 2;
  * 金币开槽通道在 Cocos 侧退役(金币出口由场内强化接过去);共享层的 `slotExpandCost` 不删,
  * 因为冻结的 Web 基准 `src/game.ts:969` 仍在消费它。
  */
-export const RUN_AD_SLOT_LIMIT = 2;
+export const RUN_AD_SLOT_LIMIT = 1;
 /** 销毁回收比率:返还 品质基础价 × 本值(50%,与 quality 主表 basePrice 备注口径一致) */
 export const DESTROY_REFUND_RATE = 0.5;
 /** "合成可达成"援助概率:把一张商店卡替换为玩家已持有卡的同款(同效果+同品质),便于凑 3 张升品 */
@@ -48,6 +48,21 @@ export const SET_OFFER_BIAS = {
   /** 常规套组 */
   normal: 0.6,
 } as const;
+
+/**
+ * 「重置分岔」(docs/DESIGN-HERO-RHYTHM.md §6):把已选的分岔技能连同它解锁的节律一起撤掉,
+ * 分岔二选一重新出现。价 = base × (1 + 章 × perChapter),每局限 RESET_BRANCH_LIMIT 次。
+ * 落点在升级弹层(商店工具钮行 4 钮已满,见设计稿 R8),但价格曲线与商店同表。
+ */
+export const RESET_BRANCH_COST = {
+  base: 400,
+  perChapter: 0.05,
+} as const;
+export const RESET_BRANCH_LIMIT = 1;
+
+export function resetBranchCost(chapter: number): number {
+  return Math.round(RESET_BRANCH_COST.base * (1 + Math.max(0, chapter) * RESET_BRANCH_COST.perChapter));
+}
 
 /** 商店卡价格(金):基础价 × 已购递增 × 章节递增 */
 export function shopCardPrice(basePrice: number, totalBought: number, chapter: number): number {

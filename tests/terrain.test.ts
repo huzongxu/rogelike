@@ -162,7 +162,8 @@ describe("地形标定(§3.4)", () => {
       expect(meanOff - meanOn, "均值回落超 1 章(回调数量/毒池 dps,不动生成曲线)").toBeLessThanOrEqual(1);
       expect(failOn, "失败谷占比系统性恶化").toBeLessThanOrEqual(failOff + 6);
     },
-    300_000
+    // 节律体系下新手局普遍推得更深(64 种子均值 ≈14.5 章),128 局的模拟时长随之拉长
+    600_000
   );
 
   it(

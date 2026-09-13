@@ -23,7 +23,7 @@ vi.mock("../src/platform/adapter", () => ({
 }));
 
 import { calcPrestigePoints, availablePoints, loadSave, persistSave, applyRunRewards, isTreeFull, type SaveData } from "../src/systems/save";
-import { BUILDER_ROUTE, BUILDER_ROUTE_COST, ALL_TALENTS, isTierUnlocked, slotBonusFor, firstXpScaleFor } from "@game/data/talents";
+import { BUILDER_ROUTE, BUILDER_ROUTE_COST, ALL_TALENTS, isTierUnlocked, slotBonusFor, passiveSlotBonusFor, firstXpScaleFor } from "@game/data/talents";
 
 /** 构造完整 SaveData(广告驱动字段给默认值),便于测试聚焦差异字段 */
 function mkSave(partial: Partial<SaveData> = {}): SaveData {
@@ -234,9 +234,11 @@ describe("天赋相关生成器扩展", () => {
 });
 
 describe("天赋效果接线", () => {
-  it("额外武装+槽位扩展I+II 共 +3 装备槽", () => {
+  it("额外武装+槽位扩展I 共 +2 主动槽(R7);槽位扩展II 改成被动槽 +1", () => {
     expect(slotBonusFor([])).toBe(0);
-    expect(slotBonusFor(["extra_gear", "slot1", "slot2"])).toBe(3);
+    expect(slotBonusFor(["extra_gear", "slot1", "slot2"])).toBe(2);
+    expect(passiveSlotBonusFor([])).toBe(0);
+    expect(passiveSlotBonusFor(["slot2"])).toBe(1);
   });
 
   it("快速启动:首次升级经验 -20%", () => {

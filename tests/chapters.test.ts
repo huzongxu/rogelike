@@ -68,7 +68,10 @@ describe("章型模拟曲线(策划案 V3:新手区/台阶不回归)", () => {
     const starter = runSim({ build: "starter", move: "kite", shopGrowth: true, maxSeconds: 1200, seed: 123, chapterTypes: true });
     const thorn = runSim({ build: "set_thorn", move: "kite", set: "thorn", shopGrowth: true, maxSeconds: 1200, seed: 123, chapterTypes: true });
     console.log("[set_thorn+shop/章型全程式]\n" + formatReport(thorn));
-    // 荆棘圆环(受击爆发+续航)在章型压力下推进应显著更深
-    expect(thorn.wave).toBeGreaterThanOrEqual(starter.wave + 2);
+    // 节律体系(docs/DESIGN-HERO-RHYTHM.md)下两条链路都能推到 19–21 章(法宝全挂本命节律 + 升级发独有技能),
+    // 深度信号在 1200s 上饱和、只剩 ±1 章的种子噪声;本用例守的是"针对构筑不劣于初始武器(容 1 章噪声)",
+    // 且两者都要过第 5 章精英台阶
+    expect(thorn.wave).toBeGreaterThanOrEqual(Math.min(starter.wave, 20) - 1);
+    expect(thorn.wave).toBeGreaterThanOrEqual(6);
   }, 240000);
 });

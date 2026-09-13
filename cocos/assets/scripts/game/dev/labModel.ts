@@ -255,7 +255,7 @@ export function buildHandles(L: MenuLayout, ctx: HandleContext): Handle[] {
   add("幻影榜", "x", L.phantomBtn.x, L.phantomBtn.y + L.phantomBtn.h / 2, origin("phantomAnchor", -1));
 
   /* --- 入口行 --- */
-  const entryBtns = [L.commissionBtn, L.gachaBtn, L.talentBtn, L.passBtn, L.dailyBtn, L.gearupBtn];
+  const entryBtns = [L.commissionBtn, L.gachaBtn, L.talentBtn, L.passBtn, L.dailyBtn, L.gearupBtn, L.fusionBtn];
   add("入口行", "y", L.entryY, entryBtns[0].x + entryBtns[0].w / 2, origin("entryY", 1));
   add("入口行", "y", L.entryY + L.entryH, entryBtns[0].x + entryBtns[0].w / 2 + 16, origin("entryH", 1));
   if (entryBtns[1]) {
