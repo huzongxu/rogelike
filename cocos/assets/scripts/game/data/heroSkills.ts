@@ -75,8 +75,8 @@ export const CORE_RHYTHM_TUNE: Partial<Record<HeroId, RhythmTune>> = {
   kyle: { interval: 0.5 },
   // 冰川界碑旧 1.2s → 1.2s(与 kyle 同拍,保持周期双雄对称)
   nora: { interval: 0.5 },
-  // 白啸霜刃旧 1.05s 全向 12 刃 → 连杀所需 5 × 0.6 = 3,底拍 3.0 × 0.5 = 1.5s(全向刃幕命中率低,3s 一发杀不动首章)
-  loka: { count: 0.6, baseline: 0.5 },
+  // 白啸霜刃旧 1.05s 全向 12 刃 → 连杀所需 5 × 0.6 = 3,底拍 3.0 × 0.4 = 1.2s(全向刃幕命中率低;3 种子对照 1.5s 11/6/21、1.2s 21/17/7、1.05s 6/7/21,取 1.2s 与周期双雄同拍)
+  loka: { count: 0.6, baseline: 0.4 },
   // 熔核之心旧 1.4s → 移动 240 × 0.7 = 168 一发
   doran: { distance: 0.7 },
   // 极北权杖旧 1.8s 常驻 → 低血阈值 0.5 × 1.4 = 0.7(七成血以下就开环)
@@ -344,7 +344,8 @@ const GENERIC_CORE: Record<Exclude<HeroId, "vera" | "kyle" | "bran" | "sia" | "n
   rayne: { name: "炽牙雷殛", effect: "chain", params: { damage: 44, jumps: 5, radius: 400 } },
   willow: { name: "影群哨笛", effect: "spirit_wolves", params: { count: 2, damage: 14, duration: 12 } },
   oden: { name: "镇魂安可", effect: "skeleton", params: { count: 2, damage: 13, duration: 14 } },
-  mu: { name: "雾缚噬灵", effect: "spirit_wolves", params: { count: 3, damage: 11, duration: 10 } },
+  // R6 数值 pass:狼伤 11 → 14 与幻影剧团(willow)同款对齐;3 种子 10/10/5 → 10/10/21,第 10 章召唤流之墙仍在(TODO 下一轮看 wolves 生存 / 章型)
+  mu: { name: "雾缚噬灵", effect: "spirit_wolves", params: { count: 3, damage: 14, duration: 10 } },
 };
 
 /** 未选英雄的核心:旧默认初始武器(全向 16 发飞刀) */
