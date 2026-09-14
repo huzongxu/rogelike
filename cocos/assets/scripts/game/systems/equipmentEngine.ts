@@ -522,6 +522,8 @@ export class EquipmentEngine {
         speed: 273,
         color: "#c9a6ff",
         source: eq,
+        // 召唤物命中回血(穆核心「雾缚噬灵」:缠斗回复;与隐藏词缀「亡灵大军」同一结算位)
+        healOnHit: (eff.params.healOnHit ?? 0) > 0,
       });
       ctx.minions.push(m);
     }

@@ -345,7 +345,8 @@ const GENERIC_CORE: Record<Exclude<HeroId, "vera" | "kyle" | "bran" | "sia" | "n
   willow: { name: "影群哨笛", effect: "spirit_wolves", params: { count: 2, damage: 14, duration: 12 } },
   oden: { name: "镇魂安可", effect: "skeleton", params: { count: 2, damage: 13, duration: 14 } },
   // R6 数值 pass:狼伤 11 → 14 与幻影剧团(willow)同款对齐;3 种子 10/10/5 → 10/10/21,第 10 章召唤流之墙仍在(TODO 下一轮看 wolves 生存 / 章型)
-  mu: { name: "雾缚噬灵", effect: "spirit_wolves", params: { count: 3, damage: 14, duration: 10 } },
+  // healOnHit:狼每次命中回玩家血(伤害 × 30%)—— 节律表备注里的「缠斗回复」身份;3 种子对照下狼存活 / 狼数都过不了第 10 / 15 章精英开场的爆发,回血是唯一对症项
+  mu: { name: "雾缚噬灵", effect: "spirit_wolves", params: { count: 3, damage: 14, duration: 10, healOnHit: 1 } },
 };
 
 /** 未选英雄的核心:旧默认初始武器(全向 16 发飞刀) */

@@ -1449,6 +1449,21 @@ describe("核心技能节律调率(R6:按旧武器射速折算节拍)", () => {
     expect(s.player.skills[0].triggers[1]?.def.type).toBe("pulse");
   });
 
+  it("穆核心灵狼命中回血(healOnHit),幻影剧团的灵狼不回", () => {
+    for (const [hero, expectHeal] of [["mu", true], ["willow", false]] as const) {
+      const p = new Player();
+      p.rhythms = [HERO_RHYTHM[hero]];
+      p.skills.push(makeSkillEquipment(coreSkillOf(hero)));
+      const ctx = makeContext(p, [spawnEnemy("chaser", vec2(60, 0), 1)]);
+      const engine = new EquipmentEngine();
+      // 底拍 / 周期都能召狼:推 3.1s 让底拍或本命周期至少发一次
+      for (let i = 0; i < 62; i++) engine.update(ctx, 0.05);
+      if (hero === "mu") engine.onHurt(ctx, 1, ctx.enemies[0]);
+      expect(ctx.minions.length, hero).toBeGreaterThan(0);
+      expect(ctx.minions.every((m) => m.healOnHit === expectHeal), hero).toBe(true);
+    }
+  });
+
   it("平衡 sim 与游戏同口径:选英雄的 build 用 makeSkillEquipment(coreSkillOf) 建核心,不再拿套组旧初始武器当核心", () => {
     const sim = fileSource("../scripts/balance-sim.ts");
     expect(sim.includes("makeSkillEquipment(coreSkillOf(heroId))")).toBe(true);

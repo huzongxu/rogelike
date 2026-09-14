@@ -126,6 +126,8 @@ export function effectDef(type: EffectType): EffectDef {
 export interface EffectParams {
   /** 基础伤害 */
   damage?: number;
+  /** 召唤物命中回血(>0 = 开;回血量 = 召唤物伤害 × combat.MINION_HEAL_ON_HIT_PCT;穆「缠斗回复」的身份项) */
+  healOnHit?: number;
   /** 弹道/射线速度(px/s) */
   speed?: number;
   /** 半径/射程(px) */

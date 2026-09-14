@@ -94,6 +94,10 @@ export const RHYTHM_AI_PROFILE: Record<RhythmId, AiProfile> = {
  * hold.fleeHpPct:血量低于此比例无条件躲(0-1;与「低血」节律阈值 0.5 错开,免得刚触发就跑没了);
  * orbit.dodgeRadius:绕场时敌人贴到多近才改为躲闪(px;小于接触半径 16+enemy 的两倍余量)。
  */
+/**
+ * 挂机档位参数。hold 围数统计里精英与普通怪同权:曾试过精英按 2 / 3 只算(「站桩不站精英」),
+ * 3 种子对照穆 15/10/21 → 10/10/15 → 10/10/10 —— 受击节律越躲越没输出,故不采用(CONTEXT 56)。
+ */
 export const AI_PROFILE_PARAMS = {
   hold: { maxContacts: 4, fleeHpPct: 0.35 },
   orbit: { dodgeRadius: 60 },
