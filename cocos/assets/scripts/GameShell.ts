@@ -897,6 +897,10 @@ export class GameShell extends Component {
             get passives() {
                 return sim.player.passives;
             },
+            // 独有技能只读段(R10 两列表):同样走 getter 取活引用
+            get skills() {
+                return sim.player.skills;
+            },
             passiveSlots: () => sim.player.passiveSlots,
             rhythms: () => sim.player.rhythms,
             gold: () => sim.gold,

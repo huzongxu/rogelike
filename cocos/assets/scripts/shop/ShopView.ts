@@ -137,6 +137,15 @@ interface WeaponSlot {
   destroy: { plate: Plate; text: Txt };
 }
 
+/** 独有技能只读行(R10):暗石面 + 节律色竖条 + 图标 + 名 / 副标;无钮无热区 */
+interface SkillSlot {
+  face: ReturnType<typeof flatBox>;
+  accent: ReturnType<typeof flatBox>;
+  icon: ReturnType<typeof iconNode>;
+  name: Txt;
+  sub: Txt;
+}
+
 interface MergeSlot {
   face: ReturnType<typeof flatBox>;
   plate: Plate;
@@ -185,6 +194,8 @@ export class ShopView {
   private tools: ToolSlot[] = [];
   private cards: CardSlot[] = [];
   private slotBtn: ToolSlot;
+  private skillHeader: HeaderSlot;
+  private skills: SkillSlot[] = [];
   private weaponHeader: HeaderSlot;
   private weapons: WeaponSlot[] = [];
   private weaponEmpty: Txt;
@@ -243,6 +254,16 @@ export class ShopView {
       });
     }
     this.slotBtn = { plate: new Plate("SlotBtn", this.root, frames), flat: flatBox("SlotFlat", this.root), text: new Txt("SlotBtnText", this.root) };
+    this.skillHeader = { plate: new Plate("SkillHeader", this.root, frames), line: flatBox("SkillHeaderLine", this.root), title: new Txt("SkillHeaderTitle", this.root), right: new Txt("SkillHeaderRight", this.root) };
+    for (let i = 0; i < 3; i++) {
+      this.skills.push({
+        face: flatBox("SkillFace" + i, this.root),
+        accent: flatBox("SkillAccent" + i, this.root),
+        icon: iconNode("SkillIcon" + i, this.root, frames, { x: 0, y: 0, w: 24, h: 24 }),
+        name: new Txt("SkillName" + i, this.root),
+        sub: new Txt("SkillSub" + i, this.root),
+      });
+    }
     this.weaponHeader = { plate: new Plate("WeaponHeader", this.root, frames), line: flatBox("WeaponHeaderLine", this.root), title: new Txt("WeaponHeaderTitle", this.root), right: new Txt("WeaponHeaderRight", this.root) };
     for (let i = 0; i < 8; i++) {
       this.weapons.push({
@@ -464,6 +485,34 @@ export class ShopView {
       if (v4) this.slotBtn.text.box(sl, FS.muted, c.slotBtn.text, "center", enabled ? HEX.actionPrimary : HEX.textMuted);
       else this.slotBtn.text.set(sl.x + sl.w / 2, sl.y + sl.h / 2 + FS.muted / 3, sl.w - 16, FS.muted, c.slotBtn.text, "center", enabled ? HEX.actionPrimary : HEX.textMuted);
     }
+
+    /* --- 独有技能只读段(R10 两列表;v4 且有技能时才画) --- */
+    const skillOn = v4 && L.skillLabelY !== null && c.skills.length > 0;
+    this.skillHeader.plate.node.active = false;
+    this.skillHeader.line.node.active = skillOn;
+    this.skillHeader.title.active(skillOn);
+    this.skillHeader.right.active(skillOn);
+    if (skillOn && L.skillLabelY !== null) this.sectionHeader(this.skillHeader, L.skillLabelY, L.headerH, c.skillHeader.title, c.skillHeader.right);
+    this.skills.forEach((slot, i) => {
+      const r = L.skillRows[i];
+      const v = c.skills[i];
+      const on = skillOn && !!r && !!v;
+      slot.face.node.active = on;
+      slot.accent.node.active = on;
+      slot.icon.node.active = on;
+      slot.name.active(on);
+      slot.sub.active(on);
+      if (!on || !r || !v) return;
+      slot.face.draw(r, "rgba(11,14,20,0.62)", "#233246");
+      slot.accent.draw({ x: r.x + 4, y: r.y + 5, w: 4, h: r.h - 10 }, v.color);
+      const iconOn = slot.icon.show(v.iconKey);
+      slot.icon.node.active = iconOn;
+      if (iconOn) placeRect(slot.icon.node, { x: r.x + 14, y: r.y + r.h / 2 - 12, w: 24, h: 24 });
+      const nx = iconOn ? r.x + 46 : r.x + 16;
+      slot.name.bold(true);
+      slot.name.box({ x: nx, y: r.y, w: Math.max(40, r.x + 236 - nx), h: r.h }, FS.micro, v.name, "left", v.color);
+      slot.sub.box({ x: r.x + 240, y: r.y, w: r.x + r.w - 8 - (r.x + 240), h: r.h }, FS.micro, v.sub, "left", HEX.textSecondary);
+    });
 
     /* --- 武器管理(≤8 行) --- */
     this.sectionHeader(this.weaponHeader, L.weaponLabelY, L.headerH, c.weaponHeader.title, c.weaponHeader.right);

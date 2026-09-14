@@ -14,7 +14,7 @@ import {
   pickTicker,
   equipRowLayout,
   barFillW,
-  type TickerFlags, equipGridLayout, HUD_BOT_H_V4,
+  type TickerFlags, equipGridLayout, HUD_BOT_H_V4, castDockLayout,
 } from "@game/ui/hud";
 import { PLAYER_BASE } from "@game/entities/player";
 
@@ -106,6 +106,50 @@ describe("equipRowLayout 底坞装备横排", () => {
 
   it("64 保底:窄区不缩到不可读", () => {
     expect(equipRowLayout(4, false, 200).cardW).toBe(64);
+  });
+});
+
+describe("castDockLayout 两列表底坞(R10:上排技能 ≤3、下排法宝 4 / Boss 3)", () => {
+  const zoneW = 560 - HUD_PAD * 2 - 136 - 8;
+  it("两类都有 → 两排 + 分隔线;只有一类 → 单排无分隔;都没有 → 零排", () => {
+    const both = castDockLayout(2, 3, false, zoneW, HUD_BOT_H_V4);
+    expect(both.rows.map((r) => r.kind)).toEqual(["skill", "artifact"]);
+    expect(both.divider).toBe(true);
+    expect(both.rows[1].start).toBe(2);
+    const onlySkill = castDockLayout(1, 0, false, zoneW, HUD_BOT_H_V4);
+    expect(onlySkill.rows.map((r) => r.kind)).toEqual(["skill"]);
+    expect(onlySkill.divider).toBe(false);
+    const onlyArt = castDockLayout(0, 5, true, zoneW, HUD_BOT_H_V4);
+    expect(onlyArt.rows.map((r) => r.kind)).toEqual(["artifact"]);
+    expect(onlyArt.rows[0].start).toBe(0);
+    expect(castDockLayout(0, 0, false, zoneW, HUD_BOT_H_V4).rows).toEqual([]);
+  });
+  it("每排各自算卡宽与 +N:技能排上限 3、法宝排平时 4 / Boss 3;整体在坞内垂直居中取偶、不越坞", () => {
+    for (const boss of [false, true]) {
+      const perRow = boss ? 3 : 4;
+      for (let s = 0; s <= 4; s++) {
+        for (let a = 0; a <= 8; a++) {
+          const L = castDockLayout(s, a, boss, zoneW, HUD_BOT_H_V4);
+          const tag = `boss=${boss} skills=${s} arts=${a}`;
+          for (const r of L.rows) {
+            const cap = r.kind === "skill" ? 3 : perRow;
+            const n = r.kind === "skill" ? s : a;
+            expect(r.shown, tag).toBe(Math.min(n, cap));
+            expect(r.chip, tag).toBe(n > cap);
+            expect(r.hidden, tag).toBe(n - r.shown);
+            const rowW = r.shown * r.cardW + Math.max(0, r.shown - 1) * r.gap + (r.chip ? r.chipW + r.gap : 0);
+            if (r.cardW > 64) expect(rowW, tag).toBeLessThanOrEqual(zoneW);
+            expect(r.cardW, tag).toBeLessThanOrEqual(168);
+          }
+          const gridH = L.rows.length * L.cardH + Math.max(0, L.rows.length - 1) * L.rowGap;
+          expect(L.y0 % 2, tag).toBe(0);
+          expect(L.y0 + gridH, tag).toBeLessThanOrEqual(HUD_BOT_H_V4);
+        }
+      }
+    }
+    // 技能排只有 1–3 张 → 比法宝排更宽(两列表一眼可辨)
+    const L = castDockLayout(2, 4, false, zoneW, HUD_BOT_H_V4);
+    expect(L.rows[0].cardW).toBeGreaterThan(L.rows[1].cardW);
   });
 });
 

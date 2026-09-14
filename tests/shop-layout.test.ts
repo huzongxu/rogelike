@@ -319,6 +319,41 @@ describe("商店 v4 版式(opts.v4 + slotCount)", () => {
       }
     }
   }
+  it("R10 技能段:skillCount 0 / 缺省与之前逐位相同;1..3 时插在槽位钮与法宝标题之间,行高 28(最满收到 24)行距 4、标题 22,块间零重叠、末行不过底坞", () => {
+    for (const h of HEIGHTS) {
+      const base = shopLayoutPure(3, 2, h, OPTS(6));
+      expect(JSON.stringify(shopLayoutPure(3, 2, h, { ...OPTS(6), skillCount: 0 }))).toBe(JSON.stringify(base));
+      expect(base.skillLabelY).toBe(null);
+      expect(base.skillRows).toEqual([]);
+      for (let ns = 1; ns <= 3; ns++) {
+        for (let nw = 0; nw <= 6; nw++) {
+          for (let nm = 0; nm <= 4; nm++) {
+            const L = shopLayoutPure(nw, nm, h, { ...OPTS(6), skillCount: ns });
+            const tag = `h=${h} skills=${ns} weapons=${nw} merges=${nm}`;
+            expect(L.skillLabelY, tag).not.toBe(null);
+            expect(L.skillRows, tag).toHaveLength(ns);
+            expect(L.skillRowH, tag).toBeGreaterThanOrEqual(24);
+            expect(L.skillRowH, tag).toBeLessThanOrEqual(28);
+            expect(L.skillLabelY!, tag).toBeGreaterThanOrEqual(L.slotBtn.y + L.slotBtn.h);
+            for (let i = 0; i < ns; i++) {
+              const r = L.skillRows[i];
+              expect([r.x, r.w, r.h], tag).toEqual([16, 528, L.skillRowH]);
+              if (i > 0) expect(r.y, tag).toBe(L.skillRows[i - 1].y + L.skillRowH + 4);
+              for (const v of [r.x, r.y, r.w, r.h]) expect(v % 2, tag).toBe(0);
+            }
+            expect(L.skillRows[0].y, tag).toBeGreaterThanOrEqual(L.skillLabelY! + L.headerH);
+            const lastS = L.skillRows[ns - 1];
+            expect(L.weaponLabelY, tag).toBeGreaterThanOrEqual(lastS.y + lastS.h);
+            const last = L.merges[L.merges.length - 1];
+            expect(last.y + last.h, tag).toBeLessThanOrEqual(L.contentBottom);
+            for (const r of L.weaponRows) expect(r.h, tag).toBeGreaterThanOrEqual(34);
+            for (const r of L.merges) expect(r.h, tag).toBeGreaterThanOrEqual(32);
+          }
+        }
+      }
+    }
+  });
+
   it("标定档 6 槽 1 件 0 组:数值锚点(工具 74/40、卡 124/208、说明行 332+、槽位钮 356、6 行 52 高)", () => {
     const L = shopLayoutPure(1, 0, 996, OPTS(6));
     expect(L.toolBtns[0]).toMatchObject({ y: 74, h: 40 });

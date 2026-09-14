@@ -62,6 +62,54 @@ export function equipRowLayout(n: number, boss: boolean, zoneW: number): EquipRo
   return { shown, hidden, cardW, cardH: 36, gap, chip, chipW };
 }
 
+/** 底坞一排(两列表之一):kind 区分技能 / 法宝;start = 该排首张在 castList 中的下标 */
+export interface DockRowLayout {
+  kind: "skill" | "artifact";
+  start: number;
+  shown: number;
+  hidden: number;
+  chip: boolean;
+  cardW: number;
+  gap: number;
+  chipW: number;
+}
+
+export interface CastDockLayout {
+  rows: DockRowLayout[];
+  cardH: number;
+  rowGap: number;
+  /** 首排顶缘相对坞顶的偏移(网格整体在坞内垂直居中,偶数) */
+  y0: number;
+  /** 两排都在时在排间画 1px 分隔线 */
+  divider: boolean;
+}
+
+/**
+ * 底坞两列表(docs/DESIGN-HERO-RHYTHM.md §6 / R10,用户裁定 C):上排**独有技能**(≤3 张:核心 / 分岔 / 进阶,不占槽),
+ * 下排**主动法宝**(平时 4 / Boss 3 张,多的收 +N 芯片);只有一类时单排。两排各自算卡宽(技能 3 张更宽),
+ * 排距 8、两排之间 1px 分隔线,整体在坞内垂直居中。技能与法宝在 castList 里本就技能在前,start 直接给下标。
+ */
+export function castDockLayout(skillCount: number, artifactCount: number, boss: boolean, zoneW: number, dockH: number): CastDockLayout {
+  const gap = 6;
+  const chipW = 30;
+  const cardH = 36;
+  const mk = (kind: DockRowLayout["kind"], start: number, count: number, perRow: number): DockRowLayout => {
+    const shown = Math.min(Math.max(0, count), perRow);
+    const chip = count > perRow;
+    const hidden = count - shown;
+    const avail = zoneW - (chip ? chipW + gap : 0) - gap * Math.max(0, shown - 1);
+    const cardW = shown > 0 ? Math.min(168, Math.max(64, Math.floor(avail / shown))) : 0;
+    return { kind, start, shown, hidden, chip, cardW, gap, chipW };
+  };
+  const rows: DockRowLayout[] = [];
+  if (skillCount > 0) rows.push(mk("skill", 0, skillCount, 3));
+  if (artifactCount > 0) rows.push(mk("artifact", Math.max(0, skillCount), artifactCount, boss ? 3 : 4));
+  const rowGap = 8;
+  const gridH = rows.length * cardH + Math.max(0, rows.length - 1) * rowGap;
+  const y0 = Math.max(0, Math.floor((dockH - gridH) / 4) * 2);
+  return { rows, cardH, rowGap, y0, divider: rows.length === 2 };
+}
+
 export interface EquipGridLayout extends EquipRowLayout {
   /** 每排列数(单排档 = 实画张数,双排档 = 满列数) */
   cols: number;

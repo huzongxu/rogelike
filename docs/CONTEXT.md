@@ -230,6 +230,11 @@
     - 处置:保留「狼命中回血」(`EffectParams.healOnHit` → `castSpiritWolves` 传 `spawnMinion.healOnHit`,与隐藏词缀「亡灵大军」同一结算位;节律表备注里穆的身份就是「缠斗回复」,此前一直没落地),其余回退。真机口径更严:`battleWorld.nextChapter` 章首清空召唤物,穆在精英开场比 sim 还裸 —— **TODO(机制层)**:召唤流英雄章首保留召唤物,或精英章开场延迟 3s 再放精英;数值层已无对症项,不再调。
     - 测试:`hero-rhythm` 新增「穆核心灵狼命中回血」1 例。真包实测:穆核心参数带 `healOnHit: 1`,12s 内场上 9 只狼全部 `healOnHit = true`、8 击杀满血,控制台 0 错误。**验收**:全套 69 套 / 3963 条全绿(Boss / 地形守卫数字不变),`typecheck:cocos` 0 条,`build:cocos` 通过。
 
+57. **两列表(R10,用户「法宝和技能应该分俩个列表」→ C):HUD 底坞上排技能 / 下排法宝,商店加只读「独有技能」段(2026-09-15)**
+    - HUD:新布局 `castDockLayout(skills, artifacts, boss, zoneW, dockH)` —— 技能排上限 3 张、法宝排平时 4 / Boss 3(超出收 +N,每排各一枚芯片),两排各自算卡宽(技能排更宽),排距 8、排间 1px 分隔线,整体坞内居中取偶;`HudView` 改为 `dockCells()` 统一产出「卡格 + 芯片 + 分隔线」再由 `rebuildCards` 落位,每帧循环改按 `cardCells`(逐卡宽度)刷 CD 与文案;技能排卡框用 `hud.colors.skillEdge` 描 1px 细边区分;旧档(非 hudV4)仍走 `equipGridLayout` 单排混排。
+    - 商店:`shopLayoutPure(opts.skillCount)` 在槽位钮之后插 4 档(钮 → 标题 12 / 标题 22 / 标题 → 首行 6 / 行带 28×n + 4×(n−1),最满形态(6 槽 + 4 组 + 3 技能 @996)行高收到 24 保住末行不过底坞),skillCount 0 或旧版式时四档全 0、几何与之前逐位相同(现有全部锚点用例不动);`flexFill` 兜底呼吸缝下标 10 → 14。`ShopWorld.skills?`(GameShell 接 `sim.player.skills` getter)→ `ShopModel.skills()`(≤3)→ `content().skillHeader / skills`(名走共鸣改名、副标「核心 · 受击节律 · 3/5 阶」、共鸣时用隐藏品质色);`ShopView` 新增 3 个只读槽(暗石面 + 色条 + 图标 + 名 / 副标,无热区)。
+    - 测试:`hud-layout` 新增 castDockLayout 两例(两类 / 单类 / 零排;3 × 9 × 2 组合宽度、+N、居中不越坞;技能排比法宝排宽),`shop-layout` 新增技能段一例(0 与缺省逐位相同;1..3 × 0..6 × 0..4 × 三档屏高无重叠不越底),`hero-rhythm` 新增商店技能段内容一例。真包实测(薇拉):商店在槽位钮下方出「独有技能(升级三选一养成 · 不占槽)」段,一行「荆棘圆环 | 核心 · 受击节律 · 1/5 阶」,法宝管理段整体下移;战斗 HUD 底坞上排「荆棘圆环 / 血棘」(技能,卡更宽)、下排「骸骨符」(法宝),控制台 0 错误。**验收**:全套 69 套 / 3967 条全绿,`typecheck:cocos` 0 条,`build:cocos` 通过。
+
 ## 环境注意
 - IAB(应用内浏览器)的键盘/点击**间歇性失效**(cua 输入退化):浏览器验证靠 `?bot=1` 自动风筝 + 按键重试 + 单测;evaluate 有时被只读守卫拦截。
 - 存档当前已重置为全新。

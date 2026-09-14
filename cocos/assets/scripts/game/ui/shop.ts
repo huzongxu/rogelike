@@ -94,6 +94,8 @@ export interface ShopLayoutOpts {
   v4: boolean;
   /** 当前总槽位数(v4:武器行数 = max(持有数, 槽位数),空槽也占一行) */
   slotCount?: number;
+  /** v4:独有技能只读行数(0..3;缺省 0 = 不出该段,几何与不传时逐位相同)。R10 两列表 */
+  skillCount?: number;
 }
 
 export interface ShopLayoutPure {
@@ -105,6 +107,10 @@ export interface ShopLayoutPure {
   cards: ShopRect[];
   cardH: number;
   slotBtn: ShopRect;
+  /** v4 两列表(R10):独有技能标题条顶缘(null = 本帧没有技能段)与只读行(≤3,行高 skillRowH) */
+  skillLabelY: number | null;
+  skillRows: ShopRect[];
+  skillRowH: number;
   /** 武器管理标题条顶缘(条高见 `headerH`) */
   weaponLabelY: number;
   headerH: number;
@@ -202,8 +208,8 @@ function flexFill(slots: FlexSlot[], total: number): number {
     rest = target - sum(slots);
   }
   /* 兜底:仍有残余只落呼吸缝(顶坞→工具行 / 武器行带→进化标题)——行带与卡带封顶后一分不加,
-     于是行高恒 ≤180、热区下限恒不被撑破,富余全部由「缝」承担。 */
-  for (const s of [slots[0], slots[10]]) {
+     于是行高恒 ≤180、热区下限恒不被撑破,富余全部由「缝」承担。(下标 14 = 武器行带 → 进化标题那一档;R10 在槽位钮后插了 4 档技能段) */
+  for (const s of [slots[0], slots[14]]) {
     rest = target - sum(slots);
     if (rest >= 2) s.v += even(rest);
   }
@@ -233,6 +239,7 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
   const v4 = !!opts?.v4;
   const nW = clamp(v4 ? Math.max(weaponCount, opts?.slotCount ?? 0) : weaponCount, 1, 8);
   const nM = clamp(mergeCount, 1, 4);
+  const nS = v4 ? clamp(opts?.skillCount ?? 0, 0, 3) : 0;
   const N = nW + nM;
   const h = Math.max(SHOP_CALIBRATION_H, evenDown(screenH));
   const dockTop = h - HUD_BOT_H;
@@ -250,6 +257,11 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
     flex(208, 176, 208, 0), // ④ 三张可购卡(v4 恒 208,只在最满形态下收到 176)
     flex(24, 22, 24, 0), // ⑤ 卡带 → 槽位钮(说明行落在这一档)
     flex(40, 40, 40, 0), // ⑥ 槽位钮
+    /* 独有技能只读段(R10;nS = 0 时四档全 0,几何与之前逐位相同):钮 → 技能标题 / 标题 / 标题 → 首行 / 行带(行高 28、行距 4) */
+    flex(nS > 0 ? 12 : 0, nS > 0 ? 10 : 0, nS > 0 ? 12 : 0, 0), // ⑥a 槽位钮 → 技能标题
+    flex(nS > 0 ? 22 : 0, nS > 0 ? 22 : 0, nS > 0 ? 22 : 0, 0), // ⑥b 技能标题行
+    flex(nS > 0 ? 6 : 0, nS > 0 ? 6 : 0, nS > 0 ? 6 : 0, 0), // ⑥c 标题 → 首行
+    flex(nS * 28 + Math.max(0, nS - 1) * 4, nS * 24 + Math.max(0, nS - 1) * 4, nS * 28 + Math.max(0, nS - 1) * 4, 0), // ⑥d 技能行带(行高 28,最满形态可收到 24;行距恒 4)
     flex(12, 10, 12, 0), // ⑦ 槽位钮 → 武器标题
     flex(22, 22, 22, 0), // ⑧ 武器标题行
     flex(6, 6, 6, 0), // ⑨ 标题 → 首行
@@ -267,6 +279,10 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
     flex(cardBase, cardBase, cardBase, 0), // ④ 三张可购卡(152/176/208 三档定高)
     flex(10, 6, 56, 1.2), // ⑤ 卡带 → 槽位钮
     flex(48, 44, 64, 0.8), // ⑥ 槽位 +1 钮高
+    flex(0, 0, 0, 0), // ⑥a–⑥d 旧版式无技能段(占位保持解构位次)
+    flex(0, 0, 0, 0),
+    flex(0, 0, 0, 0),
+    flex(0, 0, 0, 0),
     flex(10, 6, 56, 1.2), // ⑦ 槽位钮 → 武器标题条
     flex(HEAD, 26, 44, 0.6), // ⑧ 武器标题条
     flex(6, 4, 32, 0.6), // ⑨ 标题条 → 首行
@@ -279,7 +295,7 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
   ];
   flexFill(slots, contentBottom - SHOP_TOP);
 
-  const [gapTool, toolH, gapCards, cardBand, gapSlot, slotH, gapWHead, wHead, gapWRows, bandW, gapWM, mHead, gapMRows, bandM, gapBottom] = slots;
+  const [gapTool, toolH, gapCards, cardBand, gapSlot, slotH, gapSHead, sHead, gapSRows, bandS, gapWHead, wHead, gapWRows, bandW, gapWM, mHead, gapMRows, bandM, gapBottom] = slots;
 
   const splitW = v4 ? rowSplitFixedGap(bandW.v, nW, 34, 6) : rowSplit(bandW.v, nW, 34);
   const splitM = v4 ? rowSplitFixedGap(bandM.v, nM, 32, 6) : rowSplit(bandM.v, nM, 32);
@@ -291,7 +307,14 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
   const toolY = SHOP_TOP + gapTool.v;
   const cardsY = toolY + toolH.v + gapCards.v;
   const slotY = cardsY + cardBand.v + gapSlot.v;
-  const weaponLabelY = slotY + slotH.v + gapWHead.v;
+  /* 独有技能只读段:紧贴槽位钮之下;nS = 0 时四档全 0,武器标题位与之前相同 */
+  const skillLabelY = nS > 0 ? slotY + slotH.v + gapSHead.v : null;
+  const skillRowsTop = skillLabelY !== null ? skillLabelY + sHead.v + gapSRows.v : slotY + slotH.v;
+  /* 技能行高由行带反推(28,最满形态收到 24;行距恒 4),取偶 */
+  const skillRowH = nS > 0 ? even(Math.max(24, Math.floor((bandS.v - 4 * (nS - 1)) / nS))) : 28;
+  const skillRows: ShopRect[] = [];
+  for (let i = 0; i < nS; i++) skillRows.push({ x: SHOP_PAD, y: skillRowsTop + i * (skillRowH + 4), w: CONTENT_W, h: skillRowH });
+  const weaponLabelY = slotY + slotH.v + gapSHead.v + sHead.v + gapSRows.v + bandS.v + gapWHead.v;
   const rowsTop = weaponLabelY + wHead.v + gapWRows.v;
 
   /* 工具钮行:4 钮等宽 126、间距 8(16 + 4×126 + 3×8 = 544) */
@@ -333,6 +356,9 @@ export function shopLayoutPure(weaponCount: number, mergeCount: number, screenH:
     cards,
     cardH: cardBand.v,
     slotBtn,
+    skillLabelY,
+    skillRows,
+    skillRowH,
     weaponLabelY,
     headerH: wHead.v,
     weaponRowH: splitW.rowH,

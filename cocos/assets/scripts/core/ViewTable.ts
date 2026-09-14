@@ -1333,6 +1333,8 @@ export const FALLBACK: ViewTable = {
             autoOnText: "#8f9bb3",
             autoOffText: "#5ac8fa",
             cardSubText: "#cfcfcf",
+            /** 底坞技能排卡框细边(两列表:技能排与法宝排的区分色;R10) */
+            skillEdge: "#7fd6ff",
             chipText: "#cfcfcf",
             chipBg: "rgba(0,0,0,0.5)",
             chipStroke: "rgba(255,255,255,0.2)",

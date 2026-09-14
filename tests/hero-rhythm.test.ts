@@ -1067,6 +1067,54 @@ describe("重置分岔(§6,落在升级弹层)", () => {
   });
 });
 
+describe("商店独有技能只读段(R10 两列表)", () => {
+  it("接了 skills 的宿主:content().skills 列出核心 / 分岔(名 / 节律 / 阶数),layout 带技能段;没接 = 空段且几何与之前相同", () => {
+    const st = { equipment: [] as Equipment[], passives: [] as PassiveArtifact[], gold: 500 };
+    const skills = [makeSkillEquipment(coreSkillOf("vera")), makeSkillEquipment(HERO_SKILLS.vera[2])];
+    skills[1].level = 3;
+    const base = {
+      equipment: st.equipment,
+      passives: st.passives,
+      passiveSlots: () => PASSIVE_SLOTS,
+      rhythms: () => ["hit", "move"] as RhythmId[],
+      gold: () => st.gold,
+      setGold: (v: number) => {
+        st.gold = v;
+      },
+      slots: () => 4,
+      runSlotBonus: () => 0,
+      addRunSlot: () => {},
+      chapter: () => 2,
+      seasonId: () => 1,
+      highestStage: () => 1,
+      selectedSet: () => "thorn" as const,
+      ownedTalents: () => [],
+      totalBought: () => 0,
+      addTotalBought: () => {},
+      recordEquipment: () => {},
+      cardTypeKey: (eq: Equipment) => eq.effect.def.type + "|" + eq.quality,
+      mergeGroups: () => [],
+    };
+    const withSkills = new ShopModel({ ...base, skills } as ShopWorld, () => 0.5);
+    withSkills.v4 = true;
+    withSkills.rollOffers();
+    const c = withSkills.content();
+    expect(c.skills.map((s) => s.name)).toEqual([skills[0].name, skills[1].name]);
+    expect(c.skills[0].sub).toContain("核心");
+    expect(c.skills[0].sub).toContain("受击节律");
+    expect(c.skills[1].sub).toContain("分岔");
+    expect(c.skills[1].sub).toContain("3/5 阶");
+    expect(c.skillHeader.right).toBe("2 招");
+    expect(withSkills.layout(996).skillRows).toHaveLength(2);
+    const without = new ShopModel(base as ShopWorld, () => 0.5);
+    without.v4 = true;
+    without.rollOffers();
+    expect(without.content().skills).toEqual([]);
+    expect(without.layout(996).skillLabelY).toBe(null);
+    expect(without.layout(996).weaponLabelY).toBeLessThan(withSkills.layout(996).weaponLabelY);
+  });
+});
+
 describe("被动管理(R2:商店「被动」钮借升级弹层)", () => {
   function passiveWorld(passives: PassiveArtifact[], gold = 100) {
     const st = { gold };

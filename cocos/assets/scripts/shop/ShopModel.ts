@@ -23,6 +23,7 @@ import {
   equipmentResonance,
   equipmentResonant,
   equipmentRhythm,
+  skillResonant,
   generateEquipment,
   generatePassive,
   generateSetEquipment,
@@ -36,6 +37,7 @@ import {
 } from "../game/data/equipmentGen";
 import { ARTIFACT_DEFS, PASSIVE_DEFS, RELIC_VALUES, SHOP_PASSIVE_SLOTS, isRelicType, relicStack, type PassiveArtifact } from "../game/data/artifacts";
 import { rhythmDef, type RhythmId } from "../game/data/rhythm";
+import { SKILL_MAX_RANK, heroSkillDef } from "../game/data/heroSkills";
 import { makeModifier } from "../game/data/affixes";
 import { DESTROY_REFUND_RATE, DUPLICATE_OFFER_CHANCE, MERGE_FEE_MULT, RUN_AD_SLOT_LIMIT, SET_OFFER_BIAS, shopCardPrice, shopRefreshPrice } from "../game/data/shop";
 import { QUALITY_MAX_LEVEL, qualityDef, qualityPowerRatio, qualityUpgrade, type Quality } from "../game/data/quality";
@@ -62,6 +64,8 @@ export interface ShopWorld {
   readonly equipment: Equipment[];
   /** 玩家被动法宝(原地 push;引擎 statsOf 持同一引用)。可选:老宿主 / 老测试不给 = 商店不出被动 */
   readonly passives?: PassiveArtifact[];
+  /** 玩家独有技能(只读展示;R10 两列表)。可选:不给 = 商店不出技能段 */
+  readonly skills?: Equipment[];
   /** 被动槽总数(表值);缺省 = 不出被动 */
   passiveSlots?(): number;
   /** 本局已解锁节律(法宝进货默认分配 / 行内切换);缺省 = 只有周期 */
@@ -121,6 +125,15 @@ export interface ShopCardView {
   setBadgeColor: string | null;
 }
 
+/** 独有技能只读行(R10):名 / 副标(核心·节律·阶数)/ 色 / 图标;没有热区 */
+export interface ShopSkillView {
+  id: number;
+  name: string;
+  sub: string;
+  color: string;
+  iconKey: string;
+}
+
 export interface ShopWeaponView {
   id: number;
   name: string;
@@ -166,6 +179,9 @@ export interface ShopContent {
   tools: ShopToolView[];
   cards: ShopCardView[];
   slotBtn: { text: string; enabled: boolean };
+  /** 独有技能段(R10):没有技能或宿主没接 skills 时 skills 为空、视图不画该段 */
+  skillHeader: { title: string; right: string };
+  skills: ShopSkillView[];
   weaponHeader: { title: string; right: string };
   weapons: ShopWeaponView[];
   /** 空态文案(0 件武器时的占位行;null = 有货,不画空态) */
@@ -274,9 +290,14 @@ export class ShopModel {
     return this.w.mergeGroups();
   }
 
+  /** 独有技能只读行(≤3:核心 / 分岔 / 进阶;与 shopLayoutPure 的 skillCount 上限同口径) */
+  skills(): Equipment[] {
+    return (this.w.skills ?? []).slice(0, 3);
+  }
+
   /** 纯几何 + 身份:行数由实际持有量决定,纵向由本帧逻辑屏高决定,视图只按数组落位 */
   layout(screenH?: number): ShopLayoutPure {
-    return shopLayoutPure(this.weapons().length, this.merges().length, screenH, this.v4 ? { v4: true, slotCount: this.w.slots() } : undefined);
+    return shopLayoutPure(this.weapons().length, this.merges().length, screenH, this.v4 ? { v4: true, slotCount: this.w.slots(), skillCount: this.skills().length } : undefined);
   }
 
   /* ================= 操作 ================= */
@@ -498,6 +519,7 @@ export class ShopModel {
   content(): ShopContent {
     const w = this.w;
     const eqs = this.weapons();
+    const skills = this.skills();
     const gold = w.gold();
     const intel = chapterIntel(w.chapter(), w.seasonId());
     const iconKey = INTEL_ICON[intel.title] ?? null;
@@ -591,6 +613,23 @@ export class ShopModel {
         // 不再看金币:这颗钮已经不走金币通道,金币不足不该让它变灰
         enabled: !slotMaxed && this.adSlotLeft() > 0,
       },
+      skillHeader: {
+        title: "独有技能(升级三选一养成 · 不占槽)",
+        right: skills.length ? `${skills.length} 招` : "",
+      },
+      skills: skills.map((eq) => {
+        const def = eq.skillId ? heroSkillDef(eq.skillId) : null;
+        const kind = def?.kind === "core" ? "核心" : def?.kind === "branch" ? "分岔" : def?.kind === "advance" ? "进阶" : "技能";
+        const r = equipmentRhythm(eq);
+        const resonant = skillResonant(eq, passives);
+        return {
+          id: eq.id,
+          name: equipmentDisplayName(eq, passives, w.seasonId()),
+          sub: `${kind} · ${r ? rhythmDef(r).name + "节律" : ""}${resonant ? "·共鸣" : ""} · ${eq.level >= SKILL_MAX_RANK ? `${eq.level} 阶 满` : `${eq.level}/${SKILL_MAX_RANK} 阶`}`,
+          color: resonant ? qualityDef("hidden").color : "#7fd6ff",
+          iconKey: `icon_fx_${eq.effect.def.type}`,
+        };
+      }),
       weaponHeader: {
         title: unlocked.length > 1 ? "法宝管理(点行切节律 · 强化 · 销毁)" : "法宝管理(点选 · 强化 · 销毁)",
         right: this.freeSlots() > 0 ? `空槽 ${this.freeSlots()}` : "槽已满,销毁法宝腾槽",

@@ -14,12 +14,12 @@ import { Graphics, Label, Node, Sprite, SpriteFrame, UIOpacity } from "cc";
 import { DESIGN_W, logicalH, placeRect, Rect } from "../core/DesignMetrics";
 import { viewTable, borderOf } from "../core/ViewTable";
 import { bindLabel, hexToColor, label, makeNode, sliced, solidRect } from "../ui/Widgets";
-import { HUD_TOP_H, HUD_BOT_H, HUD_BOT_H_V4, HUD_PAD, pickTicker, equipGridLayout, barFillW } from "../game/ui/hud";
+import { HUD_TOP_H, HUD_BOT_H, HUD_BOT_H_V4, HUD_PAD, pickTicker, equipGridLayout, barFillW, castDockLayout } from "../game/ui/hud";
 import { strokeRing } from "../ui/PanelKit";
 import { hexA } from "../game/ui/theme";
 import { clamp } from "../game/core/math";
 import { COMBOS, comboStates } from "../game/data/combos";
-import { equipmentDisplayName } from "../game/data/equipmentGen";
+import { equipmentDisplayName, type Equipment } from "../game/data/equipmentGen";
 import { chapterIntel } from "../game/data/intel";
 import { chapterTypeInfo, chapterTypeLabel } from "../game/data/chapters";
 import { CHAPTER_SECONDS } from "../game/data/stages";
@@ -85,6 +85,8 @@ export class HudView {
     private cardSig = "";
     private cardCd: Graphics[] = [];
     private cardName: Label[] = [];
+    /** 底坞卡格(与 cardName / cardSub / cardCd 同序):castList 项 + 卡宽 */
+    private cardCells: { eq: Equipment; x: number; y: number; w: number }[] = [];
     private cardSub: Label[] = [];
 
     /* 横幅 */
@@ -667,34 +669,33 @@ export class HudView {
             }
         }
 
-        // 装备横排:布局签名变化时整体重建;每帧只刷 CD 条与文字
+        // 底坞两列表(R10):上排独有技能、下排主动法宝;布局签名变化时整体重建,每帧只刷 CD 条与文字
         const rightW = boss ? 260 : viewTable().phase3.hudV4 ? 136 : 190;
         const zoneW = DESIGN_W - HUD_PAD * 2 - rightW - 8;
-        // 独有技能在前、主动法宝在后(与引擎结算列同序;技能不占槽但要看得见)
-        const eqs = sim.player.castList;
-        const L = equipGridLayout(eqs.length, boss, zoneW, this.botH, viewTable().phase3.hudV4 ? 2 : 1);
+        const cells = this.dockCells(sim, boss, zoneW);
         const sig =
-            `${boss ? 1 : 0}|${L.shown}|${L.rows}|${L.cardW}|${L.chip ? L.hidden : 0}|${this.frames.has("hud_card_frame") ? 1 : 0}|` +
-            eqs.slice(0, L.shown).map((e) => `${e.id}:${e.quality}:${e.effect.def.type}`).join(",");
+            `${boss ? 1 : 0}|${cells.sig}|${this.frames.has("hud_card_frame") ? 1 : 0}|` +
+            cells.cards.map((c) => `${c.eq.id}:${c.eq.quality}:${c.eq.effect.def.type}:${c.w}`).join(",");
         if (sig !== this.cardSig) {
             this.cardSig = sig;
             this.rebuildCards(sim, boss, dy);
         }
         for (let i = 0; i < this.cardName.length; i++) {
-            const eq = eqs[i];
-            if (!eq) continue;
+            const cell = this.cardCells[i];
+            if (!cell) continue;
+            const eq = cell.eq;
             const cd = sim.engine.pulseLeft(eq.id);
             const cdG = this.cardCd[i];
             if (cdG) {
                 cdG.clear();
                 if (cd) {
                     const frac = 1 - cd.left / cd.interval;
-                    const w = L.cardW - 6;
+                    const w = cell.w - 6;
                     cdG.fillColor = hexToColor(h.colors.cdTrack);
-                    cdG.rect(-L.cardW / 2 + 3, -16, w, 3);
+                    cdG.rect(-cell.w / 2 + 3, -16, w, 3);
                     cdG.fill();
                     cdG.fillColor = hexToColor(h.colors.cdFill);
-                    cdG.rect(-L.cardW / 2 + 3, -16, w * frac, 3);
+                    cdG.rect(-cell.w / 2 + 3, -16, w * frac, 3);
                     cdG.fill();
                 }
             }
@@ -702,70 +703,102 @@ export class HudView {
             // 技能 / 法宝走共鸣改名(技能看被动列),老装备仍写效果名
             const name = eq.hiddenAffix ? `【隐藏】${eq.effect.def.name}` : eq.kind ? equipmentDisplayName(eq, sim.player.passives, sim.save.seasonId) : eq.effect.def.name;
             if (boss) {
-                bindLabel(this.cardName[i], this.fitOne(name + cdTxt, L.cardW - 38, h.pxCard));
+                bindLabel(this.cardName[i], this.fitOne(name + cdTxt, cell.w - 38, h.pxCard));
             } else {
-                bindLabel(this.cardName[i], this.fitOne(name, L.cardW - 38, h.pxCard));
+                bindLabel(this.cardName[i], this.fitOne(name, cell.w - 38, h.pxCard));
                 const trig = eq.triggers.map((t) => t.def.name).join("/");
                 const mod = eq.modifiers.map((m) => m.def.name).join("/");
-                bindLabel(this.cardSub[i], this.fitOne(`${trig}${mod ? " · " + mod : ""}${cdTxt}`, L.cardW - 38, h.pxCardSub));
+                bindLabel(this.cardSub[i], this.fitOne(`${trig}${mod ? " · " + mod : ""}${cdTxt}`, cell.w - 38, h.pxCardSub));
             }
         }
     }
 
-    /** 装备卡重建(布局签名变化时):品质框 + 图标 + 双行文字 + 折叠芯片 */
+    /**
+     * 底坞卡格落位:v4 走 castDockLayout(技能排 + 法宝排),旧档走 equipGridLayout 单排混排。
+     * 返回每张卡的 castList 项与几何(相对坞顶 dy 的行 / 列偏移由 x / y 给出)、芯片位、分隔线 y。
+     */
+    private dockCells(sim: BattleSim, boss: boolean, zoneW: number): { cards: { eq: Equipment; x: number; y: number; w: number }[]; chips: { x: number; y: number; w: number; hidden: number }[]; dividerY: number | null; cardH: number; sig: string } {
+        const lx = HUD_PAD;
+        const list = sim.player.castList;
+        const cards: { eq: Equipment; x: number; y: number; w: number }[] = [];
+        const chips: { x: number; y: number; w: number; hidden: number }[] = [];
+        if (viewTable().phase3.hudV4) {
+            const skills = list.filter((e) => e.kind === "skill");
+            const arts = list.filter((e) => e.kind !== "skill");
+            const L = castDockLayout(skills.length, arts.length, boss, zoneW, this.botH);
+            let dividerY: number | null = null;
+            L.rows.forEach((row, ri) => {
+                const src = row.kind === "skill" ? skills : arts;
+                const y = L.y0 + ri * (L.cardH + L.rowGap);
+                for (let i = 0; i < row.shown; i++) cards.push({ eq: src[i], x: lx + i * (row.cardW + row.gap), y, w: row.cardW });
+                if (row.chip) chips.push({ x: lx + row.shown * (row.cardW + row.gap), y, w: row.chipW, hidden: row.hidden });
+                if (ri === 0 && L.divider) dividerY = y + L.cardH + L.rowGap / 2;
+            });
+            return { cards, chips, dividerY, cardH: L.cardH, sig: `${L.rows.map((r) => `${r.kind[0]}${r.shown}/${r.hidden}/${r.cardW}`).join("+")}|${L.y0}` };
+        }
+        const L = equipGridLayout(list.length, boss, zoneW, this.botH, 1);
+        for (let i = 0; i < L.shown; i++) cards.push({ eq: list[i], x: lx + (i % L.cols) * (L.cardW + L.gap), y: L.y0 + Math.floor(i / L.cols) * (L.cardH + L.rowGap), w: L.cardW });
+        if (L.chip) {
+            const lastRow = L.shown > 0 ? Math.floor((L.shown - 1) / L.cols) : 0;
+            const lastCount = L.shown - lastRow * L.cols;
+            chips.push({ x: lx + lastCount * (L.cardW + L.gap), y: L.y0 + lastRow * (L.cardH + L.rowGap), w: L.chipW, hidden: L.hidden });
+        }
+        return { cards, chips, dividerY: null, cardH: L.cardH, sig: `${L.shown}|${L.rows}|${L.cardW}|${L.chip ? L.hidden : 0}` };
+    }
+
+    /** 装备卡重建(布局签名变化时):品质框 + 图标 + 双行文字 + 折叠芯片 + 两列表分隔线 */
     private rebuildCards(sim: BattleSim, boss: boolean, dy: number): void {
         const h = viewTable().hud;
-        const lx = HUD_PAD;
         const rightW = boss ? 260 : viewTable().phase3.hudV4 ? 136 : 190;
         const zoneW = DESIGN_W - HUD_PAD * 2 - rightW - 8;
-        const eqs = sim.player.castList;
-        // v4:两排网格(张数 ≤ 每排上限单排、否则双排,满 8 / 6 之外收 +N);旧档 rowsMax=1 即原横排口径
-        const L = equipGridLayout(eqs.length, boss, zoneW, this.botH, viewTable().phase3.hudV4 ? 2 : 1);
-        const cy = dy + L.y0;
-        const cardH = L.cardH;
+        const cells = this.dockCells(sim, boss, zoneW);
+        const cardH = cells.cardH;
         this.cardsRoot.removeAllChildren();
         this.cardCd = [];
         this.cardName = [];
         this.cardSub = [];
-        // 网格落位:第 i 张 → 列 i % cols、排 floor(i / cols);芯片跟在末排末张之后
-        const cellX = (col: number) => lx + col * (L.cardW + L.gap);
-        const cellY = (row: number) => cy + row * (L.cardH + L.rowGap);
-        for (let i = 0; i < L.shown; i++) {
-            const eq = eqs[i];
-            if (!eq) break;
+        this.cardCells = cells.cards;
+        cells.cards.forEach((cell, i) => {
+            const eq = cell.eq;
+            const cw = cell.w;
             const q = qualityDef(eq.quality);
             const card = makeNode("Card" + i, this.cardsRoot);
-            placeRect(card, { x: cellX(i % L.cols), y: cellY(Math.floor(i / L.cols)), w: L.cardW, h: cardH }, DESIGN_W, logicalH());
+            placeRect(card, { x: cell.x, y: dy + cell.y, w: cw, h: cardH }, DESIGN_W, logicalH());
             // 品质框:圆角暗底 + 品质色描边 + 内发光描边(卡片局部坐标 = 中心原点)
             const bg = makeNode("Bg", card);
             const g = bg.addComponent(Graphics);
             const cardFrame = viewTable().phase3.hudV4 ? this.frames.get("hud_card_frame") : undefined;
             if (cardFrame) {
-                // v4:暗石面 + 铁框(九宫格,透明心,按品质色乘性染色 —— 36 高的卡放不下额外的品质线,
-                // 首版那道 2px 顶线正压在卡名字形上;染框让品质语义落在框上,与旧版「品质色描边」同位)
+                // v4:暗石面 + 铁框(九宫格,透明心,按品质色乘性染色);技能排用节律色描一道细边,与法宝排区分
                 g.fillColor = hexToColor("rgba(11,14,20,0.82)");
-                g.rect(-L.cardW / 2, -cardH / 2, L.cardW, cardH);
+                g.rect(-cw / 2, -cardH / 2, cw, cardH);
                 g.fill();
-                const fr = sliced("Frame", card, cardFrame, { x: 0, y: 0, w: L.cardW, h: cardH }, borderOf("hud_card_frame", cardFrame.width, cardFrame.height), q.color);
-                placeRect(fr.node, { x: 0, y: 0, w: L.cardW, h: cardH }, L.cardW, cardH);
+                const fr = sliced("Frame", card, cardFrame, { x: 0, y: 0, w: cw, h: cardH }, borderOf("hud_card_frame", cardFrame.width, cardFrame.height), q.color);
+                placeRect(fr.node, { x: 0, y: 0, w: cw, h: cardH }, cw, cardH);
+                if (eq.kind === "skill") {
+                    g.lineWidth = 1;
+                    g.strokeColor = hexToColor(hexA(h.colors.skillEdge, 0.9));
+                    g.rect(-cw / 2 + 1.5, -cardH / 2 + 1.5, cw - 3, cardH - 3);
+                    g.stroke();
+                }
             } else {
-            g.fillColor = hexToColor(h.colors.cardBg);
-            g.roundRect(-L.cardW / 2, -cardH / 2, L.cardW, cardH, 4);
-            g.fill();
-            g.lineWidth = 1.5;
-            g.strokeColor = hexToColor(q.color);
-            g.roundRect(-L.cardW / 2, -cardH / 2, L.cardW, cardH, 4);
-            g.stroke();
-            g.lineWidth = 1;
-            g.strokeColor = hexToColor(hexA(q.color, 0.35));
-            g.rect(-L.cardW / 2 + 2.5, -cardH / 2 + 2.5, L.cardW - 5, cardH - 5);
-            g.stroke();
+                g.fillColor = hexToColor(h.colors.cardBg);
+                g.roundRect(-cw / 2, -cardH / 2, cw, cardH, 4);
+                g.fill();
+                g.lineWidth = 1.5;
+                g.strokeColor = hexToColor(q.color);
+                g.roundRect(-cw / 2, -cardH / 2, cw, cardH, 4);
+                g.stroke();
+                g.lineWidth = 1;
+                g.strokeColor = hexToColor(hexA(q.color, 0.35));
+                g.rect(-cw / 2 + 2.5, -cardH / 2 + 2.5, cw - 5, cardH - 5);
+                g.stroke();
             }
             // 技能槽底板:slot_skill 九宫格,垫在效果图标之下(图标盒 5,6,24x24 → 槽 3,4,28x28 同中心)
             const socket = this.frames.get("slot_skill");
             if (socket) {
                 const sp = sliced("Socket", card, socket, { x: 3, y: 4, w: 28, h: 28 }, borderOf("slot_skill", socket.width, socket.height));
-                placeRect(sp.node, { x: 3, y: 4, w: 28, h: 28 }, L.cardW, cardH);
+                placeRect(sp.node, { x: 3, y: 4, w: 28, h: 28 }, cw, cardH);
             }
             // 效果图标(缺图回退:品质色圆底 + 效果名首字)
             const frame = this.frames.get(`icon_fx_${eq.effect.def.type}`);
@@ -774,7 +807,7 @@ export class HudView {
                 const sp = icon.addComponent(Sprite);
                 sp.spriteFrame = frame;
                 sp.sizeMode = Sprite.SizeMode.CUSTOM;
-                placeRect(icon, { x: 5, y: 6, w: 24, h: 24 }, L.cardW, cardH);
+                placeRect(icon, { x: 5, y: 6, w: 24, h: 24 }, cw, cardH);
             } else {
                 const icon = makeNode("IconFill", card);
                 const ig = icon.addComponent(Graphics);
@@ -785,48 +818,57 @@ export class HudView {
                 ig.strokeColor = hexToColor(hexA(q.color, 0.7));
                 ig.circle(0, 0, 11);
                 ig.stroke();
-                placeRect(icon, { x: 17, y: 18, w: 0, h: 0 }, L.cardW, cardH);
+                placeRect(icon, { x: 17, y: 18, w: 0, h: 0 }, cw, cardH);
                 const ch = label("IconChar", card, eq.effect.def.name[0], 12, q.color, { bold: true, hAlign: Label.HorizontalAlign.CENTER });
-                ch.node.setPosition(17 - L.cardW / 2, cardH / 2 - (22 - 12 * 0.35), 0); // 基线 cy+22
+                ch.node.setPosition(17 - cw / 2, cardH / 2 - (22 - 12 * 0.35), 0); // 基线 cy+22
             }
             // 名称/副行(boss 收拢为仅名单行,基线 cy+22;平时 cy+15 / cy+30)
             const name = label("Name", card, "", h.pxCard, q.color, { bold: true });
             this.styleV4(name, 0);
-            placeRect(name.node, this.baselineRect(33, boss ? 22 : 15, h.pxCard, L.cardW - 38), L.cardW, cardH, 0, 0.5);
+            placeRect(name.node, this.baselineRect(33, boss ? 22 : 15, h.pxCard, cw - 38), cw, cardH, 0, 0.5);
             this.cardName.push(name);
             if (boss) {
                 this.cardSub.push(name); // boss 单行:副行指向名称,bindLabel 幂等
             } else {
                 const sub = label("Sub", card, "", h.pxCardSub, h.colors.cardSubText, {});
                 this.styleV4(sub, 0);
-                placeRect(sub.node, this.baselineRect(33, 30, h.pxCardSub, L.cardW - 38), L.cardW, cardH, 0, 0.5);
+                placeRect(sub.node, this.baselineRect(33, 30, h.pxCardSub, cw - 38), cw, cardH, 0, 0.5);
                 this.cardSub.push(sub);
             }
             // 脉冲 CD 条(每帧重绘;槽位 = 卡底 3px)
             const cdNode = makeNode("Cd", card);
             this.cardCd.push(cdNode.addComponent(Graphics));
+        });
+        // 两列表分隔线(1px,排距中线,横贯卡区)
+        if (cells.dividerY !== null) {
+            const div = makeNode("Divider", this.cardsRoot);
+            const dg = div.addComponent(Graphics);
+            placeRect(div, { x: HUD_PAD, y: dy + cells.dividerY, w: zoneW, h: 2 }, DESIGN_W, logicalH());
+            dg.fillColor = hexToColor(hexA(h.colors.cardSubText, 0.35));
+            dg.rect(-zoneW / 2, -1, zoneW, 1);
+            dg.fill();
         }
-        // 折叠芯片(+N):末排末张之后
-        this.chipNode.active = L.chip;
-        if (L.chip) {
-            const lastRow = L.shown > 0 ? Math.floor((L.shown - 1) / L.cols) : 0;
-            const lastCount = L.shown - lastRow * L.cols;
-            placeRect(this.chipNode, { x: cellX(lastCount), y: cellY(lastRow), w: L.chipW, h: cardH }, DESIGN_W, logicalH());
-            const g = this.chipNode.getComponent(Graphics)!;
+        // 折叠芯片(+N):跟在该排末张之后(每排各自一枚;旧档只有一枚)
+        this.chipNode.active = false;
+        cells.chips.forEach((chip, k) => {
+            const node = k === 0 ? this.chipNode : makeNode("Chip" + k, this.cardsRoot);
+            node.active = true;
+            placeRect(node, { x: chip.x, y: dy + chip.y, w: chip.w, h: cardH }, DESIGN_W, logicalH());
+            const g = node.getComponent(Graphics) ?? node.addComponent(Graphics);
             g.clear();
             g.fillColor = hexToColor(h.colors.chipBg);
-            g.rect(-L.chipW / 2, -cardH / 2, L.chipW, cardH);
+            g.rect(-chip.w / 2, -cardH / 2, chip.w, cardH);
             g.fill();
             g.lineWidth = 1;
             g.strokeColor = hexToColor(h.colors.chipStroke);
-            g.rect(-L.chipW / 2, -cardH / 2, L.chipW, cardH);
+            g.rect(-chip.w / 2, -cardH / 2, chip.w, cardH);
             g.stroke();
-            if (!this.chipLabel || !this.chipLabel.isValid) {
-                this.chipLabel = label("ChipText", this.chipNode, "", h.pxCard, h.colors.chipText, { bold: true, hAlign: Label.HorizontalAlign.CENTER });
-            }
-            this.chipLabel.node.setPosition(0, cardH / 2 - (22 - h.pxCard * 0.35), 0); // 基线 cy+22
-            bindLabel(this.chipLabel, this.fitOne(`+${L.hidden}`, L.chipW - 4, h.pxCard));
-        }
+            const existing = node.getChildByName("ChipText");
+            const lb = existing ? existing.getComponent(Label)! : label("ChipText", node, "", h.pxCard, h.colors.chipText, { bold: true, hAlign: Label.HorizontalAlign.CENTER });
+            if (k === 0) this.chipLabel = lb;
+            lb.node.setPosition(0, cardH / 2 - (22 - h.pxCard * 0.35), 0); // 基线 cy+22
+            bindLabel(lb, this.fitOne(`+${chip.hidden}`, chip.w - 4, h.pxCard));
+        });
     }
 
     private syncBanners(sim: BattleSim): void {
