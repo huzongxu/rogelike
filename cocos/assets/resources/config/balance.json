@@ -66,6 +66,7 @@
     "eliteSpawnScale": 1.3,
     "eliteBurst": 1.5,
     "eliteIntelBias": 0.3,
+    "eliteIntelDelay": 6,
     "treasureSpawnScale": 0.5,
     "treasureGoldMix": 0.25,
     "defaultIntelBias": 0.45

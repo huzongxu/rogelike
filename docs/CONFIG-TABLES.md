@@ -69,6 +69,7 @@
 | eliteSpawnScale | 1.3 | 精英章生成密度倍率 |
 | eliteBurst | 1.5 | 精英章开局 burst 倍率 |
 | eliteIntelBias | 0.3 | 精英章敌情倾向概率 |
+| eliteIntelDelay | 6 | 精英章章首多少秒内不强制精英敌情(开局 burst 只有密度;R12 对照:0 / 3 / 6s 与偏向 0.15 深度总和 368 / 343 / 387 / 385) |
 | treasureSpawnScale | 0.5 | 宝箱章密度倍率(<1 稀疏) |
 | treasureGoldMix | 0.25 | 宝箱章金怪替换概率 |
 | defaultIntelBias | 0.45 | 普通/宝箱章敌情倾向概率 |

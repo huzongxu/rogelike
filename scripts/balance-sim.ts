@@ -22,7 +22,7 @@ import { spawnCloud, spawnGem, type Cloud, type Minion, type Gem, _resetObjectUi
 import { WaveManager, type ArenaRect, type SpawnIntel } from "@game/systems/waves";
 import { CHAPTER_ARENA } from "@game/data/stages";
 import { chapterIntel } from "@game/data/intel";
-import { chapterTypeInfo } from "@game/data/chapters";
+import { ELITE_INTEL_DELAY_SEC, chapterTypeInfo } from "@game/data/chapters";
 import type { Equipment } from "@game/data/equipmentGen";
 import { makeSetStarterEquipment, generateEquipment, generateSetEquipment, generatePassive, qualityBasePrice, SHOP_SLOT_CAP, qualityUpgrade, qualityPowerRatio, canUpgrade, upgradeCost, _resetEquipmentUid } from "@game/data/equipmentGen";
 import { PASSIVE_SLOTS, type PassiveArtifact } from "@game/data/artifacts";
@@ -949,7 +949,9 @@ function runSimInner(opts: SimOptions): SimReport {
     if (opts.chapterTypes) {
       const ct = chapterTypeInfo(waves.wave);
       const base = chapterIntel(waves.wave);
-      simIntel = { prefer: ct.intelPrefer ?? base.prefer, hpBuff: 0.4, bias: ct.intelPrefer ? ct.intelBias : 0.45 };
+      // 精英入场延迟(与 battleWorld.spawnIntel 同口径):章首 ELITE_INTEL_DELAY_SEC 秒内不强制精英
+      const forced = ct.intelPrefer && t % 60 >= ELITE_INTEL_DELAY_SEC ? ct.intelPrefer : null;
+      simIntel = { prefer: forced ?? base.prefer, hpBuff: 0.4, bias: forced ? ct.intelBias : 0.45 };
       scale *= ct.spawnScaleMult;
       simGoldMix = ct.goldMix;
     }

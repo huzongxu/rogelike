@@ -90,7 +90,7 @@ import {
 } from "../data/combat";
 import { collectionBonus, dailyTalentOf } from "../data/daily";
 import { CHAPTER_SECONDS, CHAPTERS_PER_STAGE, stageClearedAtFinalChapter, type StageDef } from "../data/stages";
-import { chapterTypeInfo } from "../data/chapters";
+import { chapterTypeInfo, ELITE_INTEL_DELAY_SEC } from "../data/chapters";
 import { chapterIntel } from "../data/intel";
 import {
   deathChainDamage,
@@ -499,7 +499,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
   spawnIntel() {
     const i = chapterIntel(this.chapter, this.inputs.seasonId());
     const ct = this.currentStage ? chapterTypeInfo(this.chapter, this.currentStage.bossChapter) : null;
-    const forced = ct?.intelPrefer ?? null;
+    // 精英章章首 ELITE_INTEL_DELAY_SEC 秒内不强制精英敌情(开局 burst 与前几拍只有密度),之后按章型偏向入场
+    const forced = ct?.intelPrefer && this.chapterTimer >= ELITE_INTEL_DELAY_SEC ? ct.intelPrefer : null;
     return { prefer: forced ?? i.prefer, hpBuff: 0.4, bias: forced ? ct!.intelBias : 0.45 };
   }
 

@@ -33,6 +33,13 @@ export let TREASURE_CHAPTERS: number[] = [7, 14];
 export let ELITE_SPAWN_SCALE = 1.3;
 export let ELITE_BURST = 1.5;
 export let ELITE_INTEL_BIAS = 0.3;
+/**
+ * 精英章「精英入场延迟」(秒):章首这几秒的开局 burst 与刷怪不强制精英敌情(只有密度 ×1.3),之后精英按 ELITE_INTEL_BIAS 入场。
+ * 取 6:R12 对照(7 英雄 × 3 种子,章首清场口径)延迟 0 / 3 / 6 与偏向 0.15 的深度总和 368 / 343 / 387 / 385,穆 30 → 46 章,
+ * 其余英雄在噪声内;6s 比降偏向更好在保住精英章的精英占比 —— 章首只有密度,第 6 秒起「精英入场」。
+ * 0 = 旧口径(章首 14 只 burst 里就有 ~30% 精英,站桩 / 召唤英雄 10s 内被贴身打穿;CONTEXT 56 / 59)。可配 balance.json → chapterTypes.eliteIntelDelay
+ */
+export let ELITE_INTEL_DELAY_SEC = 6;
 export let TREASURE_SPAWN_SCALE = 0.5;
 export let TREASURE_GOLD_MIX = 0.25;
 export let DEFAULT_INTEL_BIAS = 0.45;
@@ -55,6 +62,7 @@ export function applyBalance(cfg?: Record<string, unknown>): void {
   ELITE_SPAWN_SCALE = num(c.eliteSpawnScale, 0.1, 10, 1.3);
   ELITE_BURST = num(c.eliteBurst, 0.1, 10, 1.5);
   ELITE_INTEL_BIAS = num(c.eliteIntelBias, 0, 1, 0.3);
+  ELITE_INTEL_DELAY_SEC = num(c.eliteIntelDelay, 0, 30, 6);
   TREASURE_SPAWN_SCALE = num(c.treasureSpawnScale, 0.1, 10, 0.5);
   TREASURE_GOLD_MIX = num(c.treasureGoldMix, 0, 1, 0.25);
   DEFAULT_INTEL_BIAS = num(c.defaultIntelBias, 0, 1, 0.45);

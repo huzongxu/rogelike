@@ -4,7 +4,10 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { chapterTypeOf, chapterTypeInfo, chapterTypeLabel, ELITE_CHAPTERS, TREASURE_CHAPTERS } from "@game/data/chapters";
+import { chapterTypeOf, chapterTypeInfo, chapterTypeLabel, ELITE_CHAPTERS, TREASURE_CHAPTERS, ELITE_INTEL_DELAY_SEC, applyBalance as applyChapterTypes } from "@game/data/chapters";
+import { BattleSim } from "../cocos/assets/scripts/battle/BattleSim";
+import { emptySave } from "../cocos/assets/scripts/core/SaveModel";
+import { vec2 } from "@game/core/math";
 import { runSim, formatReport } from "../scripts/balance-sim";
 
 describe("章型纯函数", () => {
@@ -41,6 +44,37 @@ describe("章型纯函数", () => {
     expect(chapterTypeLabel("treasure")).toBe("宝箱章");
     expect(chapterTypeLabel("boss")).toBe("Boss 章");
     expect(chapterTypeLabel("normal")).toBe("");
+  });
+});
+
+describe("精英章「精英入场延迟」(R12)", () => {
+  it("表值可配 0..30,缺省按表;开延迟后精英章章首 spawnIntel 不强制精英,到点后恢复;非精英章不受影响", () => {
+    const sim = () => {
+      const save = emptySave();
+      save.energy = 99;
+      save.selectedHero = "vera";
+      save.selectedSet = "thorn";
+      const s = new BattleSim({ save, input: { isMoving: false, moveDir: vec2(0, 0) }, worldH: 996, persist: () => {}, callbacks: { onDamage: () => {}, onDeath: () => {}, onVictory: () => {}, onChapterShop: () => {} } });
+      s.startStage(1);
+      while (s.world.chapter < ELITE_CHAPTERS[0]) s.world.nextChapter();
+      return s;
+    };
+    applyChapterTypes({ eliteIntelDelay: 3 });
+    const s = sim();
+    expect(s.world.chapter).toBe(ELITE_CHAPTERS[0]);
+    expect(s.world.chapterTimer).toBe(0);
+    expect(s.world.spawnIntel().prefer, "章首 3s 内不强制精英").not.toBe("elite");
+    s.world.chapterTimer = 3;
+    expect(s.world.spawnIntel().prefer).toBe("elite");
+    expect(s.world.spawnIntel().bias).toBe(chapterTypeInfo(ELITE_CHAPTERS[0]).intelBias);
+    s.world.nextChapter();
+    expect(chapterTypeOf(s.world.chapter)).toBe("normal");
+    expect(s.world.spawnIntel().prefer).not.toBe("elite");
+    applyChapterTypes({ eliteIntelDelay: 99 });
+    expect(ELITE_INTEL_DELAY_SEC, "越界回默认 6").toBe(6);
+    applyChapterTypes({});
+    const s0 = sim();
+    expect(s0.world.spawnIntel().prefer, `缺省延迟 ${ELITE_INTEL_DELAY_SEC}s`).toBe(ELITE_INTEL_DELAY_SEC > 0 ? s0.world.spawnIntel().prefer : "elite");
   });
 });
 

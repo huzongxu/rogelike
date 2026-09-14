@@ -26,7 +26,7 @@ import {
   splitEcho,
 } from "@game/data/stages";
 import { applyBalance as applyWaves, SPAWN_BASE, SPAWN_EARLY_CHAPTERS, SPAWN_INTERVAL_MIN } from "@game/systems/waves";
-import { applyBalance as applyChapters, chapterTypeOf, ELITE_CHAPTERS, TREASURE_CHAPTERS } from "@game/data/chapters";
+import { applyBalance as applyChapters, chapterTypeOf, ELITE_CHAPTERS, TREASURE_CHAPTERS, ELITE_INTEL_DELAY_SEC } from "@game/data/chapters";
 import { applyBalance as applyGacha, EPIC_PITY, LEGENDARY_PITY, rollGachaQuality, DUPLICATE_STARDUST } from "@game/data/gacha";
 import { applyBalance as applyEconomy, qualityBasePrice, SHOP_SLOT_CAP, slotExpandCost } from "@game/data/equipmentGen";
 
@@ -118,6 +118,15 @@ describe("章型配置(chapterTypes 段)", () => {
     expect(chapterTypeOf(5)).toBe("normal");
     expect(ELITE_CHAPTERS).toEqual([3, 9]);
     expect(TREASURE_CHAPTERS).toEqual([6]);
+  });
+
+  it("精英入场延迟可改(0..30),越界回默认 6", () => {
+    applyChapters({ eliteIntelDelay: 2 });
+    expect(ELITE_INTEL_DELAY_SEC).toBe(2);
+    applyChapters({ eliteIntelDelay: 99 });
+    expect(ELITE_INTEL_DELAY_SEC).toBe(6);
+    applyChapters({});
+    expect(ELITE_INTEL_DELAY_SEC).toBe(6);
   });
 
   it("章型数组非法回退默认", () => {
