@@ -103,6 +103,8 @@ import { vec2 } from "@game/core/math";
 import { ShopModel, isPassiveOffer, type ShopWorld } from "../cocos/assets/scripts/shop/ShopModel";
 import { emptySave } from "../cocos/assets/scripts/core/SaveModel";
 import { BattleSim } from "../cocos/assets/scripts/battle/BattleSim";
+import { spawnMinion } from "@game/entities/objects";
+import { MINION_CARRY_SPREAD } from "@game/systems/battleWorld";
 
 function makeContext(player: Player, enemies: Enemy[] = [], extra: Partial<BattleContext> = {}): BattleContext & { fx: Fx[] } {
   const fx: Fx[] = [];
@@ -1112,6 +1114,30 @@ describe("商店独有技能只读段(R10 两列表)", () => {
     expect(without.content().skills).toEqual([]);
     expect(without.layout(996).skillLabelY).toBe(null);
     expect(without.layout(996).weaponLabelY).toBeLessThan(withSkills.layout(996).weaponLabelY);
+  });
+});
+
+describe("章首保留召唤物(R11)", () => {
+  it("nextChapter 不清召唤物:数量 / 剩余存活不变,位置跟主人回场心;startRun 仍清空", () => {
+    const save = emptySave();
+    save.energy = 99;
+    save.selectedHero = "oden";
+    save.selectedSet = "requiem";
+    const s = new BattleSim({ save, input: { isMoving: false, moveDir: vec2(0, 0) }, worldH: 996, persist: () => {}, callbacks: { onDamage: () => {}, onDeath: () => {}, onVictory: () => {}, onChapterShop: () => {} } });
+    s.startStage(1);
+    const src = s.player.skills[0];
+    for (let i = 0; i < 3; i++) s.world.minions.push(spawnMinion({ pos: vec2(40 + i * 200, 900), hp: 50, damage: 10, duration: 12, speed: 100, color: "#fff", source: src }));
+    const ttl = s.world.minions.map((m) => m.ttl);
+    s.world.nextChapter();
+    expect(s.world.minions).toHaveLength(3);
+    expect(s.world.minions.map((m) => m.ttl)).toEqual(ttl);
+    for (const m of s.world.minions) {
+      expect(Math.abs(m.pos.x - s.player.pos.x)).toBeLessThanOrEqual(MINION_CARRY_SPREAD / 2);
+      expect(Math.abs(m.pos.y - s.player.pos.y)).toBeLessThanOrEqual(MINION_CARRY_SPREAD / 2);
+    }
+    expect(s.world.enemies.length, "敌人照常清场").toBeGreaterThanOrEqual(0);
+    s.world.startRun();
+    expect(s.world.minions).toHaveLength(0);
   });
 });
 

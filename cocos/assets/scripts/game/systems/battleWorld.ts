@@ -146,6 +146,8 @@ import { HUD_BOT_H, battleBandY } from "../ui/hud";
 
 /** 实体上限(保证小游戏性能;弹幕 420 = 组合技分裂子弹 + 品质高频标定值;金币堆 420 与"溢出不丢钱"的并入逻辑配套) */
 export const LIMITS = { enemies: 340, projectiles: 420, clouds: 44, minions: 24, gems: 420 };
+/** 换章时召唤物在玩家周围的散布边长(px):跟主人回场心,不叠在一点上;依据 R11 章首保留召唤物 */
+export const MINION_CARRY_SPREAD = 80;
 
 /** 伤害飘字上限(同屏超出即淘汰最早一枚) */
 const DMG_NUM_CAP = 200;
@@ -598,7 +600,11 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     this.started = true;
   }
 
-  /** 开始下一章:清场、换竞技场、回中心、重生成地形、章节开局刷一波怪 */
+  /**
+   * 开始下一章:清场、换竞技场、回中心、重生成地形、章节开局刷一波怪。
+   * 召唤物**不清**(docs/DESIGN-HERO-RHYTHM.md R11,用户裁定 A):骷髅 / 狼 / 亡影是召唤流上一章攒下的军队,跟着玩家回到场心,
+   * 剩余存活照常倒数、上限仍走 LIMITS.minions;精英章开场那 10s 里有它们顶住,补的正是穆那道墙的机理。
+   */
   nextChapter(): void {
     this.chapter += 1;
     this.chapterTimer = 0;
@@ -607,12 +613,16 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     this.skillTelegraphs.length = 0;
     this.projectiles.length = 0;
     this.clouds.length = 0;
-    this.minions.length = 0;
     this.gems.length = 0;
     this.fxLayer.reset();
     this.bossSpawned = false;
     this.bossBanner = null;
     this.player.pos = vec2((this.arena.x0 + this.arena.x1) / 2, (this.arena.y0 + this.arena.y1) / 2);
+    // 召唤物随主人回到场心(散在 MINION_CARRY_SPREAD 内),不留在上一章的位置
+    for (const m of this.minions) {
+      m.pos.x = this.player.pos.x + (Math.random() - 0.5) * MINION_CARRY_SPREAD;
+      m.pos.y = this.player.pos.y + (Math.random() - 0.5) * MINION_CARRY_SPREAD;
+    }
     // 地形重生成:与"清场换章"同节奏;第 1 章与 Boss 章净空
     this.obstacles = rollChapterObstacles(this.chapter, this.arena, Math.random, this.currentStage?.bossChapter);
     this.poolTickAcc = 0;
