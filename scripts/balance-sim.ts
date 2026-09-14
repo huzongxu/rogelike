@@ -60,6 +60,13 @@ export interface SimOptions {
    */
   chapterTypes?: boolean;
   /**
+   * 章首清场(镜像游戏 battleWorld.nextChapter):每 60s 清敌人 / 弹体 / 云 / 宝石,玩家回场心;
+   * 召唤物默认**保留**并随主人回场心(R11);`clearMinionsOnChapter` = true 时按 R11 之前的口径一并清掉(对照用)。
+   * 默认关闭,已标定基线逐帧不变。
+   */
+  chapterReset?: boolean;
+  clearMinionsOnChapter?: boolean;
+  /**
    * 跨套组合技结算(策划案 V3 §5):开启后按装备词缀实时结算三条组合技
    * (弹幕风暴/深渊裂隙/荆棘光环)。默认关闭,已标定基线逐帧不变;
    * 组合技强度验证用同一 build 开/关对照(见 tests/combos.test.ts)。
@@ -539,6 +546,7 @@ function runSimInner(opts: SimOptions): SimReport {
 
   // 章间商店成长:每章(60s)买最多 3 卡(槽位内;强化已移除)
   let shopTimer = 60;
+  let resetChapter = 1;
   for (; t < opts.maxSeconds; t += dt) {
     // 地形按章重生成(镜像游戏 nextChapter;第 1 章净空,模拟无 Boss 章)
     if (opts.obstacles) {
@@ -547,6 +555,23 @@ function runSimInner(opts: SimOptions): SimReport {
         simChapter = ch;
         obstacles = rollChapterObstacles(ch, arena, obsRng);
         poolTickAcc = 0;
+      }
+    }
+    if (opts.chapterReset) {
+      const ch = Math.floor(t / 60) + 1;
+      if (ch !== resetChapter) {
+        resetChapter = ch;
+        if (ch > 1) {
+          // 与 battleWorld.nextChapter 同序:清场、回场心;召唤物保留并散在主人身边(R11),对照口径则清掉
+          enemies.length = 0;
+          projectiles.length = 0;
+          clouds.length = 0;
+          gems.length = 0;
+          player.pos.x = (arena.x0 + arena.x1) / 2;
+          player.pos.y = (arena.y0 + arena.y1) / 2;
+          if (opts.clearMinionsOnChapter) minions.length = 0;
+          else for (const m of minions) { m.pos.x = player.pos.x + (Math.random() - 0.5) * 80; m.pos.y = player.pos.y + (Math.random() - 0.5) * 80; }
+        }
       }
     }
     if (opts.shopGrowth) {
