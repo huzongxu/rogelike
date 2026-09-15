@@ -96,7 +96,7 @@ import {
   type RhythmId,
 } from "@game/data/rhythm";
 import { SKILL_AFFINITY } from "@game/data/reroll";
-import { BESPOKE_HEROES, CORE_BASELINE_INTERVAL, CORE_RHYTHM_TUNE, HERO_SKILLS, LOKA_SLAY_DEVOURER, RESET_GUARANTEE_ROUNDS, coreSkillOf, needsBaseline, skillTriggerParams } from "@game/data/heroSkills";
+import { BESPOKE_HEROES, CORE_BASELINE_INTERVAL, CORE_RHYTHM_TUNE, HERO_SKILLS, LOKA_SLAY_DEVOURER, MU_RETALIATION_POOL_PCT, RESET_GUARANTEE_ROUNDS, coreSkillOf, needsBaseline, skillTriggerParams } from "@game/data/heroSkills";
 import { spawnProjectile } from "@game/entities/projectile";
 import { allHeroes, type HeroId } from "@game/data/heroes";
 import { QUALITY_HASTE_CAP, qualityDef } from "@game/data/quality";
@@ -1694,5 +1694,43 @@ describe("白啸霜刃对吞噬者特効(R16;剖面依据 CONTEXT 66)", () => {
     stepProjectiles(s, 0.05);
     expect(dev.hp, "不掉血,反而回 100 × 0.5").toBe(550);
     expect(p.ttl, "非穿透弹被吃掉").toBeLessThan(0);
+  });
+});
+
+describe("承伤反哺池(R17:穆「缠斗回复」的杠杆 A)", () => {
+  it("只有穆的核心带入池比例,其余英雄不受影响", () => {
+    expect(makeSkillEquipment(coreSkillOf("mu")).effect.params.retaliationHeal).toBe(MU_RETALIATION_POOL_PCT);
+    for (const id of ["vera", "kyle", "bran", "sia", "nora", "loka", "doran", "sally", "rayne", "willow", "oden"]) {
+      expect(makeSkillEquipment(coreSkillOf(id as never)).effect.params.retaliationHeal, id).toBeUndefined();
+    }
+  });
+
+  it("承伤按比例入池:护盾挡掉的部分不计、池上限 = 最大生命 × capMaxHpPct", () => {
+    const p = new Player();
+    p.maxHp = 100; p.hp = 100; p.shield = 30; p.retaliationPct = 0.6;
+    expect(p.takeDamage(50)).toBe(20);            // 护盾吃掉 30
+    expect(p.retaliationPool).toBeCloseTo(12, 5); // 只按实际扣血入池
+    const q = new Player();
+    q.maxHp = 1000; q.hp = 1000; q.retaliationPct = 0.6;
+    q.takeDamage(900);
+    expect(q.retaliationPool, "540 被钳到 maxHp × 0.5").toBe(500);
+  });
+
+  it("抽取:最多给到上限、抽多少扣多少;半衰期到期流失;未开反哺时承伤不入池", () => {
+    const p = new Player();
+    p.maxHp = 100; p.hp = 50; p.retaliationPct = 0.6;
+    p.takeDamage(50);
+    expect(p.retaliationPool).toBeCloseTo(30, 5);
+    expect(p.drawRetaliation(10)).toBe(10);
+    expect(p.retaliationPool).toBeCloseTo(20, 5);
+    expect(p.drawRetaliation(999)).toBeCloseTo(20, 5);   // 池被抽干
+    expect(p.drawRetaliation(999)).toBe(0);
+    p.retaliationPool = 40;
+    p.tickRetaliation(2.5);                               // 一个半衰期
+    expect(p.retaliationPool).toBeCloseTo(20, 5);
+    const off = new Player();
+    off.maxHp = 100; off.hp = 100;
+    off.takeDamage(40);
+    expect(off.retaliationPool, "没有 retaliationHeal 源 → 不入池").toBe(0);
   });
 });

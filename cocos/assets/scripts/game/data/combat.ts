@@ -101,6 +101,29 @@ export const MINION_ATTACK_RANGE = 100;
 export const MINION_HIT_KNOCKBACK = 20;
 /** 亡灵契约:召唤物攻击时治疗主人,量为本次伤害的 30% */
 export const MINION_HEAL_ON_HIT_PCT = 0.3;
+
+/**
+ * 承伤反哺池的结构常量(「缠斗回复」身份项的机制参数;入池比例是身份数值,在 ./heroSkills 的 MU_RETALIATION_POOL_PCT)。
+ * 机理:玩家承受伤害时按比例转入池,召唤物命中时从池里抽取追加回血 —— **反哺总量恒 ≤ 承伤 × 比例,与召唤物数量无关**
+ * (否则上百只灵狼会把每次承伤放大成无限奶,是这一档最容易踩的坑)。
+ */
+export const RETALIATION_HEAL = {
+  /** 含义:池的半衰期,超时不用则流失。单位:秒。依据:精英尖峰是 1–2 秒的脉冲,2.5s 足够把一次尖峰摊到多次狼命中上;出处:CONTEXT 68 剖面 */
+  halfLifeSec: 2.5,
+  /** 含义:池上限占最大生命的比例(防单次超大尖峰囤出超额奶)。单位:比例。依据:0.5 = 一次尖峰最多换来半条血的缓冲;出处:同上 */
+  capMaxHpPct: 0.5,
+  /**
+   * 含义:每次召唤物命中最多抽取 = 该次基础回血 × 本值。单位:倍率。
+   * 取值依据:参数 sweep 表明卡点在**释放速率**而不是池子大小——1.5 时每次命中最多退 6 点、
+   *   约 90 次命中/s 也只有 ≈540/s,追不上精英章单秒 734–1005 的承伤尖峰(穆三种子全档不动);
+   *   提到 8(单次最多退 32)后 seed 123 的第 15 章从阵亡转为打满 20 章,而 seed 21 的第 10 章
+   *   仍不动(章首第 16 秒的第一波精英脉冲早于任何可退的存量)。
+   * 出处:docs/TODO-HERO-RHYTHM.md §1 穆条(杠杆 A)、CONTEXT 68。
+   * 注:反哺**总量**始终由入池比例(heroSkills.MU_RETALIATION_POOL_PCT)与池上限 capMaxHpPct 双重钳住,
+   *   本值只决定退得多快,不决定退得多。
+   */
+  perHitMult: 8,
+} as const;
 /** 无目标时跟随玩家:距离 > 60px 才移动(贴身环绕不打扰) */
 export const MINION_FOLLOW_LEASH = 60;
 

@@ -5,7 +5,7 @@ import type { Equipment } from "../data/equipmentGen";
 import type { PassiveArtifact } from "../data/artifacts";
 import { PASSIVE_SLOTS } from "../data/artifacts";
 import { RHYTHM_MAX_LEVEL, type RhythmId } from "../data/rhythm";
-import { PLAYER_BASE, xpToNext, LEVELUP_HEAL_PCT } from "../data/combat";
+import { PLAYER_BASE, xpToNext, LEVELUP_HEAL_PCT, RETALIATION_HEAL } from "../data/combat";
 
 // 策划规范表符号经本模块再导出(历史导入路径兼容;唯一出处在 ../data/combat)
 export { PLAYER_BASE, xpToNext } from "../data/combat";
@@ -43,6 +43,10 @@ export class Player {
   runSlotBonus = 0;
   /** 首次升级经验缩放(快速启动:-20%) */
   firstXpScale = 1;
+  /** 承伤反哺入池比例(0 = 未开;世界层每帧按 castList 里的 `retaliationHeal` 参数写入) */
+  retaliationPct = 0;
+  /** 承伤反哺池余量(承伤 × 比例转入,召唤物命中时抽取;半衰期与上限见 combat.RETALIATION_HEAL) */
+  retaliationPool = 0;
   /** 主题怪受击减速(凝滞之触):剩余时长与移速系数(1 = 无减速);语义与 Enemy 侧同款 */
   slowTimer = 0;
   slowFactor = 1;
@@ -160,8 +164,33 @@ export class Player {
         this.hp = 0;
         this.alive = false;
       }
+      // 承伤反哺:按比例入池(护盾挡掉的不计 —— 那是"没挨到打")
+      if (this.retaliationPct > 0) {
+        this.retaliationPool = Math.min(
+          this.retaliationPool + dmg * this.retaliationPct,
+          this.maxHp * RETALIATION_HEAL.capMaxHpPct,
+        );
+      }
     }
     return dmg;
+  }
+
+  /** 反哺池按半衰期流失(世界层每帧调用;没开反哺时直接短路) */
+  tickRetaliation(dt: number): void {
+    if (this.retaliationPool <= 0) return;
+    this.retaliationPool *= Math.pow(0.5, dt / RETALIATION_HEAL.halfLifeSec);
+    if (this.retaliationPool < 0.5) this.retaliationPool = 0;
+  }
+
+  /**
+   * 召唤物命中时从池里抽取追加回血:最多 `cap` ,抽多少扣多少。
+   * 反哺总量因此恒 ≤ 承伤 × 入池比例,与场上召唤物数量无关。
+   */
+  drawRetaliation(cap: number): number {
+    if (this.retaliationPool <= 0 || cap <= 0) return 0;
+    const got = Math.min(cap, this.retaliationPool);
+    this.retaliationPool -= got;
+    return got;
   }
 
   heal(v: number): void {

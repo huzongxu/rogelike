@@ -114,6 +114,16 @@ export function needsBaseline(def: Pick<HeroSkillDef, "kind">, rhythm: RhythmId)
  */
 export const LOKA_SLAY_DEVOURER = 1.5;
 
+/**
+ * 穆「缠斗回复」的承伤反哺入池比例。
+ * 含义:玩家每次承受伤害时,把其中的这一比例转入反哺池,由灵狼命中抽取追补回血(机制常量见 combat.RETALIATION_HEAL)。
+ * 单位:比例(0.6 = 挨 100 下能追回 60 点血,分多次命中发放)。
+ * 取值依据:逐秒剖面(CONTEXT 68)——第 10 章死局平均承伤 60/s 对回血 254/s 却仍猝死,因为承伤是单秒尖峰(734)而回血是平滑流(501);
+ *   0.6 让一次尖峰在 2.5s 半衰期内被狼群追回约六成,把断点接上,又不改变"不挨打就没有额外奶"的定位。
+ * 出处:docs/TODO-HERO-RHYTHM.md §1 穆条(杠杆 A)、docs/DESIGN-HERO-RHYTHM.md §2.3。
+ */
+export const MU_RETALIATION_POOL_PCT = 0.6;
+
 /** 技能所挂节律的发动参数 = 节律表(含等级)× 这一招的调率;下限与节律表同口径(连杀 ≥ 2、阈值 / 概率 ≤ 0.9) */
 export function skillTriggerParams(def: Pick<HeroSkillDef, "rhythmTune">, rhythm: RhythmId, level = 1): TriggerParams {
   const p = { ...rhythmTriggerParams(rhythm, level) };
@@ -359,7 +369,9 @@ const GENERIC_CORE: Record<Exclude<HeroId, "vera" | "kyle" | "bran" | "sia" | "n
   oden: { name: "镇魂安可", effect: "skeleton", params: { count: 2, damage: 13, duration: 14 } },
   // R6 数值 pass:狼伤 11 → 14 与幻影剧团(willow)同款对齐;3 种子 10/10/5 → 10/10/21,第 10 章召唤流之墙仍在(TODO 下一轮看 wolves 生存 / 章型)
   // healOnHit:狼每次命中回玩家血(伤害 × 30%)—— 节律表备注里的「缠斗回复」身份;3 种子对照下狼存活 / 狼数都过不了第 10 / 15 章精英开场的爆发,回血是唯一对症项
-  mu: { name: "雾缚噬灵", effect: "spirit_wolves", params: { count: 3, damage: 14, duration: 10, healOnHit: 1 } },
+  // 承伤反哺(杠杆 A):逐秒剖面 CONTEXT 68 显示穆死于"承伤是尖峰(第 10 章单秒 734)、回血是平滑流(同秒 501)"的错配,
+  //   而不是围数或命中率;把承伤按比例转入反哺池、由狼群命中抽取,让拉锯在尖峰拍也追得平。
+  mu: { name: "雾缚噬灵", effect: "spirit_wolves", params: { count: 3, damage: 14, duration: 10, healOnHit: 1, retaliationHeal: MU_RETALIATION_POOL_PCT } },
 };
 
 /** 未选英雄的核心:旧默认初始武器(全向 16 发飞刀) */

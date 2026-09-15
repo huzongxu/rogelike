@@ -106,7 +106,7 @@ export const QUALITY_MAX_LEVEL = tierFieldMap("maxLevel");
 | [`game/data/affixes.ts`](../cocos/assets/scripts/game/data/affixes.ts) | 词缀结构 | 触发器/效果/修饰器定义(品质定义已迁出) |
 | [`game/data/enemies.ts`](../cocos/assets/scripts/game/data/enemies.ts) | 敌人/Boss | 基础属性表(14 敌种)、波次血量/移速曲线、出生权重曲线、特化机制常量(隐身/召唤/分裂/反射/前护)、Boss 血量曲线与三阶段阈值、震击/召唤/狂暴参数 |
 | [`game/data/seasonMonsters.ts`](../cocos/assets/scripts/game/data/seasonMonsters.ts) | 赛季主题怪 | 120 行变体三维倍率(组内均值 = 1.0)、出场倾向 `SEASON_MONSTER_TENDENCY`(当季 45%/过季 15%/新手区门控)、机制参数表 `SEASON_MONSTER_MECHS`(接触减速/死亡灼烧池/死亡复活)、精英/首领技能参数表 `SEASON_MONSTER_SKILLS`(24 只 × 11 原语:伤害预算/蓄力/间隔/召唤节奏/冲锋/光环乘数) |
-| [`game/data/combat.ts`](../cocos/assets/scripts/game/data/combat.ts) | 玩家/战斗结算 | 玩家白值(半径/移速/生命/升级成长/装备槽)、连击窗口与狂暴、精英宝石与金币掉落、复活护盾/清场、随从视野/射程/击退/吸血、宝石磁吸/拾取半径 |
+| [`game/data/combat.ts`](../cocos/assets/scripts/game/data/combat.ts) | 玩家/战斗结算 | 玩家白值(半径/移速/生命/升级成长/装备槽)、连击窗口与狂暴、精英宝石与金币掉落、复活护盾/清场、随从视野/射程/击退/吸血、宝石磁吸/拾取半径、**承伤反哺池机制常量 `RETALIATION_HEAL`**(半衰期 / 池上限 / 每次命中的释放速率) |
 | [`game/data/field.ts`](../cocos/assets/scripts/game/data/field.ts) | 场地实体 | 投射物半径/连锁半径、召唤物默认值、金币掉落散布、障碍物与地形生成规则 |
 | [`game/data/envAffixes.ts`](../cocos/assets/scripts/game/data/envAffixes.ts) | 环境词缀 | 词缀定义表 + 数值参数(反伤比例/治疗光环/时间膨胀倍率/迷雾节奏/死亡连锁半径与击退)、每局抽取规则 |
 | [`game/data/shop.ts`](../cocos/assets/scripts/game/data/shop.ts) | 商店 | 卡价曲线(已购/章节递增)、刷新价曲线(基础/章节/指数底数)、合成补位费、销毁回收率、援助概率、套组卡池偏向 |

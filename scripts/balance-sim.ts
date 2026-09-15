@@ -21,6 +21,7 @@ import { updateProjectile, projectileHits, steerHoming, type Projectile, _resetP
 import { spawnCloud, spawnGem, type Cloud, type Minion, type Gem, _resetObjectUids, type Obstacle, rollChapterObstacles, pushOutOfPillar, isInPool, OBSTACLE } from "@game/entities/objects";
 import { WaveManager, type ArenaRect, type SpawnIntel } from "@game/systems/waves";
 import { CHAPTER_ARENA } from "@game/data/stages";
+import { MINION_HEAL_ON_HIT_PCT, RETALIATION_HEAL } from "@game/data/combat";
 import { chapterIntel } from "@game/data/intel";
 import { ELITE_INTEL_DELAY_SEC, chapterTypeInfo } from "@game/data/chapters";
 import type { Equipment } from "@game/data/equipmentGen";
@@ -101,6 +102,8 @@ export interface SimTraceRow {
   inCh: number;
   /** 场上敌数(模拟上限 220,低于游戏 LIMITS.enemies 340) */
   enemies: number;
+  /** 该秒末场上召唤物数(召唤流:穆灵狼 / 奥登骷髅 / 薇洛亡影 / 雷恩) */
+  minions: number;
   /** 其中精英数 */
   elites: number;
   /** 贴身 110px 内围数的本秒峰值(站桩档的躲藏触发阈值读的就是这个数) */
@@ -126,6 +129,9 @@ export interface SimTraceRow {
   projEaten: number;
   /** 本秒造成伤害 / 击杀数 */
   dmg: number;
+  /** 本秒实际承受伤害与实际回血(两者之差 = HP 净变化;穆的"挨打换回血"经济就看这一对) */
+  taken: number;
+  healed: number;
   kills: number;
   gold: number;
   level: number;
@@ -608,6 +614,14 @@ function runSimInner(opts: SimOptions): SimReport {
   let trSec = 0;            // 正在累计的秒序号
   let trLaunched = 0, trHits = 0, trSkillLaunched = 0, trSkillHits = 0, trHitsHidden = 0;
   let trRetHidden = 0, trRetClamp = 0, trEaten = 0;
+  let trTaken = 0, trHealed = 0;
+  if (opts.trace) {
+    // 只读包一层:累计本秒承伤 / 回血,原实现照旧调用(不改任何结算)
+    const takeDamageRaw = player.takeDamage.bind(player);
+    player.takeDamage = (raw: number) => { const got = takeDamageRaw(raw); trTaken += got; return got; };
+    const healRaw = player.heal.bind(player);
+    player.heal = (v: number) => { trHealed += v; healRaw(v); };
+  }
   let trNearMax = 0;
   let trDmgBase = 0, trKillsBase = 0, trSecBase = 0;
   const pushTraceRow = (sec: number) => {
@@ -619,11 +633,12 @@ function runSimInner(opts: SimOptions): SimReport {
     traceRows.push({
       t: sec, ch: waves.wave, hp: Math.round(player.hp), maxHp: Math.round(player.maxHp),
       inCh: sec - trSecBase,
-      enemies: enemies.length, elites, nearMax: trNearMax,
+      enemies: enemies.length, minions: minions.length, elites, nearMax: trNearMax,
       launched: trLaunched, hits: trHits, skillLaunched: trSkillLaunched, skillHits: trSkillHits,
       hitsHidden: trHitsHidden, hidden,
       dmgRetHidden: trRetHidden, dmgRetClamp: trRetClamp, projEaten: trEaten,
       dmg: Math.round(totalDmg - trDmgBase), kills: kills - trKillsBase,
+      taken: Math.round(trTaken), healed: Math.round(trHealed),
       gold, level: player.level, cards: player.equipment.length, slots: player.slots,
     });
     trDmgBase = totalDmg;
@@ -631,6 +646,7 @@ function runSimInner(opts: SimOptions): SimReport {
     trSecBase = sec;
     trLaunched = 0; trHits = 0; trSkillLaunched = 0; trSkillHits = 0; trHitsHidden = 0; trNearMax = 0;
     trRetHidden = 0; trRetClamp = 0; trEaten = 0;
+    trTaken = 0; trHealed = 0;
   };
 
   // 章间商店成长:每章(60s)买最多 3 卡(槽位内;强化已移除)
@@ -773,6 +789,16 @@ function runSimInner(opts: SimOptions): SimReport {
     }
     // 玩家移动:挂机不动 / 绕圈风筝(有限竞技场,框定区域)
     player.movedThisFrame = 0;
+    // 承伤反哺(与游戏 updatePlayer 同款):入池比例取施放源里最大的 retaliationHeal,池按半衰期流失
+    {
+      let retalPct = 0;
+      for (const eq of player.castList) {
+        const v = eq.effect.params.retaliationHeal ?? 0;
+        if (v > retalPct) retalPct = v;
+      }
+      player.retaliationPct = retalPct;
+      player.tickRetaliation(dt);
+    }
     if (opts.move === "kite") {
       // 与游戏挂机 AI 一致:按本命节律取挂机档位(docs/DESIGN-HERO-RHYTHM.md §2.3)——
       // kite 贴身才躲(110px)平时巡场;hold 允许被围、只在围数过多或血量过低时才躲;orbit 持续绕场
@@ -1001,7 +1027,10 @@ function runSimInner(opts: SimOptions): SimReport {
         if (d <= 100) {
           m.attackCd = m.attackInterval;
           damageEnemy(target, m.damage, m.source, 0, 20, m.pos);
-          if (m.healOnHit) player.heal(Math.round(m.damage * 0.3));
+          if (m.healOnHit) {
+            const base = Math.round(m.damage * MINION_HEAL_ON_HIT_PCT);
+            player.heal(base + Math.round(player.drawRetaliation(Math.round(base * RETALIATION_HEAL.perHitMult))));
+          }
         } else {
           const dx = target.pos.x - m.pos.x;
           const dy = target.pos.y - m.pos.y;
@@ -1383,7 +1412,10 @@ function measureBossDpsInner(
         if (md <= 100) {
           m.attackCd = m.attackInterval;
           damageEnemy(target, m.damage, m.source, 0, 20, m.pos);
-          if (m.healOnHit) player.heal(Math.round(m.damage * 0.3));
+          if (m.healOnHit) {
+            const base = Math.round(m.damage * MINION_HEAL_ON_HIT_PCT);
+            player.heal(base + Math.round(player.drawRetaliation(Math.round(base * RETALIATION_HEAL.perHitMult))));
+          }
         } else {
           const dx = target.pos.x - m.pos.x;
           const dy = target.pos.y - m.pos.y;

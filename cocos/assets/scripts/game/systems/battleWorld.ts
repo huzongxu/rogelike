@@ -81,6 +81,7 @@ import {
   MINION_ATTACK_RANGE,
   MINION_HIT_KNOCKBACK,
   MINION_HEAL_ON_HIT_PCT,
+  RETALIATION_HEAL,
   MINION_FOLLOW_LEASH,
   REVIVE_SHIELD_SECONDS,
   REVIVE_CLEAR_RADIUS,
@@ -886,6 +887,14 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       return;
     }
     p.movedThisFrame = 0;
+    // 承伤反哺(穆「缠斗回复」身份项):入池比例取场上施放源里最大的 retaliationHeal,池每帧按半衰期流失
+    let retalPct = 0;
+    for (const eq of p.castList) {
+      const v = eq.effect.params.retaliationHeal ?? 0;
+      if (v > retalPct) retalPct = v;
+    }
+    p.retaliationPct = retalPct;
+    p.tickRetaliation(dt);
     const before = vec2(p.pos.x, p.pos.y);
     const a = this.arena;
     // 纵向空气墙顶到上下坞边(按半径钳制:身体贴栏不越栏);坞高变化时 arena 随之变化
@@ -1326,7 +1335,11 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
         if (d <= MINION_ATTACK_RANGE) {
           m.attackCd = m.attackInterval;
           this.damageEnemy(target, m.damage, m.source, 0, MINION_HIT_KNOCKBACK, m.pos);
-          if (m.healOnHit) this.player.heal(Math.round(m.damage * MINION_HEAL_ON_HIT_PCT));
+          if (m.healOnHit) {
+            const base = Math.round(m.damage * MINION_HEAL_ON_HIT_PCT);
+            const drawn = this.player.drawRetaliation(Math.round(base * RETALIATION_HEAL.perHitMult));
+            this.player.heal(base + Math.round(drawn));
+          }
         } else {
           // 追击目标
           const dx = target.pos.x - m.pos.x;
