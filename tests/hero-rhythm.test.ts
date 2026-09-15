@@ -1490,6 +1490,7 @@ describe("核心技能节律调率(R6:按旧武器射速折算节拍)", () => {
     expect(bran.triggers[1].params.interval).toBe(CORE_BASELINE_INTERVAL);
     expect(makeSkillEquipment(coreSkillOf("loka")).triggers[1].params.interval).toBe(1.2);
     expect(makeSkillEquipment(coreSkillOf("vera")).triggers[1].params.interval).toBe(2.1);
+    expect(makeSkillEquipment(coreSkillOf("sia")).triggers[1].params.interval).toBe(2.4);
     expect(makeSkillEquipment(coreSkillOf("kyle")).triggers.map((t) => t.def.type)).toEqual(["pulse"]);
     expect(makeSkillEquipment(HERO_SKILLS.vera[2]).triggers.length).toBe(1);
     expect(makeSkillEquipment(HERO_SKILLS.bran[3]).triggers.length).toBe(1);

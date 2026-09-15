@@ -79,8 +79,9 @@ export const CORE_RHYTHM_TUNE: Partial<Record<HeroId, RhythmTune>> = {
   loka: { count: 0.6, baseline: 0.4 },
   // 熔核之心旧 1.4s → 移动 240 × 0.7 = 168 一发
   doran: { distance: 0.7 },
-  // 极北权杖旧 1.8s 常驻 → 低血阈值 0.5 × 1.4 = 0.7(七成血以下就开环)
-  sia: { threshold: 1.4 },
+  // 极北权杖旧 1.8s 常驻 → 低血阈值 0.5 × 1.4 = 0.7(七成血以下就开环);底拍 3.0 × 0.8 = 2.4s
+  // (R14 真机口径 3 种子对照:基线 11/18/15 Σ44,阈值 0.8 → Σ55,底拍 2.4s → 19/19/19 Σ57,伤 50 → Σ40;取底拍,阈值不再抬)
+  sia: { threshold: 1.4, baseline: 0.8 },
 };
 
 /**
