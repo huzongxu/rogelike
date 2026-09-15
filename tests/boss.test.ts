@@ -167,11 +167,12 @@ describe("Boss 血量曲线(关卡维度;修复终局 3 秒融化/全关同血)"
   it("标定守护:锚点 build 单目标 TTK 落在目标窗口(首关 ≈20s / 末关 ≈40s,均 < 60s 超时线)", () => {
     const baseHp = Math.round(ENEMY_DEFS.boss.hp * waveHpMult(20)); // 第 20 章基础血量(旧版全关统一值)
     // 锚点 1:第 1 关到达态(套组初始武器 + 套组偏向商店成长;装备系统重构后重标定)
-    const arrival = runSim({ build: "set_barrage", move: "kite", shopGrowth: true, set: "barrage", maxSeconds: 1200, seed: 21 });
+    // 真机口径(R13):章首清场 + 章型同开,与 battleWorld.nextChapter / chapterTypeInfo 同款
+    const arrival = runSim({ build: "set_barrage", move: "kite", shopGrowth: true, set: "barrage", chapterReset: true, chapterTypes: true, maxSeconds: 1200, seed: 21 });
     const dps1 = measureBossDps(arrival.finalEquipment, { seconds: 45, seed: 21, passives: arrival.finalPassives }).dps;
     const ttk1 = (baseHp * bossHpMult(1)) / dps1;
     // 锚点 2:终局态(神装 + 商店成长 + 征服者天赋;被动法宝是全局乘区,探针一起带上)
-    const endgame = runSim({ build: "godly", move: "kite", shopGrowth: true, boosted: true, maxSeconds: 1200, seed: 21 });
+    const endgame = runSim({ build: "godly", move: "kite", shopGrowth: true, boosted: true, chapterReset: true, chapterTypes: true, maxSeconds: 1200, seed: 21 });
     const dps7 = measureBossDps(endgame.finalEquipment, { boosted: true, seconds: 45, seed: 21, passives: endgame.finalPassives }).dps;
     const ttk7 = (baseHp * bossHpMult(7)) / dps7;
     console.log(`[Boss 曲线] 首关 ${Math.round(baseHp * bossHpMult(1))}hp TTK ${ttk1.toFixed(1)}s · 末关 ${Math.round(baseHp * bossHpMult(7))}hp TTK ${ttk7.toFixed(1)}s`);

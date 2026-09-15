@@ -1,6 +1,6 @@
 /**
  * 竞技场地形(策划案 V3 §6 / DESIGN-S4 §3)两层验证:
- *  1. 纯函数:生成规则(每章 1–2 个/环带/间距/豁免)与石柱推挤几何;
+ *  1. 纯函数:生成规则(每章恒 1 个(R13 真机口径回调)/环带/间距/豁免)与石柱推挤几何;
  *  2. 强度标定(§3.4):新手局 24 种子聚合均值回落 ≤1 章、风筝局存活回落 ≤30%、毒池上限不主导。
  */
 
@@ -13,6 +13,7 @@ import {
   _resetObjectUids,
   type Obstacle,
 } from "@game/entities/objects";
+import { OBSTACLE_PLACEMENT } from "@game/data/field";
 import { vec2 } from "@game/core/math";
 import { runSim } from "../scripts/balance-sim";
 
@@ -42,11 +43,11 @@ describe("rollChapterObstacles 生成规则(§3.1)", () => {
     expect(rollChapterObstacles(19, ARENA, seededRng(2), 20).length).toBeGreaterThan(0);
   });
 
-  it("每章 1–2 个,石柱半径 40 / 毒池半径 90(100 个种子全覆盖)", () => {
+  it("每章恒 1 个(R13:真机口径 64 种子回落 1.67 → 0.86),石柱半径 40 / 毒池半径 90(100 个种子全覆盖)", () => {
     for (let seed = 1; seed <= 100; seed++) {
       const obs = rollChapterObstacles(5, ARENA, seededRng(seed));
-      expect(obs.length, `seed ${seed}`).toBeGreaterThanOrEqual(1);
-      expect(obs.length, `seed ${seed}`).toBeLessThanOrEqual(2);
+      expect(obs.length, `seed ${seed}`).toBe(OBSTACLE_PLACEMENT.countMax);
+      expect(OBSTACLE_PLACEMENT.countMax).toBe(1);
       for (const ob of obs) {
         if (ob.kind === "pillar") expect(ob.radius).toBe(OBSTACLE.pillarRadius);
         else expect(ob.radius).toBe(OBSTACLE.poolRadius);
@@ -143,8 +144,9 @@ describe("地形标定(§3.4)", () => {
       const offW: number[] = [];
       const onW: number[] = [];
       for (let seed = 1; seed <= SEEDS; seed++) {
-        const off = runSim({ build: "set_barrage", move: "kite", shopGrowth: true, set: "barrage", maxSeconds: 1200, seed });
-        const on = runSim({ build: "set_barrage", move: "kite", shopGrowth: true, set: "barrage", maxSeconds: 1200, seed, obstacles: true });
+        // 真机口径(R13):章首清场 + 章型同开
+        const off = runSim({ build: "set_barrage", move: "kite", shopGrowth: true, set: "barrage", chapterReset: true, chapterTypes: true, maxSeconds: 1200, seed });
+        const on = runSim({ build: "set_barrage", move: "kite", shopGrowth: true, set: "barrage", chapterReset: true, chapterTypes: true, maxSeconds: 1200, seed, obstacles: true });
         offW.push(off.wave);
         onW.push(on.wave);
       }
@@ -192,7 +194,7 @@ describe("地形标定(§3.4)", () => {
       console.log(`[挂机/地形] seed ${seed}: 存活 ${r.seconds}s · 毒池伤害 ${r.poolDamage}`);
       expect(r.poolDamage / Math.max(1, r.seconds), `seed ${seed} 毒池承伤超上限(平均 ≤1 dps)`).toBeLessThanOrEqual(1);
     }
-    // 池非死代码:连续 60 章内必见至少一个毒池(每章 1–2 个、池占比 1/3)
+    // 池非死代码:连续 60 章内必见至少一个毒池(每章恒 1 个、池占比 1/3)
     const rng = seededRng(4);
     let sawPool = false;
     for (let ch = 2; ch <= 61 && !sawPool; ch++) {

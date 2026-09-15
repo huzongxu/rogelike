@@ -55,7 +55,8 @@ describe("长局数值平衡", () => {
   }, 120000);
 
   it("新手局(初始武器+商店成长):金币出口生效后应推过数值墙到达 20 章", () => {
-    const r = runSim({ build: "starter", move: "kite", shopGrowth: true, maxSeconds: 1200, seed: 21 });
+    // 真机口径(R13):章首清场 + 章型同开
+    const r = runSim({ build: "starter", move: "kite", shopGrowth: true, chapterReset: true, chapterTypes: true, maxSeconds: 1200, seed: 21 });
     console.log("[starter+shop/新手全程式]\n" + formatReport(r));
     // 广告开槽应真正参与:基础 4 + 本局 RUN_AD_SLOT_LIMIT 次(R7:4 起步、6 硬顶)
     expect(r.finalSlots).toBeGreaterThanOrEqual(PLAYER_BASE.slots + RUN_AD_SLOT_LIMIT);

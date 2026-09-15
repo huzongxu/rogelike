@@ -99,8 +99,9 @@ describe("章型模拟曲线(策划案 V3:新手区/台阶不回归)", () => {
 
   it("章型压力下针对构筑(荆棘套)应明显深于初始武器(克制导向有效)", () => {
     // 种子 123 = 确定性标定下克制信号最强的种子(初始武器止步第 6 章,荆棘套推满 20 章)
-    const starter = runSim({ build: "starter", move: "kite", shopGrowth: true, maxSeconds: 1200, seed: 123, chapterTypes: true });
-    const thorn = runSim({ build: "set_thorn", move: "kite", set: "thorn", shopGrowth: true, maxSeconds: 1200, seed: 123, chapterTypes: true });
+    // 真机口径(R13):章首清场 + 章型同开
+    const starter = runSim({ build: "starter", move: "kite", shopGrowth: true, maxSeconds: 1200, seed: 123, chapterTypes: true, chapterReset: true });
+    const thorn = runSim({ build: "set_thorn", move: "kite", set: "thorn", shopGrowth: true, maxSeconds: 1200, seed: 123, chapterTypes: true, chapterReset: true });
     console.log("[set_thorn+shop/章型全程式]\n" + formatReport(thorn));
     // 节律体系(docs/DESIGN-HERO-RHYTHM.md)下两条链路都能推到 19–21 章(法宝全挂本命节律 + 升级发独有技能),
     // 深度信号在 1200s 上饱和、只剩 ±1 章的种子噪声;本用例守的是"针对构筑不劣于初始武器(容 1 章噪声)",
