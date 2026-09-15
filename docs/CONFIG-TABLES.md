@@ -2,7 +2,7 @@
 
 > 配置文件:[`public/config/balance.json`](../public/config/balance.json) —— 改完保存,**浏览器刷新即生效**(开发服务器无需重启)。
 > 规则:删除任意段或字段 = 使用内置默认值;**数值越界/类型错误 = 该字段回退默认值**(不会钳到边界,不会崩游戏,控制台告警)。
-> 单测:`tests/balance-config.test.ts`;加载器:`src/platform/balance.ts`。微信小游戏端暂不支持外置配置,自动使用内置默认值。
+> 单测:`tests/balance-config.test.ts`;加载是双通道读同一份文件——Web 侧 `src/platform/balance.ts`,Cocos 侧 `cocos/assets/scripts/core/ConfigChannel.ts`(校验 + 非法回退默认)。微信小游戏端暂不支持外置配置,两端自动使用内置默认值。
 > 开发准则:策划数值一律遵循 [`DESIGN-VALUES-SPEC.md`](./DESIGN-VALUES-SPEC.md) —— 数值入数据层规范文件、每个数值带备注、单一事实源。
 
 ## energy · 体力
@@ -30,7 +30,7 @@
 | slotExpandGrowth | 2.3 | - | 槽位价格增长系数 |
 | slotCap | 6 | 个 | 场内主动法宝槽硬顶(基础 4 + 天赋 ≤2 + 本局广告 1,合计钳到此值;R7) |
 
-> 商店卡价公式:`basePrice × (1 + 已购数×0.12) × (1 + 章节×0.03)`;刷新价:`(8 + 章节×2) × 1.6^本章已刷次数`(曲线系数已入规范表 `src/data/shop.ts`,见 DESIGN-VALUES-SPEC.md 目录;未接 balance.json 热调)。
+> 商店卡价公式:`basePrice × (1 + 已购数×0.12) × (1 + 章节×0.03)`;刷新价:`(8 + 章节×2) × 1.6^本章已刷次数`(曲线系数已入规范表 `game/data/shop.ts`,见 DESIGN-VALUES-SPEC.md 目录;未接 balance.json 热调)。
 
 ## battle · 战斗框架
 
@@ -89,7 +89,7 @@
 
 ## menuLayout · 主菜单布局
 
-> 规范表:[`src/data/layoutMenu.ts`](../src/data/layoutMenu.ts)(唯一事实源,每个字段带四要素备注) / 纯几何:`src/ui/menuLayout.ts` `menuLayoutPure()` / 单测:`tests/menu-layout.test.ts`。
+> 规范表:[`game/data/layoutMenu.ts`](../cocos/assets/scripts/game/data/layoutMenu.ts)(唯一事实源,每个字段带四要素备注) / 纯几何:`game/ui/menuLayout.ts` `menuLayoutPure()` / 单测:`tests/menu-layout.test.ts`。
 > **不想手填数字?** 本段的数值可在浏览器里拖出来:`npm run dev:lab` → [`LAYOUT-LAB.md`](./LAYOUT-LAB.md)(dev-only 布局台,实时预览 + 导出本段 JSON)。
 > **单位:设计 px** —— 560 宽设计空间内的像素(宽恒 560,高按屏比在 996~1246 之间伸展);`*Src*`/`*Num`/`*Den` 类字段的单位是**源图像素**。
 > 分两层:`origin` 是决定区块位置/尺寸的**锚点**(改一个数 = 整块移动或缩放);`deco` 是区块**内部**的装饰偏移与贴图尺寸档。
@@ -146,7 +146,7 @@
 
 ## menuSkin · 主菜单皮肤
 
-> 规范表:[`src/data/menuSkin.ts`](../src/data/menuSkin.ts)(唯一事实源,带四要素备注)/ 几何消费:`src/ui/menuLayout.ts` `menuLayoutPure()`(insets 加性增量)/ 绘制消费:`src/game.ts` `drawMenu()`(换图/显隐)/ 单测:`tests/menu-skin.test.ts` + `tests/lab-skin.test.ts`。
+> 规范表:[`game/data/menuSkin.ts`](../cocos/assets/scripts/game/data/menuSkin.ts)(唯一事实源,带四要素备注)/ 几何消费:`game/ui/menuLayout.ts` `menuLayoutPure()`(insets 加性增量)/ 绘制消费:Web 侧 `src/game.ts` `drawMenu()`、Cocos 侧 `cocos/assets/scripts/menu/MenuLayoutView.ts`(换图/显隐)/ 单测:`tests/menu-skin.test.ts` + `tests/lab-skin.test.ts`。
 > **不想手填数字?** `npm run dev:lab` 的「结构树 · 皮肤」面板直接点选操作:图层显隐、换图、四边间距,实时预览并导出本段 JSON(见 [`LAYOUT-LAB.md`](./LAYOUT-LAB.md))。
 > **整段缺省或 `{}` = 零画面变化**(本项目铁律);非法键/越界值 → 回退默认并告警,口径同 menuLayout。insets 每边 −100~100(取整)。
 > 拓扑固定:7 面板 13 层(标题横幅/货币条/筹码/分区标题条/关卡行/套组卡/说明板,除货币条无文字层外各图+文两层)。本段只能操作既有图层,不新增。
@@ -184,12 +184,12 @@
 
 ## 暂未纳入(仍是代码常量,后续按需迁移)
 
-> 品质体系数值已按开发准则抽离至规范表 [`src/data/quality.ts`](../src/data/quality.ts)(全项目品质数值唯一出处),不在本清单;其中基础价/扭蛋概率/重复补偿等字段已有本文件的运行期覆盖项,规范表中的值为内置默认。
+> 品质体系数值已按开发准则抽离至规范表 [`game/data/quality.ts`](../cocos/assets/scripts/game/data/quality.ts)(全项目品质数值唯一出处),不在本清单;其中基础价/扭蛋概率/重复补偿等字段已有本文件的运行期覆盖项,规范表中的值为内置默认。
 >
-> 战斗侧数值(敌人成长、Boss 标定、玩家白值、场地实体、环境词缀参数)已抽离至规范表 `src/data/enemies.ts` / `combat.ts` / `field.ts` / `envAffixes.ts`,见 [DESIGN-VALUES-SPEC.md](./DESIGN-VALUES-SPEC.md) 目录;这些表目前是纯常量表,**未接本文件的 balance.json 热调覆盖**,改数走代码流程。
+> 战斗侧数值(敌人成长、Boss 标定、玩家白值、场地实体、环境词缀参数)已抽离至规范表 `game/data/enemies.ts` / `combat.ts` / `field.ts` / `envAffixes.ts`,见 [DESIGN-VALUES-SPEC.md](./DESIGN-VALUES-SPEC.md) 目录;这些表目前是纯常量表,**未接本文件的 balance.json 热调覆盖**,改数走代码流程。
 
 - 词缀/天赋/套组/委托区域等结构型数据:数值已按准则抽离入表(`SET_BONUSES`/`COMBO_VALUES`/`TALENT_VALUES`/`COMMISSION_DECAY`/`EQUIPMENT_LEVEL_GROWTH`,见 [DESIGN-VALUES-SPEC.md](./DESIGN-VALUES-SPEC.md) 目录),仅剩纯结构性定义(接口形状),无数值缺口
-- 英雄页几何与滚动手感:常量已入表但**未接 balance.json 热调**——滚动容器口径(点击判定阈值/惯性初速/减速度/边界橡皮筋/滑块宽)在 `src/ui/scrollList.ts`,页面分区与行高(列表带、详情区、立绘盒、确认按钮)在 `src/ui/heroSelectLayout.ts`,改数走"改表 → `npm test`"代码流程(单测:`tests/scroll-list.test.ts` + `tests/hero-select-layout.test.ts`)
+- 英雄页几何与滚动手感:常量已入表但**未接 balance.json 热调**——滚动容器口径(点击判定阈值/惯性初速/减速度/边界橡皮筋/滑块宽)在 `game/ui/scrollList.ts`,页面分区与行高(列表带、详情区、立绘盒、确认按钮)在 `game/ui/heroSelectLayout.ts`,改数走"改表 → `npm test`"代码流程(单测:`tests/scroll-list.test.ts` + `tests/hero-select-layout.test.ts`)
 
 ## 策划操作指引
 

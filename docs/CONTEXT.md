@@ -276,6 +276,13 @@
     - **文档**:`docs/TODO-HERO-RHYTHM.md` §1 四项删行、后续小节序号前移,状态行改指本条,并补记一条本轮发现的注释滞后(`game/entities/objects.ts` 里 `rollChapterObstacles` 仍写「每章 2–4 个」而表值是 1)。**产品代码本轮零改动**(只重出构建产物 + 改文档),`.probe/` 全目录被 gitignore,探针与截图不入提交。
 
 
+65. **文档漂移一次性对齐(2026-09-15,用户「先对齐文档漂移」)**:通读 `docs/` 22 份后把「文档说的」与「代码做的」拉平,**零产品代码改动**。取真值的方式 = 直接量码/量盘:`ASSET_MANIFEST` 154 键(`public/assets/` 152 张、4 枚在册待出图 `slot_skill`/`bar_capsule`/`joy_base`/`joy_knob`、2 枚残留未登记)、`cocos/assets/resources/textures/` 289 枚、`SCREEN_KEYS` 16、`tests/*.test.ts` 69 个文件 / 3973 例(本轮全套复跑绿)、`PLAYER_BASE.slots` 4 与 `SHOP_SLOT_CAP` 6、`BOSS_HP_CURVE.base` 5.0、`LIMITS` 敌人 340/投射物 420/毒云 44/召唤 24/宝石 420、`MENU_LAYOUT_DEFAULTS` origin 37 + deco 91 = 128、套组 12 id、效果 14、天赋 30 id、`HUD_PRELOAD_KEYS` 27 枚、`echoAdGain` 100、Cocos 侧无 F 键通路(只有 WASD/方向键 + 触屏)。
+    - **README.md**:命令表补 Cocos 六个脚本;新增「两棵树并存」段(现役 `cocos/assets/scripts/` vs 冻结基准 `src/`,`@game/*` 单一事实源);清单/主题/皮肤/加载器路径改指共享层与 `core/ConfigChannel.ts`(配置是双通道读同一份 `balance.json`);主菜单入口带 7 枚、套组条改写为「12 套 = 12 英雄包装 + 件数联动由共鸣数接管」、广告点位 8 → 9(主菜单回响筹码)并写唯一入口纪律、地形补「恒 1 个」、槽位口径 4/6、融合入口在商店改回主菜单、架构块重画为两棵树 + `tests` 69、调试快捷键节标注属 Web 基准侧、迭代路线四条按现状收口(收藏强化已落地 / 主题怪剩 90 只美术 / 包体已闭合 / 微信剩 wechatgame 与广告位 ID)。
+    - **规范与教程**:`DESIGN-VALUES-SPEC` 加「路径约定」并把 18 处 `../src/data/*.ts` 链接改到共享层(逐条验过 0 断链)、条款 1 的禁内联范围覆盖两棵树、自检清单命名改 `game/data/<主题>.ts`;`CONFIG-TABLES` 加载器改双通道、`menuSkin` 绘制消费补 Cocos 侧 `MenuLayoutView.ts`、3 处表链接改路径;`ASSET-PIPELINE` 目录表加 Cocos 同步行与像素产线脚本、命名块补齐(12 套 / `icon_fx_*` / `player_<hero>` / 14 kind + 120 变体 / `anim_*` 图集)、规格段改成 560×996 与实测包体、回退表更新、9-slice 那条从"未来工作"改为现状(`drawNineUniform` + `NINE_SLICE_KEYS` + `export: 2`);`UI-DESIGN` §3b 落地路径;`LAYOUT-LAB` 字段数 125 → 128(三处)与 9 枚底板键补 `menu_` 前缀;`ART-REQUIREMENTS` 两处工单路径与「150 键 0 缺图」→ 154/152。
+    - **状态行与滞后数值**:`DESIGN-V2`「未开发」、`DESIGN-V3` 与 `DESIGN-SEASON-SETS`「待评审」改为已落地并指向验收条目;`DESIGN-V3` Boss `base 2.0` 补重锚链 2.0→3.5→4.0→5.0 与当前 TTK、§4.1 日历门控改为进度制、§8 #5 槽位口径与测试基线更新;`SEASON-SETS` 加「件数联动 → 共鸣数」后续变更行;`SEASON-PACING-AUDIT` §4/§5 的「赛季主题怪未开工」改为「批 1-4 已实装,剩 90 只贴图与画面可读性」;`DESIGN-MONSTERS-SEASONS` 美术行改 30/120 已入库;`DESIGN-S4` 与 `DESIGN-SEASON-SETS` 各加路径约定行;`PORTING-WECHAT` 包体 76 kB → 306 kB、实体上限按 `LIMITS` 重写、验证清单新增「Cocos `wechatgame` 未接 + 当前 minigame 入口是 Web 基准树」一条;`ADS-DESIGN` 点位表补 ⑨ 并写明它**没有日限**(账目缺口按现状记)。
+    - **保留不动**:`CONTEXT.md` 条目 1–64 与 `COCOS-MIGRATION` 各 Phase 落地记里的当时数字是逐轮日志,按"当时事实"读;`COCOS-MIGRATION` Phase 6 包体节改为在其后追加「复量(2026-09-15)」引用块说明枚数已增长、并声明该节是历史快照。扫尾 grep 确认 `docs/` 里已无「待评审 / 未开发 / 未开工 / 129 键 / 150 键 / SHOP_SLOT_CAP=8 / base: 2.0 / 76 kB / 投射物 260 / 125 个字段」的活引用(命中项均为历史日志或已加快照标注)。
+
 ## 环境注意
+
 - IAB(应用内浏览器)的键盘/点击**间歇性失效**(cua 输入退化):浏览器验证靠 `?bot=1` 自动风筝 + 按键重试 + 单测;evaluate 有时被只读守卫拦截。
 - 存档当前已重置为全新。

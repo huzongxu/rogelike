@@ -619,6 +619,8 @@ Cocos 侧的排版数值就是这三条通道：`balance.json` 的 `menuLayout` 
 
 清单与磁盘差 2 枚：`resources/textures/` 有 152 枚 PNG，`ASSET_MANIFEST` 只有 150 键，多出的 `gen-badge-gear-lv.png`（1,646 B）与 `gen-entry-gearup.png`（3,041 B）是出图管线残留 —— `public/assets/` 里同样有这两枚（字节相同），`src/game.ts` 与 Cocos 侧都零引用，两端运行时都不会加载，但都进了包。合计 4,687 B，量级可忽略；记在此处只为让「152 枚」与「128 枚流式」两个数各自有据，不是同一集合的两种数法。冒烟脚本的「产物贴图枚数 == 源图枚数」两边都是 152，抓不到这类残留。
 
+> **复量（2026-09-15）**：上面三段的枚数是 09-09 像素翻新复测时的快照，此后随 S1 怪物件与 `anim_*` 图集入库继续增长。现值：`ASSET_MANIFEST` **154 键**、`public/assets/` **152 张**（4 枚在册待出图 `slot_skill` / `bar_capsule` / `joy_base` / `joy_knob`，上述 2 枚残留仍未登记），`cocos/assets/resources/textures/` **289 枚 PNG**（含 Cocos 独占像素档键）。首屏分档口径不变、档位数字已调：`HUD_PRELOAD_KEYS` 由 22 枚增至 **27 枚**（`GameShell.ts:150`），其余走 `streamFrameKeys` 流式。**本节数字是历史快照**——要引用包体 / 首屏耗时，按当期 `npm run smoke:cocos` 与探针实测重取。
+
 给 R2 决策的读法（只摆事实）：首屏关键路径 ≈ 4.78 MB，只占整包 10.4%；整包的 90.9% 是 PNG，其中 97.4% 的 PNG 字节（40.5/41.5 MB）在 ready 后才需要。"进本地包的必须集"与"可分组/可远程的候选集"的天然分界已经存在于加载时序里（22 枚预载 vs 128 枚流式）。
 
 ### 2026-09-09 复测（§13 全量像素翻新落地后）

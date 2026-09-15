@@ -1,6 +1,6 @@
 # 移植到微信小游戏
 
-策划案目标平台为微信小游戏(竖屏、首包 4MB 内、即点即玩)。**微信工程已就绪,可直接导入微信开发者工具运行**。
+策划案目标平台为微信小游戏(竖屏、首包 4MB 内、即点即玩)。**微信工程已就绪,可直接导入微信开发者工具运行**;当前产物出自 Web 基准树(见文末验证清单那条)。
 
 ## 快速开始
 
@@ -18,7 +18,7 @@ minigame/
 ├── game.js               # 微信入口:环境 shim(window/document/performance) + require 游戏包
 ├── game.json             # 竖屏配置
 ├── project.config.json   # 开发者工具配置(compileType: game)
-└── js/game.bundle.cjs    # 构建产物(npm run build:minigame 生成,~76 kB / gzip 24 kB)
+└── js/game.bundle.cjs    # 构建产物(npm run build:minigame 生成,306 kB / gzip ≈98 kB)
 ```
 
 ## 平台隔离设计
@@ -38,10 +38,11 @@ npm run smoke:wechat     # 冒烟:加载 → 跑 60 帧 → 死亡结算写 stor
 ## 验证清单
 
 - [x] `game.json` 竖屏
-- [x] 首包 ~76 kB(远低于 4MB)
+- [x] 首包 306 kB(`minigame/js/game.bundle.cjs`,gzip ≈98 kB;远低于 4MB)
 - [x] 冒烟测试通过(Node + wx 桩):游戏循环/敌人生成/环境词缀/存档持久化
 - [ ] 真机触摸摇杆与 UI 点击(需微信开发者工具真机预览)
-- [ ] 低端机性能(实体上限已内置:敌人 340/投射物 260/骷髅 24)
+- [ ] 低端机性能(实体上限已内置:`LIMITS` = 敌人 340 / 投射物 420 / 毒云 44 / 召唤物 24 / 宝石 420)
+- [ ] Cocos 侧 `wechatgame` 平台构建(当前 `npm run build:minigame` 走 `vite.config.minigame.ts` 的 `entry: "src/main.ts"`,打出的是 Web 基准树;Cocos 工程出微信包属 `docs/COCOS-MIGRATION.md` Phase 6 未完项)
 
 ## 注意事项
 

@@ -103,7 +103,7 @@
 
 ## 11. 新增界面与资产待办(2026-08-29 登记;赛季套组 S2-S4 + 装备系统重构)
 
-> 以下全部**已在渲染层取图或走代码绘制**,功能完整、视觉待补。命名与 `src/data/assets.ts` 清单键对齐,图到位后加键即生效(`icon_fx_${type}` / `icon_set_${id}` 动态取图,缺图自动回退代码绘制,零代码改动)。
+> 以下全部**已在渲染层取图或走代码绘制**,功能完整、视觉待补。命名与 `cocos/assets/scripts/game/data/assets.ts` 清单键对齐,图到位后加键即生效(`icon_fx_${type}` / `icon_set_${id}` 动态取图,缺图自动回退代码绘制,零代码改动)。
 >
 > **进度(2026-08-30)**:§11.1 / §11.2 全部条目 + §11.3 的 `panel_gearup` / `card_soldout` / `badge_season` 三项已通过 Holopix 站点管线交付(批量生成→一键抠图→界面元素拆分→雪碧图拆分,共 82 算力),12 件独立透明 PNG 已进 `public/assets` 并接线。`entry_gearup` / `badge_gear_lv` 尚未出图,攒入下一次统一生成批次。
 >
@@ -158,14 +158,14 @@
 ## 12. 赛季怪物 ×120(美术直拍清单;命名定稿见 docs/DESIGN-MONSTERS-SEASONS.md)
 
 > 出图规格:256px 单帧、纯白背景源图(走 import-artwork.mjs 抠图管线)。统一暗黑 16-bit 像素风,同季共享主题色。标注 ◆ = 图鉴级细节(多花 20% 工时)。
-> **文件命名契约**:基线怪沿用 `enemy_<kind>.png`(与 `ENEMY_DEFS` 键对齐);**赛季主题怪用 `monster_<id>.png`**,`<id>` = `src/data/seasonMonsters.ts` 的行 id(渲染链已按此取图,缺图自动回退基线外观,所以出图前后都不需要改代码逻辑)。S1 的 30 个键已定稿:
+> **文件命名契约**:基线怪沿用 `enemy_<kind>.png`(与 `ENEMY_DEFS` 键对齐);**赛季主题怪用 `monster_<id>.png`**,`<id>` = `cocos/assets/scripts/game/data/seasonMonsters.ts` 的行 id(渲染链已按此取图,缺图自动回退基线外观,所以出图前后都不需要改代码逻辑)。S1 的 30 个键已定稿:
 > `monster_echo_walker` `monster_resonance_body` `monster_hollow_hum` `monster_whisper_rot` `monster_tremor_body` `monster_echo_shell` `monster_after_tone` `monster_first_awake`(基础 ×8)
 > `monster_vibrant_cadaver` `monster_afterimage_echo` `monster_harmonics_ghost` `monster_rapid_hum` `monster_echo_lurker`(迅捷 ×5)
 > `monster_resonant_carapace` `monster_reverb_rockmail` `monster_huming_shieldwalker` `monster_echo_giantshell` `monster_standing_wave_hulk`(重甲 ×5)
 > `monster_splitting_tone` `monster_mute_hider` `monster_wound_reflector` `monster_sound_devourer` `monster_hum_wallguard` `monster_echo_seed`(特性 ×6)
 > `monster_tone_leader` `monster_abyss_herald` `monster_myriad_bone_marshal` `monster_first_echo`(精英 ×4)
 > `monster_primeval_echo` `monster_empty_valley_lord`(首领 ×2)
-> 到位一批登记一批:PNG 放进 `public/assets/` 后再往 `src/data/assets.ts` 的 `ASSET_MANIFEST` 加同名键(当前清单 150 键 0 缺图,不提前登记空键)。
+> 到位一批登记一批:PNG 放进 `public/assets/` 后再往 `cocos/assets/scripts/game/data/assets.ts` 的 `ASSET_MANIFEST` 加同名键(当前清单 154 键、`public/assets/` 152 张 —— 4 枚在册待出图,不提前登记空键)。
 > **S1 现状(2026-09-12)**:30 个 `monster_*` 键已在 Cocos 侧全部落图 —— 由派生批 `artwork/pixel-kit-s1.json` + `scripts/pixel-variants.mjs` 从同行为基线件做 OKLCH 色相重映射 + 回响主题贴花(声囊 / 波纹弧 / 骨珠 / 残影 / 裂纹 / 镜甲 / 巨口 / 音壁 / 种荚 / 尸群)得到,只登记 `PIXEL_ART_KEYS.S1_MONSTER_KEYS`(不进 `ASSET_MANIFEST`,Web 侧不受影响)。其中特性 6 / 精英 4 / 首领 2 的独立立绘走 AI 重绘同键覆盖,prompt 包与规格见 `docs/ART-S1-PROMPTS.md` / `artwork/pixel-kit-s1-ai.json`。同批还出了 S1 三英雄的战斗件 `player_vera/kyle/bran`(战斗里按 `save.selectedHero` 取图,缺图回退 `player`)。
 
 ### S1 回响苏醒(主题色 #7a5cff 紫回响;尸潮感 = 残破 + 发声器官)
