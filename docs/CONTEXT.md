@@ -261,7 +261,7 @@
     - 引擎 `rhythmProgress(eq, ctx)` 只读查询:首条触发器所挂节律攒到几成 —— 连杀 = 已攒 / 所需、移动 = 已走 / 所需、低血 = 已失血 / 到阈值需失血、受击 / 击杀 = 内置冷却走完即 1(技能恒 1)、周期 null;公式与 update / onHurt 同一套。世界层 `rhythmProgress(eq)` 转发(ctx 不外泄),`BattleSim.rhythmProgress` 暴露给 HUD。
     - HUD:每张卡在 CD 条(y −16,3px)上方 4px 再叠一条 2px 节律进度条(`cardRp`),技能排用 `skillEdge` 节律色、法宝排用品质色;周期节律不画(CD 条已表达底拍 / 周期)。布局不动。
     - 精英入场横幅:`battleWorld.advance` 在精英章 `chapterTimer` 越过 `ELITE_INTEL_DELAY_SEC` 那一拍,复用 `discoveryBanner` 报「精英入场 · 第 N 章」(`chapters.ELITE_ENTER_BANNER`,停 `DISCOVERY.bannerSec`),不时停不入图鉴;`eliteBannerShown` 每章一次、`nextChapter` 复位。
-    - 测试:`hero-rhythm` 新增引擎五种节律进度一例、HudView 源码守卫一例、精英入场横幅真跑一例(横幅用例的步长要 < 1/60,首版 0.05 没跨过阈值)。真机:浏览器面板本轮仍隐藏、引擎不起帧,HUD 两条细条与横幅**未截图**;构建产物含「精英入场」文案。**验收**:全套 69 套里 68 套全绿,唯一失败即上述 5% 掷点用例,钉死后单套复跑 3 次全过(全套复跑仍在后台,结果补记);`typecheck:cocos` 0 条,`build:cocos` 通过。
+    - 测试:`hero-rhythm` 新增引擎五种节律进度一例、HudView 源码守卫一例、精英入场横幅真跑一例(横幅用例的步长要 < 1/60,首版 0.05 没跨过阈值)。真机:浏览器面板本轮仍隐藏、引擎不起帧,HUD 两条细条与横幅**未截图**;构建产物含「精英入场」文案。**验收**:全套 69 套里 68 套全绿,唯一失败即上述 5% 掷点用例,钉死后单套复跑 3 次全过,全套复跑 **69 套 / 3973 条全绿**;`typecheck:cocos` 0 条,`build:cocos` 通过。
 
 ## 环境注意
 - IAB(应用内浏览器)的键盘/点击**间歇性失效**(cua 输入退化):浏览器验证靠 `?bot=1` 自动风筝 + 按键重试 + 单测;evaluate 有时被只读守卫拦截。
