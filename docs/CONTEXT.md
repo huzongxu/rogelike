@@ -265,6 +265,17 @@
 
 63. **待办清单独立成文**:`docs/TODO-HERO-RHYTHM.md`(2026-09-15)—— 收 53–62 里所有没做完的事:待真机验证四项、数值层(洛卡第 6 章剖面 / 穆精英墙 / 标定口径统一 / Boss 末关裕量)、内容层(S2–S4 初值 / S5+ 赛季表 / 六英雄专属表 / 共鸣图鉴界面)、工具基建、已知噪声。此后新增待办记那里,做完删行。
 
+64. **R15 攒下的四项真机验证清完(2026-09-15,用户「清 TODO 第 1 节那四项真机验证」)**
+    - 先把构建包追平源码:`cocos/build/web-desktop` 停在 09-12(R10–R15 未进包),`npm run build:cocos` 重出(18s、`assets/main/index.js` 718,012 B;产物里 grep 到「精英入场」文案与 `castDockLayout` / `rhythmProgress` / `skillEdge` 三个新符号)。
+    - 探针 `.probe/p-r16-verify.js`(模式走 URL `?m=terrain|sia|rp|elite&h=<英雄>&f=<目标>`)+ 批次脚本 `p-r16.sh` / `p-r17.sh` / `p-r18.sh` / `p-r19.sh`:每条一套独立 serve 端口 / 调试端口 / user-data-dir / URL 标记,无头 Edge + CDP 驱动构建包真跑,`cc.game.step(1/60)` 一帧含渲染。
+    - **① 地形每章恒 1 个**:3 局 × 20 章逐章读 `sim.obstacles.length` → 第 1 章 0、第 2–19 章恒 1、第 20 章(`bossChapter`)0;54 次落子里石柱 35 / 毒池 19(64.8%,与 `pillarChance` 2/3 同向)。
+    - **② 希雅核心底拍 2.4s**:选希雅开局 → 「极北权杖」`triggers[0]` = hurt(`hpThreshold` 0.7 = 0.5 × 1.4)、`triggers[1]` = pulse `params.interval` 2.4;运行时 `engine.pulseLeft(sk.id).interval` 读数 2.4,连拍 5 次的重计读数 2.4 / 2.417(一帧采样余量)。
+    - **③ HUD 节律进度条**:四张静帧各自冻在目标读数上 —— 洛卡连杀 0.3333 与 0.6667、多兰移动 0.5086(`moveAccum` 98 / 需 168 = 240 × 0.7)、希雅低血阶梯(血量 85% / 75% / 70%)→ 0.5 / 0.8333 / 1。像素侧(截图与设计 px 1:1):技能排 2px 条落在 y936–937、亮段止于 x68(1/3)与 x120(2/3),预测 `13 + (168−6)·frac` = 66.7 / 120;法宝排 2px 条落在 y981、止于 x45(frac 0.2 预测 45.4);CD 条 3px `#5ac8fa` 落在 y939–941,正卡在进度条下方 3px(局部 −12 / −16 的口径)。周期节律不画这条由单测守着(`rhythmProgress` 对 pulse 返 null),本轮静帧里没有周期节律卡可拍。
+    - **④ 精英入场横幅**:第 5 章 `chapterTimer` 6.00s 那一拍 `discoveryBanner` = 「精英入场 · 第 5 章」(sighting 时 `ttl` 1.98),1.99s 后熄灭(`DISCOVERY.bannerSec` 2);敌情 `spawnIntel().prefer` 在 5.4–5.9s 仍是 chaser、6.6–7.2s 翻成 elite,截图 crop 直接读到横幅文字。横幅那一拍场上精英数仍是 0 —— 它报的是门控翻面,精英怪在之后的刷怪拍里才进场。
+    - **探针方法学四条**:a) 收升级 / 首章弹层必须走宿主热区出口 `GameShell.onLevelUpAction({ kind: "pick", index })` —— 直接 `levelUpModel.pick()` 不扣 `levelUpPending`,宿主下一帧按余量自愈重开,同位闸门把世界冻死(实测 `chapterTimer` 卡在 4.93s、`modalClears` 519 次空转),且不 `syncLevelUp()` → 弹层节点还挂在画面上,遮罩把底坞压暗、条带量不到;b) 抓静帧要同时停 `sim.update` 与 `GameShell.update`(只停前者,探针返回到 CDP 抓图之间会再弹一层);c) 目标进度比对要用 `rhythmProgress` 四舍五入后的读数(拿 `1/3` 原值比 0.3333 永远差在 1e-6 以下,循环会一路跑到上限);d) `?fw=560&fh=996` 档下 `frame` / `design` / `winSize` / canvas rect 四者同为 560×996、dpr 1,截图 px == 设计 px(纵向 `imageY = 996 − worldY`),不必再推缩放。
+    - **文档**:`docs/TODO-HERO-RHYTHM.md` §1 四项删行、后续小节序号前移,状态行改指本条,并补记一条本轮发现的注释滞后(`game/entities/objects.ts` 里 `rollChapterObstacles` 仍写「每章 2–4 个」而表值是 1)。**产品代码本轮零改动**(只重出构建产物 + 改文档),`.probe/` 全目录被 gitignore,探针与截图不入提交。
+
+
 ## 环境注意
 - IAB(应用内浏览器)的键盘/点击**间歇性失效**(cua 输入退化):浏览器验证靠 `?bot=1` 自动风筝 + 按键重试 + 单测;evaluate 有时被只读守卫拦截。
 - 存档当前已重置为全新。
