@@ -96,7 +96,8 @@ import {
   type RhythmId,
 } from "@game/data/rhythm";
 import { SKILL_AFFINITY } from "@game/data/reroll";
-import { BESPOKE_HEROES, CORE_BASELINE_INTERVAL, CORE_RHYTHM_TUNE, HERO_SKILLS, RESET_GUARANTEE_ROUNDS, coreSkillOf, needsBaseline, skillTriggerParams } from "@game/data/heroSkills";
+import { BESPOKE_HEROES, CORE_BASELINE_INTERVAL, CORE_RHYTHM_TUNE, HERO_SKILLS, LOKA_SLAY_DEVOURER, RESET_GUARANTEE_ROUNDS, coreSkillOf, needsBaseline, skillTriggerParams } from "@game/data/heroSkills";
+import { spawnProjectile } from "@game/entities/projectile";
 import { allHeroes, type HeroId } from "@game/data/heroes";
 import { QUALITY_HASTE_CAP, qualityDef } from "@game/data/quality";
 import { vec2 } from "@game/core/math";
@@ -1637,5 +1638,61 @@ describe("S2 专属表与英雄页四行", () => {
     expect(unlocked[3].label).toBe("移动节律(第二本命)");
     expect(unlocked[3].desc).toContain("周期 / 连杀 / 移动");
     expect(heroRhythmOptions("kyle")).toEqual(["pulse", "combo", "move"]);
+  });
+});
+
+describe("白啸霜刃对吞噬者特効(R16;剖面依据 CONTEXT 66)", () => {
+  /** 走真实 updateProjectiles:洛卡开局(主动槽只有核心技能),清场后手动放一只吞噬者与一枚弹 */
+  function lokaWorldWithDevourer() {
+    const save = emptySave();
+    save.energy = 99;
+    save.selectedHero = "loka";
+    save.selectedSet = "blizzard";
+    const s = new BattleSim({ save, input: { isMoving: false, moveDir: vec2(0, 0) }, worldH: 996, persist: () => {}, callbacks: { onDamage: () => {}, onDeath: () => {}, onVictory: () => {}, onChapterShop: () => {} } });
+    s.startStage(1);
+    s.world.enemies.length = 0;
+    s.world.projectiles.length = 0;
+    const dev = spawnEnemy("devourer", vec2(s.player.pos.x + 40, s.player.pos.y), 1);
+    dev.hp = 500;
+    dev.maxHp = 1000;
+    s.world.enemies.push(dev);
+    return { s, dev };
+  }
+  const stepProjectiles = (s: { world: unknown }, dt: number) =>
+    (s.world as unknown as { updateProjectiles(dt: number): void }).updateProjectiles(dt);
+
+  it("洛卡核心参数带倍率,且只有它有(其余 11 英雄不受影响)", () => {
+    const core = makeSkillEquipment(coreSkillOf("loka"));
+    expect(core.effect.def.type).toBe("knife");
+    expect(core.effect.params.slayDevourer).toBe(LOKA_SLAY_DEVOURER);
+    for (const id of ["vera", "kyle", "bran", "sia", "nora", "doran", "sally", "rayne", "willow", "oden", "mu"]) {
+      expect(makeSkillEquipment(coreSkillOf(id as never)).effect.params.slayDevourer, id).toBeUndefined();
+    }
+    expect(core.name || core.effect.def.type).toBeTruthy();
+  });
+
+  it("带特効的弹:命中吞噬者不被吸收、按倍率扣血、还能继续飞", () => {
+    const { s, dev } = lokaWorldWithDevourer();
+    const p = spawnProjectile({
+      kind: "knife", pos: vec2(dev.pos.x - 12, dev.pos.y), dir: vec2(1, 0), speed: 0,
+      damage: 100, pierce: 5, slayDevourer: LOKA_SLAY_DEVOURER, source: s.player.skills[0],
+    });
+    s.world.projectiles.push(p);
+    stepProjectiles(s, 0.05);
+    expect(dev.hp, "100 × 1.5 = 150 扣血").toBe(500 - 150);
+    expect(p.ttl, "不被吸收 → 弹体仍在飞").toBeGreaterThan(0);
+    expect(p.pierce, "走正常命中流程(穿透照常扣一次)").toBe(4);
+  });
+
+  it("不带特効的弹:仍被吸收并给吞噬者喂血(基线行为不动)", () => {
+    const { s, dev } = lokaWorldWithDevourer();
+    const p = spawnProjectile({
+      kind: "knife", pos: vec2(dev.pos.x - 12, dev.pos.y), dir: vec2(1, 0), speed: 0,
+      damage: 100, pierce: 5, source: s.player.skills[0],
+    });
+    s.world.projectiles.push(p);
+    stepProjectiles(s, 0.05);
+    expect(dev.hp, "不掉血,反而回 100 × 0.5").toBe(550);
+    expect(p.ttl, "非穿透弹被吃掉").toBeLessThan(0);
   });
 });

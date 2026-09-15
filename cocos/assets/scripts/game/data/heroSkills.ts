@@ -102,6 +102,18 @@ export function needsBaseline(def: Pick<HeroSkillDef, "kind">, rhythm: RhythmId)
   return def.kind === "core" && rhythm !== "pulse";
 }
 
+/**
+ * 白啸霜刃对吞噬者的特効倍率。
+ * 含义:洛卡核心的全向霜刃幕命中吞噬者(含吞噬技能载体)时**不被吸收、不喂血**,并按本倍率结算伤害。
+ * 单位:倍率(1.5 = 斩得穿且对该种敌人 +50% 伤害)。
+ * 取值依据:逐秒剖面(CONTEXT 66)——第 6 章登场的吞噬者吃掉洛卡 25% 的弹体(活下来的种子 7 是 16%),
+ *   有效 DPS 从 993/s 掉到 644/s、末 4 秒归零 → 击杀断供 → 连杀节律(需 3 杀)饥饿 → 发射只剩 1.2s 底拍。
+ *   先把"被吃掉的 25%"变成有效输出再谈加伤,1.5 是这一档的起点;R14 的刃伤 / 底拍 / 连杀三根杠杆
+ *   之所以全在噪声内,正是因为它们只放大被吃掉的那部分。
+ * 出处:docs/TODO-HERO-RHYTHM.md §1(杠杆 B)、docs/DESIGN-HERO-RHYTHM.md §3.2。
+ */
+export const LOKA_SLAY_DEVOURER = 1.5;
+
 /** 技能所挂节律的发动参数 = 节律表(含等级)× 这一招的调率;下限与节律表同口径(连杀 ≥ 2、阈值 / 概率 ≤ 0.9) */
 export function skillTriggerParams(def: Pick<HeroSkillDef, "rhythmTune">, rhythm: RhythmId, level = 1): TriggerParams {
   const p = { ...rhythmTriggerParams(rhythm, level) };
@@ -308,8 +320,8 @@ const NORA: readonly HeroSkillDef[] = [
 const LOKA: readonly HeroSkillDef[] = [
   {
     id: "loka_core", heroId: "loka", kind: "core", name: "白啸霜刃", rhythm: "combo", rhythmTune: CORE_RHYTHM_TUNE.loka,
-    desc: "每 3 连杀掷出 12 发霜刃幕",
-    effect: "knife", params: { damage: 34, speed: 560, radius: 640, spread: 12, pierce: 1 },
+    desc: "每 3 连杀掷出 12 发霜刃幕;霜刃斩得穿吞噬者(不被吸收、对其伤害 ×" + LOKA_SLAY_DEVOURER + ")",
+    effect: "knife", params: { damage: 34, speed: 560, radius: 640, spread: 12, pierce: 1, slayDevourer: LOKA_SLAY_DEVOURER },
     resonancePassive: "split", resonanceName: "白啸刃雨", resonanceDesc: "霜刃 +4 发",
     resonanceMorph: { splitExtra: 4 },
   },

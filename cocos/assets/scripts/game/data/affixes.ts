@@ -128,6 +128,13 @@ export interface EffectParams {
   damage?: number;
   /** 召唤物命中回血(>0 = 开;回血量 = 召唤物伤害 × combat.MINION_HEAL_ON_HIT_PCT;穆「缠斗回复」的身份项) */
   healOnHit?: number;
+  /**
+   * 对吞噬者特効(倍率;0/缺省 = 无)。带这一位的弹体命中吞噬者 / 吞噬技能载体时**不被吸收、不喂血**
+   * (吞噬者原本 `hp += damage×0.5` 且非穿透弹 `ttl=-1` 消亡),并按本倍率结算伤害。
+   * 单位:倍率(1.5 = 斩得穿且 +50%);依据:洛卡第 6 章逐秒剖面(CONTEXT 66)——
+   * 第 6 章登场的吞噬者吃掉全向刃幕 25% 的弹体,是白啸霜刃独有的墙;出处:docs/TODO-HERO-RHYTHM.md §1。
+   */
+  slayDevourer?: number;
   /** 弹道/射线速度(px/s) */
   speed?: number;
   /** 半径/射程(px) */

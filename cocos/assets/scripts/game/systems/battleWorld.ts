@@ -1188,7 +1188,10 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
         if (projectileHits(proj, { pos: e.pos, radius: e.def.radius })) {
           proj.hit.add(e.id);
           // 吞噬投射:基线吞噬者 + 批 4 技能载体(极渊之颚);吸收比例 = 表值,基线回落 0.5
-          if (e.kind === "devourer" || e.def.skill?.devour) {
+          // 特効例外(白啸霜刃):弹体带 slayDevourer 时斩得穿 —— 不被吸收、不喂血,按倍率扣血后照常走命中流程
+          const slay = proj.slayDevourer ?? 0;
+          const isDevourer = e.kind === "devourer" || !!e.def.skill?.devour;
+          if (isDevourer && slay <= 0) {
             const healRate = e.def.skill?.devour?.healRate ?? 0.5;
             const healed = Math.round(proj.damage * healRate);
             e.hp = Math.min(e.maxHp, e.hp + healed);
@@ -1201,7 +1204,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
             proj.ttl = -1;
             break;
           }
-          this.damageEnemy(e, proj.damage, proj.source, proj.lifesteal, 30, proj.pos, proj.splitChild === true);
+          this.damageEnemy(e, isDevourer ? Math.round(proj.damage * slay) : proj.damage, proj.source, proj.lifesteal, 30, proj.pos, proj.splitChild === true);
           this.emitHitSpark(proj);
           if (proj.kind === "ray" && proj.slow) applySlow(e, proj.slow, proj.slowDuration ?? 2);
           if (proj.explode) {

@@ -117,6 +117,9 @@ export const QUALITY_MAX_LEVEL = tierFieldMap("maxLevel");
 | [`game/data/talents.ts`](../cocos/assets/scripts/game/data/talents.ts) | 天赋树 | 19 项天赋效果数值(经验/离线增效/委托加速/稀有加成/生命/护盾/伤害/冷却/暴击/元素/背水),解锁价备注在定义表 |
 | [`game/data/commissions.ts`](../cocos/assets/scripts/game/data/commissions.ts) | 委托挂机 | 收益衰减曲线(2h 全额 → 4h 衰减至 50% → 保底)、领取提醒门槛 |
 | [`game/data/equipmentGen.ts`](../cocos/assets/scripts/game/data/equipmentGen.ts) | 装备生成 | 装备等级成长系数(每级 +12%,生成与强化共用同一常量) |
+| [`game/data/rhythm.ts`](../cocos/assets/scripts/game/data/rhythm.ts) | 本命节律 | 六节律的发动参数表(周期 / 阈值 / 概率)、节律等级 1–5 的冷却与阈值缩放、受击齐放窗口、12 英雄本命分配与挂机档位 |
+| [`game/data/heroSkills.ts`](../cocos/assets/scripts/game/data/heroSkills.ts) | 独有技能 | `HERO_SKILLS` 逐英雄 4 技能(核心 / 分岔 / 进阶)与 5 阶成长、`CORE_RHYTHM_TUNE` 节律调率、`CORE_BASELINE_INTERVAL` 底拍、分岔出现与保底等级(`BRANCH_MIN_LEVEL` / `BRANCH_GUARANTEE_LEVEL` / `BRANCH_TEASE_LEVEL`)、重置分岔保底轮数、兜底三项、**`LOKA_SLAY_DEVOURER` 白啸霜刃对吞噬者特効倍率**(依据 = 逐秒剖面 CONTEXT 66) |
+| [`game/data/artifacts.ts`](../cocos/assets/scripts/game/data/artifacts.ts) | 法宝 | 14 主动法宝(内置冷却 / 两条共鸣节律 / 变形补丁)、8+2 被动法宝(全局乘区数值、叠加衰减与上限)、8 枚遗物数值、槽位数、赛季共鸣格与赛季法宝、回响衰减与当季出货偏向 |
 
 > 战斗批表(`enemies` / `seasonMonsters` / `combat` / `field` / `envAffixes`)目前是**纯常量表**:未接 balance.json 热调覆盖层,
 > 改动走"改规范表 → npm test"流程;如需策划免发版调参,再按条款 4 登记热调字段。

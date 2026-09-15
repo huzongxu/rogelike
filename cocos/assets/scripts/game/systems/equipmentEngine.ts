@@ -630,6 +630,7 @@ export class EquipmentEngine {
         lifesteal: s.lifesteal,
         slow: eff.params.slow,
         slowDuration: ((eff.params.duration ?? 2) + s.durationBonus) * (s.durationMult ?? 1),
+        slayDevourer: eff.params.slayDevourer,
         source: eq,
       });
       ctx.projectiles.push(p);

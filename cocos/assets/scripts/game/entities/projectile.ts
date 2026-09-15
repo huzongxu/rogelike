@@ -35,6 +35,8 @@ export interface Projectile {
   slowDuration?: number;
   /** 追踪转向率 rad/s(冰锥 icelance 专用;0/缺省 = 直线弹道) */
   homing?: number;
+  /** 对吞噬者特効倍率(发射时由 `effect.params.slayDevourer` 带来;>0 = 命中吞噬者不被吸收、按本值扣血) */
+  slayDevourer?: number;
   ttl: number;
   /** 已命中的敌人 id,避免重复伤害 */
   hit: Set<number>;
@@ -78,6 +80,7 @@ export function spawnProjectile(opts: {
   slow?: number;
   slowDuration?: number;
   homing?: number;
+  slayDevourer?: number;
   source: Equipment;
   splitChild?: boolean;
 }): Projectile {
@@ -97,6 +100,7 @@ export function spawnProjectile(opts: {
     slow: opts.slow,
     slowDuration: opts.slowDuration,
     homing: opts.homing,
+    slayDevourer: opts.slayDevourer,
     ttl: PROJECTILE_TTL,
     hit: new Set(),
     source: opts.source,

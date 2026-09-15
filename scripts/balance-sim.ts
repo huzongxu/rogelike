@@ -81,6 +81,56 @@ export interface SimOptions {
   maxSeconds: number;
   /** 随机种子(确定性与可复现) */
   seed?: number;
+  /**
+   * 逐秒剖面(诊断用,默认关):每秒往 `report.trace` 记一行 HP / 敌数 / 精英数 / 贴身围数 /
+   * 弹体发射与命中 / 伤害与击杀。只读累加,**不吃 Math.random、不改任何结算分支**,
+   * 关闭时与基线逐帧一致;开启也不影响 perMinute / totalDamage 等既有读数。
+   */
+  trace?: boolean;
+}
+
+/** 逐秒剖面的一行(仅 opts.trace = true 时产出) */
+export interface SimTraceRow {
+  /** 秒序号(从 0 起) */
+  t: number;
+  /** 章(= waves.wave) */
+  ch: number;
+  hp: number;
+  maxHp: number;
+  /** 本章内累计秒(章首清场口径下用于看台阶位置) */
+  inCh: number;
+  /** 场上敌数(模拟上限 220,低于游戏 LIMITS.enemies 340) */
+  enemies: number;
+  /** 其中精英数 */
+  elites: number;
+  /** 贴身 110px 内围数的本秒峰值(站桩档的躲藏触发阈值读的就是这个数) */
+  nearMax: number;
+  /** 本秒弹体发射数 / 命中事件数 */
+  launched: number;
+  hits: number;
+  /** 其中来自独有技能(kind = "skill")的部分 —— 洛卡的「全向刃幕」命中率就看这一对 */
+  skillLaunched: number;
+  skillHits: number;
+  /**
+   * 命中在**隐身敌**身上的事件数:游戏侧弹体判定不跳隐身(updateProjectiles 只排 hp<=0),
+   * 而 damageEnemy 首行 `if (e.hidden) return` —— 非穿透弹就此被吃掉且零伤害。
+   * 全向弹幕流(洛卡 / 凯尔)受这一笔税的影响最大,故单独计数。
+   */
+  hitsHidden: number;
+  /** 该秒末场上处于隐身状态的敌数 */
+  hidden: number;
+  /** damageEnemy 的两条提前 return 计数:目标隐身 / 护盾卫士正面减伤后伤害归零 */
+  dmgRetHidden: number;
+  dmgRetClamp: number;
+  /** 被**吞噬者**吸收掉的弹体数(它加血、不结算伤害、弹体就此消亡) */
+  projEaten: number;
+  /** 本秒造成伤害 / 击杀数 */
+  dmg: number;
+  kills: number;
+  gold: number;
+  level: number;
+  cards: number;
+  slots: number;
 }
 
 export interface SimSnapshot {
@@ -119,6 +169,8 @@ export interface SimReport {
   finalEquipment: Equipment[];
   /** 局末被动法宝(全局乘区;Boss DPS 探针要一起带上,否则终局输出被低估) */
   finalPassives: PassiveArtifact[];
+  /** 逐秒剖面(opts.trace = true 时非空) */
+  trace?: SimTraceRow[];
 }
 
 export function buildEquipment(build: SimOptions["build"]): Equipment[] {
@@ -439,9 +491,15 @@ function runSimInner(opts: SimOptions): SimReport {
   }
 
   function damageEnemy(e: ReturnType<typeof spawnEnemy>, dmg: number, source: Equipment, lifesteal: number, kb: number, from?: Vec2, fromSplit = false): void {
-    if (e.hidden) return;
+    if (e.hidden) {
+      if (opts.trace) trRetHidden += 1;
+      return;
+    }
     if (from) dmg = Math.round(dmg * shieldguardDamageMult(e, from));
-    if (dmg <= 0) return;
+    if (dmg <= 0) {
+      if (opts.trace) trRetClamp += 1;
+      return;
+    }
     let mult = damageMult;
     if (critOn && Math.random() < 0.1) mult *= 1.25;
     if (elemental(source.effect.def.type)) mult *= elementMult;
@@ -543,6 +601,37 @@ function runSimInner(opts: SimOptions): SimReport {
   const perMinute: SimSnapshot[] = [];
   let lastMinute = 0;
   let t = 0;
+
+  /* ---- 逐秒剖面(opts.trace;纯只读累加,不吃随机、不改结算分支) ---- */
+  const traceRows: SimTraceRow[] = [];
+  const seenProj = new WeakSet<object>();
+  let trSec = 0;            // 正在累计的秒序号
+  let trLaunched = 0, trHits = 0, trSkillLaunched = 0, trSkillHits = 0, trHitsHidden = 0;
+  let trRetHidden = 0, trRetClamp = 0, trEaten = 0;
+  let trNearMax = 0;
+  let trDmgBase = 0, trKillsBase = 0, trSecBase = 0;
+  const pushTraceRow = (sec: number) => {
+    let elites = 0, hidden = 0;
+    for (const e of enemies) {
+      if (e.kind === "elite") elites += 1;
+      if (e.hidden) hidden += 1;
+    }
+    traceRows.push({
+      t: sec, ch: waves.wave, hp: Math.round(player.hp), maxHp: Math.round(player.maxHp),
+      inCh: sec - trSecBase,
+      enemies: enemies.length, elites, nearMax: trNearMax,
+      launched: trLaunched, hits: trHits, skillLaunched: trSkillLaunched, skillHits: trSkillHits,
+      hitsHidden: trHitsHidden, hidden,
+      dmgRetHidden: trRetHidden, dmgRetClamp: trRetClamp, projEaten: trEaten,
+      dmg: Math.round(totalDmg - trDmgBase), kills: kills - trKillsBase,
+      gold, level: player.level, cards: player.equipment.length, slots: player.slots,
+    });
+    trDmgBase = totalDmg;
+    trKillsBase = kills;
+    trSecBase = sec;
+    trLaunched = 0; trHits = 0; trSkillLaunched = 0; trSkillHits = 0; trHitsHidden = 0; trNearMax = 0;
+    trRetHidden = 0; trRetClamp = 0; trEaten = 0;
+  };
 
   // 章间商店成长:每章(60s)买最多 3 卡(槽位内;强化已移除)
   let shopTimer = 60;
@@ -783,6 +872,11 @@ function runSimInner(opts: SimOptions): SimReport {
 
     // 投射物
     for (const p of projectiles) {
+      if (opts.trace && !seenProj.has(p)) {
+        seenProj.add(p);
+        trLaunched += 1;
+        if (p.source.kind === "skill") trSkillLaunched += 1;
+      }
       updateProjectile(p, dt);
       // 追踪转向(冰锥 icelance):与游戏 updateProjectiles 同款
       if (p.homing) steerHoming(p, enemies, dt);
@@ -805,12 +899,20 @@ function runSimInner(opts: SimOptions): SimReport {
         if (e.hp <= 0 || p.hit.has(e.id)) continue;
         if (projectileHits(p, { pos: e.pos, radius: e.def.radius })) {
           p.hit.add(e.id);
-          if (e.kind === "devourer") {
+          if (opts.trace) {
+            trHits += 1;
+            if (e.hidden) trHitsHidden += 1;
+            if (p.source.kind === "skill") trSkillHits += 1;
+          }
+          // 吞噬投射(与游戏 updateProjectiles 同款):带 slayDevourer 的弹体斩得穿,不被吸收、按倍率扣血
+          const slay = p.slayDevourer ?? 0;
+          if (e.kind === "devourer" && slay <= 0) {
+            if (opts.trace) trEaten += 1;
             e.hp = Math.min(e.maxHp, e.hp + Math.round(p.damage * 0.5));
             p.ttl = -1;
             break;
           }
-          damageEnemy(e, p.damage, p.source, p.lifesteal, 30, p.pos, p.splitChild === true);
+          damageEnemy(e, e.kind === "devourer" ? Math.round(p.damage * slay) : p.damage, p.source, p.lifesteal, 30, p.pos, p.splitChild === true);
           if (p.kind === "ray" && p.slow) applySlow(e, p.slow, p.slowDuration ?? 2);
           if (p.explode) engine.explode(p.source, ctx, p.pos, p.explode, { power: 1, haste: 0, durationBonus: 0, chainTargets: 0, splitExtra: 0, lifesteal: p.lifesteal, pierce: 0 });
           if (p.chainLeft > 0) {
@@ -966,7 +1068,26 @@ function runSimInner(opts: SimOptions): SimReport {
       lastMinute = minute;
       perMinute.push({ t: Math.round(t), kills, level: player.level, wave: waves.wave, hp: Math.round(player.hp), enemyCount: enemies.length, gold, slots: player.slots, cards: player.equipment.length, dmg: Math.round(totalDmg) });
     }
+
+    // 逐秒剖面:贴身围数每 0.25s 采样取本秒峰值;整秒落一行
+    if (opts.trace) {
+      if (Math.round(t / dt) % 5 === 0) {
+        let near = 0;
+        for (const e of enemies) {
+          if (Math.hypot(e.pos.x - player.pos.x, e.pos.y - player.pos.y) <= 110) near += 1;
+        }
+        if (near > trNearMax) trNearMax = near;
+      }
+      const sec = Math.floor(t + dt);
+      if (sec > trSec) {
+        pushTraceRow(trSec);
+        trSec = sec;
+      }
+    }
   }
+
+  // 末秒(含阵亡那一拍 —— 循环内先 break 就记不到)补落一行
+  if (opts.trace) pushTraceRow(trSec);
 
   // finalEquipment = 技能 + 主动法宝(Boss 单目标 DPS 探针要连核心技能一起量)
   return {
@@ -983,6 +1104,7 @@ function runSimInner(opts: SimOptions): SimReport {
     poolDamage: Math.round(poolDamage),
     finalEquipment: player.castList.map((e) => JSON.parse(JSON.stringify(e))),
     finalPassives: player.passives.map((p) => JSON.parse(JSON.stringify(p))),
+    trace: opts.trace ? traceRows : undefined,
   };
 }
 
