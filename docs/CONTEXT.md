@@ -263,6 +263,8 @@
     - 精英入场横幅:`battleWorld.advance` 在精英章 `chapterTimer` 越过 `ELITE_INTEL_DELAY_SEC` 那一拍,复用 `discoveryBanner` 报「精英入场 · 第 N 章」(`chapters.ELITE_ENTER_BANNER`,停 `DISCOVERY.bannerSec`),不时停不入图鉴;`eliteBannerShown` 每章一次、`nextChapter` 复位。
     - 测试:`hero-rhythm` 新增引擎五种节律进度一例、HudView 源码守卫一例、精英入场横幅真跑一例(横幅用例的步长要 < 1/60,首版 0.05 没跨过阈值)。真机:浏览器面板本轮仍隐藏、引擎不起帧,HUD 两条细条与横幅**未截图**;构建产物含「精英入场」文案。**验收**:全套 69 套里 68 套全绿,唯一失败即上述 5% 掷点用例,钉死后单套复跑 3 次全过,全套复跑 **69 套 / 3973 条全绿**;`typecheck:cocos` 0 条,`build:cocos` 通过。
 
+63. **待办清单独立成文**:`docs/TODO-HERO-RHYTHM.md`(2026-09-15)—— 收 53–62 里所有没做完的事:待真机验证四项、数值层(洛卡第 6 章剖面 / 穆精英墙 / 标定口径统一 / Boss 末关裕量)、内容层(S2–S4 初值 / S5+ 赛季表 / 六英雄专属表 / 共鸣图鉴界面)、工具基建、已知噪声。此后新增待办记那里,做完删行。
+
 ## 环境注意
 - IAB(应用内浏览器)的键盘/点击**间歇性失效**(cua 输入退化):浏览器验证靠 `?bot=1` 自动风筝 + 按键重试 + 单测;evaluate 有时被只读守卫拦截。
 - 存档当前已重置为全新。
