@@ -104,6 +104,7 @@ import { ShopModel, isPassiveOffer, type ShopWorld } from "../cocos/assets/scrip
 import { emptySave } from "../cocos/assets/scripts/core/SaveModel";
 import { BattleSim } from "../cocos/assets/scripts/battle/BattleSim";
 import { spawnMinion } from "@game/entities/objects";
+import { ELITE_CHAPTERS, ELITE_ENTER_BANNER, ELITE_INTEL_DELAY_SEC, chapterTypeOf } from "@game/data/chapters";
 import { MINION_CARRY_SPREAD } from "@game/systems/battleWorld";
 
 function makeContext(player: Player, enemies: Enemy[] = [], extra: Partial<BattleContext> = {}): BattleContext & { fx: Fx[] } {
@@ -430,6 +431,74 @@ describe("引擎:技能与法宝同列、节律等级、内置冷却、齐放窗
     engine.update(ctx, 0.4);
     const calls = (ctx.damageEnemy as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1] as number);
     expect(calls).toEqual([100, 50]);
+  });
+});
+
+describe("HUD 节律进度条(R15)", () => {
+  it("引擎 rhythmProgress:连杀 = 已攒 / 所需、移动 = 已走 / 所需、低血 = 已失血 / 到阈值、受击 / 击杀技能恒 1、周期 null、法宝受击按内置冷却", () => {
+    const p = new Player();
+    p.rhythms = ["combo", "move", "hurt", "hit", "pulse"];
+    const combo = makeSkillEquipment(coreSkillOf("loka")); // 3 连杀
+    const sia = makeSkillEquipment(coreSkillOf("sia")); // 低血 0.7
+    const move = artifact("cloud", "move", { dps: 10, radius: 100, duration: 4 }, 1201);
+    const hit = artifact("nova", "hit", { damage: 20, radius: 100 }, 1202);
+    const pulse = artifact("knife", "pulse", { damage: 10, speed: 500, radius: 640, spread: 1 }, 1203);
+    p.skills.push(combo, sia);
+    p.equipment.push(move, hit, pulse);
+    const enemies = [spawnEnemy("chaser", vec2(60, 0), 1), spawnEnemy("chaser", vec2(-60, 0), 1)];
+    const ctx = makeContext(p, enemies);
+    const engine = new EquipmentEngine();
+    engine.update(ctx, 0.01);
+    expect(engine.rhythmProgress(pulse, ctx)).toBeNull();
+    expect(engine.rhythmProgress(combo, ctx)).toEqual({ frac: 0, kind: "combo" });
+    engine.onKill(ctx, enemies[0]);
+    engine.onKill(ctx, enemies[1]);
+    expect(engine.rhythmProgress(combo, ctx)!.frac).toBeCloseTo(2 / 3, 5);
+    // 移动:走 120px(所需 240)→ 0.5
+    p.movedThisFrame = 120;
+    engine.update(ctx, 0.01);
+    expect(engine.rhythmProgress(move, ctx)!.frac).toBeCloseTo(0.5, 5);
+    // 低血:阈值 0.7 → 需失血 30%;失血 15% → 0.5;满血 0
+    expect(engine.rhythmProgress(sia, ctx)!.frac).toBe(0);
+    p.hp = p.maxHp * 0.85;
+    expect(engine.rhythmProgress(sia, ctx)!.frac).toBeCloseTo(0.5, 5);
+    // 受击法宝:触发后内置冷却走完前 < 1,技能恒 1
+    expect(engine.rhythmProgress(hit, ctx)).toEqual({ frac: 1, kind: "hit" });
+    engine.onHurt(ctx, 1, enemies[0]);
+    expect(engine.rhythmProgress(hit, ctx)!.frac).toBeLessThan(1);
+    expect(engine.rhythmProgress(makeSkillEquipment(coreSkillOf("vera")), ctx)).toEqual({ frac: 1, kind: "hit" });
+  });
+
+  it("HudView 每张卡带节律进度条(cardRp),经 BattleSim.rhythmProgress 取值", () => {
+    const hud = fileSource("../cocos/assets/scripts/battle/HudView.ts");
+    expect(hud.includes("private cardRp: Graphics[]")).toBe(true);
+    expect(hud.includes("sim.rhythmProgress(eq)")).toBe(true);
+    expect(hud.includes('makeNode("Rp", card)')).toBe(true);
+  });
+});
+
+describe("精英入场横幅(R15)", () => {
+  it("精英章到 ELITE_INTEL_DELAY_SEC 那一拍报一次「精英入场 · 第 N 章」;普通章不报;下一章复位", () => {
+    const save = emptySave();
+    save.energy = 99;
+    save.selectedHero = "vera";
+    save.selectedSet = "thorn";
+    const s = new BattleSim({ save, input: { isMoving: false, moveDir: vec2(0, 0) }, worldH: 996, persist: () => {}, callbacks: { onDamage: () => {}, onDeath: () => {}, onVictory: () => {}, onChapterShop: () => {} } });
+    s.startStage(1);
+    while (s.world.chapter < ELITE_CHAPTERS[0]) s.world.nextChapter();
+    s.world.discoveryBanner = null;
+    s.world.chapterTimer = ELITE_INTEL_DELAY_SEC - 1 / 120;
+    s.update(1 / 60);
+    expect(s.discoveryBanner?.text).toBe(`${ELITE_ENTER_BANNER} · 第 ${ELITE_CHAPTERS[0]} 章`);
+    expect(s.world.hitStop, "不时停").toBeLessThanOrEqual(0);
+    s.world.discoveryBanner = null;
+    for (let i = 0; i < 30; i++) s.update(1 / 60);
+    expect(s.discoveryBanner, "同章不重复").toBeNull();
+    s.world.nextChapter();
+    expect(chapterTypeOf(s.world.chapter)).toBe("normal");
+    s.world.chapterTimer = ELITE_INTEL_DELAY_SEC - 1 / 120;
+    s.update(1 / 60);
+    expect(s.discoveryBanner, "普通章不报").toBeNull();
   });
 });
 

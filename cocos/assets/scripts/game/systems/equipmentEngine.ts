@@ -26,7 +26,7 @@ import { COMBO_VALUES, type ComboStates } from "../data/combos";
 import type { SeasonMutation } from "../data/seasonSets";
 import { RELIC_VALUES, isRelicType, passiveStackMult, type MorphPatch, type PassiveType } from "../data/artifacts";
 import { heroSkillDef } from "../data/heroSkills";
-import { HIT_RHYTHM_WINDOW, isRhythm, rhythmIntervalMult, rhythmThresholdMult } from "../data/rhythm";
+import { HIT_RHYTHM_WINDOW, isRhythm, rhythmIntervalMult, rhythmThresholdMult, type RhythmId } from "../data/rhythm";
 
 /** 特效(纯视觉) */
 export interface Fx {
@@ -159,6 +159,42 @@ export class EquipmentEngine {
       return heroSkillDef(eq.skillId)?.resonanceMorph ?? null;
     }
     return equipmentResonance(eq, ctx.seasonId)?.morph ?? null;
+  }
+
+  /**
+   * 只读查询(R15,HUD 节律进度条):首条触发器所挂节律攒到几成(0–1)。
+   * 连杀 = 已攒 / 所需;移动 = 已走 / 所需;低血 = 已失血 / 到阈值需失血;受击 / 击杀 = 内置冷却走完即 1(技能无冷却恒 1);
+   * 周期节律与隐藏触发器返 null(周期由 pulseLeft 的 CD 条另画)。与 update / onHurt 里的判定同一套公式。
+   */
+  rhythmProgress(eq: Equipment, ctx: BattleContext): { frac: number; kind: RhythmId } | null {
+    const tr = eq.triggers[0];
+    if (!tr || !isRhythm(tr.def.type)) return null;
+    const t = tr.def.type;
+    const st = this.states.get(eq.id);
+    switch (t) {
+      case "pulse":
+        return null;
+      case "combo": {
+        const need = Math.max(2, Math.round((tr.params.count ?? 5) * this.rhythmMult(ctx, "combo", "threshold")));
+        return { frac: Math.min(1, (st?.comboCount ?? 0) / need), kind: t };
+      }
+      case "move": {
+        const need = (tr.params.distance ?? 500) * (1 - this.statsOf(eq, ctx).haste) * this.rhythmMult(ctx, "move", "threshold");
+        return { frac: need > 0 ? Math.min(1, (st?.moveAccum ?? 0) / need) : 0, kind: t };
+      }
+      case "hurt": {
+        const threshold = Math.min(0.95, (tr.params.hpThreshold ?? 0.6) * (2 - this.rhythmMult(ctx, "hurt", "threshold")));
+        const p = ctx.player;
+        const lost = 1 - p.hp / Math.max(1, p.maxHp);
+        return { frac: threshold >= 1 ? 1 : Math.max(0, Math.min(1, lost / (1 - threshold))), kind: t };
+      }
+      case "hit":
+      case "kill": {
+        const cdMax = eq.kind === "active" ? artifactInnerCd(eq) : 0;
+        const cd = st?.innerCd ?? 0;
+        return { frac: cdMax > 0 && cd > 0 ? Math.max(0, 1 - cd / cdMax) : 1, kind: t };
+      }
+    }
   }
 
   /** 只读查询:脉冲冷却剩余与当前生效间隔(战斗 HUD 倒计时用);无脉冲状态返 null */

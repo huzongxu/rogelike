@@ -90,7 +90,7 @@ import {
 } from "../data/combat";
 import { collectionBonus, dailyTalentOf } from "../data/daily";
 import { CHAPTER_SECONDS, CHAPTERS_PER_STAGE, stageClearedAtFinalChapter, type StageDef } from "../data/stages";
-import { chapterTypeInfo, ELITE_INTEL_DELAY_SEC } from "../data/chapters";
+import { chapterTypeInfo, chapterTypeOf, ELITE_ENTER_BANNER, ELITE_INTEL_DELAY_SEC } from "../data/chapters";
 import { chapterIntel } from "../data/intel";
 import {
   deathChainDamage,
@@ -353,6 +353,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
   bossBanner: { text: string; ttl: number } | null = null;
   /** 共鸣发现横幅(docs/DESIGN-HERO-RHYTHM.md §5:首次达成某条共鸣) */
   discoveryBanner: { text: string; ttl: number } | null = null;
+  /** 本章是否已报过「精英入场」横幅(R15;每章一次,nextChapter 复位) */
+  private eliteBannerShown = false;
   /** 时停剩余(秒):发现共鸣时战斗停 DISCOVERY.hitStop */
   hitStop = 0;
   /** 本局已达成的共鸣键(横幅只在首次) */
@@ -618,6 +620,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     this.fxLayer.reset();
     this.bossSpawned = false;
     this.bossBanner = null;
+    this.eliteBannerShown = false;
     this.player.pos = vec2((this.arena.x0 + this.arena.x1) / 2, (this.arena.y0 + this.arena.y1) / 2);
     // 召唤物随主人回到场心(散在 MINION_CARRY_SPREAD 内),不留在上一章的位置
     for (const m of this.minions) {
@@ -714,6 +717,11 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
 
     // 章节计时:每章时长结束 → 章间商店(玩家手动开始下一章)
     this.chapterTimer += dt;
+    // 精英入场横幅(R15):精英章到 ELITE_INTEL_DELAY_SEC 那一拍复用发现横幅节点报一次(不时停、不入图鉴),把 R12 的预告说出来
+    if (!this.eliteBannerShown && this.currentStage && ELITE_INTEL_DELAY_SEC > 0 && this.chapterTimer >= ELITE_INTEL_DELAY_SEC) {
+      this.eliteBannerShown = true;
+      if (chapterTypeOf(this.chapter, this.currentStage.bossChapter) === "elite") this.discoveryBanner = { text: `${ELITE_ENTER_BANNER} · 第 ${this.chapter} 章`, ttl: DISCOVERY.bannerSec };
+    }
     if (this.chapterTimer >= CHAPTER_SECONDS) {
       this.chapterEnd();
       return;
@@ -798,6 +806,11 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       this.emitFx({ type: "nova", pos: vec2(p.pos.x, p.pos.y), radius: 90, ttl: 0.5, maxTtl: 0.5 });
       this.inputs.recordResonanceSeen?.(key);
     }
+  }
+
+  /** HUD 节律进度条(R15):转发引擎只读查询,ctx 不外泄 */
+  rhythmProgress(eq: Equipment): { frac: number; kind: RhythmId } | null {
+    return this.engine.rhythmProgress(eq, this.ctx);
   }
 
   /**

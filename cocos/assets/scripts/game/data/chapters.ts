@@ -40,6 +40,8 @@ export let ELITE_INTEL_BIAS = 0.3;
  * 0 = 旧口径(章首 14 只 burst 里就有 ~30% 精英,站桩 / 召唤英雄 10s 内被贴身打穿;CONTEXT 56 / 59)。可配 balance.json → chapterTypes.eliteIntelDelay
  */
 export let ELITE_INTEL_DELAY_SEC = 6;
+/** 精英章到点那一拍的横幅文案(R15;复用发现横幅节点,停 DISCOVERY.bannerSec) */
+export const ELITE_ENTER_BANNER = "精英入场";
 export let TREASURE_SPAWN_SCALE = 0.5;
 export let TREASURE_GOLD_MIX = 0.25;
 export let DEFAULT_INTEL_BIAS = 0.45;

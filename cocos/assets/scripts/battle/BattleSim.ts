@@ -219,6 +219,8 @@ export class BattleSim {
     get bossDead() { return this.world.bossDead; }
     get bossBanner() { return this.world.bossBanner; }
     get discoveryBanner() { return this.world.discoveryBanner; }
+    /** HUD 节律进度条(R15) */
+    rhythmProgress(eq: Equipment) { return this.world.rhythmProgress(eq); }
     get currentStage() { return this.world.currentStage; }
     get envAffixes() { return this.world.envAffixes; }
     get selectedSet() { return this.world.selectedSet; }

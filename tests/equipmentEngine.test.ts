@@ -124,7 +124,10 @@ describe("示例 Build 2:死亡连锁流", () => {
     const enemy = spawnEnemy("chaser", vec2(100, 0), 1);
     ctx.enemies.push(enemy);
 
+    // 击杀概率封顶 0.95(节律等级抬概率的上限),chance = 1 也有 5% 不触发 —— 掷点钉死,别让守卫掷硬币
+    const rnd = vi.spyOn(Math, "random").mockReturnValue(0);
     engine.onKill(ctx, enemy);
+    rnd.mockRestore();
     expect(ctx.projectiles).toHaveLength(1);
     expect(ctx.projectiles[0].chainLeft).toBe(3);
     expect(ctx.projectiles[0].damage).toBe(28);

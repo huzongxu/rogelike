@@ -84,6 +84,8 @@ export class HudView {
     private chipLabel: Label | null = null;
     private cardSig = "";
     private cardCd: Graphics[] = [];
+    /** 节律进度条(R15,与 cardCd 同序):首条触发器所挂节律攒到几成 */
+    private cardRp: Graphics[] = [];
     private cardName: Label[] = [];
     /** 底坞卡格(与 cardName / cardSub / cardCd 同序):castList 项 + 卡宽 */
     private cardCells: { eq: Equipment; x: number; y: number; w: number }[] = [];
@@ -699,6 +701,21 @@ export class HudView {
                     cdG.fill();
                 }
             }
+            // 节律进度条(R15):CD 条上方 2px,技能排用节律色、法宝排用品质色;周期节律不画(CD 条已表达)
+            const rpG = this.cardRp[i];
+            if (rpG) {
+                rpG.clear();
+                const rp = eq.kind ? sim.rhythmProgress(eq) : null;
+                if (rp) {
+                    const w = cell.w - 6;
+                    rpG.fillColor = hexToColor(h.colors.cdTrack);
+                    rpG.rect(-cell.w / 2 + 3, -12, w, 2);
+                    rpG.fill();
+                    rpG.fillColor = hexToColor(eq.kind === "skill" ? h.colors.skillEdge : hexA(qualityDef(eq.quality).color, 0.9));
+                    rpG.rect(-cell.w / 2 + 3, -12, w * rp.frac, 2);
+                    rpG.fill();
+                }
+            }
             const cdTxt = cd ? ` · ${cd.left.toFixed(1)}s` : "";
             // 技能 / 法宝走共鸣改名(技能看被动列),老装备仍写效果名
             const name = eq.hiddenAffix ? `【隐藏】${eq.effect.def.name}` : eq.kind ? equipmentDisplayName(eq, sim.player.passives, sim.save.seasonId) : eq.effect.def.name;
@@ -755,6 +772,7 @@ export class HudView {
         const cardH = cells.cardH;
         this.cardsRoot.removeAllChildren();
         this.cardCd = [];
+        this.cardRp = [];
         this.cardName = [];
         this.cardSub = [];
         this.cardCells = cells.cards;
@@ -838,6 +856,9 @@ export class HudView {
             // 脉冲 CD 条(每帧重绘;槽位 = 卡底 3px)
             const cdNode = makeNode("Cd", card);
             this.cardCd.push(cdNode.addComponent(Graphics));
+            // 节律进度条(每帧重绘;CD 条上方 2px)
+            const rpNode = makeNode("Rp", card);
+            this.cardRp.push(rpNode.addComponent(Graphics));
         });
         // 两列表分隔线(1px,排距中线,横贯卡区)
         if (cells.dividerY !== null) {
