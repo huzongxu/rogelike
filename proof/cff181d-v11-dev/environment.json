@@ -1,0 +1,12 @@
+{
+  "canvas": [
+    {
+      "h": 720,
+      "w": 405
+    }
+  ],
+  "ccDebug": true,
+  "dpr": 1,
+  "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ZCode/3.17.2 Chrome/152.0.7977.130 Electron/44.7.0 Safari/537.36",
+  "url": "http://127.0.0.1:4173/"
+}

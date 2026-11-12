@@ -213,9 +213,15 @@ export function levelUpBox(w: number, h: number): LvRect {
   return { x: LV_PAD, y: evenDown((evenDown(h) - LV_BOX_H) / 2), w: w - LV_PAD * 2, h: LV_BOX_H };
 }
 
-/** 第 i 张卡的框矩形(i 从 0 起;16 / 196 / 376,右缘 544) */
-export function levelUpCardRect(b: LvRect, i: number): LvRect {
-  return { x: b.x + i * (LV_CARD_W + LV_CARD_GAP), y: b.y + LV_CARDS_DY, w: LV_CARD_W, h: LV_CARD_H };
+/**
+ * 第 i 张卡的框矩形(i 从 0 起;默认三张 = 16 / 196 / 376,右缘 544)。
+ * `count` = 本层实际出几张(R22 的局首姿势层只出两张):卡宽与间距不动,整行在内容列里横向居中,
+ * 于是三张时偏移恒 0(与既有锚点逐位相同),两张时左右各让出 90。
+ */
+export function levelUpCardRect(b: LvRect, i: number, count: number = LV_CARDS): LvRect {
+  const rowW = count * LV_CARD_W + Math.max(0, count - 1) * LV_CARD_GAP;
+  const x0 = b.x + Math.max(0, evenDown((b.w - rowW) / 2));
+  return { x: x0 + i * (LV_CARD_W + LV_CARD_GAP), y: b.y + LV_CARDS_DY, w: LV_CARD_W, h: LV_CARD_H };
 }
 
 /** 卡内一枚钮的矩形(第 k 枚,0 = 选它 / 1 = 重随 / 2 = 锁定) */
@@ -235,9 +241,9 @@ function btn(rect: LvRect): LvBtn {
   return { rect, text: mid(rect.x + rect.w / 2, rect.y + LV_BTN_TEXT_DY, rect.w, LV_BTN_PX, true) };
 }
 
-/** 一张卡的完整几何(六族文本 + 三枚钮,全部锚在卡框左上) */
-export function levelUpCardLayout(b: LvRect, idx: number): LvCardLayout {
-  const rect = levelUpCardRect(b, idx);
+/** 一张卡的完整几何(六族文本 + 三枚钮,全部锚在卡框左上;`count` 只影响卡框横向落位,见 `levelUpCardRect`) */
+export function levelUpCardLayout(b: LvRect, idx: number, count: number = LV_CARDS): LvCardLayout {
+  const rect = levelUpCardRect(b, idx, count);
   const tx = rect.x + LV_CARD_INSET;
   const descLines: LvTextLine[] = [];
   for (let i = 0; i < LV_DESC_MAX_LINES; i++) {
@@ -260,13 +266,14 @@ export function levelUpCardLayout(b: LvRect, idx: number): LvCardLayout {
 
 /**
  * 整层几何。本层不读存档、不看金币、不管锁定态 —— 那些只改配色档与文案档,不改一枚矩形
- * (与体力屏的两个形态位、死亡屏的 `canDouble` 同性质),故入参只有 `(w, h)`。
+ * (与体力屏的两个形态位、死亡屏的 `canDouble` 同性质),入参只有 `(w, h)` 与本层实际出几张卡。
+ * `count` 缺省 = `LV_CARDS`(三张),只有局首姿势层(R22)会传两张。
  */
-export function levelUpLayout(w: number, h: number): LevelUpLayout {
+export function levelUpLayout(w: number, h: number, count: number = LV_CARDS): LevelUpLayout {
   const b = levelUpBox(w, h);
   const cx = b.x + b.w / 2;
   const cards: LvCardLayout[] = [];
-  for (let i = 0; i < LV_CARDS; i++) cards.push(levelUpCardLayout(b, i));
+  for (let i = 0; i < count; i++) cards.push(levelUpCardLayout(b, i, count));
   return {
     box: b,
     panelKey: "panel_dark_corners",
@@ -284,6 +291,6 @@ export function levelUpLayout(w: number, h: number): LevelUpLayout {
 }
 
 /** 整层几何的单一出口(宿主 `syncLevelUp` 只调这一发) */
-export function levelUpScreenLayout(w: number, h: number): LevelUpLayout {
-  return levelUpLayout(w, h);
+export function levelUpScreenLayout(w: number, h: number, count: number = LV_CARDS): LevelUpLayout {
+  return levelUpLayout(w, h, count);
 }

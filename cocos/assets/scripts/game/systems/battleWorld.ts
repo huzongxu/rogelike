@@ -88,6 +88,8 @@ import {
   BOSS_SPAWN_OFFSET_X,
   BOSS_SPAWN_OFFSET_Y,
   BOSS_SPAWN_INSET,
+  THORN_STACK,
+  type ThornGainMode,
 } from "../data/combat";
 import { collectionBonus, dailyTalentOf } from "../data/daily";
 import { CHAPTER_SECONDS, CHAPTERS_PER_STAGE, stageClearedAtFinalChapter, type StageDef } from "../data/stages";
@@ -104,7 +106,7 @@ import {
   DEATH_CHAIN_KNOCKBACK,
   type EnvAffixType,
 } from "../data/envAffixes";
-import { setDef, type SetId } from "../data/sets";
+import { SET_BONUSES, setDef, type SetId } from "../data/sets";
 import { comboStates } from "../data/combos";
 import { setMutation } from "../data/seasonSets";
 import {
@@ -123,6 +125,7 @@ import {
   type Equipment,
 } from "../data/equipmentGen";
 import { coreSkillOf, heroSkillDef } from "../data/heroSkills";
+import { buildBranch, buildNode, buildStepFor, type BuildStep } from "../data/heroBuild";
 import { AI_PROFILE_PARAMS, heroAiProfile, heroRhythm, heroRhythmOptions, rhythmDef, type AiProfile, type RhythmId } from "../data/rhythm";
 import { heroOfSetOrNull, type HeroId } from "../data/heroes";
 import { DISCOVERY, RELIC_VALUES, isSeasonFeatured, relicStack } from "../data/artifacts";
@@ -376,6 +379,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
   over = false;
   /** 本局已用复活次数(通关星数判定输入) */
   reviveUsed = 0;
+  /** 章节节点层:开章待选的二选一(非 null = 世界冻结,等宿主提交;仅三原型会产生) */
+  buildPending: BuildStep | null = null;
 
   /* ---------- 连杀/反伤/毒池计时 ---------- */
   comboCount = 0;
@@ -555,6 +560,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     this.bossDead = false;
     this.bossBanner = null;
     this.over = false;
+    this.buildPending = null;
+    this.player.resetBuild();
     // 章节制与金币经济初始化
     this.chapter = 1;
     this.chapterTimer = 0;
@@ -647,6 +654,49 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       }
       this.enemies.push(e);
     }
+    // 章节节点层(三原型):换章清临时职业资源;第 2 / 4 / 8 / 12 章开章挂起二选一,
+    // 选完才恢复战斗。非原型英雄 buildStepFor 恒 null,本段逐帧不变。
+    this.player.clearBuildTemp();
+    this.buildPending = buildStepFor(this.heroId(), this.chapter, this.player.buildBranchId, this.player.buildNodes);
+  }
+
+  /** 当前开章待选(null = 没有待选;宿主据此开关 build 弹层) */
+  buildStep(): BuildStep | null {
+    return this.buildPending;
+  }
+
+  /**
+   * 提交一次开章二选一(宿主弹层「选它」的唯一出口)。
+   * 分岔:把分岔技能放进技能列 + 解锁节律 + 写 branchChosen / buildBranchId;
+   * 节点:只写 buildNodes[层];两者都不占槽、不花钱、不登记图鉴之外的任何经济。
+   * 提交后立刻算下一步(第 4 章补选分岔后会紧接着挂起节点层)。
+   */
+  commitBuild(id: string): boolean {
+    const step = this.buildPending;
+    if (!step) return false;
+    const hero = this.heroId();
+    if (!hero) return false;
+    if (step.kind === "branch") {
+      const def = buildBranch(id);
+      if (!def || def.heroId !== hero || this.player.buildBranchId) return false;
+      const skill = heroSkillDef(def.skillId);
+      if (!skill) return false;
+      if (!this.player.skills.some((e) => e.skillId === skill.id)) {
+        const eq = makeSkillEquipment(skill);
+        this.player.skills.push(eq);
+        this.recordEquipment(eq);
+      }
+      this.player.unlockRhythm(skill.rhythm);
+      this.player.branchChosen = skill.id;
+      this.player.buildBranchId = def.id;
+      this.player.clearBuildTemp();
+    } else {
+      const node = buildNode(id);
+      if (!node || node.heroId !== hero || node.branchId !== this.player.buildBranchId || node.tier !== step.tier) return false;
+      this.player.buildNodes[step.tier - 1] = node.id;
+    }
+    this.buildPending = buildStepFor(hero, this.chapter, this.player.buildBranchId, this.player.buildNodes);
+    return true;
   }
 
   /** 广告复活的战场部分:满血 + 短无敌盾 + 清掉贴身敌人给喘息空间 */
@@ -660,6 +710,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     removeIf(this.enemies, (e) => Math.hypot(e.pos.x - p.pos.x, e.pos.y - p.pos.y) < REVIVE_CLEAR_RADIUS);
     this.reviveUsed += 1;
     this.over = false;
+    // 复活保留路线与节点,清空临时职业资源(印 / 过载 / 配对 / 幕)
+    p.clearBuildTemp();
   }
 
   /* ================= 一帧推进 ================= */
@@ -680,6 +732,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       this.tickBanners(dt);
       return;
     }
+    // 开章二选一未提交:世界整体冻结(宿主弹层与这道闸门同义,双保险)
+    if (this.buildPending) return;
     this.updatePlayer(dt);
     // 连杀狂潮:连杀 3 秒无新击杀则断连;每 10 连杀触发 2 秒狂潮(全装备触发加速)
     this.comboTimer -= dt;
@@ -814,17 +868,6 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     return this.engine.rhythmProgress(eq, this.ctx);
   }
 
-  /**
-   * 重置分岔(§6):撤掉已选分岔技能与它解锁的节律,挂在那条节律上的法宝按剩余已解锁节律重挂。
-   * 次数与价由升级弹层管(表在 ../data/shop);返回 false = 没有分岔可撤。
-   */
-  resetBranch(): boolean {
-    const r = this.player.resetBranch();
-    if (!r) return false;
-    for (const eq of this.player.equipment) normalizeArtifact(eq, this.player.rhythms, undefined, this.inputs.seasonId());
-    return true;
-  }
-
   /* ---------- 玩家受伤统一入口(遗物「护心镜」/「假命」的结算位) ---------- */
 
   /** 接触类伤害倍率:护心镜 ×0.85(叠加按表衰减) */
@@ -895,6 +938,18 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     }
     p.retaliationPct = retalPct;
     p.tickRetaliation(dt);
+    // 荆棘层(薇拉的站位资源,docs/DESIGN-HERO-PIPELINE.md §2 / §5.5 提案 4):
+    // 前半段只定"这一局走不走层数"(coreMorph 管怎么打);姿势是**局首二选一**的结果(R22),
+    // 读 `p.thornGainMode` —— 不再由分岔给。真正的累加在**位移之后**做,still / move 两档读的就是"本帧动不动"。
+    let stacked = false;
+    for (const eq of p.castList) {
+      const pr = eq.effect.params;
+      if ((pr.stackRadiusPer ?? 0) > 0 || (pr.sustainHeal ?? 0) > 0) stacked = true;
+    }
+    const gainMode = p.thornGainMode;
+    p.stackDriven = stacked;
+    // 挂机档跟着姿势走:绕场档就转圈,站定档就允许被围;没带层数的人仍是 startRun 那一档
+    const aiProfile: AiProfile = !stacked ? this.aiProfile : gainMode === "move" ? "orbit" : "hold";
     const before = vec2(p.pos.x, p.pos.y);
     const a = this.arena;
     // 纵向空气墙顶到上下坞边(按半径钳制:身体贴栏不越栏);坞高变化时 arena 随之变化
@@ -912,16 +967,21 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       // orbit:持续绕场(移动节律靠走位触发),敌人贴到很近才躲
       const nearest = this.nearestEnemy(p.pos, 110);
       let dodge = !!nearest;
-      if (nearest && this.aiProfile === "hold") {
-        let around = 0;
-        for (const e of this.enemies) if (e.hp > 0 && Math.hypot(e.pos.x - p.pos.x, e.pos.y - p.pos.y) <= 110) around += 1;
-        dodge = around >= AI_PROFILE_PARAMS.hold.maxContacts || p.hp / p.maxHp < AI_PROFILE_PARAMS.hold.fleeHpPct;
-      } else if (nearest && this.aiProfile === "orbit") {
+      if (nearest && aiProfile === "hold") {
+        if (stacked && gainMode === "still") {
+          // 荆甲档:站定才涨层 → 不能"围到 4 只就跑"(那样永远攒不满层,身份自相矛盾);只在血量过低时撤
+          dodge = p.hp / p.maxHp < AI_PROFILE_PARAMS.hold.fleeHpPct;
+        } else {
+          let around = 0;
+          for (const e of this.enemies) if (e.hp > 0 && Math.hypot(e.pos.x - p.pos.x, e.pos.y - p.pos.y) <= 110) around += 1;
+          dodge = around >= AI_PROFILE_PARAMS.hold.maxContacts || p.hp / p.maxHp < AI_PROFILE_PARAMS.hold.fleeHpPct;
+        }
+      } else if (nearest && aiProfile === "orbit") {
         dodge = Math.hypot(nearest.pos.x - p.pos.x, nearest.pos.y - p.pos.y) <= AI_PROFILE_PARAMS.orbit.dodgeRadius;
       }
       let mvx = 0;
       let mvy = 0;
-      if (nearest && !dodge && this.aiProfile === "hold") {
+      if (nearest && !dodge && aiProfile === "hold") {
         // 站桩承伤:原地不动
       } else if (nearest && dodge) {
         const dx = p.pos.x - nearest.pos.x;
@@ -962,7 +1022,31 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       this.poolTickAcc = 0;
     }
     p.movedThisFrame = Math.hypot(p.pos.x - before.x, p.pos.y - before.y);
+    // 荆棘层累加(位移之后:still / move 两档要读"本帧动不动")
+    if (stacked) {
+      let contacts = 0;
+      const cr2 = THORN_STACK.contactRadius * THORN_STACK.contactRadius;
+      for (const e of this.enemies) {
+        if (e.hp <= 0) continue;
+        const ddx = e.pos.x - p.pos.x;
+        const ddy = e.pos.y - p.pos.y;
+        if (ddx * ddx + ddy * ddy <= cr2) contacts += 1;
+      }
+      const sb = this.ctx.setBonus;
+      const gainMult = sb && sb.id === "thorn" && sb.bonus3 ? SET_BONUSES.thorn3StackGainMult : 1;
+      p.tickThornStack(dt, contacts, p.movedThisFrame, true, gainMode, gainMult);
+    } else {
+      p.tickThornStack(dt, 0, p.movedThisFrame, false, gainMode);
+    }
     p.update(dt);
+  }
+
+  /**
+   * 局首姿势二选一的落点(R22):写进玩家本局态,下一帧起 `updatePlayer` 就按它攒层、
+   * 并跟着换挂机档(绕场 / 站桩)。只有走荆棘层的英雄读得到意义。
+   */
+  setThornGainMode(mode: ThornGainMode): void {
+    this.player.thornGainMode = mode;
   }
 
   private updateEnemies(dt: number): void {
@@ -1053,8 +1137,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
             speed: [40, 130], size: [1.4, 2.8], life: [0.25, 0.5], halo: 2.4, drag: 3,
           });
         }
-        // 荆棘反伤回血流:每次挨打回固定比例最大生命
-        if (this.isThornBuild()) {
+        // 荆棘反伤回血流:每次挨打回固定比例最大生命(走荆棘层的人除外 —— 她的续航按层数逐帧给)
+        if (this.isThornBuild() && !this.player.stackDriven) {
           this.player.heal(Math.max(1, Math.round(this.player.maxHp * THORN_HEAL_PCT)));
         }
       }
@@ -1088,7 +1172,7 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       this.hurtPlayer(dmg);
       this.engine.onHurt(this.ctx, dmg, src);
       this.spawnDmg(p.pos, dmg, "#ff6b6b");
-      if (this.isThornBuild()) p.heal(Math.max(1, Math.round(p.maxHp * THORN_HEAL_PCT)));
+      if (this.isThornBuild() && !p.stackDriven) p.heal(Math.max(1, Math.round(p.maxHp * THORN_HEAL_PCT)));
     }
   }
 
@@ -1214,6 +1298,8 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
             break;
           }
           this.damageEnemy(e, isDevourer ? Math.round(proj.damage * slay) : proj.damage, proj.source, proj.lifesteal, 30, proj.pos, proj.splitChild === true);
+          // 章节节点层(V1.1):凯尔过载 / 冰印只认真实弹体命中,不认地面 DoT
+          this.engine.recordBuildHit(proj.source, e, this.ctx);
           this.emitHitSpark(proj);
           if (proj.kind === "ray" && proj.slow) applySlow(e, proj.slow, proj.slowDuration ?? 2);
           if (proj.explode) {
@@ -1329,20 +1415,31 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
       m.ttl -= dt;
       m.attackCd -= dt;
       this.emitMinionFx(m, dt);
-      const target = this.nearestEnemy(m.pos, MINION_SIGHT);
+      let target = this.nearestEnemy(m.pos, MINION_SIGHT);
+      // 薇洛 A:头狼焦点 / 护主节点(只咬主人 100px 内的威胁) / 夹猎偏移
+      if (m.wolfSide) {
+        const w = p.buildRes.wolf;
+        if (w && w.focusUntil > p.buildTime) {
+          const f = this.enemies.find((e) => e.id === w.focusTargetId && e.hp > 0);
+          if (f) target = f;
+        }
+        if (m.guardRadius && target && Math.hypot(target.pos.x - p.pos.x, target.pos.y - p.pos.y) > 100) target = null;
+      }
       if (target && m.attackCd <= 0) {
         const d = Math.hypot(target.pos.x - m.pos.x, target.pos.y - m.pos.y);
         if (d <= MINION_ATTACK_RANGE) {
           m.attackCd = m.attackInterval;
           this.damageEnemy(target, m.damage, m.source, 0, MINION_HIT_KNOCKBACK, m.pos);
+          this.engine.onMinionHit(m, target, this.ctx);
           if (m.healOnHit) {
             const base = Math.round(m.damage * MINION_HEAL_ON_HIT_PCT);
             const drawn = this.player.drawRetaliation(Math.round(base * RETALIATION_HEAL.perHitMult));
             this.player.heal(base + Math.round(drawn));
           }
         } else {
-          // 追击目标
-          const dx = target.pos.x - m.pos.x;
+          // 追击目标(夹猎节点:左右狼从目标两侧靠近)
+          const aimX = m.flank && m.wolfSide ? target.pos.x + (m.wolfSide === "l" ? -m.flank : m.flank) : target.pos.x;
+          const dx = aimX - m.pos.x;
           const dy = target.pos.y - m.pos.y;
           const l = Math.hypot(dx, dy) || 1;
           m.pos.x += (dx / l) * m.speed * dt;
@@ -1359,7 +1456,11 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
         }
       }
     }
-    removeIf(this.minions, (m) => m.ttl <= 0);
+    removeIf(this.minions, (m) => {
+      // 亡影自然到期 +1 幕(强制淘汰 / 上限裁剪不给幕)
+      if (m.ttl <= 0 && m.shade) this.engine.onShadeExpire(m, this.ctx);
+      return m.ttl <= 0;
+    });
     if (this.minions.length > LIMITS.minions) {
       this.minions.splice(0, this.minions.length - LIMITS.minions);
     }
@@ -1424,7 +1525,15 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
     if (from) {
       const fm = shieldguardDamageMult(e, from);
       dmg = Math.round(dmg * fm);
-      if (fm < 1) this.emitShieldBlock(e); // 正面被挡:盾面金属火花
+      if (fm < 1) {
+        this.emitShieldBlock(e); // 正面被挡:盾面金属火花
+        // 读数(DESIGN-HERO-PIPELINE §5.5 提案 3):减免一直在结算里发生,但玩家看不到"这一发撞在盾面上";
+        // 每 0.45s 最多报一条,数字取当前生效倍率(盾卫 0.2 / Boss 0.6),纯装饰、不参与结算。
+        if (this.elapsed >= this.frontLabelAt) {
+          this.frontLabelAt = this.elapsed + 0.45;
+          this.spawnLabel(e.pos, `盾 ×${fm}`, "#8f9bb3");
+        }
+      }
     }
     if (dmg <= 0) return;
     // 征服者天赋:全局增伤 / 绝境爆发 / 暴击 / 元素精通
@@ -1670,7 +1779,15 @@ export class BattleWorld<F extends FxBridge = FxBridge> {
 
   /** 生成一条伤害飘字:入 dmgNums(宿主渲染读取)+ 即时通知宿主(一次性视觉) */
   spawnDmg(pos: Vec2, value: number, color: string): void {
-    const d: DmgNum = { pos: vec2(pos.x + rand(-6, 6), pos.y - 6), value: String(value), color, ttl: 0.6, maxTtl: 0.6 };
+    this.spawnLabel(pos, String(value), color);
+  }
+
+  /** 正面被挡读数的下一次允许时刻(秒;用 `elapsed` 比,免得每次减免都糊一屏字) */
+  private frontLabelAt = 0;
+
+  /** 文字飘字(数字与"盾 ×0.2"这类非数字读数共用同一池、同一宿主出口) */
+  spawnLabel(pos: Vec2, text: string, color: string): void {
+    const d: DmgNum = { pos: vec2(pos.x + rand(-6, 6), pos.y - 6), value: text, color, ttl: 0.6, maxTtl: 0.6 };
     this.dmgNums.push(d);
     if (this.dmgNums.length > DMG_NUM_CAP) this.dmgNums.splice(0, this.dmgNums.length - DMG_NUM_CAP);
     this.host.onDamage(d);

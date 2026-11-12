@@ -131,8 +131,8 @@ describe("章型配置(chapterTypes 段)", () => {
 
   it("章型数组非法回退默认", () => {
     applyChapters({ eliteChapters: "abc", treasureChapters: [] });
-    expect(ELITE_CHAPTERS).toEqual([5, 10, 15]);
-    expect(TREASURE_CHAPTERS).toEqual([7, 14]);
+    expect(ELITE_CHAPTERS).toEqual([4, 8, 12]);
+    expect(TREASURE_CHAPTERS).toEqual([6, 10]);
   });
 });
 

@@ -42,6 +42,13 @@ export interface Cloud {
   /** 陨星(火焰/落点,DESIGN-SEASON-SETS §3.3):telegraph 倒计时(ttl=delay),
    *  落点引爆 dps 值伤害,并留下灼烧余烬小云(参数在 cast 时按倍率算好) */
   meteor?: { burnDps: number; burnRadius: number; burnDuration: number };
+  /**
+   * 章节节点层(V1.1)城垣:首次进入圈内的敌人吃一次固定伤害;`follow` = 跟随玩家。
+   * 伤害与命中集合由引擎 `tickBuild` 结算(世界层与模拟器共用),本字段只承载数据。
+   */
+  wall?: { damage: number; hit: Set<number>; follow: boolean };
+  /** 章节节点层(V1.1)薇拉 B 的棘迹:引擎 `tickBuild` 给圈内敌人叠踏迹印,不另做 DoT */
+  trail?: boolean;
   source: Equipment;
   /** 纯装饰:陨星灼烧余烬标记,渲染层据此画火焰氛围粒子(不参与结算) */
   fxEmber?: boolean;
@@ -58,6 +65,8 @@ export function spawnCloud(opts: {
   heals?: boolean;
   ring?: { expandSpeed: number; slow: number; slowDuration: number };
   meteor?: { burnDps: number; burnRadius: number; burnDuration: number };
+  wall?: { damage: number; follow: boolean };
+  trail?: boolean;
   source: Equipment;
   /** 纯装饰:灼烧余烬渲染标记 */
   fxEmber?: boolean;
@@ -74,6 +83,8 @@ export function spawnCloud(opts: {
     heals: opts.heals,
     ring: opts.ring ? { ...opts.ring, hits: new Set<number>() } : undefined,
     meteor: opts.meteor,
+    wall: opts.wall ? { ...opts.wall, hit: new Set<number>() } : undefined,
+    trail: opts.trail,
     source: opts.source,
     fxEmber: opts.fxEmber,
   };
@@ -98,6 +109,12 @@ export interface Minion {
   healOnHit: boolean;
   /** 亡灵冠冕唤出的亡影(用于场上 4 上限计数,DESIGN-SEASON-SETS §3.4) */
   shade?: boolean;
+  /** 薇洛 A:两只职业狼的左右槽(L/R;配对与头狼判定用) */
+  wolfSide?: "l" | "r";
+  /** 薇洛 A 节点「夹猎」:靠近目标时左右偏移 px(0 = 不夹) */
+  flank?: number;
+  /** 薇洛 A 节点「护主」:守主人半径 px(0 = 不守) */
+  guardRadius?: number;
   source: Equipment;
   /** 纯装饰:召唤出场爆点是否已播(渲染层一次性标记,不参与结算) */
   fxSpawned?: boolean;
@@ -115,6 +132,9 @@ export function spawnMinion(opts: {
   speed?: number;
   /** 亡影标记(亡灵冠冕 4 上限计数) */
   shade?: boolean;
+  wolfSide?: "l" | "r";
+  flank?: number;
+  guardRadius?: number;
   color?: string;
   source: Equipment;
 }): Minion {
@@ -131,6 +151,9 @@ export function spawnMinion(opts: {
     color: opts.color ?? MINION_COLOR_DEFAULT,
     healOnHit: opts.healOnHit ?? false,
     shade: opts.shade,
+    wolfSide: opts.wolfSide,
+    flank: opts.flank,
+    guardRadius: opts.guardRadius,
     source: opts.source,
   };
 }

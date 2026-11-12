@@ -12,13 +12,13 @@
 
 import { type Vec2, vec2 } from "../core/math";
 import type { Player } from "../entities/player";
-import type { Enemy } from "../entities/enemy";
+import { applySlow, type Enemy } from "../entities/enemy";
 import type { Projectile } from "../entities/projectile";
 import { spawnProjectile } from "../entities/projectile";
 import type { Cloud, Minion } from "../entities/objects";
 import { spawnCloud, spawnMinion } from "../entities/objects";
 import { artifactInnerCd, echoSpecOf, equipmentResonance, passiveEchoSpec, skillResonant, type Equipment } from "../data/equipmentGen";
-import { CRIT_TRIGGER_CD } from "../data/combat";
+import { CRIT_TRIGGER_CD, THORN_STACK } from "../data/combat";
 import type { EffectInstance, EffectType, ModifierType, TriggerType } from "../data/affixes";
 import { qualityDef, QUALITY_HASTE_CAP, QUALITY_BONUS_CONVERSION } from "../data/quality";
 import { SET_BONUSES, type SetBonusState } from "../data/sets";
@@ -26,6 +26,7 @@ import { COMBO_VALUES, type ComboStates } from "../data/combos";
 import type { SeasonMutation } from "../data/seasonSets";
 import { RELIC_VALUES, isRelicType, passiveStackMult, type MorphPatch, type PassiveType } from "../data/artifacts";
 import { heroSkillDef } from "../data/heroSkills";
+import { buildBranch, hasChapterBuild, selectedBuildPatch } from "../data/heroBuild";
 import { HIT_RHYTHM_WINDOW, isRhythm, rhythmIntervalMult, rhythmThresholdMult, type RhythmId } from "../data/rhythm";
 
 /** 特效(纯视觉) */
@@ -84,6 +85,8 @@ interface TriggerState {
   echoMult: number;
   /** 主动法宝事件型节律的内置冷却(秒;表值 ARTIFACT_DEFS.innerCd),防同帧齐放 */
   innerCd: number;
+  /** 状态型回血的小数累计器(每秒按层数比例给量,攒满 1 才入账,避免 dt 粒度把治疗吹大) */
+  sustainAcc: number;
 }
 
 interface EffStats {
@@ -119,7 +122,7 @@ export class EquipmentEngine {
   private stateOf(eq: Equipment): TriggerState {
     let s = this.states.get(eq.id);
     if (!s) {
-      s = { pulseTimer: 0, pulseInterval: 0, comboCount: 0, comboWindowTimer: 0, moveAccum: 0, hurtCd: 0, hitCd: 0, critCd: 0, echoTimer: 0, echoMult: 1, innerCd: 0 };
+      s = { pulseTimer: 0, pulseInterval: 0, comboCount: 0, comboWindowTimer: 0, moveAccum: 0, hurtCd: 0, hitCd: 0, critCd: 0, echoTimer: 0, echoMult: 1, innerCd: 0, sustainAcc: 0 };
       this.states.set(eq.id, s);
     }
     return s;
@@ -152,19 +155,42 @@ export class EquipmentEngine {
     return true;
   }
 
-  /** 共鸣变形补丁:主动法宝挂在共鸣节律上 → 法宝表补丁;独有技能拿到共鸣被动 → 技能表补丁;无 → null */
+  /**
+   * 变形补丁汇总:① 主动法宝挂在共鸣节律上 → 法宝表补丁;② 独有技能拿到共鸣被动 → 技能表补丁;
+   * ③ **本英雄已装备分支给核心的形态补丁**(`coreMorph`,选中即生效、不需要指定被动法宝)。
+   * 同键以后入的覆盖前者 —— 共鸣补丁排在分支补丁之后,它是"再上一层"的报酬。
+   */
   private morphOf(eq: Equipment, ctx: BattleContext): MorphPatch | null {
+    const parts: MorphPatch[] = [];
     if (eq.kind === "skill") {
-      if (!eq.skillId || !skillResonant(eq, ctx.player.passives ?? [])) return null;
-      return heroSkillDef(eq.skillId)?.resonanceMorph ?? null;
+      const def = eq.skillId ? heroSkillDef(eq.skillId) : null;
+      if (def && def.kind === "core") {
+        for (const s of ctx.player.skills) {
+          const b = s.skillId ? heroSkillDef(s.skillId) : null;
+          if (b && b.kind === "branch" && b.heroId === def.heroId && b.coreMorph) parts.push(b.coreMorph);
+        }
+      }
+      // 分岔主动件自己的 coreMorph(薇洛 B 的 `haunt_crown` 读 loop.shadeTroupe;薇拉 / 凯尔同)
+      if (def && def.kind === "branch" && def.coreMorph) parts.push(def.coreMorph);
+      if (def && eq.skillId && skillResonant(eq, ctx.player.passives ?? [])) parts.push(def.resonanceMorph);
+      // 章节节点层(V1.1):本局已选节点并入该英雄的每一次技能施放(三原型;legacy 恒 null)
+      if (def && def.heroId !== "generic" && hasChapterBuild(def.heroId)) {
+        const nodePatch = selectedBuildPatch(ctx.player.buildNodes);
+        if (nodePatch) parts.push({ node: nodePatch });
+      }
+    } else {
+      const m = equipmentResonance(eq, ctx.seasonId)?.morph;
+      if (m) parts.push(m);
     }
-    return equipmentResonance(eq, ctx.seasonId)?.morph ?? null;
+    if (parts.length === 0) return null;
+    return parts.length === 1 ? parts[0] : Object.assign({}, ...parts);
   }
 
   /**
    * 只读查询(R15,HUD 节律进度条):首条触发器所挂节律攒到几成(0–1)。
-   * 连杀 = 已攒 / 所需;移动 = 已走 / 所需;低血 = 已失血 / 到阈值需失血;受击 / 击杀 = 内置冷却走完即 1(技能无冷却恒 1);
-   * 周期节律与隐藏触发器返 null(周期由 pulseLeft 的 CD 条另画)。与 update / onHurt 里的判定同一套公式。
+   * 连杀 = 已攒 / 所需;移动 = 已走 / 所需;低血 = 已失血 / 到阈值需失血;
+   * 受击 = 带荆棘层的技能(薇拉核心)读层数比例,其余与击杀同为内置冷却走完即 1;周期 null。
+   * 公式与 update / onHurt 里的判定同一套。
    */
   rhythmProgress(eq: Equipment, ctx: BattleContext): { frac: number; kind: RhythmId } | null {
     const tr = eq.triggers[0];
@@ -188,13 +214,24 @@ export class EquipmentEngine {
         const lost = 1 - p.hp / Math.max(1, p.maxHp);
         return { frac: threshold >= 1 ? 1 : Math.max(0, Math.min(1, lost / (1 - threshold))), kind: t };
       }
-      case "hit":
-      case "kill": {
-        const cdMax = eq.kind === "active" ? artifactInnerCd(eq) : 0;
-        const cd = st?.innerCd ?? 0;
-        return { frac: cdMax > 0 && cd > 0 ? Math.max(0, 1 - cd / cdMax) : 1, kind: t };
+      case "hit": {
+        // 带荆棘层的技能(薇拉核心):这条条画的是**层数**(贴身攒、脱战掉),不是"冷却走完即满"
+        const sk = eq.effect.params;
+        if (eq.kind === "skill" && ((sk.stackRadiusPer ?? 0) > 0 || (sk.stackPowerLoss ?? 0) > 0)) {
+          return { frac: ctx.player.thornStackFrac, kind: t };
+        }
+        return this.innerCdFrac(eq, st, t);
       }
+      case "kill":
+        return this.innerCdFrac(eq, st, t);
     }
+  }
+
+  /** 受击 / 击杀节律的通用读数:内置冷却走完即满(技能无内置冷却 → 恒 1) */
+  private innerCdFrac(eq: Equipment, st: TriggerState | undefined, kind: RhythmId): { frac: number; kind: RhythmId } {
+    const cdMax = eq.kind === "active" ? artifactInnerCd(eq) : 0;
+    const cd = st?.innerCd ?? 0;
+    return { frac: cdMax > 0 && cd > 0 ? Math.max(0, 1 - cd / cdMax) : 1, kind };
   }
 
   /** 只读查询:脉冲冷却剩余与当前生效间隔(战斗 HUD 倒计时用);无脉冲状态返 null */
@@ -206,6 +243,9 @@ export class EquipmentEngine {
 
   /** 帧驱动更新:周期脉冲 / 移动累积 / 暴击冷却 / 回响延迟 */
   update(ctx: BattleContext, dt: number): void {
+    // 章节节点层(V1.1):过载合并窗 / 印记到期 / 踏迹 / 幕计时 / 延迟段统一在这里推进,
+    // 世界层与 balance-sim 共用同一份(`tickBuild` 不读 Canvas / 平台)。
+    this.tickBuild(ctx, dt);
     if (this.hitWindow > 0) this.hitWindow -= dt;
     for (const eq of this.castList(ctx)) {
       const st = this.stateOf(eq);
@@ -231,6 +271,21 @@ export class EquipmentEngine {
       }
 
       const moveDist = ctx.player.movedThisFrame;
+      // 状态型回血(R19:她的续航只认荆棘层):按层数比例逐帧给量,小数攒满 1 才入账
+      const sustain = eq.effect.params.sustainHeal ?? 0;
+      if (sustain > 0) {
+        const frac = ctx.player.thornStackFrac;
+        if (frac > 0) {
+          st.sustainAcc += sustain * frac * (this.statsOf(eq, ctx).healMult ?? 1) * dt;
+          const whole = Math.floor(st.sustainAcc);
+          if (whole > 0) {
+            st.sustainAcc -= whole;
+            ctx.healPlayer(whole);
+          }
+        } else {
+          st.sustainAcc = 0;
+        }
+      }
       for (const tr of eq.triggers) {
         const intervalMul = (1 - this.statsOf(eq, ctx).haste) * this.rhythmMult(ctx, tr.def.type, "interval");
         if (tr.def.type === "pulse") {
@@ -326,7 +381,7 @@ export class EquipmentEngine {
     const p = ctx.player;
     // 荆棘套一档「棘肤」:受击回血;数值见 ../data/sets 的 SET_BONUSES
     const sb = ctx.setBonus;
-    if (sb && sb.id === "thorn" && sb.bonus3 && this.thornHealCd <= 0) {
+    if (sb && sb.id === "thorn" && sb.bonus3 && !p.stackDriven && this.thornHealCd <= 0) {
       ctx.healPlayer(p.maxHp * SET_BONUSES.thorn3HealPct);
       this.thornHealCd = SET_BONUSES.thorn3HealCd;
     }
@@ -544,11 +599,43 @@ export class EquipmentEngine {
 
   /** 灵狼(亡影剧团):群体近战协战;复用骷髅 AI,移速 ×1.3 */
   private castSpiritWolves(eq: Equipment, eff: EffectInstance, s: EffStats, ctx: BattleContext): void {
-    const count = (eff.params.count ?? 2) + (s.summonExtra ?? 0);
+    const morph = this.morphOf(eq, ctx);
+    // 薇洛 B:核心狼槽被亡影替代(定拍走分岔主动件 `haunt_crown`),核心施放直接吞掉
+    if (morph?.loop?.shadeTroupe && eq.skillId === "willow_core") return;
     const damage = Math.round((eff.params.damage ?? 14) * s.power);
     const duration = ((eff.params.duration ?? 12) + s.durationBonus) * (s.durationMult ?? 1);
     const p = ctx.player;
     const at = this.summonOrigin(eq, ctx);
+    // 薇洛 A:两个职业狼槽 L/R;后拍刷新寿命,不重置攻击计时,也不新增第三只
+    const wolfLoop = morph?.loop?.wolfPair;
+    if (wolfLoop && eq.skillId === "willow_core") {
+      const wolfNode = morph?.node?.wolf;
+      for (const side of ["l", "r"] as const) {
+        const live = ctx.minions.find((m) => m.wolfSide === side);
+        if (live) {
+          live.ttl = Math.max(live.ttl, duration);
+          if (wolfNode?.flank) live.flank = wolfNode.flank;
+          if (wolfNode?.guard) live.guardRadius = wolfNode.guard;
+          continue;
+        }
+        const m = spawnMinion({
+          pos: vec2(at.x + (side === "l" ? -24 : 24) + (Math.random() - 0.5) * 20, at.y + (Math.random() - 0.5) * 20),
+          hp: 40 + ctx.player.level * 6,
+          damage,
+          duration,
+          speed: 273,
+          color: "#c9a6ff",
+          wolfSide: side,
+          flank: wolfNode?.flank,
+          guardRadius: wolfNode?.guard,
+          source: eq,
+        });
+        ctx.minions.push(m);
+      }
+      ctx.addFx({ type: "heal", pos: vec2(p.pos.x, p.pos.y), ttl: 0.25, maxTtl: 0.25 });
+      return;
+    }
+    const count = (eff.params.count ?? 2) + (s.summonExtra ?? 0);
     for (let i = 0; i < count; i++) {
       const m = spawnMinion({
         pos: vec2(at.x + (Math.random() - 0.5) * 40, at.y + (Math.random() - 0.5) * 40),
@@ -568,6 +655,13 @@ export class EquipmentEngine {
 
   /** 亡灵冠冕(亡影剧团):击杀触发时在尸体处唤醒亡影;场上亡影上限 4(防滚雪球) */
   private castHauntCrown(eq: Equipment, eff: EffectInstance, s: EffStats, ctx: BattleContext): void {
+    const morph = this.morphOf(eq, ctx);
+    const troupe = morph?.loop?.shadeTroupe;
+    // 薇洛 B:分岔主动件每 3 秒召一影(基础入场),幕数 / 谢幕由本段结算
+    if (troupe && eq.skillId === "willow_shades") {
+      this.castShadeEntry(eq, eff, s, ctx, troupe, morph?.node?.shade);
+      return;
+    }
     const shades = ctx.minions.filter((m) => m.shade);
     if (shades.length >= 4) return;
     const at = this.lastKillPos ?? vec2(ctx.player.pos.x, ctx.player.pos.y);
@@ -586,6 +680,189 @@ export class EquipmentEngine {
     }
   }
 
+  /** 薇洛 B:一次定拍入场(靶前召影 → 横扫 → +1 幕 → 满 4 幕谢幕) */
+  private castShadeEntry(
+    eq: Equipment,
+    eff: EffectInstance,
+    s: EffStats,
+    ctx: BattleContext,
+    loop: import("../data/heroBuild").ShadeTroupeLoop,
+    node: import("../data/heroBuild").ShadeNodePatch | undefined,
+  ): void {
+    const alive = ctx.enemies.filter((e) => e.hp > 0);
+    if (alive.length === 0) return;
+    const p = ctx.player;
+    const br = p.buildRes;
+    if (!br.shade) br.shade = { acts: 0, timer: 0, cd: 0, lastX: p.pos.x, lastY: p.pos.y, hasStage: false };
+    const shade = br.shade;
+    let target = this.nearest(p.pos, alive, 640);
+    if (node?.focus) {
+      const elite = alive.find((e) => e.isElite);
+      if (elite) target = elite;
+    }
+    if (node?.tour) {
+      let far = alive[0];
+      for (const e of alive) {
+        if (Math.hypot(e.pos.x - p.pos.x, e.pos.y - p.pos.y) > Math.hypot(far.pos.x - p.pos.x, far.pos.y - p.pos.y)) far = e;
+      }
+      target = far;
+    }
+    if (!target) return;
+    let pos = vec2(target.pos.x, target.pos.y);
+    if (node?.stage && shade.hasStage) {
+      const nearStage = alive.filter((e) => Math.hypot(e.pos.x - shade.lastX, e.pos.y - shade.lastY) <= node.stage!.radius);
+      const pick = nearStage[0] ?? target;
+      pos = vec2(pick.pos.x, pick.pos.y);
+    } else {
+      // 靶前 = 玩家到目标连线上、目标身前一档
+      const dx = p.pos.x - target.pos.x;
+      const dy = p.pos.y - target.pos.y;
+      const l = Math.hypot(dx, dy) || 1;
+      pos = vec2(target.pos.x + (dx / l) * 30, target.pos.y + (dy / l) * 30);
+    }
+    const shades = ctx.minions.filter((m) => m.shade);
+    while (shades.length >= loop.maxShades) {
+      const old = shades.shift()!;
+      const idx = ctx.minions.indexOf(old);
+      if (idx >= 0) ctx.minions.splice(idx, 1);
+    }
+    ctx.minions.push(spawnMinion({
+      pos, hp: 30 + p.level * 5, damage: Math.round((eff.params.damage ?? 14) * s.power),
+      duration: loop.shadeTtl, color: "#8f9bb3", shade: true, source: eq,
+    }));
+    this.damageArea(ctx, eq, pos, 80, Math.round(14 * loop.shadeDamageMult), { maxTargets: loop.shadeMaxTargets, from: pos });
+    shade.acts += 1;
+    shade.lastX = pos.x;
+    shade.lastY = pos.y;
+    shade.hasStage = true;
+    if (shade.acts >= loop.actsToCurtain) this.castCurtain(ctx, eq, loop, node);
+  }
+
+  /** 薇洛 B 谢幕:两个 90px 圈共享命中集合;谢幕不消耗实体、不触发退场 */
+  private castCurtain(
+    ctx: BattleContext,
+    eq: Equipment,
+    loop: import("../data/heroBuild").ShadeTroupeLoop,
+    node: import("../data/heroBuild").ShadeNodePatch | undefined,
+  ): void {
+    const p = ctx.player;
+    const br = p.buildRes;
+    const sh = br.shade;
+    if (!sh || sh.cd > 0 || sh.acts < loop.actsToCurtain) return;
+    sh.acts -= loop.actsToCurtain;
+    sh.cd = loop.curtainIcd;
+    const centers: Vec2[] = [];
+    if (node?.focus) {
+      const elite = ctx.enemies.find((e) => e.hp > 0 && e.isElite);
+      if (elite) centers.push(vec2(elite.pos.x, elite.pos.y));
+    }
+    if (centers.length === 0) centers.push(vec2(sh.lastX, sh.lastY));
+    const otherShade = ctx.minions.find((m) => m.shade);
+    if (otherShade && centers.length < 2) centers.push(vec2(otherShade.pos.x, otherShade.pos.y));
+    const damage = Math.round(loop.curtainBaseDamage * loop.curtainDamageMult);
+    const hit = new Set<number>();
+    const picks: Enemy[] = [];
+    for (const c of centers) {
+      for (const e of ctx.enemies) {
+        if (e.hp <= 0 || hit.has(e.id)) continue;
+        if (Math.hypot(e.pos.x - c.x, e.pos.y - c.y) <= loop.curtainRadius + e.def.radius) {
+          hit.add(e.id);
+          picks.push(e);
+        }
+      }
+    }
+    // 双舞台:两圈之间连线,共享每靶一次谢幕命中
+    if (node?.link && centers.length >= 2) {
+      for (const e of ctx.enemies) {
+        if (e.hp <= 0 || hit.has(e.id)) continue;
+        if (this.pointSegmentDist(e.pos, centers[0], centers[1]) <= node.link.width / 2 + e.def.radius) {
+          hit.add(e.id);
+          picks.push(e);
+        }
+      }
+    }
+    for (const e of picks.slice(0, loop.curtainMaxTargets)) {
+      ctx.damageEnemy(e, damage, { source: eq, from: centers[0] });
+      if (node?.slow) applySlow(e, node.slow.factor, node.slow.duration);
+    }
+    if (node?.doubleAct) {
+      br.pendingShade.push({
+        at: p.buildTime + node.doubleAct.delay, x: centers[0].x, y: centers[0].y,
+        damage: Math.round(damage * node.doubleAct.damageShare), radius: loop.curtainRadius,
+        maxTargets: loop.curtainMaxTargets, slow: !!node.slow,
+      });
+    }
+  }
+
+  /** 薇洛 B:亡影自然到期 +1 幕(强制淘汰 / 刷新不给幕;调用方只对 ttl 自然归零的实体调) */
+  onShadeExpire(_m: Minion, ctx: BattleContext): void {
+    const branch = buildBranch(ctx.player.buildBranchId);
+    const loop = branch?.loop.shadeTroupe;
+    if (!loop) return;
+    const sh = ctx.player.buildRes.shade;
+    if (!sh) return;
+    sh.acts = Math.min(loop.actsToCurtain + 1, sh.acts + 1);
+  }
+
+  /**
+   * 薇洛 A 双狼命中回调(世界层与模拟器在狼咬中后调用):
+   * 同靶 1.2s 内 L/R 各一次未使用命中 → +1 猎记;3 记 → 头狼 3s + 扑击 2×14。
+   */
+  onMinionHit(m: Minion, target: Enemy, ctx: BattleContext): void {
+    if (!m.wolfSide) return;
+    const branch = buildBranch(ctx.player.buildBranchId);
+    const loop = branch?.loop.wolfPair;
+    if (!loop) return;
+    const p = ctx.player;
+    const br = p.buildRes;
+    const node = selectedBuildPatch(p.buildNodes)?.wolf;
+    const now = p.buildTime;
+    if (!br.wolf) br.wolf = { targetId: 0, lAt: -1, rAt: -1, marks: 0, lastPairAt: -1, alphaUntil: 0, focusUntil: 0, focusTargetId: 0 };
+    const w = br.wolf;
+    if (w.targetId !== target.id) {
+      w.targetId = target.id;
+      w.lAt = -1;
+      w.rAt = -1;
+    }
+    if (m.wolfSide === "l") w.lAt = now;
+    else w.rAt = now;
+    if (w.lAt < 0 || w.rAt < 0 || Math.abs(w.lAt - w.rAt) > loop.pairWindow) return;
+    w.lAt = -1;
+    w.rAt = -1;
+    w.marks += 1;
+    w.lastPairAt = now;
+    if (w.marks < loop.marksToAlpha) return;
+    w.marks = 0;
+    w.alphaUntil = now + loop.alphaSec;
+    const pounce = Math.round(m.damage * loop.pounceMult);
+    ctx.damageEnemy(target, pounce, { source: m.source, from: m.pos });
+    if (node?.repounce) {
+      const next = this.nearest(target.pos, ctx.enemies.filter((e) => e.hp > 0 && e.id !== target.id), 320) ?? target;
+      ctx.damageEnemy(next, Math.round(m.damage * loop.pounceMult * 0.5), { source: m.source, from: m.pos });
+    }
+    if (node?.focus) {
+      w.focusUntil = now + node.focus.seconds;
+      const elite = ctx.enemies.find((e) => e.hp > 0 && e.isElite);
+      w.focusTargetId = node.focus.retargetElite && elite ? elite.id : target.id;
+    }
+    if (node?.huntLine) {
+      const wolves = ctx.minions.filter((x) => x.wolfSide);
+      if (wolves.length >= 2) {
+        const a = wolves[0];
+        const b = wolves[1];
+        let n = 0;
+        for (const e of ctx.enemies) {
+          if (e.hp <= 0 || n >= node.huntLine.maxTargets) continue;
+          if (this.pointSegmentDist(e.pos, a.pos, b.pos) <= node.huntLine.width / 2 + e.def.radius) {
+            ctx.damageEnemy(e, node.huntLine.damage, { source: m.source, from: m.pos });
+            n += 1;
+          }
+        }
+        br.huntLineUntil = now + 2;
+      }
+    }
+  }
+
   private castKnife(
     eq: Equipment,
     eff: EffectInstance,
@@ -599,7 +876,15 @@ export class EquipmentEngine {
     const origin = vec2(ctx.player.pos.x, ctx.player.pos.y);
     // 基础扇形多发(spread) + 分裂修饰器叠加,形成弹幕;共鸣变形「连杀飞刃」再按世界层连杀数加发
     const morph = this.morphOf(eq, ctx);
-    const total = (eff.params.spread ?? 1) + s.splitExtra + this.comboExtra(ctx, morph);
+    // 章节节点层(V1.1):凯尔 A 过载 / 凯尔 B 三束同向 + 冰印
+    const overload = morph?.loop?.overload;
+    const marksB = morph?.loop?.marksB;
+    const fanNode = morph?.node?.fan;
+    const br = ctx.player.buildRes;
+    if (marksB && eq.skillId === "kyle_core") br.markRound = [];
+    const total = marksB && eq.skillId === "kyle_core"
+      ? marksB.baseSpread + s.splitExtra
+      : (eff.params.spread ?? 1) + s.splitExtra + this.comboExtra(ctx, morph);
     const base = this.nearest(origin, enemies, range);
     // 初始武器全向弹幕:spread ≥ 6 时均匀环绕 360°(前 5 章新手区不被围死,
     // 单侧扇形会被四边刷怪从背后包抄;商店随机卡 spread 1-3 不受影响)
@@ -609,9 +894,52 @@ export class EquipmentEngine {
       baseAngle = Math.atan2(this.lastAttackerPos.y - origin.y, this.lastAttackerPos.x - origin.x);
     }
     let spreadAngle = Math.PI / 9; // 每发 20° 散布
-    if ((eff.params.spread ?? 1) >= 6) {
+    if ((eff.params.spread ?? 1) >= 6 && !(marksB && eq.skillId === "kyle_core")) {
       baseAngle = 0;
-      spreadAngle = (Math.PI * 2) / total; // 360° 等分
+      spreadAngle = (Math.PI * 2) / total; // 360° 等分(凯尔 B 的基础轮改 3 束同向,不走这一支)
+    }
+    if (marksB && eq.skillId === "kyle_core") spreadAngle = 0;
+
+    // 凯尔 A「满 100 卸载」:先扣资源再射 8 束;额外齐射不积过载(本段只发弹,不开窗)
+    if (overload && eq.skillId === "kyle_core" && br.overload >= overload.cap && br.overloadCd <= 0) {
+      br.overload -= overload.cap;
+      br.overloadCd = overload.icd;
+      let burstAngle = fanNode?.intercept && base
+        ? Math.atan2(base.pos.y - origin.y, base.pos.x - origin.x)
+        : this.denseAngle(origin, enemies);
+      const arc = (overload.fanDeg * Math.PI) / 180;
+      if (fanNode?.rotateDeg) {
+        burstAngle += (br.overloadSpin * Math.PI) / 180;
+        br.overloadSpin = (br.overloadSpin + fanNode.rotateDeg) % 360;
+      }
+      const bdmg = Math.round(60 * s.power * overload.burstDamageMult);
+      const sourceId = eq.skillId ?? "";
+      const speed = (eff.params.speed ?? 620) * (s.speedMult ?? 1);
+      if (fanNode?.frontBack) {
+        this.fireFan(ctx, eq, origin.x, origin.y, burstAngle, Math.ceil(overload.burstSpread / 2), bdmg, speed, s.pierce, kind, arc);
+        this.fireFan(ctx, eq, origin.x, origin.y, burstAngle + Math.PI, Math.floor(overload.burstSpread / 2), bdmg, speed, s.pierce, kind, arc);
+      } else if (fanNode?.split && fanNode.split > 1) {
+        const n = fanNode.split;
+        for (let k = 0; k < n; k++) {
+          this.fireFan(ctx, eq, origin.x, origin.y, burstAngle + (k - (n - 1) / 2) * arc, Math.ceil(overload.burstSpread / n), bdmg, speed, s.pierce, kind, arc);
+        }
+      } else if (fanNode?.twoWave) {
+        const first = Math.ceil(overload.burstSpread / 2);
+        this.fireFan(ctx, eq, origin.x, origin.y, burstAngle, first, bdmg, speed, s.pierce, kind, arc);
+        br.pendingFan.push({
+          at: ctx.player.buildTime + fanNode.twoWave.delay, x: origin.x, y: origin.y, angle: burstAngle,
+          count: overload.burstSpread - first, damage: Math.round(bdmg * fanNode.twoWave.damageShare), speed,
+          pierce: s.pierce, arc, sourceId, kind,
+        });
+      } else {
+        this.fireFan(ctx, eq, origin.x, origin.y, burstAngle, overload.burstSpread, bdmg, speed, s.pierce, kind, arc);
+        if (fanNode?.return) {
+          br.pendingFan.push({
+            at: ctx.player.buildTime + 0.2, x: origin.x, y: origin.y, angle: burstAngle + Math.PI,
+            count: overload.burstSpread, damage: Math.round(bdmg * 0.5), speed, pierce: s.pierce, arc, sourceId, kind,
+          });
+        }
+      }
     }
 
     for (let i = 0; i < total; i++) {
@@ -638,26 +966,147 @@ export class EquipmentEngine {
         ctx.addFx({ type: "knife", pos: vec2(origin.x, origin.y), ttl: 0.12, maxTtl: 0.12 });
       }
     }
+    // 凯尔 A:基础轮首命中后开 0.12s 合并窗(命中由世界层 `recordBuildHit` 记入)
+    if (overload && eq.skillId === "kyle_core") {
+      br.overloadWindowAt = ctx.player.buildTime;
+      br.overloadWindowTargets = [];
+    }
+  }
+
+  /** 密集扇区角度:最近 8 只按 1/(距离) 加权平均方向 */
+  private denseAngle(origin: Vec2, enemies: Enemy[]): number {
+    const near = enemies
+      .filter((e) => e.hp > 0)
+      .map((e) => ({ e, d: Math.hypot(e.pos.x - origin.x, e.pos.y - origin.y) }))
+      .sort((a, b) => a.d - b.d)
+      .slice(0, 8);
+    if (near.length === 0) return 0;
+    let sx = 0;
+    let sy = 0;
+    for (const { e, d } of near) {
+      const w = 1 / (d + 1);
+      sx += ((e.pos.x - origin.x) / (d || 1)) * w;
+      sy += ((e.pos.y - origin.y) / (d || 1)) * w;
+    }
+    return Math.atan2(sy, sx);
+  }
+
+  /** 凯尔技能命中回调(世界层与模拟器在弹体命中后调用;只记弹体,不记地面 DoT) */
+  recordBuildHit(eq: Equipment, target: Enemy, ctx: BattleContext): void {
+    const p = ctx.player;
+    const branch = buildBranch(p.buildBranchId);
+    if (!branch) return;
+    const now = p.buildTime;
+    if (branch.loop.overload) {
+      if (eq.skillId === "kyle_core" && p.buildRes.overloadWindowAt >= 0) {
+        if (!p.buildRes.overloadWindowTargets.includes(target.id)) p.buildRes.overloadWindowTargets.push(target.id);
+      }
+      return;
+    }
+    const loop = branch.loop.marksB;
+    if (!loop) return;
+    if (p.buildRes.markRound.includes(target.id)) return;
+    p.buildRes.markRound.push(target.id);
+    const node = selectedBuildPatch(p.buildNodes);
+    const st = p.buildRes.marks[target.id] ?? { stacks: 0, lastAt: now, spare: 0 };
+    const nearest = this.nearest(p.pos, ctx.enemies, 640);
+    const add = nearest?.id === target.id ? loop.firstMark : loop.backMark;
+    st.stacks += add;
+    st.lastAt = now;
+    if (st.stacks > loop.cap) {
+      st.stacks = loop.cap;
+      if (node?.mark?.spare) st.spare = Math.min(node.mark.spare, st.spare + 1);
+    }
+    p.buildRes.marks[target.id] = st;
+    if (st.stacks >= loop.detonateAt && !p.buildRes.pendingIcicle) {
+      st.stacks -= loop.detonateAt;
+      if (st.stacks <= 0) delete p.buildRes.marks[target.id];
+      p.buildRes.pendingIcicle = { targetId: target.id, at: now + 0.05, x: target.pos.x, y: target.pos.y };
+    }
   }
 
   private castNova(eq: Equipment, eff: EffectInstance, s: EffStats, ctx: BattleContext): void {
-    const radius = (eff.params.radius ?? 130)  * (s.radiusMult ?? 1);
-    const damage = Math.round((eff.params.damage ?? 30) * s.power);
     const p = ctx.player;
-    ctx.addFx({ type: "nova", pos: vec2(p.pos.x, p.pos.y), radius, ttl: 0.35, maxTtl: 0.35 });
-    for (const e of ctx.enemies) {
-      if (e.hp <= 0) continue;
-      const d = Math.hypot(e.pos.x - p.pos.x, e.pos.y - p.pos.y);
-      if (d <= radius + e.def.radius) {
-        ctx.damageEnemy(e, damage, {
-          source: eq,
-          lifesteal: s.lifesteal,
-          knockbackPower: 120,
-          from: p.pos,
+    // 荆棘层(docs/DESIGN-HERO-PIPELINE.md §2 站位语义):只有带 stack 参数的施放源读层数 ——
+    // 半径按层线性放大,伤害按"离满层还差多少"线性折损;没带这两位的人 stack 恒 0,乘 1 / 折 0 逐帧不变。
+    const stackPer = eff.params.stackRadiusPer ?? 0;
+    const stackLoss = eff.params.stackPowerLoss ?? 0;
+    const stack = stackPer > 0 || stackLoss > 0 ? p.thornStack : 0;
+    const radius = (eff.params.radius ?? 130) * (s.radiusMult ?? 1) * (1 + stackPer * stack);
+    const damage = Math.round((eff.params.damage ?? 30) * s.power * (1 - stackLoss * (1 - Math.min(1, stack / THORN_STACK.cap))));
+    const morph = this.morphOf(eq, ctx);
+    // 分支形态「敌下开花」:落点搬到最近一次来袭者所在位置;无来袭记录仍以自身为中心(行为不变)
+    const at = morph?.castAtAttacker && this.lastAttackerPos ? this.lastAttackerPos : p.pos;
+    ctx.addFx({ type: "nova", pos: vec2(at.x, at.y), radius, ttl: 0.35, maxTtl: 0.35 });
+    this.damageArea(ctx, eq, at, radius, damage, { lifesteal: s.lifesteal, knockbackPower: 120, from: at });
+    // 薇拉 A「荆棘堡垒」:满 6 层付 3,追加一次向内收缩的刺圈(只认基础拍;派生事件不再消费)
+    const loop = morph?.loop?.stackConsume;
+    const nodeNova = morph?.node?.nova;
+    if (loop && stack >= loop.atStacks) {
+      p.thornStack = Math.max(0, p.thornStack - loop.consume);
+      const extraDamage = Math.round(damage * loop.damageMult);
+      const extraRadius = radius * loop.radiusMult;
+      // 截阵:落点改到下一名逼近者脚下(近似 = 除当前落点外最近的一只);1s 内没有就回当前靶
+      let anchor = at;
+      if (nodeNova?.anchorNext) {
+        const next = this.nearest(p.pos, ctx.enemies.filter((e) => e.hp > 0), 320);
+        if (next) anchor = next.pos;
+      }
+      if (nodeNova?.line) {
+        const dirPos = this.lastAttackerPos ?? anchor;
+        const ang = Math.atan2(dirPos.y - p.pos.y, dirPos.x - p.pos.x);
+        this.damageLine(ctx, eq, p.pos, ang, nodeNova.line.length, nodeNova.line.width, Math.round(damage * nodeNova.line.damageMult), nodeNova.line.maxTargets, { lifesteal: s.lifesteal });
+      } else {
+        this.damageArea(ctx, eq, anchor, extraRadius, extraDamage, { maxTargets: loop.maxTargets, lifesteal: s.lifesteal, knockbackPower: 80, from: anchor });
+      }
+      if (nodeNova?.shield) {
+        const amount = Math.max(nodeNova.shield.amount ?? 0, Math.round(p.maxHp * (nodeNova.shield.amountPct ?? 0)));
+        if (amount > 0) ctx.addPlayerShield(amount, nodeNova.shield.sec);
+      }
+      if (nodeNova?.echo) {
+        p.buildRes.pendingNova.push({
+          at: p.buildTime + nodeNova.echo.delay,
+          x: anchor.x, y: anchor.y,
+          radius: extraRadius * nodeNova.echo.radiusMult,
+          damage: Math.round(extraDamage * nodeNova.echo.damageMult),
+          sourceId: eq.skillId ?? "",
+          maxTargets: nodeNova.echo.maxTargets,
         });
       }
+      if (nodeNova?.wall) {
+        ctx.clouds.push(spawnCloud({
+          pos: vec2(anchor.x, anchor.y),
+          radius: extraRadius * nodeNova.wall.radiusMult,
+          dps: 0,
+          duration: nodeNova.wall.duration,
+          wall: { damage: Math.round(extraDamage * nodeNova.wall.damageMult), follow: !!nodeNova.wall.follow },
+          source: eq,
+        }));
+      }
     }
-    // 组合技「深渊裂隙」(策划案 V3 §5):新星落点(= 玩家位置)留 3s 回血池,
+    // 分支形态「爆完留地」:落点长出一片持续伤害地面(dps = 新星单发伤害 × dpsPerDamage)
+    const g = morph?.afterCastGround;
+    if (g) {
+      const imprint = morph?.loop?.trailImprint;
+      if (imprint) {
+        // 两类地面合池 4 块:超出时原地移除最旧一块(保持数组身份)
+        const trails = ctx.clouds.filter((c) => c.trail);
+        while (trails.length >= imprint.trailMax) {
+          const oldest = trails.shift()!;
+          const idx = ctx.clouds.indexOf(oldest);
+          if (idx >= 0) ctx.clouds.splice(idx, 1);
+        }
+      }
+      ctx.clouds.push(spawnCloud({
+        pos: vec2(at.x, at.y),
+        radius: radius * g.radiusMult,
+        dps: damage * g.dpsPerDamage,
+        duration: g.duration,
+        trail: !!imprint,
+        source: eq,
+      }));
+    }
+    // 组合技「深渊裂隙」(策划案 V3 §5):新星落点留 3s 回血池(落点与上面同一处 at),
     // 总治疗 = 新星伤害 ×40% 分 3 秒(0.25s tick);场上回血池上限 3 个,超出移除最旧。
     const ar = COMBO_VALUES.abyss_rift;
     if (ctx.comboActive?.abyss_rift) {
@@ -667,7 +1116,7 @@ export class EquipmentEngine {
         if (idx >= 0) ctx.clouds.splice(idx, 1);
       }
       const c = spawnCloud({
-        pos: vec2(p.pos.x, p.pos.y),
+        pos: vec2(at.x, at.y),
         radius,
         dps: (damage * ar.healRatio) / ar.poolDuration,
         duration: ar.poolDuration,
@@ -676,6 +1125,67 @@ export class EquipmentEngine {
       });
       ctx.clouds.push(c);
     }
+  }
+
+  /** 圆形范围伤害(按距离排序,最多 maxTargets 靶;缺省 = 不限) */
+  private damageArea(
+    ctx: BattleContext,
+    eq: Equipment,
+    at: Vec2,
+    radius: number,
+    damage: number,
+    opts: { lifesteal?: number; knockbackPower?: number; from?: Vec2; maxTargets?: number } = {},
+  ): number {
+    const hit: { e: Enemy; d: number }[] = [];
+    for (const e of ctx.enemies) {
+      if (e.hp <= 0) continue;
+      const d = Math.hypot(e.pos.x - at.x, e.pos.y - at.y);
+      if (d <= radius + e.def.radius) hit.push({ e, d });
+    }
+    hit.sort((a, b) => a.d - b.d);
+    const list = opts.maxTargets ? hit.slice(0, opts.maxTargets) : hit;
+    for (const { e } of list) {
+      ctx.damageEnemy(e, damage, { source: eq, lifesteal: opts.lifesteal, knockbackPower: opts.knockbackPower, from: opts.from });
+    }
+    return list.length;
+  }
+
+  /** 矩形范围伤害(沿 angle 的直线;length / width = 设计 px) */
+  private damageLine(
+    ctx: BattleContext,
+    eq: Equipment,
+    origin: Vec2,
+    angle: number,
+    length: number,
+    width: number,
+    damage: number,
+    maxTargets: number,
+    opts: { lifesteal?: number } = {},
+  ): number {
+    const dx = Math.cos(angle);
+    const dy = Math.sin(angle);
+    const hit: { e: Enemy; t: number }[] = [];
+    for (const e of ctx.enemies) {
+      if (e.hp <= 0) continue;
+      const rx = e.pos.x - origin.x;
+      const ry = e.pos.y - origin.y;
+      const t = rx * dx + ry * dy;
+      if (t < 0 || t > length) continue;
+      const perp = Math.abs(-rx * dy + ry * dx);
+      if (perp > width / 2 + e.def.radius) continue;
+      hit.push({ e, t });
+    }
+    hit.sort((a, b) => a.t - b.t);
+    const list = hit.slice(0, maxTargets);
+    for (const { e } of list) ctx.damageEnemy(e, damage, { source: eq, lifesteal: opts.lifesteal, from: origin });
+    return list.length;
+  }
+
+  /** 按 skillId 找玩家身上的技能实例(延迟段结算用;找不到返回 null) */
+  private equipmentBySkillId(ctx: BattleContext, id: string): Equipment | null {
+    if (!id) return null;
+    for (const eq of ctx.player.castList) if (eq.skillId === id) return eq;
+    return null;
   }
 
   /** 共鸣变形「连杀 ×」:每 per 连杀 +1(封顶 cap);无变形或无连杀数 → 0 */
@@ -1033,6 +1543,329 @@ export class EquipmentEngine {
         s.durationBonus += (p.sec ?? 0) * mult;
         break;
       // echo / condemned:结算位在 fire(回响排队)与 damageEnemy(送葬乘区),不入 statsOf
+    }
+  }
+
+  /**
+   * 章节节点层(V1.1)的共享 tick:延迟新星 / 延迟扇射 / 延迟谢幕 / 城垣 / 过载合并窗 /
+   * 冰印到期 / 踏迹印与爆种 / 双狼配对 / 亡影幕。世界层与 balance-sim 都经 `update()` 调到这里,
+   * 不另写第二份。
+   */
+  private tickBuild(ctx: BattleContext, dt: number): void {
+    const p = ctx.player;
+    const br = p.buildRes;
+    const now = p.buildTime;
+    const branch = buildBranch(p.buildBranchId);
+    const node = selectedBuildPatch(p.buildNodes);
+
+    // 延迟新星(双向反刺 / 孤花第二段)
+    for (let i = br.pendingNova.length - 1; i >= 0; i--) {
+      const n = br.pendingNova[i];
+      if (now < n.at) continue;
+      const eq = this.equipmentBySkillId(ctx, n.sourceId);
+      if (eq) this.damageArea(ctx, eq, vec2(n.x, n.y), n.radius, n.damage, { maxTargets: n.maxTargets, from: vec2(n.x, n.y) });
+      br.pendingNova.splice(i, 1);
+    }
+    // 延迟扇射(折返 / 两波)
+    for (let i = br.pendingFan.length - 1; i >= 0; i--) {
+      const f = br.pendingFan[i];
+      if (now < f.at) continue;
+      const eq = this.equipmentBySkillId(ctx, f.sourceId);
+      if (eq) this.fireFan(ctx, eq, f.x, f.y, f.angle, f.count, f.damage, f.speed, f.pierce, f.kind, f.arc);
+      br.pendingFan.splice(i, 1);
+    }
+    // 延迟谢幕(终场返照)
+    for (let i = br.pendingShade.length - 1; i >= 0; i--) {
+      const s = br.pendingShade[i];
+      if (now < s.at) continue;
+      const eq = this.equipmentBySkillId(ctx, "willow_core");
+      if (eq) {
+        this.damageArea(ctx, eq, vec2(s.x, s.y), s.radius, s.damage, { maxTargets: s.maxTargets, from: vec2(s.x, s.y) });
+        if (s.slow) this.applyBuildSlow(ctx, vec2(s.x, s.y), s.radius, node?.shade?.slow);
+      }
+      br.pendingShade.splice(i, 1);
+    }
+    // 城垣:跟随 / 首次越界
+    for (const c of ctx.clouds) {
+      if (!c.wall) continue;
+      if (c.wall.follow) {
+        c.pos.x = p.pos.x;
+        c.pos.y = p.pos.y;
+      }
+      for (const e of ctx.enemies) {
+        if (e.hp <= 0 || c.wall.hit.has(e.id)) continue;
+        if (Math.hypot(e.pos.x - c.pos.x, e.pos.y - c.pos.y) <= c.radius + e.def.radius) {
+          c.wall.hit.add(e.id);
+          ctx.damageEnemy(e, c.wall.damage, { source: c.source, from: c.pos });
+        }
+      }
+    }
+
+    // 凯尔 A:过载合并窗到期 → 结算本窗过载;额外齐射不积过载
+    const overload = branch?.loop.overload;
+    if (overload) {
+      if (br.overloadCd > 0) br.overloadCd = Math.max(0, br.overloadCd - dt);
+      if (br.overloadWindowAt >= 0 && now - br.overloadWindowAt >= overload.windowSec) {
+        const q = Math.min(overload.perRoundMax, overload.base + overload.perTarget * br.overloadWindowTargets.length);
+        br.overload = Math.min(overload.cap, br.overload + q);
+        br.overloadWindowAt = -1;
+        br.overloadWindowTargets = [];
+      }
+    }
+
+    // 凯尔 B:冰印到期 / 携印 / 待发冰锥
+    const marksB = branch?.loop.marksB;
+    if (marksB) {
+      for (const key of Object.keys(br.marks)) {
+        const id = Number(key);
+        const st = br.marks[id];
+        const target = ctx.enemies.find((e) => e.id === id && e.hp > 0);
+        if (!target) {
+          const carry = node?.mark?.carry ?? 0;
+          if (carry > 0 && st.stacks > 0) {
+            const next = this.nearest(p.pos, ctx.enemies, 640);
+            if (next) {
+              const nx = br.marks[next.id] ?? { stacks: 0, lastAt: now, spare: 0 };
+              nx.stacks = Math.min(marksB.cap, nx.stacks + Math.min(carry, st.stacks));
+              nx.lastAt = now;
+              br.marks[next.id] = nx;
+            }
+          }
+          delete br.marks[id];
+        } else if (now - st.lastAt > marksB.expireSec && st.stacks > 0) {
+          delete br.marks[id];
+        }
+      }
+      if (br.pendingIcicle && now >= br.pendingIcicle.at) {
+        const pi = br.pendingIcicle;
+        br.pendingIcicle = null;
+        this.fireIcicle(ctx, pi, node, marksB);
+      }
+    }
+
+    // 薇拉 B:移动铺迹 / 踏迹印 / 3 印爆种
+    const imprint = branch?.loop.trailImprint;
+    if (imprint) {
+      if (p.movedThisFrame > 0) {
+        br.moveAccum += p.movedThisFrame;
+        while (br.moveAccum >= imprint.moveTrailEvery) {
+          br.moveAccum -= imprint.moveTrailEvery;
+          const eq = this.equipmentBySkillId(ctx, "vera_core");
+          if (!eq) break;
+          const trails = ctx.clouds.filter((c) => c.trail);
+          while (trails.length >= imprint.trailMax) {
+            const old = trails.shift()!;
+            const idx = ctx.clouds.indexOf(old);
+            if (idx >= 0) ctx.clouds.splice(idx, 1);
+          }
+          ctx.clouds.push(spawnCloud({
+            pos: vec2(p.pos.x, p.pos.y), radius: imprint.moveTrailRadius, dps: imprint.moveTrailDps,
+            duration: imprint.moveTrailDuration, trail: true, source: eq,
+          }));
+        }
+      }
+      const trails = ctx.clouds.filter((c) => c.trail);
+      // 接续棘径:最近两块迹之间形成可叠印窄带
+      const link = node?.trail?.link;
+      if (link && trails.length >= 2) {
+        const a = trails[trails.length - 2];
+        const b = trails[trails.length - 1];
+        for (const e of ctx.enemies) {
+          if (e.hp <= 0 || this.pointSegmentDist(e.pos, a.pos, b.pos) > link.width / 2 + e.def.radius) continue;
+          if (Math.hypot(b.pos.x - a.pos.x, b.pos.y - a.pos.y) > link.maxLength) continue;
+          this.addTrailMark(ctx, e, imprint, now);
+        }
+      }
+      if (trails.length > 0) {
+        for (const e of ctx.enemies) {
+          if (e.hp <= 0) continue;
+          const onTrail = trails.some((c) => Math.hypot(e.pos.x - c.pos.x, e.pos.y - c.pos.y) <= c.radius + e.def.radius);
+          if (!onTrail) continue;
+          const st = this.addTrailMark(ctx, e, imprint, now);
+          if (st && st.stacks >= imprint.detonateAt) {
+            br.trailBoomAt = br.trailBoomAt.filter((t) => now - t < 1);
+            if (br.trailBoomAt.length >= imprint.detonateMaxPerSec) continue;
+            br.trailBoomAt.push(now);
+            st.stacks -= imprint.detonateAt;
+            if (st.stacks <= 0) delete br.trailMarks[e.id];
+            const eq = this.equipmentBySkillId(ctx, "vera_core");
+            if (!eq) continue;
+            const dmg = Math.round(imprint.detonateBaseDamage * imprint.detonateDamageMult);
+            if (node?.trail?.doubleBloom) {
+              const delay = node.trail.doubleBloom.delay;
+              const share = node.trail.doubleBloom.damageShare;
+              for (const k of [1, 2]) {
+                br.pendingNova.push({
+                  at: now + delay * k, x: e.pos.x, y: e.pos.y, radius: 80,
+                  damage: Math.round(dmg * share), sourceId: "vera_core", maxTargets: 1,
+                });
+              }
+            } else if (node?.trail?.bloom) {
+              this.damageArea(ctx, eq, e.pos, node.trail.bloom.radius, Math.round(dmg * node.trail.bloom.damageMult), { maxTargets: node.trail.bloom.maxTargets, from: e.pos });
+            } else {
+              this.damageArea(ctx, eq, e.pos, imprint.detonateRadius, dmg, { maxTargets: imprint.detonateMaxTargets, from: e.pos });
+            }
+            if (node?.trail?.seed) {
+              const other = this.nearest(e.pos, ctx.enemies.filter((x) => x.hp > 0 && x.id !== e.id), node.trail.seed.radius);
+              if (other) {
+                const os = br.trailMarks[other.id] ?? { stacks: 0, lastAt: now };
+                os.stacks = Math.min(imprint.maxMarks, os.stacks + node.trail.seed.marks);
+                os.lastAt = now;
+                br.trailMarks[other.id] = os;
+              }
+            }
+            if (node?.trail?.moveOldest && trails.length > 0) {
+              trails[0].pos.x = e.pos.x;
+              trails[0].pos.y = e.pos.y;
+            }
+          }
+        }
+      }
+      // 扎根:场上无敌人时,最新棘迹跟玩家 1 秒
+      if (node?.trail?.follow && ctx.enemies.every((e) => e.hp <= 0) && trails.length > 0) {
+        const newest = trails[trails.length - 1];
+        newest.pos.x = p.pos.x;
+        newest.pos.y = p.pos.y;
+        newest.ttl = Math.max(newest.ttl, node.trail.follow.seconds);
+      }
+    }
+
+    // 薇洛 A:头狼 / 焦点到期,猎记脱战逐秒掉
+    const wolfPair = branch?.loop.wolfPair;
+    if (wolfPair && br.wolf) {
+      const w = br.wolf;
+      if (w.alphaUntil > 0 && now > w.alphaUntil) w.alphaUntil = 0;
+      if (w.focusUntil > 0 && now > w.focusUntil) {
+        w.focusUntil = 0;
+        w.focusTargetId = 0;
+      }
+      if (w.marks > 0) {
+        const last = Math.max(w.lastPairAt, w.lAt, w.rAt);
+        if (now - last > wolfPair.markDecayDelay) {
+          w.marks = Math.max(0, w.marks - wolfPair.markDecayPerSec * dt);
+        }
+      }
+    }
+
+    // 薇洛 B:谢幕 ICD 与自然到期攒满后的结算
+    const troupe = branch?.loop.shadeTroupe;
+    if (troupe && br.shade) {
+      if (br.shade.cd > 0) br.shade.cd = Math.max(0, br.shade.cd - dt);
+      if (br.shade.acts >= troupe.actsToCurtain) {
+        const eq = this.equipmentBySkillId(ctx, "willow_shades");
+        if (eq) this.castCurtain(ctx, eq, troupe, node?.shade);
+      }
+    }
+  }
+
+  /** 踏迹印:每靶每秒首次踏迹 +1(上限 / 最多靶数读表);返回该靶印记 */
+  private addTrailMark(
+    ctx: BattleContext,
+    e: Enemy,
+    imprint: { markPerSec: number; maxMarks: number; maxTargets: number },
+    now: number,
+  ): { stacks: number; lastAt: number } | null {
+    const br = ctx.player.buildRes;
+    let st = br.trailMarks[e.id];
+    if (!st) {
+      if (Object.keys(br.trailMarks).length >= imprint.maxTargets) return null;
+      st = { stacks: 0, lastAt: -99 };
+      br.trailMarks[e.id] = st;
+    }
+    if (now - st.lastAt >= 1 / imprint.markPerSec) {
+      st.stacks = Math.min(imprint.maxMarks, st.stacks + 1);
+      st.lastAt = now;
+    }
+    return st;
+  }
+
+  /** 点到线段距离(接续棘径 / 合围猎线共用) */
+  private pointSegmentDist(p: Vec2, a: Vec2, b: Vec2): number {
+    const vx = b.x - a.x;
+    const vy = b.y - a.y;
+    const len2 = vx * vx + vy * vy;
+    if (len2 <= 1e-6) return Math.hypot(p.x - a.x, p.y - a.y);
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / len2));
+    return Math.hypot(p.x - (a.x + vx * t), p.y - (a.y + vy * t));
+  }
+
+  /** 凯尔 B 冰锥结算(单靶 2×40;裁决节点改写为贯线 / 驻留 / 折射 / 侧晶) */
+  private fireIcicle(
+    ctx: BattleContext,
+    pi: { targetId: number; at: number; x: number; y: number },
+    node: import("../data/heroBuild").BuildPatch | null,
+    loop: { detonateDamageMult: number },
+  ): void {
+    const eq = this.equipmentBySkillId(ctx, "kyle_core");
+    if (!eq) return;
+    const damage = Math.round(40 * loop.detonateDamageMult);
+    const target = ctx.enemies.find((e) => e.id === pi.targetId && e.hp > 0);
+    if (node?.mark?.pierceLine) {
+      const origin = target ? target.pos : vec2(pi.x, pi.y);
+      const dir = target ? Math.atan2(target.pos.y - ctx.player.pos.y, target.pos.x - ctx.player.pos.x) : 0;
+      this.damageLine(ctx, eq, origin, dir, 320, 40, damage, node.mark.pierceLine.pierce, {});
+      const behind = this.nearest(origin, ctx.enemies.filter((e) => e.hp > 0 && e.id !== target?.id), 320);
+      if (behind) ctx.damageEnemy(behind, Math.round(damage * node.mark.pierceLine.falloff), { source: eq });
+    } else if (node?.mark?.stationary) {
+      if (target) ctx.damageEnemy(target, damage, { source: eq });
+      else this.damageArea(ctx, eq, vec2(pi.x, pi.y), 60, Math.round(damage / 2), { maxTargets: 1 });
+    } else if (target) {
+      ctx.damageEnemy(target, damage, { source: eq });
+      if (node?.mark?.refract) {
+        const other = this.nearest(target.pos, ctx.enemies.filter((e) => e.hp > 0 && e.id !== target.id), 320);
+        if (other) ctx.damageEnemy(other, Math.round(damage / 2), { source: eq });
+      }
+    }
+    if (node?.mark?.sideShard && target) {
+      const ang = Math.atan2(target.pos.y - ctx.player.pos.y, target.pos.x - ctx.player.pos.x) + Math.PI / 2;
+      const dir = vec2(Math.cos(ang), Math.sin(ang));
+      const proj = spawnProjectile({
+        kind: "knife", pos: vec2(ctx.player.pos.x, ctx.player.pos.y), dir, speed: 560,
+        damage: Math.round(damage * node.mark.sideShard.damageMult), radius: 5,
+        pierce: 0, chainLeft: 0, chainRange: 0, source: eq,
+      });
+      ctx.projectiles.push(proj);
+    }
+  }
+
+  /** 亡影 / 终场定格的减速(免控 Boss 只受原伤,不减速) */
+  private applyBuildSlow(ctx: BattleContext, at: Vec2, radius: number, slow: { duration: number; factor: number } | undefined): void {
+    if (!slow) return;
+    for (const e of ctx.enemies) {
+      if (e.hp <= 0) continue;
+      if (Math.hypot(e.pos.x - at.x, e.pos.y - at.y) > radius + e.def.radius) continue;
+      applySlow(e, slow.factor, slow.duration);
+    }
+  }
+
+  /** 一条扇射(延迟段 / 额外齐射共用;不读触发器、不积资源) */
+  private fireFan(
+    ctx: BattleContext,
+    eq: Equipment,
+    x: number, y: number,
+    angle: number,
+    count: number,
+    damage: number,
+    speed: number,
+    pierce: number,
+    kind: "ray" | "knife",
+    arc = Math.PI * 2,
+  ): void {
+    const spread = arc / Math.max(1, count);
+    for (let i = 0; i < count; i++) {
+      const a = angle + (i - (count - 1) / 2) * spread;
+      ctx.projectiles.push(spawnProjectile({
+        kind,
+        pos: vec2(x, y),
+        dir: vec2(Math.cos(a), Math.sin(a)),
+        speed,
+        damage,
+        radius: kind === "ray" ? 7 : 5,
+        pierce,
+        chainLeft: 0,
+        chainRange: 300,
+        source: eq,
+      }));
     }
   }
 

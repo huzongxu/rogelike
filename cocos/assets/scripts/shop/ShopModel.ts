@@ -30,18 +30,19 @@ import {
   nextRhythmOf,
   normalizeArtifact,
   qualityBasePrice,
+  resonanceBonusState,
   thornPairOffer,
   upgradeCost,
   upgradeEquipment,
   type Equipment,
 } from "../game/data/equipmentGen";
 import { ARTIFACT_DEFS, PASSIVE_DEFS, RELIC_VALUES, SHOP_PASSIVE_SLOTS, isRelicType, relicStack, type PassiveArtifact } from "../game/data/artifacts";
-import { rhythmDef, type RhythmId } from "../game/data/rhythm";
+import { rhythmDef, rhythmShort, type RhythmId } from "../game/data/rhythm";
 import { SKILL_MAX_RANK, heroSkillDef } from "../game/data/heroSkills";
 import { makeModifier } from "../game/data/affixes";
 import { DESTROY_REFUND_RATE, DUPLICATE_OFFER_CHANCE, MERGE_FEE_MULT, RUN_AD_SLOT_LIMIT, SET_OFFER_BIAS, shopCardPrice, shopRefreshPrice } from "../game/data/shop";
 import { QUALITY_MAX_LEVEL, qualityDef, qualityPowerRatio, qualityUpgrade, type Quality } from "../game/data/quality";
-import { setDef } from "../game/data/sets";
+import { resonanceProgress, setDef } from "../game/data/sets";
 import type { SetId } from "../game/data/sets";
 import { isSeasonBoosted, setMutation } from "../game/data/seasonSets";
 import { rareBonusFor } from "../game/data/talents";
@@ -525,11 +526,14 @@ export class ShopModel {
     const iconKey = INTEL_ICON[intel.title] ?? null;
     const setId = w.selectedSet();
     const set = setId ? setDef(setId) : null;
-    // 套组件数退役 → 共鸣数(docs/DESIGN-HERO-RHYTHM.md §5):挂在共鸣节律上的主动法宝数
-    const pieces = eqs.filter((e) => equipmentResonant(e, w.seasonId())).length;
+    const passives = this.w.passives ?? [];
+    // 共鸣数与引擎同源:问共享层 `resonanceBonusState`,列取与 `player.castList` 同构的
+    // 「独有技能在前 + 主动法宝在后」**全量**(不是展示用的前 8 / 前 3 切片)。
+    // 旧口径在本文件 filter 主动法宝,漏算「拿到共鸣被动的独有技能」那一半 → 商店读数会低于引擎实际生效值。
+    const bonus = resonanceBonusState([...(this.w.skills ?? []), ...this.w.equipment], passives, setId, w.seasonId());
+    const prog = resonanceProgress(bonus?.pieces ?? 0);
     const slotMaxed = w.slots() >= SHOP_SLOT_CAP;
     const unlocked = this.rhythms();
-    const passives = this.w.passives ?? [];
     const passiveText = this.passiveOn()
       ? `被动 ${passives.length}/${this.w.passiveSlots!()}${passives.length ? ":" + passives.map((p) => p.name).join("·") : ""}`
       : "";
@@ -580,7 +584,7 @@ export class ShopModel {
         color: q.color,
         frameKey: `frame_${eq.quality}`,
         iconKey: `icon_fx_${eq.effect.def.type}`,
-        sub: `${r ? rhythmDef(r).name + "节律" : ""}${resonant ? " · 共鸣" : ""}${seasonTag}`,
+        sub: `${r ? rhythmDef(r).name + "节律·" + rhythmShort(r) : ""}${resonant ? " · 共鸣" : ""}${seasonTag}`,
         priceText: afford ? `购买 ${price}金` : `¥${price}`,
         afford,
         setBadge: resonant ? "共鸣" : null,
@@ -596,8 +600,8 @@ export class ShopModel {
       intelText: `第 ${w.chapter()} 章 · 敌情:${intel.title}(${intel.desc})`,
       intelIconKey: iconKey,
       slotText: `槽位 ${this.w.equipment.length}/${w.slots()}`,
-      setText: set ? `${set.name} · 共鸣 ${pieces}` : null,
-      setProgress: Math.min(1, pieces / 6),
+      setText: set ? `${set.name} 共鸣 ${prog.pieces}/${prog.target}${prog.stage === 2 ? " · 质变" : prog.stage === 1 ? ` · 差${prog.toNext}` : ""}` : null,
+      setProgress: prog.ratio,
       setColor: set ? set.color : null,
       bonusText: set ? `节律:${unlocked.map((r) => rhythmDef(r).name).join("/")}${passiveText ? " · " + passiveText : ""}` : null,
       recText: set ? "" : `未选英雄(通用职业包)${passiveText ? " · " + passiveText : ""}${intel.recommended ? ` · 推荐:${setDef(intel.recommended).name}` : ""}`,
@@ -625,7 +629,7 @@ export class ShopModel {
         return {
           id: eq.id,
           name: equipmentDisplayName(eq, passives, w.seasonId()),
-          sub: `${kind} · ${r ? rhythmDef(r).name + "节律" : ""}${resonant ? "·共鸣" : ""} · ${eq.level >= SKILL_MAX_RANK ? `${eq.level} 阶 满` : `${eq.level}/${SKILL_MAX_RANK} 阶`}`,
+          sub: `${kind} · ${r ? rhythmDef(r).name + "节律(" + rhythmShort(r) + ")" : ""}${resonant ? "·共鸣" : ""} · ${eq.level >= SKILL_MAX_RANK ? `${eq.level} 阶 满` : `${eq.level}/${SKILL_MAX_RANK} 阶`}`,
           color: resonant ? qualityDef("hidden").color : "#7fd6ff",
           iconKey: `icon_fx_${eq.effect.def.type}`,
         };

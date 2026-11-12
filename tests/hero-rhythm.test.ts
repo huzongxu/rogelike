@@ -37,8 +37,8 @@ import {
   equipmentResonance,
   type Equipment,
 } from "@game/data/equipmentGen";
-import { RESONANCE_TIERS } from "@game/data/sets";
-import { DESTROY_REFUND_RATE, RESET_BRANCH_LIMIT, resetBranchCost } from "@game/data/shop";
+import { RESONANCE_TIERS, SET_BONUSES, setDef } from "@game/data/sets";
+import { DESTROY_REFUND_RATE } from "@game/data/shop";
 import { readFileSync } from "node:fs";
 
 function fileSource(rel: string): string {
@@ -96,10 +96,11 @@ import {
   type RhythmId,
 } from "@game/data/rhythm";
 import { SKILL_AFFINITY } from "@game/data/reroll";
-import { BESPOKE_HEROES, CORE_BASELINE_INTERVAL, CORE_RHYTHM_TUNE, HERO_SKILLS, LOKA_SLAY_DEVOURER, MU_RETALIATION_POOL_PCT, RESET_GUARANTEE_ROUNDS, coreSkillOf, needsBaseline, skillTriggerParams } from "@game/data/heroSkills";
+import { BESPOKE_HEROES, CORE_BASELINE_INTERVAL, CORE_RHYTHM_TUNE, DEFAULT_THORN_MODE, HERO_SKILLS, LOKA_SLAY_DEVOURER, MU_RETALIATION_POOL_PCT, VERA_BRANCH_COST, VERA_STACK_TUNE, VERA_SUSTAIN, coreSkillOf, heroStances, needsBaseline, skillTriggerParams } from "@game/data/heroSkills";
 import { spawnProjectile } from "@game/entities/projectile";
 import { allHeroes, type HeroId } from "@game/data/heroes";
 import { QUALITY_HASTE_CAP, qualityDef } from "@game/data/quality";
+import { THORN_STACK } from "@game/data/combat";
 import { vec2 } from "@game/core/math";
 import { ShopModel, isPassiveOffer, type ShopWorld } from "../cocos/assets/scripts/shop/ShopModel";
 import { emptySave } from "../cocos/assets/scripts/core/SaveModel";
@@ -436,7 +437,7 @@ describe("引擎:技能与法宝同列、节律等级、内置冷却、齐放窗
 });
 
 describe("HUD 节律进度条(R15)", () => {
-  it("引擎 rhythmProgress:连杀 = 已攒 / 所需、移动 = 已走 / 所需、低血 = 已失血 / 到阈值、受击 / 击杀技能恒 1、周期 null、法宝受击按内置冷却", () => {
+  it("引擎 rhythmProgress:连杀 = 已攒 / 所需、移动 = 已走 / 所需、低血 = 已失血 / 到阈值、受击 / 击杀按内置冷却(带荆棘层的受击技能改读层数)、周期 null", () => {
     const p = new Player();
     p.rhythms = ["combo", "move", "hurt", "hit", "pulse"];
     const combo = makeSkillEquipment(coreSkillOf("loka")); // 3 连杀
@@ -467,7 +468,13 @@ describe("HUD 节律进度条(R15)", () => {
     expect(engine.rhythmProgress(hit, ctx)).toEqual({ frac: 1, kind: "hit" });
     engine.onHurt(ctx, 1, enemies[0]);
     expect(engine.rhythmProgress(hit, ctx)!.frac).toBeLessThan(1);
+    // 带荆棘层的技能(薇拉核心)读的是层数比例,不属于"内置冷却"这一支
+    p.thornStack = 0;
+    expect(engine.rhythmProgress(makeSkillEquipment(coreSkillOf("vera")), ctx)).toEqual({ frac: 0, kind: "hit" });
+    p.thornStack = THORN_STACK.cap;
     expect(engine.rhythmProgress(makeSkillEquipment(coreSkillOf("vera")), ctx)).toEqual({ frac: 1, kind: "hit" });
+    // 同为受击节律但不带层数(穆核心)→ 仍是"恒 1"口径
+    expect(engine.rhythmProgress(makeSkillEquipment(coreSkillOf("mu")), ctx)).toEqual({ frac: 1, kind: "hit" });
   });
 
   it("HudView 每张卡带节律进度条(cardRp),经 BattleSim.rhythmProgress 取值", () => {
@@ -486,7 +493,12 @@ describe("精英入场横幅(R15)", () => {
     save.selectedSet = "thorn";
     const s = new BattleSim({ save, input: { isMoving: false, moveDir: vec2(0, 0) }, worldH: 996, persist: () => {}, callbacks: { onDamage: () => {}, onDeath: () => {}, onVictory: () => {}, onChapterShop: () => {} } });
     s.startStage(1);
-    while (s.world.chapter < ELITE_CHAPTERS[0]) s.world.nextChapter();
+    // V1.1:薇拉在第 2 章开章选支、第 4 章开章节节点;不提交会冻结世界
+    while (s.world.chapter < ELITE_CHAPTERS[0]) {
+      s.world.nextChapter();
+      const step = s.world.buildStep();
+      if (step) s.world.commitBuild(step.options[0].id);
+    }
     s.world.discoveryBanner = null;
     s.world.chapterTimer = ELITE_INTEL_DELAY_SEC - 1 / 120;
     s.update(1 / 60);
@@ -592,11 +604,12 @@ describe("共鸣变形(§5 表 1)", () => {
 /* ==================== 商店 ==================== */
 
 describe("商店:被动货位、被动槽、切节律、共鸣数(§4 / §6)", () => {
-  interface St { equipment: Equipment[]; passives: ReturnType<typeof generatePassive>[]; gold: number; rhythms: RhythmId[]; recorded: Equipment[] }
+  interface St { equipment: Equipment[]; skills: Equipment[]; passives: ReturnType<typeof generatePassive>[]; gold: number; rhythms: RhythmId[]; recorded: Equipment[] }
   function makeShop(rand: () => number, over: Partial<St> = {}): { m: ShopModel; st: St } {
-    const st: St = { equipment: [], passives: [], gold: 100000, rhythms: ["hit", "move"], recorded: [], ...over };
+    const st: St = { equipment: [], skills: [], passives: [], gold: 100000, rhythms: ["hit", "move"], recorded: [], ...over };
     const world: ShopWorld = {
       equipment: st.equipment,
+      skills: st.skills,
       passives: st.passives,
       passiveSlots: () => PASSIVE_SLOTS,
       rhythms: () => st.rhythms,
@@ -707,13 +720,62 @@ describe("商店:被动货位、被动槽、切节律、共鸣数(§4 / §6)", (
     st.equipment.push(artifact("cloud", "move", { dps: 10, radius: 100, duration: 4 }, 701), artifact("knife", "hit", { damage: 10, speed: 500, radius: 640, spread: 1 }, 702));
     st.passives.push(makePassive(1, "power", "common", 1, { pct3: 0.2 }));
     const c = m.content();
-    expect(c.setText).toBe("荆棘回响 · 共鸣 1");
-    expect(c.setProgress).toBeCloseTo(1 / 6, 10);
+    expect(c.setText).toBe("荆棘回响 共鸣 1/2");
+    // 进度以最高档 tier2 为满格(1 处 = 1/4);旧口径写死 /6 → 全部生效时条只走到 67%,玩家看不到「凑齐」
+    expect(c.setProgress).toBeCloseTo(1 / RESONANCE_TIERS.tier2, 10);
     expect(c.bonusText).toContain("节律:受击/移动");
     expect(c.bonusText).toContain(`被动 1/${PASSIVE_SLOTS}:增幅`);
     expect(c.weapons[0].sub.startsWith("移动·共鸣")).toBe(true);
     expect(c.weapons[1].sub.startsWith("受击 ")).toBe(true);
     expect(c.weaponHeader.title).toContain("点行切节律");
+  });
+
+  it("共鸣读数与引擎同源:拿到共鸣被动的独有技能计入商店(旧口径只 filter 主动法宝 → 漏算这一半)", () => {
+    const { m, st } = makeShop(() => 0.99);
+    // 荆棘圆环的共鸣被动 = duration;只给技能 + 那枚被动,主动法宝侧共鸣数为 0
+    st.skills.push(makeSkillEquipment(coreSkillOf("vera")));
+    st.passives.push(makePassive(1, "duration", "common", 1, { sec: 1 }));
+    const engine = resonanceBonusState([...st.skills, ...st.equipment], st.passives, "thorn", 1)!;
+    expect(engine.pieces).toBe(1);
+    const c = m.content();
+    expect(c.setText).toBe("荆棘回响 共鸣 1/2");
+    expect(c.setProgress).toBeCloseTo(engine.pieces / RESONANCE_TIERS.tier2, 10);
+    // 一档达成后文案改口报缺口,把下一个目标摆在玩家眼前
+    st.equipment.push(artifact("cloud", "move", { dps: 10, radius: 100, duration: 4 }, 703));
+    expect(m.content().setText).toBe("荆棘回响 共鸣 2/4 · 差2");
+    // 质变档达成后不再报缺口(S1 首发共鸣格 = cloud/move、ray/hit、chain/kill 三对)
+    st.equipment.push(artifact("ray", "hit", { damage: 10, speed: 600, radius: 600 }, 704), artifact("chain", "kill", { damage: 10, jumps: 3, radius: 500 }, 705));
+    const full = resonanceBonusState([...st.skills, ...st.equipment], st.passives, "thorn", 1)!;
+    expect(full.pieces).toBeGreaterThanOrEqual(RESONANCE_TIERS.tier2);
+    expect(m.content().setText).toContain("· 质变");
+    expect(m.content().setProgress).toBeCloseTo(1, 10);
+  });
+
+  it("宽度闸:setText 逐档实宽不得超出套组文本盒(超了会画到进度胶囊底下)", () => {
+    const VT = JSON.parse(fileSource("../cocos/assets/resources/config/viewTable.json"));
+    const { asciiWidth, spaceWidth } = VT.hud;
+    const box = Number(/setHintW:\s*(\d+)/.exec(fileSource("../cocos/assets/scripts/core/ViewTable.ts"))?.[1]);
+    const micro = Number(/micro:\s*(\d+)/.exec(fileSource("../cocos/assets/scripts/ui/Widgets.ts"))?.[1]);
+    expect(box, "ViewTable 须有 setHintW").toBeGreaterThan(0);
+    expect(micro, "FS.micro 字号").toBeGreaterThan(0);
+    // 与 PanelKit.approxW 同一判别式:空格按 spaceWidth、CJK(>0x2E7F)按整格、其余按 asciiWidth
+    const width = (t: string) => [...t].reduce((w, ch) => w + (ch === " " ? micro * spaceWidth : ch.charCodeAt(0) > 0x2e7f ? micro : micro * asciiWidth), 0);
+
+    const { m, st } = makeShop(() => 0.99);
+    st.skills.push(makeSkillEquipment(coreSkillOf("vera")));
+    st.passives.push(makePassive(1, "duration", "common", 1, { sec: 1 }));
+    const stages: string[] = [m.content().setText!];
+    st.equipment.push(artifact("cloud", "move", { dps: 10, radius: 100, duration: 4 }, 711));
+    stages.push(m.content().setText!);
+    st.equipment.push(artifact("ray", "hit", { damage: 10, speed: 600, radius: 600 }, 712), artifact("chain", "kill", { damage: 10, jumps: 3, radius: 500 }, 713));
+    stages.push(m.content().setText!);
+    expect(stages.length).toBe(3);
+    for (const t of stages) expect(width(t), `${t} 实宽 ${Math.round(width(t) * 10) / 10}px / 盒 ${box}px`).toBeLessThanOrEqual(box);
+
+    // 视图侧盒宽必须读表,不得再出现裸 150(否则模型改长文案时无声溢出)
+    const view = fileSource("../cocos/assets/scripts/shop/ShopView.ts");
+    expect(view.includes("p3.setHintW")).toBe(true);
+    expect(/Math\.min\(150,/.test(view)).toBe(false);
   });
 });
 
@@ -797,7 +859,7 @@ describe("BattleSim 开局:本命节律、核心技能、挂机档位", () => {
   });
 });
 
-/* ==================== S1-c / S2:被动 × 技能共鸣、共鸣里程碑、发现横幅、遗物、重置分岔 ==================== */
+/* ==================== S1-c / S2:被动 × 技能共鸣、共鸣里程碑、发现横幅、遗物 ==================== */
 
 describe("被动 × 技能共鸣(§5 表 2)与共鸣里程碑", () => {
   it("每个技能都标了共鸣被动与补丁;拿到那枚被动 → skillResonant 真、显示名改走共鸣名", () => {
@@ -816,9 +878,51 @@ describe("被动 × 技能共鸣(§5 表 2)与共鸣里程碑", () => {
     expect(equipmentDisplayName(core, [dur])).toBe("荆棘领域");
   });
 
+  it("分支给核心的形态补丁(coreMorph):棘行者让圆环爆完留荆棘带;荆甲把落点搬到来袭者脚下", () => {
+    const walker = HERO_SKILLS.vera.find((d) => d.id === "vera_walker")!;
+    const armor = HERO_SKILLS.vera.find((d) => d.id === "vera_armor")!;
+    expect(walker.coreMorph?.afterCastGround).toBeDefined();
+    expect(armor.coreMorph?.castAtAttacker).toBe(true);
+
+    // 基线:没选分支时圆环不留地 —— 地面只可能来自 coreMorph
+    const p0 = new Player();
+    p0.rhythms = ["hit", "move"];
+    p0.skills.push(makeSkillEquipment(coreSkillOf("vera")));
+    const e0 = spawnEnemy("chaser", vec2(30, 0), 1);
+    const c0 = makeContext(p0, [e0]);
+    new EquipmentEngine().onHurt(c0, 1, e0);
+    expect(c0.clouds.filter((x) => !x.heals).length).toBe(0);
+
+    // A) 棘行者:圆环结算后在落点长出荆棘带,半径与持续都读表
+    const p1 = new Player();
+    p1.rhythms = ["hit", "move"];
+    p1.skills.push(makeSkillEquipment(coreSkillOf("vera")), makeSkillEquipment(walker));
+    const e1 = spawnEnemy("chaser", vec2(30, 0), 1);
+    const c1 = makeContext(p1, [e1]);
+    new EquipmentEngine().onHurt(c1, 1, e1);
+    const nova1 = c1.fx.find((f) => f.type === "nova")!;
+    const ground = c1.clouds.filter((x) => !x.heals);
+    expect(ground.length).toBe(1);
+    expect(ground[0].radius).toBeCloseTo(nova1.radius! * walker.coreMorph!.afterCastGround!.radiusMult, 6);
+    expect(ground[0].maxTtl).toBeCloseTo(walker.coreMorph!.afterCastGround!.duration, 10);
+    expect(ground[0].dps).toBeGreaterThan(0);
+
+    // B) 荆甲:新星中心从玩家自身搬到最近一次来袭者位置(onHurt 已记 lastAttackerPos)
+    const p2 = new Player();
+    p2.rhythms = ["hit", "hurt"];
+    p2.skills.push(makeSkillEquipment(coreSkillOf("vera")), makeSkillEquipment(armor));
+    const e2 = spawnEnemy("chaser", vec2(30, 40), 1);
+    const c2 = makeContext(p2, [e2]);
+    new EquipmentEngine().onHurt(c2, 1, e2);
+    const nova2 = c2.fx.find((f) => f.type === "nova")!;
+    expect([Math.round(nova2.pos.x), Math.round(nova2.pos.y)]).toEqual([30, 40]);
+  });
+
   it("引擎:技能拿到共鸣被动后叠 resonanceMorph(荆棘领域:范围 ×1.5、伤害 ×1.2 再乘被动本身)", () => {
     const p = new Player();
     p.rhythms = ["hit"];
+    // 钉在满层:零层罚项会让"×1.2 后再取整"与"取整后 ×1.2"差 1 点,这条只验共鸣乘区
+    p.thornStack = THORN_STACK.cap;
     p.skills.push(makeSkillEquipment(coreSkillOf("vera")));
     const e = spawnEnemy("chaser", vec2(30, 0), 1);
     const before = makeContext(p, [e]);
@@ -969,173 +1073,6 @@ describe("遗物类被动(D3 并入)", () => {
     }
     rand2.mockRestore();
     expect(c.player.alive).toBe(false);
-  });
-});
-
-describe("重置分岔(§6,落在升级弹层)", () => {
-  it("Player.resetBranch:撤技能、收节律、清选择、计次;无分岔 → null", () => {
-    const p = new Player();
-    p.rhythms = ["hit"];
-    p.skills.push(makeSkillEquipment(coreSkillOf("vera")));
-    expect(p.resetBranch()).toBeNull();
-    const walker = makeSkillEquipment(HERO_SKILLS.vera[2]);
-    p.skills.push(walker);
-    p.unlockRhythm("move");
-    p.rhythmLevel.move = 3;
-    p.branchChosen = "vera_walker";
-    const r = p.resetBranch();
-    expect(r).toEqual({ skillId: "vera_walker", rhythm: "move" });
-    expect(p.skills.map((s) => s.skillId)).toEqual(["vera_core"]);
-    expect(p.rhythms).toEqual(["hit"]);
-    expect(p.rhythmLevel.move).toBeUndefined();
-    expect(p.branchChosen).toBeNull();
-    expect(p.branchResets).toBe(1);
-  });
-
-  it("世界层 resetBranch:挂在被收回节律上的法宝重挂回剩余节律", () => {
-    const save = emptySave();
-    save.energy = 99;
-    save.selectedHero = "vera";
-    save.selectedSet = "thorn";
-    const s = new BattleSim({ save, input: { isMoving: false, moveDir: vec2(0, 0) }, worldH: 996, persist: () => {}, callbacks: { onDamage: () => {}, onDeath: () => {}, onVictory: () => {}, onChapterShop: () => {} } });
-    s.startStage(1);
-    s.player.skills.push(makeSkillEquipment(HERO_SKILLS.vera[2]));
-    s.player.unlockRhythm("move");
-    s.player.branchChosen = "vera_walker";
-    const eq = generateEquipment(1, "common", false, 0, ["hit", "move"]);
-    assignRhythm(eq, "move", ["hit", "move"]);
-    s.player.equipment.push(eq);
-    expect(s.world.resetBranch()).toBe(true);
-    expect(s.player.rhythms).toEqual(["hit"]);
-    expect(equipmentRhythm(eq)).toBe("hit");
-    expect(s.world.resetBranch()).toBe(false);
-  });
-
-  it("升级弹层:已选分岔且金币够时「重置分岔」进候选;选它扣 resetBranchCost 并调宿主 resetBranch;次数用完不再出", () => {
-    const st = { gold: 1000, branch: "vera_walker" as string | null, resets: 0, skills: [makeSkillEquipment(coreSkillOf("vera")), makeSkillEquipment(HERO_SKILLS.vera[2])], rhythms: ["hit", "move"] as RhythmId[] };
-    const world = {
-      equipment: [] as Equipment[],
-      skills: st.skills,
-      heroId: () => "vera" as const,
-      playerLevel: () => 6,
-      rhythms: () => st.rhythms,
-      unlockRhythm: () => {},
-      rhythmLevel: () => 1,
-      rhythmLevelUp: () => true,
-      branchChosen: () => st.branch,
-      setBranchChosen: (id: string) => {
-        st.branch = id;
-      },
-      resetBranch: () => {
-        st.branch = null;
-        st.resets += 1;
-        st.skills.splice(1, 1);
-        st.rhythms.splice(1, 1);
-        return true;
-      },
-      branchResets: () => st.resets,
-      gold: () => st.gold,
-      setGold: (v: number) => {
-        st.gold = v;
-      },
-      healPct: () => {},
-      addMaxHp: () => {},
-      slots: () => 6,
-      chapter: () => 3,
-      highestStage: () => 1,
-      ownedTalents: () => [],
-      recordEquipment: () => {},
-    };
-    // 候选:血棘 3 / 核心升阶 2 / 棘行者升阶 2 / 受击节律 1 / 移动节律 1 / 重置分岔 1;随机源恒 0.99 → 首抽落在权重末位 = 重置
-    const mm = new LevelUpModel(world, () => 0.99);
-    mm.open();
-    const i = mm.choices.findIndex((c) => c.kind === "reset");
-    expect(i).toBeGreaterThanOrEqual(0);
-    const card = mm.content().cards[i];
-    expect(card.tagText).toBe(LV_TEXT.tagReset);
-    expect(card.qualityText).toContain(`${resetBranchCost(3)} 金`);
-    expect(mm.canPick(i)).toBe(true);
-    expect(mm.pick(i)).toEqual({ ok: true, kind: "reset" });
-    expect(st.gold).toBe(1000 - resetBranchCost(3));
-    expect(st.branch).toBeNull();
-    expect(st.resets).toBe(1);
-    expect(st.skills.map((s) => s.skillId)).toEqual(["vera_core"]);
-    // 次数用完:不再进候选(RESET_BRANCH_LIMIT = 1)
-    st.branch = "vera_armor";
-    st.skills.push(makeSkillEquipment(HERO_SKILLS.vera[1]));
-    const m2 = new LevelUpModel(world, () => 0.99);
-    m2.open();
-    expect(m2.choices.some((c) => c.kind === "reset")).toBe(false);
-    expect(RESET_BRANCH_LIMIT).toBe(1);
-    // 金币不够:不进候选
-    st.resets = 0;
-    st.gold = resetBranchCost(3) - 1;
-    const m3 = new LevelUpModel(world, () => 0.99);
-    m3.open();
-    expect(m3.choices.some((c) => c.kind === "reset")).toBe(false);
-    // 老宿主没接 resetBranch:永远不出
-    st.gold = 1000;
-    const legacy = new LevelUpModel({ ...world, resetBranch: undefined, branchResets: undefined }, () => 0.99);
-    legacy.open();
-    expect(legacy.choices.some((c) => c.kind === "reset")).toBe(false);
-  });
-
-  it("保底(R8):分岔选定后随机源一直不给重置,第 RESET_GUARANTEE_ROUNDS 轮必出;出现过一次后不再保底;换分岔重新数", () => {
-    const st = { gold: 5000, branch: "vera_walker" as string | null, resets: 0, skills: [makeSkillEquipment(coreSkillOf("vera")), makeSkillEquipment(HERO_SKILLS.vera[2])], rhythms: ["hit", "move"] as RhythmId[] };
-    const world = {
-      equipment: [] as Equipment[],
-      skills: st.skills,
-      heroId: () => "vera" as const,
-      playerLevel: () => 6,
-      rhythms: () => st.rhythms,
-      unlockRhythm: () => {},
-      rhythmLevel: () => 1,
-      rhythmLevelUp: () => true,
-      branchChosen: () => st.branch,
-      setBranchChosen: (id: string) => {
-        st.branch = id;
-      },
-      resetBranch: () => true,
-      branchResets: () => st.resets,
-      gold: () => st.gold,
-      setGold: (v: number) => {
-        st.gold = v;
-      },
-      healPct: () => {},
-      addMaxHp: () => {},
-      slots: () => 6,
-      chapter: () => 3,
-      highestStage: () => 1,
-      ownedTalents: () => [],
-      recordEquipment: () => {},
-    };
-    // 随机源恒 0:权重抽样永远取池首(血棘 → 升阶 → …),重置(权重末位)靠随机永远出不来
-    const m = new LevelUpModel(world, () => 0);
-    for (let round = 1; round <= RESET_GUARANTEE_ROUNDS + 2; round++) {
-      m.open();
-      const has = m.choices.some((c) => c.kind === "reset");
-      expect(has, `第 ${round} 轮`).toBe(round === RESET_GUARANTEE_ROUNDS);
-      // 选一张非重置的卡关掉这一轮(不改分岔)
-      const i = m.choices.findIndex((c) => c.kind === "rhythm" || c.kind === "rank" || c.kind === "fallback");
-      m.pick(i >= 0 ? i : 0);
-    }
-    // 换了分岔(重置后再选另一条):从头数,第 RESET_GUARANTEE_ROUNDS 轮再保底一次
-    st.branch = "vera_armor";
-    for (let round = 1; round <= RESET_GUARANTEE_ROUNDS; round++) {
-      m.open();
-      expect(m.choices.some((c) => c.kind === "reset"), `换分岔后第 ${round} 轮`).toBe(round === RESET_GUARANTEE_ROUNDS);
-      const i = m.choices.findIndex((c) => c.kind === "rhythm" || c.kind === "rank" || c.kind === "fallback");
-      m.pick(i >= 0 ? i : 0);
-    }
-    // 金币不够时保底也不出(可出的前提不满足)
-    st.branch = "vera_walker";
-    st.gold = 0;
-    for (let round = 1; round <= RESET_GUARANTEE_ROUNDS + 1; round++) {
-      m.open();
-      expect(m.choices.some((c) => c.kind === "reset")).toBe(false);
-      m.pick(0);
-    }
-    expect(RESET_GUARANTEE_ROUNDS).toBe(3);
   });
 });
 
@@ -1618,7 +1555,7 @@ describe("核心技能节律调率(R6:按旧武器射速折算节拍)", () => {
 
 describe("S2 专属表与英雄页四行", () => {
   it("六个英雄有专属表(id 前缀 = 英雄),其余走通用职业包", () => {
-    expect(BESPOKE_HEROES).toEqual(["vera", "kyle", "bran", "sia", "nora", "loka"]);
+    expect(BESPOKE_HEROES).toEqual(["vera", "kyle", "bran", "sia", "nora", "loka", "willow"]);
     for (const h of BESPOKE_HEROES) for (const s of HERO_SKILLS[h]) expect(s.id.startsWith(`${h}_`)).toBe(true);
     expect(HERO_SKILLS.doran[1].id).toBe("doran_guard");
     expect(HERO_SKILLS.sia[0].rhythm).toBe(HERO_RHYTHM.sia);
@@ -1626,11 +1563,11 @@ describe("S2 专属表与英雄页四行", () => {
     expect(HERO_SKILLS.loka[0].rhythm).toBe(HERO_RHYTHM.loka);
   });
 
-  it("heroSkillLines:核心 / 分岔 / 进阶 / 本命节律,四行文案取自技能表与节律表;第二本命提示随解锁态变", () => {
+  it("heroSkillLines:核心 / 分岔 / 进阶 / 本命节律 / 套装,五行文案取自技能表、节律表与套组表;第二本命提示随解锁态变", () => {
     const lines = heroSkillLines("kyle", 1);
-    expect(lines.map((l) => l.tag)).toEqual(["核心技能", "分岔", "进阶", "本命节律"]);
+    expect(lines.map((l) => l.tag)).toEqual(["核心技能", "分岔", "进阶", "本命节律", "套装"]);
     expect(lines[0].label).toBe("寒霜齐射");
-    expect(lines[1].label).toBe("连杀过载 / 猎手步伐");
+    expect(lines[1].label).toBe("弹幕风暴 / 冰晶狙猎");
     expect(lines[2].label).toBe("冰晶穿刺");
     expect(lines[3].label).toBe("周期节律");
     expect(lines[3].desc).toContain("3 星通关解锁第二本命");
@@ -1638,6 +1575,12 @@ describe("S2 专属表与英雄页四行", () => {
     expect(unlocked[3].label).toBe("移动节律(第二本命)");
     expect(unlocked[3].desc).toContain("周期 / 连杀 / 移动");
     expect(heroRhythmOptions("kyle")).toEqual(["pulse", "combo", "move"]);
+    // 套装行与第 4 行的节律选择无关(换本命不动套组),内容全部来自 sets 表
+    const set = setDef("barrage");
+    expect(unlocked[4]).toEqual(lines[4]);
+    expect(lines[4].label).toBe(`${set.name} · ${set.desc}`);
+    expect(lines[4].desc).toContain(`共鸣 ${RESONANCE_TIERS.tier1} 处「${set.bonus3.name}」`);
+    expect(lines[4].desc).toContain(`${RESONANCE_TIERS.tier2} 处「${set.bonus6.name}」`);
   });
 });
 
@@ -1732,5 +1675,292 @@ describe("承伤反哺池(R17:穆「缠斗回复」的杠杆 A)", () => {
     off.maxHp = 100; off.hp = 100;
     off.takeDamage(40);
     expect(off.retaliationPool, "没有 retaliationHeal 源 → 不入池").toBe(0);
+  });
+});
+
+describe("荆棘层·站位续航与分岔代价(R18 / R19,docs/DESIGN-HERO-PIPELINE.md §2 / §5.5)", () => {
+  /** 一次受击施放:回传圆环的半径、落点与结算伤害(与真机同一条 castNova 通路) */
+  function castVera(opts: { branchId?: string | null; stack?: number } = {}) {
+    const p = new Player();
+    p.pos = vec2(0, 0);
+    p.rhythms = ["hit"];
+    const list: Equipment[] = [makeSkillEquipment(coreSkillOf("vera"))];
+    if (opts.branchId) {
+      const b = HERO_SKILLS.vera.find((s) => s.id === opts.branchId);
+      expect(b, `分岔 ${opts.branchId} 必须在薇拉表里`).toBeTruthy();
+      list.push(makeSkillEquipment(b!));
+    }
+    p.skills = list;
+    p.thornStack = opts.stack ?? 0;
+    const e0 = spawnEnemy("chaser", vec2(30, 0), 1);
+    const ctx = makeContext(p, [e0]);
+    new EquipmentEngine().onHurt(ctx, 1, e0);
+    const nova = ctx.fx.find((f) => f.type === "nova");
+    expect(nova, "受击必须爆出一枚圆环").toBeTruthy();
+    const call = (ctx.damageEnemy as ReturnType<typeof vi.fn>).mock.calls[0];
+    return { radius: nova!.radius!, pos: nova!.pos, dmg: call[1] as number };
+  }
+
+  const thornTier = { id: "thorn", pieces: 2, bonus3: true, bonus6: false } as const;
+
+  it("层数的作用位与续航档位只挂在薇拉身上:别人的核心不带这些字段", () => {
+    const core = makeSkillEquipment(coreSkillOf("vera")).effect.params;
+    expect(core.stackRadiusPer).toBe(VERA_STACK_TUNE.radiusPerStack);
+    expect(core.stackPowerLoss).toBe(VERA_STACK_TUNE.powerLossAtZero);
+    expect(core.sustainHeal).toBe(VERA_SUSTAIN.coreHealPerSec);
+    const blood = HERO_SKILLS.vera.find((s) => s.id === "vera_blood")!;
+    expect(blood.params.sustainHeal).toBe(VERA_SUSTAIN.advanceHealPerSec);
+    expect(blood.params.heal, "R19:血棘不再是「受击回几点血」").toBeUndefined();
+    for (const h of allHeroes()) {
+      if (h.id === "vera") continue;
+      const pr = makeSkillEquipment(coreSkillOf(h.id)).effect.params;
+      expect(pr.stackRadiusPer, `${h.id} 不该吃荆棘层`).toBeUndefined();
+      expect(pr.stackPowerLoss, `${h.id} 不该吃荆棘层罚项`).toBeUndefined();
+      expect(pr.sustainHeal, `${h.id} 不该走荆棘层续航`).toBeUndefined();
+    }
+    for (const s of HERO_SKILLS.vera) {
+      if (s.kind === "core") continue;
+      expect(makeSkillEquipment(s).effect.params.stackRadiusPer, `${s.id} 不带层数作用位`).toBeUndefined();
+    }
+  });
+
+  it("两态各自怎么攒层:站定才涨 / 边走边涨,贴身是两态共有的前提;倍率与上限都读表", () => {
+    /** 预填层数后走一帧,回传本帧层数变化(0 起点会被钳住,读不出衰减) */
+    const step = (mode: "still" | "move", contacts: number, movedPx: number, dt = 1, gainMult = 1, from = 3) => {
+      const p = new Player();
+      p.thornStack = from;
+      p.tickThornStack(dt, contacts, movedPx, true, mode, gainMult);
+      return +(p.thornStack - from).toFixed(4);
+    };
+    const per = THORN_STACK.perContactPerSec;
+    const dec = THORN_STACK.decayPerSec;
+    expect(step("still", 1, 0), "站定档:停下不动才涨").toBeCloseTo(per, 5);
+    expect(step("still", 1, 40), "站定档:一走就停涨、改按衰减掉层").toBeCloseTo(-dec, 5);
+    expect(step("move", 1, 40), "绕场档:边走边贴身才涨").toBeCloseTo(per, 5);
+    expect(step("move", 1, 0), "绕场档:站着不动反而掉层").toBeCloseTo(-dec, 5);
+    // 两态共有的前提 = 贴身:R22 收掉第三档之后,"什么都不约束"不再是可选项
+    expect(step("move", 0, 40), "绕场档:走是走了,但没贴身 → 不涨").toBeCloseTo(-dec, 5);
+    expect(step("still", 0, 0), "站定档:站住了但身边没人 → 一样不涨").toBeCloseTo(-dec, 5);
+    expect(step("still", 1, 0, 1, SET_BONUSES.thorn3StackGainMult, 0), "棘肤档:层数涨得更快(不再是按最大生命回血)")
+      .toBeCloseTo(per * SET_BONUSES.thorn3StackGainMult, 5);
+    const grow = new Player();
+    grow.tickThornStack(999, 3, 0, true, "still", 4);
+    expect(grow.thornStack, "封顶在 cap").toBe(THORN_STACK.cap);
+    const dry = new Player();
+    dry.tickThornStack(999, 0, 0, true, "move");
+    expect(dry.thornStack, "从不贴身 → 恒 0(不会变负)").toBe(0);
+    const off = new Player();
+    off.thornStack = 5;
+    off.tickThornStack(999, 5, 0, false, "still");
+    expect(off.thornStack, "没带层数源 → 直接归零").toBe(0);
+    expect(off.stackDriven, "并写下「本局不走层数」的标记").toBe(false);
+    expect(new Player().thornGainMode, "玩家自带的姿势位 = 姿势表首档(没走到弹层时的确定值)").toBe(DEFAULT_THORN_MODE);
+  });
+
+  it("接触记忆(R22 候选①):怪刚被清掉也算这一拍 —— 窗口按围数正比、只放宽贴身、不放宽姿势", () => {
+    // 上一组用例每步都新开一个 Player,记忆位天然是 0,所以那些单帧读数与加记忆之前逐位一致
+    const dt = 0.1;
+    const per = THORN_STACK.perContactPerSec;
+    const dec = THORN_STACK.decayPerSec;
+    const edec = THORN_STACK.contactEchoDecayPerSec;
+    /** 一拍贴身 `n` 只的记忆窗口(帧):窗口 = 围数 / 衰减率,全部由表值算,不在用例里写死帧数 */
+    const winOf = (n: number) => Math.round(n / edec / dt);
+
+    /** 站定档:一拍贴身 3 只(怪随即被圆环清掉),之后每帧都是 0 只 */
+    const n = 3;
+    const win = winOf(n);
+    const p = new Player();
+    p.tickThornStack(dt, n, 0, true, "still");
+    expect(p.thornStack, "贴身那一拍照旧按围数攒").toBeCloseTo(n * per * dt, 6);
+    expect(p.thornContactEcho, "记忆位记下的是围数,不是层数").toBeCloseTo(n, 6);
+    let prev = p.thornStack;
+    let fed = 0;
+    for (let i = 1; i <= win; i++) {
+      p.tickThornStack(dt, 0, 0, true, "still");
+      const mem = Math.max(0, n - edec * dt * i);
+      if (mem > 0) {
+        expect(p.thornStack, `第 ${i} 帧:怪已经没了,记忆里的 ${mem.toFixed(2)} 只继续喂层`).toBeCloseTo(prev + mem * per * dt, 6);
+        expect(p.thornStack, `第 ${i} 帧仍在涨(这就是站定档不必出门的报酬)`).toBeGreaterThan(prev);
+        fed += 1;
+      } else {
+        expect(p.thornStack, `第 ${i} 帧:记忆见底 → 交回 decayPerSec 掉层`).toBeCloseTo(prev - dec * dt, 6);
+      }
+      prev = p.thornStack;
+    }
+    expect(fed, "窗口内除末帧都在喂").toBe(win - 1);
+    expect(p.thornContactEcho, "窗口结束记忆归零").toBeCloseTo(0, 6);
+
+    // 窗口与围数成正比:6 只的记忆是 3 只的两倍长
+    const wide = new Player();
+    wide.tickThornStack(dt, 6, 0, true, "still");
+    expect(winOf(6), "窗口按围数正比放大").toBe(win * 2);
+    for (let i = 1; i < winOf(6); i++) wide.tickThornStack(dt, 0, 0, true, "still");
+    expect(wide.thornContactEcho, "6 只在窗口末帧之前还没退完").toBeGreaterThan(0);
+    wide.tickThornStack(dt, 0, 0, true, "still");
+    expect(wide.thornContactEcho, "满窗退尽").toBeCloseTo(0, 6);
+    expect(wide.thornStack, "但总量仍被 cap 夹住(记忆不放开上限)").toBeLessThanOrEqual(THORN_STACK.cap);
+
+    // 只放宽"贴身"这一条前提:姿势那一条照旧读"本帧动不动"
+    const walked = new Player();
+    walked.tickThornStack(dt, n, 0, true, "still");
+    const s0 = walked.thornStack;
+    walked.tickThornStack(dt, 0, 40, true, "still");
+    expect(walked.thornContactEcho, "记忆还在(挪位置不会把记忆抹掉)").toBeGreaterThan(0);
+    expect(walked.thornStack, "站定档一走就掉层:记忆救不了姿势").toBeCloseTo(s0 - dec * dt, 6);
+    const froze = new Player();
+    froze.tickThornStack(dt, n, 1, true, "move");
+    const m0 = froze.thornStack;
+    froze.tickThornStack(dt, 0, 0, true, "move");
+    expect(froze.thornContactEcho, "绕场档同样有记忆").toBeGreaterThan(0);
+    expect(froze.thornStack, "但站下不动就不涨,这一条没被放宽").toBeCloseTo(m0 - dec * dt, 6);
+
+    // 记忆只记"曾经在闸里"的峰值,不会自己长:新的真实围数抬得上来,退尽后归零
+    const peak = new Player();
+    peak.tickThornStack(dt, 2, 0, true, "still");
+    peak.tickThornStack(dt, 5, 0, true, "still");
+    expect(peak.thornContactEcho, "贴身更多 → 抬到当前围数").toBeCloseTo(5, 6);
+    // 5 只的记忆要 winOf(5) 帧才退尽;这期间层数一路被喂到封顶(记忆放开的是喂层节奏,不是上限)
+    for (let i = 0; i < winOf(5) + 2; i++) peak.tickThornStack(dt, 0, 0, true, "still");
+    expect(peak.thornContactEcho, "记忆退尽归零,不会变负").toBe(0);
+    expect(peak.thornStack, "层数仍被 cap 夹住").toBeLessThanOrEqual(THORN_STACK.cap);
+    const peakTail = peak.thornStack;
+    peak.tickThornStack(dt, 0, 0, true, "still");
+    expect(peak.thornStack, "记忆一尽就交回 decayPerSec 掉层").toBeCloseTo(peakTail - dec * dt, 6);
+    const off = new Player();
+    off.tickThornStack(dt, 4, 0, true, "still");
+    expect(off.thornContactEcho).toBeGreaterThan(0);
+    off.tickThornStack(dt, 4, 0, false, "still");
+    expect(off.thornContactEcho, "不走层数的人:层数与记忆一起清零").toBe(0);
+
+    // 数值只在表里:实现读的是表字段,不是在 player 里写死一个窗口
+    expect(fileSource("../cocos/assets/scripts/game/entities/player.ts")).toContain("cfg.contactEchoDecayPerSec");
+  });
+
+  it("状态型回血只认层数:两条源各给一档、小数攒满才入账,血棘的共鸣被动只翻自己那一档", () => {
+    /** 逐帧给量:核心 6 点/秒、血棘 4 点/秒(各自乘层数比例与本源 healMult) */
+    const run = (stack: number, dt: number, withBlood: boolean, withLifesteal: boolean) => {
+      const p = new Player();
+      p.rhythms = ["hit"];
+      p.skills = [makeSkillEquipment(coreSkillOf("vera"))];
+      if (withBlood) p.skills.push(makeSkillEquipment(HERO_SKILLS.vera.find((s) => s.id === "vera_blood")!));
+      if (withLifesteal) p.passives.push(makePassive(9, "lifesteal", "common", 1, { pct: 0.03 }));
+      p.thornStack = stack;
+      const ctx = makeContext(p, [spawnEnemy("chaser", vec2(30, 0), 1)]);
+      new EquipmentEngine().update(ctx, dt);
+      return (ctx.healPlayer as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    };
+    const core = VERA_SUSTAIN.coreHealPerSec;
+    const adv = VERA_SUSTAIN.advanceHealPerSec;
+    expect(run(THORN_STACK.cap, 0.5, false, false), "只有核心:半秒给一半").toEqual([core / 2]);
+    expect(run(THORN_STACK.cap, 0.5, true, false), "拿到血棘 → 两条源各出一笔").toEqual([core / 2, adv / 2]);
+    expect(run(THORN_STACK.cap, 0.5, true, true), "共鸣「饮血荆棘」只翻倍血棘那一档,核心档不动").toEqual([core / 2, adv]);
+    expect(run(THORN_STACK.cap / 2, 0.1, true, false), "半层 0.1 秒不足 1 点 → 不入账").toEqual([]);
+    expect(run(0, 1, true, true), "零层不给血(层数掉了续航就断)").toEqual([]);
+  });
+
+  it("棘肤让位:走荆棘层的人不再按最大生命比例受击回血,不吃层数的荆棘装备流照旧", () => {
+    const run = (stackDriven: boolean) => {
+      const p = new Player();
+      p.rhythms = ["hit"];
+      p.stackDriven = stackDriven;
+      const ctx = makeContext(p, [spawnEnemy("chaser", vec2(30, 0), 1)], { setBonus: { ...thornTier } });
+      new EquipmentEngine().onHurt(ctx, 1, ctx.enemies[0]);
+      return { calls: (ctx.healPlayer as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]), maxHp: p.maxHp };
+    };
+    const legacy = run(false);
+    expect(legacy.calls, "非层数玩家:仍按棘肤回 1.5% 最大生命").toEqual([legacy.maxHp * SET_BONUSES.thorn3HealPct]);
+    expect(run(true).calls, "走层数:这一档不再回血(续航改由层数逐帧给)").toEqual([]);
+  });
+
+  it("姿势来自局首二选一:薇拉两档明牌、其余英雄没有姿势表、分岔一律不再带姿势位", () => {
+    const st = heroStances("vera");
+    expect(st.map((s) => s.mode), "两态:站定 / 绕场(表序 = 局首卡序)").toEqual(["still", "move"]);
+    expect(DEFAULT_THORN_MODE, "兜底档 = 姿势表首项(没走到弹层的局按它跑,可复现)").toBe(st[0].mode);
+    for (const s of st) {
+      expect(s.name.length, "卡面名").toBeGreaterThan(0);
+      expect(s.desc, `${s.name} 必须写清发动条件`).toContain("才攒荆棘层");
+      expect(s.desc, `${s.name} 必须交代接触记忆(两态同享的贴身前提)`).toContain("也算这一拍");
+      expect(s.aiNote, `${s.name} 必须交代挂机档跟着怎么变`).toContain("挂机");
+    }
+    for (const h of allHeroes()) if (h.id !== "vera") expect(heroStances(h.id), `${h.id} 不该弹姿势层`).toEqual([]);
+    expect(heroStances(null), "没选英雄 = 没有姿势").toEqual([]);
+    // 姿势位已从分岔上摘掉:整张技能表里不该再有 sustainMode 这个字段(源码级钉死)
+    for (const src of [fileSource("../cocos/assets/scripts/game/data/heroSkills.ts"), fileSource("../cocos/assets/scripts/game/systems/battleWorld.ts")]) {
+      expect(src.includes("sustainMode"), "sustainMode 已退役").toBe(false);
+    }
+    // 两枚分岔因此只剩"核心怎么打"(几何差)+ 数值代价:各自的 coreMorph 与代价仍在
+    const armor = HERO_SKILLS.vera.find((s) => s.id === "vera_armor")!;
+    const walker = HERO_SKILLS.vera.find((s) => s.id === "vera_walker")!;
+    expect(armor.coreMorph?.castAtAttacker, "荆甲:爆发搬到来袭者脚下").toBe(true);
+    expect(armor.coreMorph?.radiusMult, "荆甲:半径代价").toBe(VERA_BRANCH_COST.armorRadiusMult);
+    expect(walker.coreMorph?.afterCastGround, "棘行者:落点长荆棘带").toBeDefined();
+    expect(walker.coreMorph?.power, "棘行者:爆发代价").toBe(VERA_BRANCH_COST.walkerPowerMult);
+    // 分岔文案里不再出现姿势句(那两句话已搬进姿势表,不留两份)
+    for (const s of [armor, walker]) expect(s.desc.includes("攒荆棘层"), `${s.id} 的文案不该再写姿势`).toBe(false);
+  });
+
+  it("圆环的半径与威力读同一个层数:满层半径 +36%,零层吃满罚项", () => {
+    const zero = castVera({ stack: 0 });
+    const half = castVera({ stack: THORN_STACK.cap / 2 });
+    const full = castVera({ stack: THORN_STACK.cap });
+    expect(zero.radius).toBeCloseTo(200, 5);
+    expect(half.radius).toBeCloseTo(200 * (1 + VERA_STACK_TUNE.radiusPerStack * THORN_STACK.cap / 2), 5);
+    expect(full.radius).toBeCloseTo(200 * (1 + VERA_STACK_TUNE.radiusPerStack * THORN_STACK.cap), 5);
+    expect(Math.abs(half.dmg - full.dmg * (1 - VERA_STACK_TUNE.powerLossAtZero / 2))).toBeLessThanOrEqual(1);
+    expect(Math.abs(zero.dmg - full.dmg * (1 - VERA_STACK_TUNE.powerLossAtZero))).toBeLessThanOrEqual(1);
+    expect(full.dmg, "满层不再有罚项").toBeGreaterThan(zero.dmg);
+  });
+
+  it("两扇门:荆甲压圆环半径(换来绕开盾面)、棘行者压即时爆发(换来地面)", () => {
+    const base = castVera();
+    const armor = castVera({ branchId: "vera_armor" });
+    const walker = castVera({ branchId: "vera_walker" });
+    expect(armor.radius).toBeCloseTo(base.radius * VERA_BRANCH_COST.armorRadiusMult, 5);
+    expect(armor.dmg, "荆甲不碰伤害").toBe(base.dmg);
+    expect(Math.abs(walker.dmg - base.dmg * VERA_BRANCH_COST.walkerPowerMult)).toBeLessThanOrEqual(1);
+    expect(walker.radius, "棘行者不碰圆环半径").toBe(base.radius);
+    expect(armor.pos.x, "荆甲把落点搬到刚打我的人脚下").toBeCloseTo(30, 5);
+    expect(base.pos.x, "没选分岔时仍以自身为中心").toBeCloseTo(0, 5);
+  });
+
+  it("HUD 的节律进度条改读层数;不带荆棘层的技能与法宝仍是内置冷却口径", () => {
+    const p = new Player();
+    p.rhythms = ["hit"];
+    p.skills = [makeSkillEquipment(coreSkillOf("vera"))];
+    p.thornStack = THORN_STACK.cap / 2;
+    const engine = new EquipmentEngine();
+    expect(engine.rhythmProgress(p.skills[0], makeContext(p, []))).toMatchObject({ frac: 0.5, kind: "hit" });
+    p.thornStack = 0;
+    expect(engine.rhythmProgress(p.skills[0], makeContext(p, []))!.frac).toBe(0);
+    const k = new Player();
+    k.rhythms = ["pulse"];
+    k.skills = [makeSkillEquipment(coreSkillOf("kyle"))];
+    expect(engine.rhythmProgress(k.skills[0], makeContext(k, [])), "周期节律不画这条(CD 条另画)").toBeNull();
+    const m = new Player();
+    m.rhythms = ["hit"];
+    m.skills = [makeSkillEquipment(coreSkillOf("mu"))];
+    expect(engine.rhythmProgress(m.skills[0], makeContext(m, []))!.frac, "同为受击但不带荆棘层 → 仍是内置冷却口径").toBe(1);
+    const a = artifact("nova", "hit", { damage: 10, radius: 100 });
+    const q = new Player();
+    q.rhythms = ["hit"];
+    q.equipment.push(a);
+    expect(engine.rhythmProgress(a, makeContext(q, []))!.frac, "受击法宝仍走内置冷却").toBe(1);
+  });
+
+  it("驱动点唯一:世界层与模拟器同款调用(位移之后、同一个距离闸、同一套模式与倍率)", () => {
+    const world = fileSource("../cocos/assets/scripts/game/systems/battleWorld.ts");
+    const sim = fileSource("../scripts/balance-sim.ts");
+    expect(world).toContain("p.tickThornStack(dt, contacts, p.movedThisFrame, true, gainMode, gainMult)");
+    expect(world).toContain("THORN_STACK.contactRadius * THORN_STACK.contactRadius");
+    expect(world).toContain("SET_BONUSES.thorn3StackGainMult");
+    expect(sim).toContain("player.tickThornStack(dt, contacts, player.movedThisFrame, true, thornMode, gainMult)");
+    expect(sim).toContain("THORN_STACK.contactRadius * THORN_STACK.contactRadius");
+    expect(sim).toContain("SET_BONUSES.thorn3StackGainMult");
+    // 挂机档跟着姿势走:两边同一处改写,不允许只有一侧改
+    expect(world).toContain('gainMode === "move" ? "orbit"');
+    expect(sim).toContain('thornMode === "move" ? "orbit"');
+    // 站桩档(荆甲)取消"围到 4 只就跑":这一条两侧都要在,否则 sim 与真机各玩各的
+    expect(world).toContain('stacked && gainMode === "still"');
+    expect(sim).toContain('thornStacked && thornMode === "still"');
   });
 });

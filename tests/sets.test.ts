@@ -8,10 +8,11 @@ import { Player } from "@game/entities/player";
 import { spawnEnemy } from "@game/entities/enemy";
 import { EquipmentEngine, type BattleContext, type Fx } from "@game/systems/equipmentEngine";
 import { makeTrigger, makeEffect, type EffectType } from "@game/data/affixes";
-import { generateSetEquipment, GENERIC_EFFECT_TYPES, type Equipment } from "@game/data/equipmentGen";
+import { generateSetEquipment, makeSkillEquipment, GENERIC_EFFECT_TYPES, type Equipment } from "@game/data/equipmentGen";
 import { ARTIFACT_DEFS } from "@game/data/artifacts";
 import type { RhythmId } from "@game/data/rhythm";
-import { SETS, setDef, setOfEffect, setsOfEffect, allSets, seasonNewSets, setReleaseSeason, isSetPiece, setPieces, setBonusState, releasedSets, type SetId } from "@game/data/sets";
+import { SETS, setDef, setOfEffect, setsOfEffect, allSets, seasonNewSets, setReleaseSeason, isSetPiece, setPieces, setBonusState, releasedSets, resonanceProgress, setPieceProgress, RESONANCE_TIERS, SET_PIECE_TIERS, type SetId } from "@game/data/sets";
+import { heroSkillCapacity, heroSkillPieces, coreSkillOf } from "@game/data/heroSkills";
 import { chapterIntel } from "@game/data/intel";
 import { EFFECTS } from "@game/data/affixes";
 import { vec2 } from "@game/core/math";
@@ -235,3 +236,36 @@ function makeEquipment(effect: EffectType, id = 1, params: Record<string, number
     modifiers: [],
   };
 }
+
+/* ==================== 两条进度线(件套 / 共鸣)的展示口径 ==================== */
+
+describe("件套线与共鸣线:进度口径唯一事实源", () => {
+  it("共鸣线:ratio 以 tier2 为满格,两档门槛都来自 RESONANCE_TIERS(视图不得自算分母)", () => {
+    expect(resonanceProgress(0)).toMatchObject({ target: RESONANCE_TIERS.tier1, stage: 0, ratio: 0 });
+    expect(resonanceProgress(RESONANCE_TIERS.tier1 - 1).stage).toBe(0);
+    expect(resonanceProgress(RESONANCE_TIERS.tier1)).toMatchObject({ stage: 1, target: RESONANCE_TIERS.tier2, toNext: 2 });
+    // 旧缺陷:进度按 pieces / 6 算 → 全部生效时条只走到 67%,玩家看不到「凑齐」
+    expect(resonanceProgress(RESONANCE_TIERS.tier2)).toMatchObject({ stage: 2, toNext: 0, ratio: 1 });
+  });
+
+  it("件套线:门槛按可达上限裁剪,4 技能表下质变档标为不可达且一档即满格", () => {
+    const cap = heroSkillCapacity("vera");
+    // 1 核心 + (2 条互斥分岔 → 只贡献 1)+ 1 进阶 = 3
+    expect(cap).toBe(3);
+    expect(setPieceProgress(0, cap)).toMatchObject({ capacity: 3, tier2Reachable: false, target: SET_PIECE_TIERS.tier1, ratio: 0 });
+    expect(setPieceProgress(3, cap)).toMatchObject({ stage: 1, toNext: 0, ratio: 1, tier2Reachable: false });
+    // 技能表扩到 6 件之后,质变档才可达、满格基准才抬到 tier2
+    expect(setPieceProgress(6, 6)).toMatchObject({ stage: 2, toNext: 0, ratio: 1, tier2Reachable: true });
+    expect(setPieceProgress(3, 6)).toMatchObject({ stage: 1, target: SET_PIECE_TIERS.tier2, toNext: 3, ratio: 0.5 });
+  });
+
+  it("件套计数只数本英雄独有技能,且不看指定被动(与共鸣线的双份隐藏依赖正交)", () => {
+    const veraCore = makeSkillEquipment(coreSkillOf("vera"));
+    const kyleCore = makeSkillEquipment(coreSkillOf("kyle"));
+    const list = [veraCore, kyleCore, makeEquipment("nova")];
+    expect(heroSkillPieces(list, "vera")).toBe(1);
+    expect(heroSkillPieces(list, "kyle")).toBe(1);
+    // 主动法宝不计入件套
+    expect(heroSkillPieces([makeEquipment("nova")], "vera")).toBe(0);
+  });
+});

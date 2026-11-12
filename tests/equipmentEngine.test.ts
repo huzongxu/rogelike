@@ -268,7 +268,10 @@ describe("隐藏词缀效果(策划案 5.3)", () => {
     player.equipment = [eq];
     const enemy = spawnEnemy("chaser", vec2(100, 0), 1);
     ctx.enemies.push(enemy);
+    // 击杀概率封顶 0.95:固定随机源,避免 5% 的假失败
+    const rnd = vi.spyOn(Math, "random").mockReturnValue(0);
     engine.onKill(ctx, enemy);
+    rnd.mockRestore();
     expect(ctx.projectiles).toHaveLength(8);
   });
 

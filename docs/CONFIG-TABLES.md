@@ -37,13 +37,13 @@
 | 字段 | 默认 | 单位 | 说明 |
 |---|---|---|---|
 | chapterSeconds | 60 | 秒/章 | 每章限时(同步 waves.chapterLength) |
-| chaptersPerStage | 20 | 章/关 | 每关卡章节数 |
+| chaptersPerStage | 15 | 章/关 | 每关卡章节数(R20 由 20 缩到 15;`STAGES` 七行的 `chapters` / `bossChapter` 同源) |
 | echoRetainRate | 0.4 | - | 回响跨天保留比例(0.4=40% 入永久池) |
 | monsterCountBase | 30 | 只 | 每章怪物数量曲线基数(第 1 章) |
 | monsterCountGrowth | 1.15 | -/章 | 数量曲线增长率 |
 | echoRewardBase | 10 | 点 | 关卡回响奖励基数:N = base × N^exp |
 | echoRewardExp | 1.5 | - | 回响奖励指数 |
-| stageUnlockProgress | 0.5 | - | 关卡解锁门槛:前一关打到 ceil(章节数×此值) 章即解锁下一关(0.5=第 10/20 章);通关整关始终解锁 |
+| stageUnlockProgress | 0.5 | - | 关卡解锁门槛:前一关打到 ceil(章节数×此值) 章即解锁下一关(0.5=第 8/15 章);通关整关始终解锁 |
 | clearRewardGrowth | 0.15 | -/关 | 通关奖励成长:奖励 ×(1 + growth×(解锁前最高关-1)),通关越多奖励越好 |
 
 ## waves · 生成节奏
@@ -64,8 +64,8 @@
 
 | 字段 | 默认 | 说明 |
 |---|---|---|
-| eliteChapters | [5,10,15] | 精英章位置(第几章) |
-| treasureChapters | [7,14] | 宝箱章位置 |
+| eliteChapters | [4,8,12] | 精英章位置(第几章;R20 随 15 章重排,末章让给 Boss) |
+| treasureChapters | [6,10] | 宝箱章位置(R20 随 15 章重排) |
 | eliteSpawnScale | 1.3 | 精英章生成密度倍率 |
 | eliteBurst | 1.5 | 精英章开局 burst 倍率 |
 | eliteIntelBias | 0.3 | 精英章敌情倾向概率 |
@@ -190,6 +190,7 @@
 
 - 词缀/天赋/套组/委托区域等结构型数据:数值已按准则抽离入表(`SET_BONUSES`/`COMBO_VALUES`/`TALENT_VALUES`/`COMMISSION_DECAY`/`EQUIPMENT_LEVEL_GROWTH`,见 [DESIGN-VALUES-SPEC.md](./DESIGN-VALUES-SPEC.md) 目录),仅剩纯结构性定义(接口形状),无数值缺口
 - 英雄页几何与滚动手感:常量已入表但**未接 balance.json 热调**——滚动容器口径(点击判定阈值/惯性初速/减速度/边界橡皮筋/滑块宽)在 `game/ui/scrollList.ts`,页面分区与行高(列表带、详情区、立绘盒、确认按钮)在 `game/ui/heroSelectLayout.ts`,改数走"改表 → `npm test`"代码流程(单测:`tests/scroll-list.test.ts` + `tests/hero-select-layout.test.ts`)
+- 章节节点层(V1.1):开章章位(2 / 4 / 8 / 12)、6 条路线主循环与 36 个节点系数在 `game/data/heroBuild.ts`,当前是**纯常量表,未接 balance.json 热调**;调整走"改表 → `npm test`",标定口径见 `DESIGN-HERO-BUILD.md` §7
 
 ## 策划操作指引
 

@@ -1,5 +1,5 @@
 /**
- * 英雄选择屏 —— 像素暗黑翻新档:12 名英雄 + 详情 + 技能四行。
+ * 英雄选择屏 —— 像素暗黑翻新档:12 名英雄 + 详情 + 技能五行(核心 / 分岔 / 进阶 / 本命节律 / 套装)。
  *
  * 分工:几何全走共享层 `heroSelectLayout(w, h, heroes, seasonId, offset)`(单一出口,
  * 绘制与命中判定共读同一份矩形),滚动与热区全走 `heroes/HeroSelectModel.ts`
@@ -56,10 +56,15 @@ const V4_BONE = "#a9b4c4";
 
 /** 行池容量:最大屏高下视口 634 / 步长 80 ≈ 9 行可见,缓冲行与甩动高速段留足余量 */
 const ROW_POOL = 16;
-/** 技能行池(共享层恒 4 行) */
-const SKILL_POOL = 4;
-/** 详情正文最多三行(与 Web 的 slice(0, 3) 同档) */
-const LORE_LINES = 3;
+/** 技能行池(共享层恒 5 行:核心 / 分岔 / 进阶 / 本命节律 / 套装) */
+const SKILL_POOL = 5;
+/**
+ * 详情正文最多几行。含义:立绘右侧那条带里给"人物设定"留的行数;单位:行。
+ * 依据:共享层 `L.lore` 盒高 36 = 2 × round(13 × 1.3),再多一行就压到下方的「本套计件」清单;
+ *   12 位英雄的 lore 实测最长 26 字 → 312px 限宽下最多两行(`tests/hero-select-layout.test.ts` 有守卫,超行会被裁)。
+ * 出处:`game/ui/heroSelectLayout.ts` 的 `HERO_LORE_H`。
+ */
+const LORE_LINES = 2;
 /** 详情立绘缺图时的名字字号 */
 const PORTRAIT_CHAR_PX = FS.display;
 /** 缺图回退的硬边方框线宽(像素档不画圆角,圆边在 2px 网格上会抖糊) */
@@ -195,7 +200,7 @@ export class HeroSelectView {
   private listMask: Node;
   private rows: RowSlot[] = [];
   private track: ReturnType<typeof flatBox>;
-  private thumb: ReturnType<typeof flatBox>;
+  private thumb: ReturnType<typeof flatBox>;
   /** v6:详情面板框内的城堡窗景(压在面板之上、文字之下) */
   private detailScene: Plate;
   private detail: Plate;
@@ -206,8 +211,19 @@ export class HeroSelectView {
   private detailName: Txt;
   private detailTitle: Txt;
   private detailLore: Txt;
+  /** 「本套计件」题行与清单(立绘右侧带里、正文之下;矩形由共享层 `L.pieces` 给) */
+  private detailPiecesCap: Txt;
+  private detailPieces: Txt;
   private skillLabel: Txt;
+  private treeHint: Txt;
   private skills: SkillSlot[] = [];
+  /** V1.1 D03:独立技能树面板(浮在英雄页之上;组件同族键,零新贴图) */
+  private treeDim: ReturnType<typeof flatBox>;
+  private treePanel: Plate;
+  private treeTitle: Txt;
+  private treeClose: { plate: Plate; text: Txt };
+  private treeRows: { plate: Plate; title: Txt; desc: Txt }[] = [];
+  private treeFooter: Txt;
   private back: { plate: Plate; text: Txt };
   private confirm: { plate: Plate; text: Txt };
   private clear: { plate: Plate; text: Txt };
@@ -261,7 +277,10 @@ export class HeroSelectView {
     this.detailName = new Txt("DetailName", this.root);
     this.detailTitle = new Txt("DetailTitle", this.root);
     this.detailLore = new Txt("DetailLore", this.root);
+    this.detailPiecesCap = new Txt("DetailPiecesCaption", this.root);
+    this.detailPieces = new Txt("DetailPieces", this.root);
     this.skillLabel = new Txt("SkillCaption", this.root);
+    this.treeHint = new Txt("TreeHint", this.root);
     for (let i = 0; i < SKILL_POOL; i++) {
       this.skills.push({
         face: flatBox("SkillFace" + i, this.root),
@@ -276,6 +295,20 @@ export class HeroSelectView {
     this.back = { plate: new Plate("Back", this.root, frames), text: new Txt("BackText", this.root) };
     this.confirm = { plate: new Plate("Confirm", this.root, frames), text: new Txt("ConfirmText", this.root) };
     this.clear = { plate: new Plate("Clear", this.root, frames), text: new Txt("ClearText", this.root) };
+
+    // 技能树面板:压在确认层之上、Capture 之下(兄弟次序 = 渲染次序)
+    this.treeDim = flatBox("TreeDim", this.root);
+    this.treePanel = new Plate("TreePanel", this.root, frames);
+    this.treeTitle = new Txt("TreeTitle", this.root);
+    this.treeClose = { plate: new Plate("TreeClose", this.root, frames), text: new Txt("TreeCloseText", this.root) };
+    for (let i = 0; i < 8; i++) {
+      this.treeRows.push({
+        plate: new Plate("TreeRow" + i, this.root, frames),
+        title: new Txt("TreeRowTitle" + i, this.root),
+        desc: new Txt("TreeRowDesc" + i, this.root),
+      });
+    }
+    this.treeFooter = new Txt("TreeFooter", this.root);
 
     this.capture = makeNode("Capture", this.root);
     placeRect(this.capture, fullRect());
@@ -297,6 +330,8 @@ export class HeroSelectView {
         if (this.touchId >= 0) return;
         const p = at(e);
         this.touchId = e.getID();
+        // 技能树面板开着时不接管滚动手势(面板自身只认关闭/返回)
+        if (this.model.treeOpen) return;
         // 只有落在列表视口内的按下才接管为滚动手势(与 Web beginHeroDrag 同一闸门)
         if (inRect(this.hooks.layout().list, p.x, p.y)) scroll.begin(p.y, this.now());
       },
@@ -306,6 +341,7 @@ export class HeroSelectView {
       Node.EventType.TOUCH_MOVE,
       (e: { getUILocation(): { x: number; y: number }; getID(): number }) => {
         if (e.getID() !== this.touchId) return;
+        if (this.model.treeOpen) return;
         const p = at(e);
         scroll.move(p.y, this.now(), scroll.geometry(this.hooks.layout()));
         this.hooks.changed();
@@ -336,7 +372,6 @@ export class HeroSelectView {
 
   sync(): void {
     const p3 = viewTable().phase3;
-    const lift = viewTable().menu.baselineLift;
     const L = this.hooks.layout();
     const screen = { w: DESIGN_W, h: logicalH() };
 
@@ -442,21 +477,43 @@ export class HeroSelectView {
       this.detailName.set(d.x + d.w / 2, blockTop + FS.section, d.w - 32, FS.section, det.name, "center", HEX.textSecondary, screen);
       this.detailTitle.set(d.x + d.w / 2, blockTop + blockH, d.w - 32, FS.muted, det.title, "center", HEX.textSecondary, screen);
     } else if (v4) {
-      /* v4:名 22 金 / 称号 13 主色 / 正文 13 灰自动换行(盒高到立绘底,超出裁掉) */
+      /* v4:名 22 金 / 称号 13 主色 / 正文 13 灰自动换行(盒由共享层给,下方留给「本套计件」清单) */
       this.detailName.bold(true);
       this.detailName.box({ x: L.textX, y: port.y, w: L.loreW, h: 30 }, FS.title, det.name, "left", HEX.gold);
       this.detailTitle.box({ x: L.textX, y: port.y + 32, w: L.loreW, h: 22 }, FS.muted, det.title, "left", det.color);
-      this.detailLore.box({ x: L.textX, y: port.y + 60, w: L.loreW, h: Math.max(FS.muted * 2, port.h - 60) }, FS.muted, det.lore, "left", HEX.textSecondary, undefined, true);
+      this.detailLore.box(L.lore, FS.muted, det.lore, "left", HEX.textSecondary, undefined, true);
     } else {
       this.detailName.bold(true);
       this.detailName.set(L.textX, L.nameY, L.loreW, FS.title, det.name, "left", HEX.textPrimary, screen);
       this.detailTitle.set(L.textX, L.titleY, L.loreW, FS.muted, det.title, "left", det.color, screen);
-      const lines = fitLines(det.lore, L.loreW, FS.muted).slice(0, LORE_LINES);
-      this.detailLore.lines(lines, L.textX, Math.round(L.loreY - FS.muted * lift), L.loreW, FS.muted, HEX.textSecondary, screen);
+      const lines = fitLines(det.lore, L.lore.w, FS.muted).slice(0, LORE_LINES);
+      this.detailLore.lines(lines, L.lore.x, L.lore.y, L.lore.w, FS.muted, HEX.textSecondary, screen);
+    }
+    /* 「本套计件」:题行 + 清单两枚字都挂在共享层 `L.pieces` 那条带里(正文之下、立绘带底缘之上) */
+    const piecesOn = !emptyMode && det.pieces.text !== "";
+    this.detailPiecesCap.node.active = piecesOn;
+    this.detailPieces.node.active = piecesOn;
+    if (piecesOn) {
+      const capH = FS.micro + 4;
+      this.detailPiecesCap.bold(true);
+      this.detailPiecesCap.box({ x: L.pieces.x, y: L.pieces.y, w: L.pieces.w, h: capH }, FS.micro, det.pieces.caption, "left", HEX.gold);
+      this.detailPieces.box({ x: L.pieces.x, y: L.pieces.y + capH + 2, w: L.pieces.w, h: L.pieces.h - capH - 2 }, FS.micro, det.pieces.text, "left", HEX.textSecondary, undefined, true);
     }
     this.skillLabel.bold(true);
     if (v4) this.skillLabel.box({ x: port.x, y: L.skillLabelY, w: 200, h: 22 }, FS.micro, "技能详情", "left", HEX.gold);
     else this.skillLabel.set(port.x, L.skillLabelY, 160, FS.micro, "技能详情", "left", HEX.gold, screen);
+    // D03 可发现性:分岔行可点开技能树(不可用时整行字隐藏)
+    this.treeHint.active(det.treeAvailable);
+    if (det.treeAvailable) {
+      this.treeHint.bold(true);
+      this.treeHint.box(
+        { x: d.x + d.w - 220, y: L.skillLabelY, w: 204, h: 22 },
+        FS.micro,
+        "点「分岔」行展开技能树 ▸",
+        "right",
+        HEX.textSecondary,
+      );
+    }
     this.skills.forEach((slot, i) => {
       const sr = L.skillRows[i];
       const line = det.skills[i];
@@ -477,7 +534,9 @@ export class HeroSelectView {
         slot.label.bold(true);
         const tx = sr.rect.x + HERO_SKILL_TEXT_X;
         slot.label.box({ x: tx, y: sr.rect.y + 2, w: sr.descW, h: 22 }, FS.body, line.label, "left", HEX.textPrimary);
-        slot.desc.box({ x: tx, y: sr.rect.y + 24, w: sr.descW, h: Math.max(16, sr.rect.h - 28) }, FS.micro, line.desc, "left", HEX.textMuted);
+        // desc 折几行由布局给(=`descLines`):只有末行「套装」的行盒装得下两行,其余行仍单行截断
+        const twoLine = sr.descLines > 1;
+        slot.desc.box({ x: tx, y: sr.rect.y + 24, w: sr.descW, h: twoLine ? sr.rect.h - 26 : Math.max(16, sr.rect.h - 28) }, FS.micro, line.desc, "left", HEX.textMuted, undefined, twoLine);
         return;
       }
       slot.row.show(KEY_SKILL_ROW, sr.rect, "slice", p3.detailBg, p3.detailStroke);
@@ -506,6 +565,91 @@ export class HeroSelectView {
       this.back.text.set(B.x + B.w / 2, B.y + B.h / 2 + FS.muted / 3, B.w, FS.muted, "返回", "center", p3.buttonText, screen);
       this.confirm.text.set(C.x + C.w / 2, C.y + C.h / 2 + FS.body / 3, C.w - 16, FS.body, this.model.confirmText(), "center", HEX.textPrimary, screen);
       this.clear.text.set(CL.x + CL.w / 2, CL.y + CL.h / 2 + FS.muted / 3, CL.w - 8, FS.muted, "不出战", "center", HEX.textSecondary, screen);
+    }
+
+    this.paintTree(L, p3);
+  }
+
+  /** V1.1 D03:独立技能树面板(2 列 × 4 行:分岔头 + 4/8/12 三层;legacy 只显示两条分岔) */
+  private paintTree(L: HeroSelectLayout, p3: Phase3Params): void {
+    const tree = this.model.treeOpen ? this.model.tree() : null;
+    const open = !!tree;
+    this.treeDim.node.active = open;
+    this.treePanel.node.active = open;
+    this.treeTitle.active(open);
+    this.treeClose.plate.node.active = open;
+    this.treeClose.text.active(open);
+    this.treeFooter.active(open);
+    for (const r of this.treeRows) {
+      r.plate.node.active = false;
+      r.title.active(false);
+      r.desc.active(false);
+    }
+    if (!open || !tree) return;
+
+    const T = L.tree;
+    this.treeDim.draw(T.dim, p3.panelDim);
+    this.treePanel.show(KEY_PANEL, T.panel, "slice", p3.detailBg, p3.detailStroke);
+    this.treeTitle.bold(true);
+    this.treeTitle.box({ x: T.title.x, y: T.title.baseY - 14, w: T.title.maxW, h: 28 }, T.title.px, `技能树 · ${this.model.detail().name}`, "left", HEX.gold);
+    this.treeClose.plate.show(KEY_BACK, T.close, "slice", p3.detailBg, p3.detailStroke);
+    this.treeClose.text.box(T.close, FS.muted, "关闭", "center", p3.buttonText);
+    this.treeFooter.box({ x: T.footer.x, y: T.footer.baseY - 10, w: T.footer.maxW, h: 20 }, T.footer.px, tree.note, "left", HEX.textMuted);
+
+    for (let c = 0; c < 2; c++) {
+      const branch = tree.branches[c];
+      const col = T.columns[c];
+      // 每列 4 槽:0..2 = 4/8/12 层,3 = 分支头(同层语义,共用行板)
+      const head = this.treeRows[c * 4 + 3];
+      head.plate.node.active = !!branch;
+      head.title.active(!!branch);
+      head.desc.active(!!branch);
+      if (!branch) continue;
+      head.plate.show(KEY_ROW, col.header, "slice", p3.heroRowSel, theme.select);
+      head.title.bold(true);
+      head.title.box(
+        { x: col.header.x + 6, y: col.header.y + 4, w: col.header.w - 12, h: 22 },
+        FS.micro,
+        `${c === 0 ? "A" : "B"} · ${branch.name} · ${branch.skillName}`,
+        "left",
+        HEX.gold,
+      );
+      head.desc.box(
+        { x: col.header.x + 6, y: col.header.y + 26, w: col.header.w - 12, h: Math.max(16, col.header.h - 30) },
+        FS.micro,
+        branch.desc,
+        "left",
+        HEX.textMuted,
+        undefined,
+        true,
+      );
+      for (let k = 0; k < 3; k++) {
+        const slot = this.treeRows[c * 4 + k];
+        const row = col.rows[k];
+        const tier = branch.tiers[k];
+        slot.plate.node.active = !!tier;
+        slot.title.active(!!tier);
+        slot.desc.active(!!tier);
+        if (!tier) continue;
+        slot.plate.show(KEY_ROW, row, "slice", p3.heroRowIdle, p3.heroRowStroke);
+        slot.title.bold(true);
+        slot.title.box(
+          { x: row.x + 6, y: row.y + 4, w: row.w - 12, h: 22 },
+          FS.micro,
+          `第 ${tier.chapter} 章 · ${tier.options.map((o) => o.name).join(" / ")}`,
+          "left",
+          HEX.textPrimary,
+        );
+        slot.desc.box(
+          { x: row.x + 6, y: row.y + 26, w: row.w - 12, h: row.h - 30 },
+          FS.micro,
+          tier.options.map((o) => `${o.name}:${o.desc}`).join("；"),
+          "left",
+          HEX.textMuted,
+          undefined,
+          true,
+        );
+      }
     }
   }
 

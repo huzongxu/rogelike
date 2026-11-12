@@ -355,8 +355,8 @@ export class ShopView {
       this.recText.active(!setOn2);
       if (setOn2 && c.setText) {
         this.setText.bold(true);
-        this.setText.box({ x: pad, y: cy, w: 150, h: 16 }, FS.micro, c.setText, "left", c.setColor ?? HEX.echo);
-        const tw2 = Math.min(150, approxW(c.setText, FS.micro));
+        this.setText.box({ x: pad, y: cy, w: p3.setHintW, h: 16 }, FS.micro, c.setText, "left", c.setColor ?? HEX.echo);
+        const tw2 = Math.min(p3.setHintW, approxW(c.setText, FS.micro));
         this.bonusText.box({ x: pad + tw2 + 8, y: cy, w: 210, h: 16 }, FS.micro, c.bonusText ?? "", "left", HEX.textSecondary);
       } else {
         this.recText.box({ x: pad, y: cy, w: 340, h: 16 }, FS.micro, c.recText, "left", HEX.textSecondary);
@@ -383,8 +383,8 @@ export class ShopView {
     this.recText.active(!setOn);
     if (setOn && c.setText) {
       this.setText.bold(true);
-      this.setText.set(pad, 58, 150, FS.micro, c.setText, "left", c.setColor ?? HEX.echo);
-      const tw = Math.min(150, approxW(c.setText, FS.micro));
+      this.setText.set(pad, 58, p3.setHintW, FS.micro, c.setText, "left", c.setColor ?? HEX.echo);
+      const tw = Math.min(p3.setHintW, approxW(c.setText, FS.micro));
       const bx = pad + tw + 8;
       this.setBar.draw({ x: bx, y: 52, w: p3.setBarW, h: p3.setBarH }, c.setProgress, c.setColor ?? HEX.echo);
       this.bonusText.set(bx + p3.setBarW + 8, 58, 190, FS.micro, c.bonusText ?? "");

@@ -1,0 +1,106 @@
+{
+  "vera@2": {
+    "branch": null,
+    "chapter": 2,
+    "hero": "vera",
+    "nodes": [
+      null,
+      null,
+      null
+    ],
+    "overlay": true,
+    "paused": true,
+    "step": {
+      "kind": "branch",
+      "options": [
+        {
+          "id": "vera.a",
+          "name": "荆棘堡垒"
+        },
+        {
+          "id": "vera.b",
+          "name": "血棘行者"
+        }
+      ],
+      "tier": null
+    }
+  },
+  "kyle@4": {
+    "branch": "kyle.a",
+    "chapter": 4,
+    "hero": "kyle",
+    "nodes": [
+      null,
+      null,
+      null
+    ],
+    "overlay": true,
+    "paused": true,
+    "step": {
+      "kind": "node",
+      "options": [
+        {
+          "id": "kyle_a_4_return",
+          "name": "折返"
+        },
+        {
+          "id": "kyle_a_4_weave",
+          "name": "交织"
+        }
+      ],
+      "tier": 1
+    }
+  },
+  "willow@8": {
+    "branch": "willow.a",
+    "chapter": 8,
+    "hero": "willow",
+    "nodes": [
+      "willow_a_4_flank",
+      null,
+      null
+    ],
+    "overlay": true,
+    "paused": true,
+    "step": {
+      "kind": "node",
+      "options": [
+        {
+          "id": "willow_a_8_focus",
+          "name": "头狼接令"
+        },
+        {
+          "id": "willow_a_8_intercept",
+          "name": "护卫接令"
+        }
+      ],
+      "tier": 2
+    }
+  },
+  "vera@12": {
+    "branch": "vera.a",
+    "chapter": 12,
+    "hero": "vera",
+    "nodes": [
+      "vera_a_4_guard",
+      "vera_a_8_echo",
+      null
+    ],
+    "overlay": true,
+    "paused": true,
+    "step": {
+      "kind": "node",
+      "options": [
+        {
+          "id": "vera_a_12_wall",
+          "name": "城垣合围"
+        },
+        {
+          "id": "vera_a_12_move_wall",
+          "name": "移动城垣"
+        }
+      ],
+      "tier": 3
+    }
+  }
+}

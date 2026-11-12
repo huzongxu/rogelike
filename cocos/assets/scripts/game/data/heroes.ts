@@ -10,10 +10,11 @@
  */
 
 import type { SetId } from "./sets";
-import { allSets, setReleaseSeason } from "./sets";
+import { RESONANCE_TIERS, allSets, setDef, setReleaseSeason } from "./sets";
 import { isSeasonBoosted, seasonThemeIndex } from "./seasonSets";
 import { heroSkills } from "./heroSkills";
-import { heroRhythm, heroRhythmOptions, rhythmDef, type RhythmId } from "./rhythm";
+import { ARTIFACT_DEFS } from "./artifacts";
+import { heroRhythm, heroRhythmOptions, rhythmDef, rhythmShort, type RhythmId } from "./rhythm";
 
 export type HeroId =
   | "vera"
@@ -228,9 +229,9 @@ export function showcaseHero(save: HeroSelection): HeroDef | null {
   return heroOfSetOrNull(save.selectedSet);
 }
 
-/* ---------- 技能详情(英雄页下半区,恒 4 条) ---------- */
+/* ---------- 技能详情(英雄页下半区,恒 5 条) ---------- */
 
-export type HeroSkillTag = "核心技能" | "分岔" | "进阶" | "本命节律";
+export type HeroSkillTag = "核心技能" | "分岔" | "进阶" | "本命节律" | "套装";
 
 export interface HeroSkillLine {
   tag: HeroSkillTag;
@@ -245,8 +246,21 @@ export interface HeroSkillLineOpts {
 }
 
 /**
- * 英雄的四条技能说明(docs/DESIGN-HERO-RHYTHM.md §3):核心 / 两个互斥分岔 / 进阶 / 本命节律。
- * 全部从 heroSkills 与 rhythm 两张表读,本函数不落地任何数值。第 4 行在已解锁第二本命时提示可点行轮转。
+ * 本套「计件」物品名:套组认领的每种效果(`SetDef.effects`)恰好有一枚同效果的主动法宝(`artifacts.ARTIFACT_DEFS`
+ * 以效果为键,一对一),所以这份清单就是"进商店该捡哪些"的答案,顺序随表、不另立文案。
+ * 含义:该英雄套组的成员物品显示名;单位:名字数组(1–4 项,最长 4 项 = 余烬那套)。
+ * 出处:docs/DESIGN-HERO-PIPELINE.md §1 第 7 步(呈现收口)。
+ */
+export function heroSetPieces(id: HeroId): readonly string[] {
+  return setDef(heroDef(id).setId).effects.map((e) => ARTIFACT_DEFS[e].name);
+}
+
+/**
+ * 英雄的五条详情说明(docs/DESIGN-HERO-RHYTHM.md §3 + docs/DESIGN-HERO-PIPELINE.md §1 第 7 步):
+ * 核心 / 两个互斥分岔 / 进阶 / 本命节律 / 套装。
+ * 全部从 heroSkills、rhythm、sets 三张表读,本函数不落地任何数值与文案。第 4 行在已解锁第二本命时提示可点行轮转。
+ * 第 5 行「套装」= 出战英雄所持套组的身份与两档联动效果:发动口径与本局结算同源
+ * (门槛读 `sets.RESONANCE_TIERS` 的共鸣 2 / 4 处,不是退役的 3 / 6 件),效果正文读 `SetDef.bonus3 / bonus6`。
  */
 export function heroSkillLines(id: HeroId, _seasonId: number, opts: HeroSkillLineOpts = {}): readonly HeroSkillLine[] {
   const skills = heroSkills(id);
@@ -256,13 +270,25 @@ export function heroSkillLines(id: HeroId, _seasonId: number, opts: HeroSkillLin
   const native = heroRhythm(id);
   const chosen = opts.rhythm ?? native;
   const options = heroRhythmOptions(id);
+  // 第 4 行恒以"所选节律具体干什么"开头(旧文案在解锁第二本命后只剩一串名字,完全看不出作用)
   const rhythmDesc = opts.unlocked
-    ? `可选:${options.map((r) => rhythmDef(r).name).join(" / ")} · 点此行切换`
+    ? `${rhythmDef(chosen).desc} · 点此行切换:${options.map((r) => rhythmDef(r).name).join(" / ")}`
     : `${rhythmDef(native).desc} · 任一关 3 星通关解锁第二本命`;
+  const set = setDef(heroDef(id).setId);
   return [
     { tag: "核心技能", label: core.name, desc: core.desc },
-    { tag: "分岔", label: `${branches[0].name} / ${branches[1].name}`, desc: `${branches[0].desc};${branches[1].desc}` },
+    {
+      tag: "分岔",
+      label: `${branches[0].name} / ${branches[1].name}`,
+      desc: `${branches[0].desc};${branches[1].desc}`
+        + ` 两岔各解锁:${branches[0].name}→${rhythmDef(branches[0].rhythm).name}(${rhythmShort(branches[0].rhythm)}),${branches[1].name}→${rhythmDef(branches[1].rhythm).name}(${rhythmShort(branches[1].rhythm)})`,
+    },
     { tag: "进阶", label: advance.name, desc: advance.desc },
     { tag: "本命节律", label: `${rhythmDef(chosen).name}节律${chosen !== native ? "(第二本命)" : ""}`, desc: rhythmDesc },
+    {
+      tag: "套装",
+      label: `${set.name} · ${set.desc}`,
+      desc: `共鸣 ${RESONANCE_TIERS.tier1} 处「${set.bonus3.name}」${set.bonus3.desc} · ${RESONANCE_TIERS.tier2} 处「${set.bonus6.name}」${set.bonus6.desc}`,
+    },
   ];
 }

@@ -11,25 +11,25 @@ import { vec2 } from "@game/core/math";
 import { runSim, formatReport } from "../scripts/balance-sim";
 
 describe("章型纯函数", () => {
-  it("章型判定:精英 5/10/15、宝箱 7/14、Boss 章优先、其余普通", () => {
+  it("章型判定:精英 4/8/12、宝箱 6/10、Boss 章优先、其余普通(R20 每关 15 章)", () => {
     expect(chapterTypeOf(1)).toBe("normal");
-    expect(chapterTypeOf(4)).toBe("normal");
+    expect(chapterTypeOf(5)).toBe("normal");
     for (const c of ELITE_CHAPTERS) expect(chapterTypeOf(c)).toBe("elite");
     for (const c of TREASURE_CHAPTERS) expect(chapterTypeOf(c)).toBe("treasure");
-    expect(chapterTypeOf(20, 20)).toBe("boss");
+    expect(chapterTypeOf(15, 15)).toBe("boss");
     // bossChapter 优先于其它型(即使位置重叠)
     expect(chapterTypeOf(5, 5)).toBe("boss");
-    expect(chapterTypeOf(20)).toBe("normal"); // 无限关无 Boss 章参数
+    expect(chapterTypeOf(15)).toBe("normal"); // 无限关无 Boss 章参数
   });
 
   it("章型局部参数:只乘本章,不碰全局曲线", () => {
-    const elite = chapterTypeInfo(5);
+    const elite = chapterTypeInfo(4);
     expect(elite.spawnScaleMult).toBe(1.3);
     expect(elite.burstMult).toBe(1.5);
     expect(elite.goldMix).toBe(0);
     expect(elite.intelPrefer).toBe("elite");
     expect(elite.intelBias).toBe(0.3);
-    const treasure = chapterTypeInfo(7);
+    const treasure = chapterTypeInfo(6);
     expect(treasure.spawnScaleMult).toBe(0.5);
     expect(treasure.goldMix).toBe(0.25);
     expect(treasure.intelPrefer).toBeNull();

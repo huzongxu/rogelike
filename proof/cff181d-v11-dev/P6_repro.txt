@@ -1,0 +1,15 @@
+
+[1m[46m RUN [49m[22m [36mv3.2.7 [39m[90mH:/workspace/挂机游戏[39m
+
+[90mstdout[2m | tests/p6-repro.test.ts[2m > [22m[2mP6 nearestEnemy 距离闸复现[2m > [22m[2m110/300/320 三种闸在 400/500/600px 外仍返回目标
+[22m[39m[P6] range=110 dist=400 -> HIT (阈值 12100)
+[P6] range=300 dist=500 -> HIT (阈值 90000)
+[P6] range=320 dist=600 -> HIT (阈值 102400)
+
+ [32m✓[39m tests/p6-repro.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 6[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m   Start at [22m 11:28:24
+[2m   Duration [22m 862ms[2m (transform 381ms, setup 0ms, collect 518ms, tests 6ms, environment 0ms, prepare 133ms)[22m
+

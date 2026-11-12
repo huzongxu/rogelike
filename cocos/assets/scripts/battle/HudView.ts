@@ -157,7 +157,8 @@ export class HudView {
     /** 单行限宽(对标 Web fitOne:超宽逐字截断补「…」) */
     private fitOne(text: string, maxW: number, px: number): string {
         if (this.approxW(text, px) <= maxW) return text;
-        const chars = [...text];
+        // Array.from 而非 [...text]:Cocos 构建把字符串展开 downlevel 成 [].concat(text) → 整串变单元素、既不截断又补「…」
+        const chars = Array.from(text);
         while (chars.length > 1 && this.approxW(chars.join("") + "…", px) > maxW) chars.pop();
         return chars.join("") + "…";
     }
@@ -166,7 +167,7 @@ export class HudView {
     private fitLines(text: string, maxW: number, px: number): string[] {
         const out: string[] = [];
         let line = "";
-        for (const c of [...text]) {
+        for (const c of Array.from(text)) {
             const test = line + c;
             if (line && this.approxW(test, px) > maxW) {
                 out.push(line);

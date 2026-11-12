@@ -24,10 +24,17 @@ export interface ChapterTypeInfo {
   intelBias: number;
 }
 
-/** 精英章位置(数值台阶章:密集 + 强制精英敌情;可配 balance.json → chapterTypes.eliteChapters) */
-export let ELITE_CHAPTERS: number[] = [5, 10, 15];
-/** 宝箱章位置(低密度 + 金怪,鼓励集火攒金币;可配 chapterTypes.treasureChapters) */
-export let TREASURE_CHAPTERS: number[] = [7, 14];
+/**
+ * 精英章位置(数值台阶章:密集 + 强制精英敌情;可配 balance.json → chapterTypes.eliteChapters)。
+ * R20 随每关 15 章重排:4 / 8 / 12(原 5 / 10 / 15 在 20 章制下是 25 / 50 / 75%,新布局是 27 / 53 / 80%,同形);
+ *   15 已让位给末章 Boss,不能再叠一层精英身份。
+ */
+export let ELITE_CHAPTERS: number[] = [4, 8, 12];
+/**
+ * 宝箱章位置(低密度 + 金怪,鼓励集火攒金币;可配 chapterTypes.treasureChapters)。
+ * R20 随每关 15 章重排:6 / 10(原 7 / 14 = 35 / 70%,新 40 / 67%),且刻意不与精英章同拍。
+ */
+export let TREASURE_CHAPTERS: number[] = [6, 10];
 
 /* ---------- 章型局部参数(可配 balance.json → chapterTypes) ---------- */
 export let ELITE_SPAWN_SCALE = 1.3;
@@ -59,8 +66,8 @@ const chapterArr = (v: unknown, fallback: number[]): number[] => {
 /** 应用配置表覆盖(balance.json → chapterTypes 段);非法字段回退默认 */
 export function applyBalance(cfg?: Record<string, unknown>): void {
   const c = cfg ?? {};
-  ELITE_CHAPTERS = chapterArr(c.eliteChapters, [5, 10, 15]);
-  TREASURE_CHAPTERS = chapterArr(c.treasureChapters, [7, 14]);
+  ELITE_CHAPTERS = chapterArr(c.eliteChapters, [4, 8, 12]);
+  TREASURE_CHAPTERS = chapterArr(c.treasureChapters, [6, 10]);
   ELITE_SPAWN_SCALE = num(c.eliteSpawnScale, 0.1, 10, 1.3);
   ELITE_BURST = num(c.eliteBurst, 0.1, 10, 1.5);
   ELITE_INTEL_BIAS = num(c.eliteIntelBias, 0, 1, 0.3);

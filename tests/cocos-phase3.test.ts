@@ -88,13 +88,13 @@ const HERO_N = 12;
 const STEP = HERO_ROW_H + HERO_ROW_GAP; // 80
 const CONTENT_H = HERO_N * HERO_ROW_H + (HERO_N - 1) * HERO_ROW_GAP; // 952
 
-/** 996 标定档:视口 384 / maxScroll 568(= game/ui/heroSelectLayout 文件头的逐像素标定) */
-const VIEW_996 = 384;
-const MAX_996 = CONTENT_H - VIEW_996; // 568
+/** 996 标定档:详情板 488(含第 5 行「套装」)→ 视口 336 / maxScroll 616(= game/ui/heroSelectLayout 文件头的逐像素标定) */
+const VIEW_996 = 336;
+const MAX_996 = CONTENT_H - VIEW_996; // 616
 /** 1246 伸展档:详情与按钮底锚不动,多余高度全部给列表 */
 const H_TALL = 1246;
-const VIEW_TALL = VIEW_996 + (H_TALL - 996); // 634
-const MAX_TALL = CONTENT_H - VIEW_TALL; // 318
+const VIEW_TALL = VIEW_996 + (H_TALL - 996); // 586
+const MAX_TALL = CONTENT_H - VIEW_TALL; // 366
 
 function heroLayoutAt(seasonId: number, h: number, offset = 0, selected: HeroId | null = null) {
   const m = new HeroSelectModel();
@@ -115,7 +115,7 @@ describe("英雄列表几何(赛季门控 + 两档屏高)", () => {
     }
   });
 
-  it("996 档 offset=0 出 6 行,1246 档出 9 行;maxScroll 568 / 318", () => {
+  it("996 档 offset=0 出 6 行,1246 档出 9 行;maxScroll 616 / 366", () => {
     const a = heroLayoutAt(1, 996).L;
     expect(a.list).toEqual({ x: 16, y: HERO_LIST_TOP, w: 528, h: VIEW_996 });
     expect(a.maxScroll).toBe(MAX_996);
@@ -199,11 +199,11 @@ describe("英雄列表几何(赛季门控 + 两档屏高)", () => {
     expect(heroLayoutAt(1, 996).m.header().title).toMatch(/^出战英雄 · S1「.+」$/);
   });
 
-  it("进屏定位:open() 把当前出战那行滚到视口居中(996 档 index6 → offset 328)", () => {
+  it("进屏定位:open() 把当前出战那行滚到视口居中(996 档 index6 → offset 352)", () => {
     const m = new HeroSelectModel();
     const save: HeroSaveView = { selectedHero: "doran", selectedSet: heroDef("doran").setId, seasonId: 3 };
     m.open(save, W, 996);
-    expect(m.scroll.offset).toBe(328); // 6×80 − (384−80)/2
+    expect(m.scroll.offset).toBe(352); // 6×80 − (336−80)/2
     expect(m.scroll.vel).toBe(0);
     expect(m.preview).toBe("doran");
     const L = m.layout(save, W, 996);
@@ -379,15 +379,22 @@ describe("出战写入:selectedHero → selectedSet 的唯一同步点", () => {
     expect(sel).toEqual({ selectedHero: null, selectedSet: null });
   });
 
-  it("详情区四行技能恒在,且只读共享表(核心 / 分岔 / 进阶 / 本命节律;英雄自身不产生数值)", () => {
+  it("详情区五行技能恒在,且只读共享表(核心 / 分岔 / 进阶 / 本命节律 / 套装;英雄自身不产生数值)", () => {
     const m = new HeroSelectModel();
     m.preview = "vera";
     const d = m.detail();
     expect(d.empty).toBe(false);
-    expect(d.skills.map((s) => s.tag)).toEqual(["核心技能", "分岔", "进阶", "本命节律"]);
+    expect(d.skills.map((s) => s.tag)).toEqual(["核心技能", "分岔", "进阶", "本命节律", "套装"]);
     expect(d.skills[0].label).toBe("荆棘圆环");
     expect(d.skills[3].label).toBe("受击节律");
+    // 第 5 行「套装」:出战英雄看得见自己那套与两档联动效果,文案全部取自 sets 表
+    expect(d.skills[4].label).toBe(`${setDef("thorn").name} · ${setDef("thorn").desc}`);
+    expect(d.skills[4].desc).toContain(`「${setDef("thorn").bonus3.name}」${setDef("thorn").bonus3.desc}`);
+    expect(d.skills[4].desc).toContain(`「${setDef("thorn").bonus6.name}」${setDef("thorn").bonus6.desc}`);
     expect(d.color).toBe(setDef("thorn").color);
+    // 「本套计件」:该套认领的每种效果那一枚主动法宝名(荆棘 = 汲取 + 护盾)
+    expect(d.pieces.caption).toBe("本套计件");
+    expect(d.pieces.text).toBe("汲取符 · 护盾符");
     // 未解锁第二本命:第 4 行不产热区,rhythm 动作无效
     const L = m.layout({ selectedHero: "vera", selectedSet: "thorn", seasonId: 1 }, W, 996);
     const r = L.skillRows[3].rect;
@@ -714,7 +721,7 @@ function menuSave(over: Partial<MenuSaveView> = {}): MenuSaveView {
     energy: 7.6,
     gachaTicket: 3,
     highestStage: 3,
-    stageFurthest: { 1: 20, 2: 20, 3: 9 },
+    stageFurthest: { 1: 15, 2: 15, 3: 7 },
     stageStars: [0, 3, 2, 1, 0, 0, 0, 0],
     seasonId: 1,
     seasonStartAt: T0,
@@ -733,10 +740,10 @@ function menuSave(over: Partial<MenuSaveView> = {}): MenuSaveView {
 const content = (s: MenuSaveView, currentStageId: number | null = null) => buildMenuContent({ save: s, now: NOW, currentStageId, stageIds: STAGE_IDS });
 
 describe("主菜单内容模型(解锁 / 减淡档位 / 红点 / 实时数值)", () => {
-  it("解锁门控:highestStage=3 开三关;第 4 关要前关打到第 10 章(现 9 章 → 锁)", () => {
+  it("解锁门控:highestStage=3 开三关;第 4 关要前关打到第 8 章(15 章 × 50%,现 7 章 → 锁)", () => {
     const s = menuSave();
     expect(STAGE_IDS.map((id) => menuStageOpen(s, id))).toEqual([true, true, true, false, false, false, false]);
-    expect(STAGE_IDS.map((id) => menuStageOpen({ ...s, stageFurthest: { 3: 10 } }, id))).toEqual([true, true, true, true, false, false, false]);
+    expect(STAGE_IDS.map((id) => menuStageOpen({ ...s, stageFurthest: { 3: 8 } }, id))).toEqual([true, true, true, true, false, false, false]);
   });
 
   it("逐行状态:通关档与补星档各归其位(补星只在已解锁且恰好 2 星那行)", () => {
@@ -747,7 +754,7 @@ describe("主菜单内容模型(解锁 / 减淡档位 / 红点 / 实时数值)",
     expect(rows.map((r) => r.makeup)).toEqual([false, true, false, false, false, false, false]);
     // 锁定行即便有 2 星也不给补星钮
     // 第 2 关只打到 5 章 → 第 3 关锁着,但它有 2 星:锁定行不给补星钮
-    expect(menuRowStates(menuSave({ highestStage: 1, stageFurthest: { 1: 20, 2: 5 }, stageStars: [0, 3, 2, 2, 0, 0, 0, 0] }), STAGE_IDS).map((r) => r.makeup)).toEqual([false, true, false, false, false, false, false]);
+    expect(menuRowStates(menuSave({ highestStage: 1, stageFurthest: { 1: 15, 2: 5 }, stageStars: [0, 3, 2, 2, 0, 0, 0, 0] }), STAGE_IDS).map((r) => r.makeup)).toEqual([false, true, false, false, false, false, false]);
   });
 
   it("行文案与减淡判定源:锁定行给门槛章文案,通关行打勾,星标只数到 3", () => {
@@ -760,9 +767,9 @@ describe("主菜单内容模型(解锁 / 减淡档位 / 红点 / 实时数值)",
     expect(c.rows[3].unlocked).toBe(false);
     // v4 版式:左列恒为关卡描述,解锁条件挪到右下行(tail2),desc 仍是三段整串
     expect(c.rows[3].sub).toBe("时间扭曲,反伤弥漫");
-    expect(c.rows[3].tail2).toBe("打到第3关第10章解锁 · 已到第9章");
-    expect(c.rows[3].desc).toBe("时间扭曲,反伤弥漫 · 20 章 · Boss · 打到第3关第10章解锁 · 已到第9章");
-    expect(c.rows[0].desc).toBe("第一次直面尸潮 · 20 章 · Boss · 已通关");
+    expect(c.rows[3].tail2).toBe("打到第3关第8章解锁 · 已到第7章");
+    expect(c.rows[3].desc).toBe("时间扭曲,反伤弥漫 · 15 章 · Boss · 打到第3关第8章解锁 · 已到第7章");
+    expect(c.rows[0].desc).toBe("第一次直面尸潮 · 15 章 · Boss · 已通关");
     expect(c.rows[0].tail2).toBe("已通关");
     expect(starsGlyphs(0)).toBe("☆☆☆");
     expect(starsGlyphs(9)).toBe("★★★");
@@ -803,7 +810,7 @@ describe("主菜单内容模型(解锁 / 减淡档位 / 红点 / 实时数值)",
     const c = content(menuSave());
     expect(c.title).toBe("回响深渊");
     expect(c.sectionText).toBe("主线关卡 · 通关解锁下一关");
-    expect(c.sectionHint).toBe("7 关 × 20 章 · 关底深渊领主");
+    expect(c.sectionHint).toBe("7 关 × 15 章 · 关底深渊领主");
     expect(c.endlessText).toBe("♾ 无限关 · 爽模式");
     expect(c.seasonLine.startsWith("赛季 S1")).toBe(true);
     expect(c.seasonLine).toContain("第 4/14 天");
@@ -986,7 +993,10 @@ function heroTextBands(L: ReturnType<typeof heroLayoutAt>["L"], preview: boolean
     out.push(
       { at: "详情名", x: L.textX, baseY: L.nameY, maxW: L.loreW, px: FS.title, align: "left" },
       { at: "详情称号", x: L.textX, baseY: L.titleY, maxW: L.loreW, px: FS.muted, align: "left" },
-      { at: "详情正文", x: L.textX, baseY: L.loreY, maxW: L.loreW, px: FS.muted, align: "left" }
+      { at: "详情正文", x: L.textX, baseY: L.loreY, maxW: L.loreW, px: FS.muted, align: "left" },
+      // 「本套计件」两枚字挂在共享层 L.pieces 那条带里(题行 + 清单),限宽同样是盒宽
+      { at: "套组计件题行", x: L.pieces.x, baseY: L.pieces.y + FS.micro, maxW: L.pieces.w, px: FS.micro, align: "left" },
+      { at: "套组计件清单", x: L.pieces.x, baseY: L.pieces.y + FS.micro + 6 + FS.micro, maxW: L.pieces.w, px: FS.micro, align: "left" }
     );
   } else {
     out.push(

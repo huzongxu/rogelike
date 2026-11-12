@@ -12,6 +12,7 @@
 
 import { type Vec2 } from "../game/core/math";
 import { BattleWorld, type BattleRunInputs, type BattleWorldHost, type MoveInput } from "../game/systems/battleWorld";
+import type { BuildStep } from "../game/data/heroBuild";
 import { HUD_BOT_H } from "../game/ui/hud";
 import { Onboarding } from "../game/systems/onboarding";
 import { FxLayerData } from "./FxCore";
@@ -328,6 +329,16 @@ export class BattleSim {
     /** 开始下一章(清场、换竞技场、回中心、开局 burst;战场部分在共享层) */
     nextChapter(): void {
         this.world.nextChapter();
+    }
+
+    /** 开章二选一待选(三原型;null = 没有待选) */
+    buildStep(): BuildStep | null {
+        return this.world.buildStep();
+    }
+
+    /** 提交开章二选一(分岔 / 节点);失败返回 false,状态不变 */
+    commitBuild(id: string): boolean {
+        return this.world.commitBuild(id);
     }
 
     /* ================= 主循环推进 ================= */

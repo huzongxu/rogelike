@@ -49,20 +49,8 @@ export const SET_OFFER_BIAS = {
   normal: 0.6,
 } as const;
 
-/**
- * 「重置分岔」(docs/DESIGN-HERO-RHYTHM.md §6):把已选的分岔技能连同它解锁的节律一起撤掉,
- * 分岔二选一重新出现。价 = base × (1 + 章 × perChapter),每局限 RESET_BRANCH_LIMIT 次。
- * 落点在升级弹层(商店工具钮行 4 钮已满,见设计稿 R8),但价格曲线与商店同表。
- */
-export const RESET_BRANCH_COST = {
-  base: 400,
-  perChapter: 0.05,
-} as const;
-export const RESET_BRANCH_LIMIT = 1;
-
-export function resetBranchCost(chapter: number): number {
-  return Math.round(RESET_BRANCH_COST.base * (1 + Math.max(0, chapter) * RESET_BRANCH_COST.perChapter));
-}
+/* 「重置分岔」(原 RESET_BRANCH_COST / RESET_BRANCH_LIMIT / resetBranchCost)随 R20 退场:
+   分岔互斥是一局最重的决策,不给可回退的第二条路;升级层也因此不再有那一张卡。 */
 
 /** 商店卡价格(金):基础价 × 已购递增 × 章节递增 */
 export function shopCardPrice(basePrice: number, totalBought: number, chapter: number): number {

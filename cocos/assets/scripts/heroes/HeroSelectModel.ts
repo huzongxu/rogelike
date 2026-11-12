@@ -14,12 +14,13 @@
 
 import { HERO_ROW_GAP, HERO_ROW_H, heroSelectLayout, type HeroSelectLayout } from "../game/ui/heroSelectLayout";
 import { SCROLL_TAP_SLOP, dragScrollFrom, flickOf, inertiaNext } from "../game/ui/scrollList";
-import { allHeroes, applyHeroSelection, heroDef, heroSkillLines, releasedHeroes, type HeroId, type HeroSelection } from "../game/data/heroes";
+import { allHeroes, applyHeroSelection, heroDef, heroSetPieces, heroSkillLines, releasedHeroes, type HeroId, type HeroSelection } from "../game/data/heroes";
 import { seasonTheme } from "../game/data/seasonSets";
 import { setDef } from "../game/data/sets";
 import { clamp } from "../game/core/math";
 import { theme } from "../game/ui/theme";
 import { heroRhythm, heroRhythmOptions, type RhythmId } from "../game/data/rhythm";
+import { heroBuildTree, type HeroTree } from "../game/data/heroTree";
 
 /** 一次滚动的几何输入:内容高与视口高(都由 heroSelectLayout 给出,这里不另算) */
 export interface ScrollGeometry {
@@ -117,8 +118,15 @@ export interface HeroSaveView extends HeroSelection {
   heroRhythmChoice?: Partial<Record<HeroId, RhythmId>>;
 }
 
-/** 一次点击落到的热区(rhythm = 详情区第 4 行「本命节律」,已解锁第二本命时轮转) */
-export type HeroAction = { kind: "back" } | { kind: "row"; id: HeroId } | { kind: "clear" } | { kind: "confirm" } | { kind: "rhythm" };
+/** 一次点击落到的热区(rhythm = 详情区第 4 行「本命节律」,已解锁第二本命时轮转;tree = 分岔行展开技能树) */
+export type HeroAction =
+  | { kind: "back" }
+  | { kind: "row"; id: HeroId }
+  | { kind: "clear" }
+  | { kind: "confirm" }
+  | { kind: "rhythm" }
+  | { kind: "tree" }
+  | { kind: "treeClose" };
 
 /** 列表行的展示数据(几何仍由 layout 的行给,这里只补"写什么、什么色") */
 export interface HeroRowView {
@@ -140,6 +148,8 @@ export class HeroSelectModel {
   readonly scroll = new ScrollModel();
   /** 详情区预览的英雄;null = 「不出战」 */
   preview: HeroId | null = null;
+  /** V1.1 D03:分岔行展开的独立技能树面板是否开着(只读展示,不写存档) */
+  treeOpen = false;
   private selected: HeroId | null = null;
   private seasonId = 1;
   /** 第二本命解锁与选择(存档切片的镜像;`rhythm` 动作只改 choice 预览,confirm 才落盘) */
@@ -151,6 +161,7 @@ export class HeroSelectModel {
     this.selected = save.selectedHero;
     this.seasonId = save.seasonId;
     this.preview = save.selectedHero;
+    this.treeOpen = false;
     this.rhythmUnlock = save.heroRhythmUnlock ?? {};
     this.rhythmChoice = { ...(save.heroRhythmChoice ?? {}) };
     this.scroll.vel = 0;
@@ -171,6 +182,11 @@ export class HeroSelectModel {
   /** 命中判定(顺序对标 Web onHeroesClick):落在列表内就不再往下走 */
   hit(L: HeroSelectLayout, x: number, y: number): HeroAction | null {
     const inRect = (r: { x: number; y: number; w: number; h: number }) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+    // 技能树面板开着时只认关闭/返回,其余点击全部吞掉(与二次确认层同处置)
+    if (this.treeOpen) {
+      if (inRect(L.tree.close) || inRect(L.backBtn)) return { kind: "treeClose" };
+      return null;
+    }
     if (inRect(L.backBtn)) return { kind: "back" };
     if (inRect(L.list)) {
       for (const row of L.rows) {
@@ -181,6 +197,9 @@ export class HeroSelectModel {
     }
     if (inRect(L.clearBtn)) return { kind: "clear" };
     if (inRect(L.confirm)) return { kind: "confirm" };
+    // V1.1 D03:详情区第 2 行「分岔」→ 展开独立技能树(不出战时不产热区)
+    const branchRow = L.skillRows[1];
+    if (branchRow && this.preview && inRect(branchRow.rect)) return { kind: "tree" };
     // 详情区第 4 行「本命节律」:已解锁第二本命的英雄可点行轮转(未解锁 / 不出战时不产热区)
     const rhythmRow = L.skillRows[3];
     if (rhythmRow && this.preview && this.rhythmOptions(this.preview).length > 1 && inRect(rhythmRow.rect)) return { kind: "rhythm" };
@@ -206,8 +225,19 @@ export class HeroSelectModel {
       this.preview = a.id;
       return true;
     }
+    if (a.kind === "tree") {
+      if (!this.preview || this.treeOpen) return false;
+      this.treeOpen = true;
+      return true;
+    }
+    if (a.kind === "treeClose") {
+      if (!this.treeOpen) return false;
+      this.treeOpen = false;
+      return true;
+    }
     if (a.kind === "clear") {
       this.preview = null;
+      this.treeOpen = false;
       return true;
     }
     if (a.kind === "rhythm") {
@@ -223,6 +253,7 @@ export class HeroSelectModel {
 
   /** 确定出战 / 确认不出战:唯一写入路径,派生镜像 selectedSet 由 applyHeroSelection 同步;本命选择一并落盘 */
   commit(save: HeroSelection & { heroRhythmChoice?: Partial<Record<HeroId, RhythmId>> }): HeroId | null {
+    this.treeOpen = false;
     applyHeroSelection(save, this.preview);
     this.selected = this.preview;
     if (save.heroRhythmChoice) {
@@ -261,17 +292,25 @@ export class HeroSelectModel {
     });
   }
 
+  /** V1.1 D03:当前预览英雄的技能树(空 = 不出战) */
+  tree(): HeroTree | null {
+    return this.preview ? heroBuildTree(this.preview) : null;
+  }
+
   /** 详情区;preview 为 null = 「不出战」那一屏 */
-  detail(): { empty: boolean; name: string; title: string; lore: string; skills: { tag: string; label: string; desc: string }[]; color: string } {
-    if (!this.preview) return { empty: true, name: "不出战", title: "通用卡池 · 无套组加成", lore: "", skills: [], color: theme.textSecondary };
+  detail(): { empty: boolean; name: string; title: string; lore: string; pieces: { caption: string; text: string }; skills: { tag: string; label: string; desc: string }[]; color: string; treeAvailable: boolean } {
+    if (!this.preview) return { empty: true, name: "不出战", title: "通用卡池 · 无套组加成", lore: "", pieces: { caption: "", text: "" }, skills: [], color: theme.textSecondary, treeAvailable: false };
     const hero = heroDef(this.preview);
     return {
       empty: false,
       name: hero.name,
       title: `${hero.title} · ${setDef(hero.setId).name}`,
       lore: hero.lore,
+      // 「本套计件」= 该套认领的每种效果那一枚主动法宝名;进商店该捡什么在这一行里
+      pieces: { caption: "本套计件", text: heroSetPieces(this.preview).join(" · ") },
       skills: heroSkillLines(this.preview, this.seasonId, { rhythm: this.rhythmOf(this.preview), unlocked: !!this.rhythmUnlock[this.preview] }).map((l) => ({ tag: l.tag, label: l.label, desc: l.desc })),
       color: hero.accentColor,
+      treeAvailable: heroBuildTree(this.preview).branches.length > 0,
     };
   }
 

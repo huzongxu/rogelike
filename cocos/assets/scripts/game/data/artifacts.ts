@@ -57,6 +57,28 @@ export interface MorphPatch {
   aimAtAttacker?: boolean;
   /** 附带爆炸(半径 / 伤害倍数;与被动「爆裂」同一结算位,已有爆炸时不覆盖) */
   explode?: { radius: number; damageMult: number };
+  /**
+   * 新星落点改为「最近一次来袭者所在位置」(而不是玩家自身)。
+   * 含义:以自身为中心的爆发搬到打我的人脚下 —— 真·形态变化,不是半径倍率的近似。
+   * 无来袭记录时退化为原行为(以玩家为中心)。
+   */
+  castAtAttacker?: boolean;
+  /**
+   * 新星结算后在落点留一片持续伤害地面(荆棘带 / 熔迹同一通路,复用 `spawnCloud`)。
+   * `radiusMult` = 地面半径 / 新星半径(比例);`duration` = 残留秒数(秒);
+   * `dpsPerDamage` = 地面每秒伤害 = 新星单发伤害 × 本值(每秒伤害系数)。
+   */
+  afterCastGround?: { radiusMult: number; duration: number; dpsPerDamage: number };
+  /**
+   * 英雄 Build V1.1 章节节点层:分岔路线主循环配置(仅分岔技能 `coreMorph.loop` 使用)。
+   * 数据结构见 ./heroBuild 的 `BranchLoopPatch`;引擎在各 cast / update 内读。
+   */
+  loop?: import("./heroBuild").BranchLoopPatch;
+  /**
+   * 英雄 Build V1.1 章节节点层:本局已选节点的合并 patch(由 `morphOf` 从 `player.buildNodes` 收集)。
+   * 只对三原型英雄的技能生效;legacy 英雄恒 undefined。
+   */
+  node?: import("./heroBuild").BuildPatch;
 }
 
 export interface ArtifactDef {

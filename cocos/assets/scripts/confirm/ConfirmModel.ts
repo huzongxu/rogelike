@@ -188,7 +188,8 @@ export function confirmBodyMaxW(boxW: number): number {
 export function confirmFitLines(text: string, maxW: number, px: number, measure: ConfirmMeasure): string[] {
   const out: string[] = [];
   let line = "";
-  for (const c of [...text]) {
+  // Array.from 而非 [...text]:Cocos 构建把字符串展开 downlevel 成 [].concat(text) → 整串变单元素,折行会失效
+  for (const c of Array.from(text)) {
     const test = line + c;
     if (line && measure(test, px) > maxW) {
       out.push(line);

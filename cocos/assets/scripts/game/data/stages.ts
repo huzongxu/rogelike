@@ -31,13 +31,13 @@ export interface StageDef {
 }
 
 export const STAGES: readonly StageDef[] = [
-  { id: 1, name: "初入尸潮", desc: "第一次直面尸潮", chapters: 20, bossChapter: 20, envAffixes: [], spawnScale: 0.6, rewards: { tickets: 1, points: 10, stardust: 0 } },
-  { id: 2, name: "荒野求生", desc: "荒原上的脚步声越来越密", chapters: 20, bossChapter: 20, envAffixes: ["mist"], spawnScale: 0.9, rewards: { tickets: 1, points: 28, stardust: 0 } },
-  { id: 3, name: "沼泽深处", desc: "毒雾弥漫,怪物会持续回血", chapters: 20, bossChapter: 20, envAffixes: ["heal_aura"], spawnScale: 1, rewards: { tickets: 2, points: 52, stardust: 5 } },
-  { id: 4, name: "裂谷火海", desc: "时间扭曲,反伤弥漫", chapters: 20, bossChapter: 20, envAffixes: ["time_dilation", "reflect_field"], spawnScale: 1, rewards: { tickets: 2, points: 80, stardust: 8 } },
-  { id: 5, name: "深渊边缘", desc: "死亡在此连锁引爆", chapters: 20, bossChapter: 20, envAffixes: ["death_chain"], spawnScale: 1.1, rewards: { tickets: 3, points: 112, stardust: 12 } },
-  { id: 6, name: "深渊之喉", desc: "扭曲的空间吞噬一切", chapters: 20, bossChapter: 20, envAffixes: ["space_warp", "heal_aura", "mist"], spawnScale: 1.15, rewards: { tickets: 3, points: 147, stardust: 16 } },
-  { id: 7, name: "王座之间", desc: "深渊领主在此等候", chapters: 20, bossChapter: 20, envAffixes: ["reflect_field", "time_dilation", "death_chain"], spawnScale: 1.2, rewards: { tickets: 5, points: 185, stardust: 25 } },
+  { id: 1, name: "初入尸潮", desc: "第一次直面尸潮", chapters: 15, bossChapter: 15, envAffixes: [], spawnScale: 0.6, rewards: { tickets: 1, points: 10, stardust: 0 } },
+  { id: 2, name: "荒野求生", desc: "荒原上的脚步声越来越密", chapters: 15, bossChapter: 15, envAffixes: ["mist"], spawnScale: 0.9, rewards: { tickets: 1, points: 28, stardust: 0 } },
+  { id: 3, name: "沼泽深处", desc: "毒雾弥漫,怪物会持续回血", chapters: 15, bossChapter: 15, envAffixes: ["heal_aura"], spawnScale: 1, rewards: { tickets: 2, points: 52, stardust: 5 } },
+  { id: 4, name: "裂谷火海", desc: "时间扭曲,反伤弥漫", chapters: 15, bossChapter: 15, envAffixes: ["time_dilation", "reflect_field"], spawnScale: 1, rewards: { tickets: 2, points: 80, stardust: 8 } },
+  { id: 5, name: "深渊边缘", desc: "死亡在此连锁引爆", chapters: 15, bossChapter: 15, envAffixes: ["death_chain"], spawnScale: 1.1, rewards: { tickets: 3, points: 112, stardust: 12 } },
+  { id: 6, name: "深渊之喉", desc: "扭曲的空间吞噬一切", chapters: 15, bossChapter: 15, envAffixes: ["space_warp", "heal_aura", "mist"], spawnScale: 1.15, rewards: { tickets: 3, points: 147, stardust: 16 } },
+  { id: 7, name: "王座之间", desc: "深渊领主在此等候", chapters: 15, bossChapter: 15, envAffixes: ["reflect_field", "time_dilation", "death_chain"], spawnScale: 1.2, rewards: { tickets: 5, points: 185, stardust: 25 } },
 ];
 
 export function stageOf(id: number): StageDef {
@@ -48,8 +48,15 @@ export function stageOf(id: number): StageDef {
 
 /** 每章时长(秒) */
 export let CHAPTER_SECONDS = 60;
-/** 每关章节数 */
-export let CHAPTERS_PER_STAGE = 20;
+/**
+ * 每关章节数(R20:20 → 15)。
+ * 依据:升级三选一的商品已收敛成"只有独有技能与节律"(取消「另辟蹊径」重置卡与「补给」兜底三张),
+ *   一局的牌 = 3 件技能各 5 阶(核心 + 一枚分岔 + 进阶;开局自带 1 阶)+ 2 条节律各 5 级 ≈ **22–25 张**。
+ *   实测每章约 2.5–3 级(R19 三种子:20 章末 Lv.56–57),故 15 章 × 60s 比 20 章更贴近"内容用完就该收尾";
+ *   但要真正做到"牌发完 = 末章"还差一步(下一枚杠杆:每章级数或开局自带阶数),本轮先按用户口径缩长度。
+ * 同步项:`chapters.ELITE_CHAPTERS / TREASURE_CHAPTERS`(末章要让位给 Boss 章)、balance.json 的 battle.chaptersPerStage。
+ */
+export let CHAPTERS_PER_STAGE = 15;
 
 /** 章内竞技场 = 一屏(需求反馈:行动范围缩小到一屏,全屏可见无需移镜头) */
 export const CHAPTER_ARENA = { w: 480, h: 854 };
@@ -83,7 +90,7 @@ const num = (v: unknown, min: number, max: number, fallback: number): number => 
 export function applyBalance(cfg?: Record<string, unknown>): void {
   const b = cfg ?? {};
   CHAPTER_SECONDS = num(b.chapterSeconds, 5, 3600, 60);
-  CHAPTERS_PER_STAGE = num(b.chaptersPerStage, 1, 200, 20);
+  CHAPTERS_PER_STAGE = num(b.chaptersPerStage, 1, 200, 15);
   ECHO_RETAIN_RATE = num(b.echoRetainRate, 0, 1, 0.4);
   MONSTER_COUNT_BASE = num(b.monsterCountBase, 1, 9999, 30);
   MONSTER_COUNT_GROWTH = num(b.monsterCountGrowth, 1, 4, 1.15);

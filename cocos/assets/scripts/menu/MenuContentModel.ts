@@ -15,7 +15,7 @@
  */
 
 import type { SetId } from "../game/data/sets";
-import { releasedSets, setDef } from "../game/data/sets";
+import { RESONANCE_TIERS, releasedSets, setDef } from "../game/data/sets";
 import type { HeroId } from "../game/data/heroes";
 import { showcaseHero } from "../game/data/heroes";
 import { SET_STARTERS } from "../game/data/equipmentGen";
@@ -304,7 +304,7 @@ export function buildMenuContent(o: MenuContentInput): MenuTextContent {
     noteLines:
       hero && set && starter
         ? [
-            `出战「${hero.name}」· 商店偏向刷「${set.name}」卡 · 3 件:${set.bonus3.name} / 6 件:${set.bonus6.name}${mut ? ` · 赛季联动:${mut.name}(${mut.desc})` : ""}`,
+            `出战「${hero.name}」· 商店偏向刷「${set.name}」卡 · 共鸣 ${RESONANCE_TIERS.tier1} 处:${set.bonus3.name} / ${RESONANCE_TIERS.tier2} 处:${set.bonus6.name}${mut ? ` · 赛季联动:${mut.name}(${mut.desc})` : ""}`,
             `初始武器:${starter.name} — ${starter.desc}`,
           ]
         : [],

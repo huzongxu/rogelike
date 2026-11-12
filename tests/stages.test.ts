@@ -8,17 +8,17 @@ import { spawnEnemy, updateSpecial, reflectDamage, shieldguardDamageMult, splitB
 import { vec2 } from "@game/core/math";
 
 describe("主线关卡定义", () => {
-  it("7 个关卡,id 连续,每关 20 章且通关奖励递增", () => {
+  it("7 个关卡,id 连续,每关 15 章且通关奖励递增", () => {
     expect(STAGES).toHaveLength(7);
     STAGES.forEach((s, i) => {
       expect(s.id).toBe(i + 1);
-      expect(s.chapters).toBe(20);
+      expect(s.chapters).toBe(15);
       expect(s.rewards.tickets).toBeGreaterThan(0);
       expect(s.rewards.points).toBeGreaterThan(0);
     });
   });
 
-  it("第 1/3/5/7 关为 Boss 关(第 20 章),难度与奖励逐关递增", () => {
+  it("第 1/3/5/7 关为 Boss 关(第 15 章),难度与奖励逐关递增", () => {
     expect(STAGES[0].bossChapter).toBeDefined();
     expect(STAGES[2].bossChapter).toBeDefined();
     expect(STAGES[4].bossChapter).toBeDefined();

@@ -20,6 +20,7 @@ import { applyBalance as applyMenuLayoutTable } from "./game/data/layoutMenu";
 import { applyMenuSkin } from "./game/data/menuSkin";
 import { normalizeSave, type SaveModel } from "./core/SaveModel";
 import { STAGES } from "./game/data/stages";
+import { heroDef } from "./game/data/heroes";
 import { canStarMakeup, STAR_MAKEUP_COST, THREE_STAR_TICKETS } from "./game/data/season";
 import { BattleSim, type VictoryInfo } from "./battle/BattleSim";
 import { BattleWorldView } from "./battle/BattleWorldView";
@@ -405,6 +406,11 @@ export class GameShell extends Component {
     private levelUpModel: LevelUpModel | null = null;
     /** 还没弹出去的升级次数(选完一轮减 1,归零即恢复战斗) */
     private levelUpPending = 0;
+    /**
+     * 局首两层的接续标记(R22):姿势层选完还要接着弹首章法宝三选一。
+     * 只在 `enterBattleRun` 里排,姿势层落地那一发清掉;升级队列不参与(姿势与法宝都不占 `levelUpPending`)。
+     */
+    private levelUpStanceThenFirst = false;
     /** 复用的存档切片:每轮布局覆写它,滚动期间不再逐帧分配对象 */
     private heroSlice: HeroSaveView = { selectedHero: null, selectedSet: null, seasonId: 1, heroRhythmUnlock: {}, heroRhythmChoice: {} };
     /** 赛季切片同样被 `tickSeason` 逐帧读,故与 heroSlice 同性质地复用同一枚对象 */
@@ -637,11 +643,124 @@ export class GameShell extends Component {
         });
         this.joystick.onToggleAuto = () => this.sim.toggleAuto();
         this.hudView.onSkipGuide = () => this.sim.skipGuide();
+        this.installDevProbe();
         // 开局不在这里：三个入口（菜单选关 / 菜单无限关 / restartRun）都走 requestStage /
         // requestEndless 这一对漏斗，成功才进 enterBattleRun() 切战斗屏。启动落主城，
         // 此处若预跑一局，在城里也会照打钱掉血。
         this.resetGameOverTransients();
         this.refreshBackdrop();
+    }
+
+    /**
+     * V1.1 Work 包 Gate1:开发态章节点直达探针(仅 `CC_DEBUG` 构建暴露)。
+     * 不写存档、不扣体力:直接 `world.startRun()` 后用生产 `nextChapter` / `commitBuild` 推进。
+     * 用法见 docs/WORK-V1.1-PROBE.md;发布构建该全局不存在。
+     */
+    private installDevProbe(): void {
+        const dbg = (globalThis as { CC_DEBUG?: boolean }).CC_DEBUG === true;
+        if (!dbg) return;
+        const host = this;
+        const state = () => {
+            const s = host.sim;
+            const step = s?.buildStep() ?? null;
+            return {
+                chapter: s?.chapter ?? 0,
+                hero: s?.world.heroId() ?? null,
+                branch: s?.world.player.buildBranchId ?? null,
+                nodes: [...(s?.world.player.buildNodes ?? [])],
+                step: step
+                    ? {
+                        kind: step.kind,
+                        tier: step.kind === "node" ? step.tier : null,
+                        options: step.options.map((o) => ({ id: o.id, name: o.name })),
+                    }
+                    : null,
+                overlay: !!host.levelUpModel?.visible,
+                paused: (s?.world as { buildPending?: unknown } | undefined)?.buildPending != null,
+            };
+        };
+        const openIfPending = () => {
+            host.openBuildStep();
+            host.syncLevelUp();
+        };
+        const jump = (chapter: number, branchId?: string, nodeIds?: readonly string[]) => {
+            const s = host.sim;
+            if (!s) return state();
+            let guard = 0;
+            while (s.chapter < chapter && guard++ < 40) {
+                const step = s.buildStep();
+                if (step) {
+                    const id = step.kind === "branch" ? branchId ?? step.options[0].id : nodeIds?.[step.tier - 1] ?? step.options[0].id;
+                    s.commitBuild(id);
+                    continue;
+                }
+                s.nextChapter();
+            }
+            openIfPending();
+            return state();
+        };
+        (globalThis as Record<string, unknown>).__abyssDev = {
+            state,
+            /** 从主菜单直接开一局指定英雄(不扣体力 / 不落盘),再推进到目标章 */
+            start(hero: "vera" | "kyle" | "willow" | "bran" | "sia" | "nora" | "loka" | "doran" | "sally" | "rayne" | "oden" | "mu", chapter = 1) {
+                const s = host.sim;
+                if (!s) return state();
+                const save = host.save();
+                save.selectedHero = hero;
+                save.selectedSet = heroDef(hero).setId;
+                host.levelUpPending = 0;
+                host.levelUpStanceThenFirst = false;
+                host.levelUpModel?.resetRun();
+                s.world.currentStage = STAGES[0];
+                s.world.envAffixes = [];
+                s.world.startRun();
+                host.router.show("battle");
+                host.refreshBackdrop();
+                return jump(chapter);
+            },
+            /** 推进到目标章:沿途按 branchId / nodeIds 自动提交;目标章若挂起则开弹层 */
+            jump,
+            /** 只推进到目标章之前并挂起,弹层打开但不提交(截「选择前」) */
+            before(chapter: number) {
+                const s = host.sim;
+                if (!s) return state();
+                if (chapter > 1) jump(chapter - 1);
+                s.nextChapter();
+                openIfPending();
+                return state();
+            },
+            /** 提交当前挂起项(不传 id 取第一项),再算下一步 */
+            commit(id?: string) {
+                const s = host.sim;
+                const step = s?.buildStep();
+                if (s && step) s.commitBuild(id ?? step.options[0].id);
+                openIfPending();
+                return state();
+            },
+            /** 关掉开章弹层(不提交,世界仍冻结;重开 / 恢复用) */
+            closeOverlay() {
+                host.levelUpModel?.close();
+                host.syncLevelUp();
+                return state();
+            },
+            /** 清空普通升级队列并关层,用于截「提交后战斗」画面 */
+            clearOverlays() {
+                host.levelUpPending = 0;
+                host.levelUpModel?.close();
+                host.syncLevelUp();
+                return state();
+            },
+            /** 打开英雄页(可指定英雄),用于真实 Canvas 点「分岔」行展开技能树 */
+            heroPage(hero?: "vera" | "kyle" | "willow" | "bran" | "sia" | "nora" | "loka" | "doran" | "sally" | "rayne" | "oden" | "mu") {
+                const save = host.save();
+                if (hero) {
+                    save.selectedHero = hero;
+                    save.selectedSet = heroDef(hero).setId;
+                }
+                host.openHeroes();
+                return { screen: host.router.current, preview: host.heroesModel?.preview ?? null, treeOpen: host.heroesModel?.treeOpen ?? false };
+            },
+        };
     }
 
     /** 战斗背景 = bg_stage_<关卡>(无限关 bg_outside),对标 Web render() 的 bgCoverKey/bgKey */
@@ -940,9 +1059,16 @@ export class GameShell extends Component {
 
     /** 离开商店:next = 继续下一章,否则回主菜单(本局金币与章节进度按 Web 口径留在场内) */
     private closeShop(next: boolean): void {
-        if (next && this.sim) this.sim.nextChapter();
+        if (next && this.sim) {
+            this.sim.nextChapter();
+            this.refreshBackdrop();
+            this.router.show("battle");
+            // 第 2/4/8/12 章开章二选一:选完才恢复战斗(三原型;其余英雄 buildStep 恒 null)
+            this.openBuildStep();
+            return;
+        }
         this.refreshBackdrop();
-        this.router.show(next ? "battle" : "menu");
+        this.router.show("menu");
     }
 
     private onShopAction(a: ShopAction): void {
@@ -1090,6 +1216,8 @@ export class GameShell extends Component {
             case "row":
             case "clear":
             case "rhythm":
+            case "tree":
+            case "treeClose":
                 if (m.apply(a)) this.syncHeroes();
                 return;
             case "confirm":
@@ -2276,12 +2404,19 @@ export class GameShell extends Component {
         // (锁定是"本局内跨弹层记忆",不跨局),再补排一次把可能还开着的弹层收起
         this.levelUpPending = 0;
         this.levelUpModel?.resetRun();
-        // 首章法宝三选一(docs/DESIGN-HERO-RHYTHM.md §6):进第 1 章前免费挑 1 件主动法宝;
-        // 随身带了收藏件的局不弹(开局已有法宝)。弹层开着 = 战斗停住,与升级弹层同一道闸门
-        if (this.sim && this.sim.player.equipment.length === 0 && this.levelUpModel) this.levelUpModel.openFirstPick();
+        // 局首两层(R22):走荆棘层的英雄先弹**姿势二选一**(站定 / 绕场),选完再弹首章法宝三选一;
+        // 没有姿势表的英雄直接弹后者。随身带了收藏件的局不弹法宝层(开局已有法宝)。
+        // 弹层开着 = 战斗停住,与升级弹层同一道闸门。
+        this.levelUpStanceThenFirst = false;
+        if (this.sim && this.sim.player.equipment.length === 0 && this.levelUpModel) {
+            if (this.levelUpModel.openStance()) this.levelUpStanceThenFirst = true;
+            else this.levelUpModel.openFirstPick();
+        }
         this.syncLevelUp();
         this.refreshBackdrop();
         this.router.show("battle");
+        // 第 1 章没有 build 步骤;保留这一发让"从旧档续到第 2 章"的局也能补弹
+        this.openBuildStep();
     }
 
     /**
@@ -2463,17 +2598,15 @@ export class GameShell extends Component {
             setBranchChosen: (id) => {
                 sim.player.branchChosen = id;
             },
-            // 重置分岔:撤技能 + 收节律 + 法宝重挂都在世界层(它知道归一化规则),这里只转调
-            resetBranch: () => sim.world.resetBranch(),
-            branchResets: () => sim.player.branchResets,
+            // 章节节点层:分岔 / 节点写入走世界(技能入场 + 节律解锁 + build 状态)
+            commitBuild: (id) => sim.commitBuild(id),
+            // 局首姿势二选一的落点(R22):写玩家本局态,下一帧起世界层按它攒层并跟着换挂机档
+            setThornGainMode: (mode) => {
+                sim.world.setThornGainMode(mode);
+            },
             gold: () => sim.gold,
             setGold: (v) => {
                 sim.world.gold = v;
-            },
-            healPct: (pct) => sim.player.heal(Math.max(1, Math.round(sim.player.maxHp * pct))),
-            addMaxHp: (v) => {
-                sim.player.maxHp += v;
-                sim.player.heal(v);
             },
             slots: () => sim.player.slots,
             chapter: () => sim.chapter,
@@ -2503,12 +2636,31 @@ export class GameShell extends Component {
         if (!this.levelUpModel?.visible) this.openLevelUp();
     }
 
+    /** 开章二选一:世界层有挂起步骤才开层;选完由 `onLevelUpAction` 接着算下一步 */
+    private openBuildStep(): void {
+        const m = this.levelUpModel;
+        const sim = this.sim;
+        if (!m || !sim || m.visible) return;
+        const step = sim.buildStep();
+        if (!step) return;
+        if (this.router.current !== "battle" || this.confirm) return;
+        if (!m.openBuild(step)) return;
+        this.syncLevelUp();
+    }
+
     /** 弹一轮:只在战斗屏上弹,且不与二次确认弹层叠(两层都开着时点击派发会含糊) */
     private openLevelUp(): void {
         const m = this.levelUpModel;
         if (!m || this.levelUpPending <= 0 || m.visible) return;
         if (this.router.current !== "battle" || this.confirm) return;
-        m.open();
+        // 开章二选一优先:世界还冻着,普通升级等这一步选完再弹
+        if (this.sim?.buildStep()) return;
+        // 独有技能与节律全部满级 → 这一轮没牌可发(R20:不再有「补给」兜底),队列就地收掉,别逐帧重开
+        if (!m.open()) {
+            this.levelUpPending = 0;
+            this.syncLevelUp();
+            return;
+        }
         this.syncLevelUp();
     }
 
@@ -2557,6 +2709,18 @@ export class GameShell extends Component {
             this.syncLevelUp();
             return;
         }
+        if (m.mode === "build") {
+            // 开章二选一:只有「选它」;重随 / 锁定在模型层恒禁用,这里直接吞掉
+            if (a.kind !== "pick") return;
+            const r = m.pick(a.index);
+            if (!r.ok) this.toast("这一步已不可选");
+            this.syncLevelUp();
+            // 补选链:第 4 章补分支后会紧接着弹节点层;没有下一步就恢复普通升级队列
+            this.openBuildStep();
+            if (!m.visible && this.levelUpPending > 0) this.openLevelUp();
+            return;
+        }
+        const stance = m.mode === "stance";
         const first = m.mode === "first";
         const r = m.pick(a.index);
         if (!r.ok) {
@@ -2564,8 +2728,13 @@ export class GameShell extends Component {
             this.syncLevelUp();
             return;
         }
-        // 首章法宝三选一不占升级队列
-        if (!first) this.levelUpPending = Math.max(0, this.levelUpPending - 1);
+        // 局首两层(姿势 / 首章法宝)都不占升级队列
+        if (!first && !stance) this.levelUpPending = Math.max(0, this.levelUpPending - 1);
+        if (stance && this.levelUpStanceThenFirst) {
+            // 姿势选完接着弹首章法宝三选一(同一层面板换一页,战斗仍被闸门冻着)
+            this.levelUpStanceThenFirst = false;
+            m.openFirstPick();
+        }
         this.syncLevelUp();
         // 连升多级:选完这一轮还有余量就接着弹(弹层不关到底,战斗也就一直停着)
         if (this.levelUpPending > 0) this.openLevelUp();

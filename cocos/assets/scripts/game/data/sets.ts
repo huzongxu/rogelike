@@ -46,12 +46,12 @@ export const SETS: readonly SetDef[] = [
   {
     id: "thorn",
     name: "荆棘回响",
-    desc: "挨打回血,反伤输出",
+    desc: "越贴越来劲,反伤输出",
     color: "#4dffc8",
     effects: ["drain", "shield"],
     triggers: ["hurt", "hit"],
     modifiers: ["lifesteal", "power"],
-    bonus3: { name: "棘肤", desc: "每次受击回复 1.5% 最大生命(0.5 秒冷却)" },
+    bonus3: { name: "棘肤", desc: "受击回复 1.5% 最大生命(0.5 秒冷却);薇拉这档改为荆棘层涨得更快 ×1.5" },
     bonus6: { name: "反伤回响·极", desc: "质变:受击/受伤触发的效果伤害翻倍" },
   },
   {
@@ -216,15 +216,99 @@ export const RESONANCE_TIERS = {
 } as const;
 
 /**
+ * 共鸣进度的**展示口径唯一事实源**(消费方:商店套组行 / 进度条)。
+ * 门槛只读 `RESONANCE_TIERS`,视图侧禁止自算分母 —— 旧代码把进度条写成 `pieces / 6`,
+ * 而两档门槛实际是 2 / 4:凑到一档时条只走 33%、全部生效时只走 67%,玩家永远看不到"凑齐"。
+ */
+export interface ResonanceProgress {
+  /** 本局共鸣数(处) */
+  pieces: number;
+  /** 下一档所需总数(已质变则停在 tier2,读数不会倒退) */
+  target: number;
+  /** 距下一档还差几处(已全开 = 0) */
+  toNext: number;
+  /** 进度条比例 0-1,以最高档 tier2 为满格 */
+  ratio: number;
+  /** 已开档位:0 = 未开一档 / 1 = 一档已开 / 2 = 质变已开 */
+  stage: 0 | 1 | 2;
+}
+
+export function resonanceProgress(pieces: number): ResonanceProgress {
+  const t1 = RESONANCE_TIERS.tier1;
+  const t2 = RESONANCE_TIERS.tier2;
+  const stage: 0 | 1 | 2 = pieces >= t2 ? 2 : pieces >= t1 ? 1 : 0;
+  const target = stage === 0 ? t1 : t2;
+  return {
+    pieces,
+    target,
+    toNext: Math.max(0, target - pieces),
+    ratio: Math.min(1, pieces / t2),
+    stage,
+  };
+}
+
+/**
+ * 件套线的展示口径(与共鸣线正交:件数只数本英雄独有技能,见 heroSkills 的 `heroSkillPieces`)。
+ * 门槛读 `SET_PIECE_TIERS` 的 3 / 6,但必须按**该英雄本局可达上限**裁剪:
+ * 现 4 条独有技能表(1 核心 + 2 互斥分岔 + 1 进阶)最多只能凑 3 件,不裁剪就会画出一条
+ * 永远打不满、也永远不报质变的进度线 —— 那正是「没有目标感」的成因之一。
+ */
+export interface SetPieceProgress {
+  /** 本局已装备的本英雄独有技能数(件) */
+  pieces: number;
+  /** 本英雄本局可达件数上限(件) */
+  capacity: number;
+  /** 下一档目标件数(可达档已全开则停在最高可达档) */
+  target: number;
+  /** 距下一档还差几件 */
+  toNext: number;
+  /** 进度条比例 0-1,以**最高可达档**为满格 */
+  ratio: number;
+  /** 质变档(6 件)在当前技能表下是否可达(4→6 未落地前恒 false) */
+  tier2Reachable: boolean;
+  /** 已开档位:0 = 未开一档 / 1 = 一档已开 / 2 = 质变已开 */
+  stage: 0 | 1 | 2;
+}
+
+export function setPieceProgress(pieces: number, capacity: number): SetPieceProgress {
+  const t1 = SET_PIECE_TIERS.tier1;
+  const t2 = SET_PIECE_TIERS.tier2;
+  const tier2Reachable = capacity >= t2;
+  const cap = Math.max(1, Math.min(capacity, t2));
+  const stage: 0 | 1 | 2 = pieces >= t2 && tier2Reachable ? 2 : pieces >= t1 ? 1 : 0;
+  // 满格基准 = 当前可达的最高档;质变不可达时以一档为满格,进度条才会在"能拿的最大"处走满
+  const full = tier2Reachable ? t2 : t1;
+  const target = Math.min(stage === 0 ? t1 : t2, cap);
+  return {
+    pieces,
+    capacity,
+    target,
+    toNext: Math.max(0, target - pieces),
+    ratio: Math.min(1, pieces / full),
+    tier2Reachable,
+    stage,
+  };
+}
+
+/**
  * 套组联动效果数值(唯一事实源;消费方:装备引擎结算/受击回血)。
  * SETS/FEATURED_SETS 里的 desc 为玩家展示文案,与本表同源;改数值只改这里。
  * 出处:需求优化 v2(常驻三套)+ DESIGN-SEASON-SETS(赛季套);单位/依据逐项备注。
  */
 export const SET_BONUSES = {
-  /** 荆棘 3 件「棘肤」:每次受击回复的最大生命比例(比例 0-1;1.5%,挨打流续航基准) */
+  /**
+   * 荆棘 3 档「棘肤」:每次受击回复的最大生命比例(比例 0-1;1.5%,挨打流续航基准)。
+   * **只对不吃荆棘层的玩家生效** —— 薇拉(`player.stackDriven`)的续航整体改走层数结算
+   * (docs/DESIGN-HERO-PIPELINE.md §5;这一档对她改为下面那条倍率)。
+   */
   thorn3HealPct: 0.015,
-  /** 荆棘 3 件「棘肤」:受击回血冷却(秒;防高频受击超额回复) */
+  /** 荆棘 3 档「棘肤」:受击回血冷却(秒;防高频受击超额回复) */
   thorn3HealCd: 0.5,
+  /**
+   * 荆棘 3 档「棘肤」对荆棘层积累的倍率(×1.5;层数来源见 combat.THORN_STACK)。
+   * 含义:她拿到这一档时,涨得更快而不是回得更多 —— 把"越肉越奶"的那条路换成"越贴越来劲"。
+   */
+  thorn3StackGainMult: 1.5,
   /** 弹幕 3 件「齐射」:额外弹幕数(发) */
   barrage3SplitExtra: 1,
   /** 弹幕 3 件「齐射」:触发间隔缩短(比例 0-1,叠入 haste;8%) */

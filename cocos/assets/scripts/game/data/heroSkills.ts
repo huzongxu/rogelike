@@ -20,7 +20,11 @@
 import type { EffectParams, EffectType, ModifierType, TriggerParams } from "./affixes";
 import type { HeroId } from "./heroes";
 import type { MorphPatch } from "./artifacts";
+import type { ThornGainMode } from "./combat";
+// 只取类型:equipmentGen 运行期反向 import 本文件的 heroSkillDef,`import type` 编译期擦除、不成环
+import type { Equipment } from "./equipmentGen";
 import { RHYTHM_MAX_LEVEL, _bindSecondRhythmSource, rhythmTriggerParams, type RhythmId } from "./rhythm";
+import { buildBranch, hasChapterBuild } from "./heroBuild";
 
 export type HeroSkillKind = "core" | "branch" | "advance";
 
@@ -42,6 +46,14 @@ export interface HeroSkillDef {
   resonanceName: string;
   resonanceDesc: string;
   resonanceMorph: MorphPatch;
+  /**
+   * 分支技能的**真实载荷**(仅 `kind = "branch"` 使用):把补丁并入本英雄核心的施放形态。
+   * 为什么要有这个字段:分岔若只是"再来一发更小的同类弹",选完就被系统遗忘(`branchChosen`
+   * 全仓零下游消费者),两条分支的通关差被种子噪声吃掉。改成"核心怎么打"之后,分支一进包
+   * 就立刻改变主武器的落点 / 残留,且不需要指定被动法宝才生效(与共鸣的双份依赖正交)。
+   * 由 `equipmentEngine.morphOf` 在核心结算时并入。
+   */
+  coreMorph?: MorphPatch;
   /** 节律调率(R6):只作用于这一招所挂节律的发动参数;缺省 = 节律表原值。核心技能读 CORE_RHYTHM_TUNE */
   rhythmTune?: RhythmTune;
 }
@@ -152,49 +164,160 @@ export const BRANCH_GUARANTEE_LEVEL = 8;
  * 依据:R3「A + 预告」—— 让玩家在转折点前两次升级里知道该囤升阶还是节律强化,拿到 B 方案的目标感而不付盲选代价。
  */
 export const BRANCH_TEASE_LEVEL = 3;
-/** 三选一权重:新技能 / 升阶 / 节律强化 / 重置分岔 */
-export const OFFER_WEIGHTS = { skill: 3, rank: 2, rhythm: 1, reset: 1 } as const;
-/**
- * 「重置分岔」保底(轮):分岔选定后,若可重置(金币够、本局未用),最迟在之后第 N 轮升级必出现一次;
- * 保底之外仍按 OFFER_WEIGHTS.reset 随机出。依据:docs/DESIGN-HERO-RHYTHM.md R8(用户裁定「A + 第 3 次升级保底」)。
+/** 三选一权重:新技能 / 升阶 / 节律强化(唯一的两类决策:我怎么打、我是谁) */
+export const OFFER_WEIGHTS = { skill: 3, rank: 2, rhythm: 1 } as const;
+/*
+ * 已取消的两类选牌(R20,用户「取消另辟蹊径这种重置以及补给类型所有选牌」):
+ *  - 「另辟蹊径 · 重置分岔」(原 `RESET_GUARANTEE_ROUNDS` / `OFFER_WEIGHTS.reset` / `shop.RESET_BRANCH_*`)——
+ *    分岔互斥本身就是这一局最重的决策,给一次"反悔"等于把它降级成可回退的选项;
+ *  - 「补给」兜底三张(回气 / 赏金 / 壮体,原 `FALLBACK_OFFERS`)—— 它们卖的是金币与生命,
+ *    与升级层"只发独有技能"的口径不同宗,池耗尽时该做的是不再出牌,而不是发一张无关的卡。
+ * 现在技能池耗尽 → 模型层直接不开弹层(见 `LevelUpModel.open`)。
  */
-export const RESET_GUARANTEE_ROUNDS = 3;
-/** 技能池耗尽后的兜底三张 */
-export const FALLBACK_OFFERS = [
-  { id: "heal30", name: "回气", desc: "立即回复 30% 最大生命", healPct: 0.3 },
-  { id: "gold80", name: "赏金", desc: "获得 80 金币", gold: 80 },
-  { id: "hp8", name: "壮体", desc: "最大生命 +8", maxHp: 8 },
-] as const;
-export type FallbackId = (typeof FALLBACK_OFFERS)[number]["id"];
 
 /* ---------- S1 三英雄专属表(§3.2) ---------- */
+
+/**
+ * 荆棘层的作用位(站位资源;积累与衰减规则在 ../data/combat 的 THORN_STACK)。
+ * 只挂在她的核心上:其余 11 英雄与她的分岔 / 进阶都不带这两位 → 别人逐帧与加这一层之前一致。
+ * 单位:radiusPerStack = 每层半径倍率加成(0.06 = 满 6 层 +36%);powerLossAtZero = 零层的伤害损失(0.15 = 只剩八成五)。
+ * 依据:docs/DESIGN-HERO-PIPELINE.md §2「站位有增益」+ §5.5 提案 4 —— 她的身份动词"什么时候站在圈里"
+ *   原先没有任何读数,站与走完全等价;这一对给上限也给下限,不是把奶量当闸门。
+ * 罚项首版取 0.35,R18 实测后收到 0.15:自动档下她多数时间并不在 110px 接触带内(围数均值 0.2–1.6),
+ *   0.35 使这条资源在挂机口径里变成**纯惩罚**(三种子 21/21/19† → 11†/21/21),读起来像"她变弱了"而不是"有节奏"。
+ */
+export const VERA_STACK_TUNE = { radiusPerStack: 0.06, powerLossAtZero: 0.15 } as const;
+
+/**
+ * 荆棘层的**攒法**(站位资源的入口条件;由本局所选分岔决定,未选分岔 = `contact`)。
+ * 类型定义在 ./combat(世界层与模拟器都要引用,不反向依赖本文件),这里再导出一次方便技能表使用。
+ * 设计意图:回血与半径共用同一个层数,所以"怎么维持层数"就是"怎么保住续航"——
+ *   三条路分别对应三种身体:贴着脸站(默认)/ 站定不动(荆甲)/ 边走边拉(棘行者)。
+ * 选完分岔后挂机档跟着换(`still → hold`、`move → orbit`),不另设按钮。
+ */
+export type { ThornGainMode } from "./combat";
+
+/**
+ * 薇拉的续航档位(R19:受击回血 → **状态型回血**)。
+ * 单位:点/秒(**满层时**的值;实际给量 = 本值 × 层数比例 × dt,小数攒满 1 才入账)。
+ * 形状:她的回血只有"荆棘层"这一个来源,两个技能各贡献一档(核心常驻、进阶血棘再加一层);
+ *   旧的三条受击型回复(挨打回 2% 最大生命 / 棘肤回 1.5% / 血棘每下 6 点)对她一律停用,改由层数结算。
+ * 依据:R18 剖面 —— 每秒承伤 7–30 对回血 60–120、四种敌情全净回血 → 天敌根本不成立;
+ *   而旧那两条都按**最大生命比例**给(越肉越奶,总量随等级无限成长),按秒/按层给才钳得住。
+ * 出处:docs/DESIGN-HERO-PIPELINE.md §5、docs/TODO-HERO-RHYTHM.md §1 薇拉条。
+ */
+export const VERA_SUSTAIN = {
+  /** 核心「荆棘圆环」那一档:满层 6 血/秒 */
+  coreHealPerSec: 6,
+  /** 进阶「血棘」那一档:满层再 +4 血/秒(拿到共鸣「饮血荆棘」翻倍) */
+  advanceHealPerSec: 4,
+} as const;
+
+/**
+ * 薇拉两枚分岔各自的**代价**(选完就痛;docs/DESIGN-HERO-PIPELINE.md §5.3 与 §7 纪律「分岔必须关一扇门」)。
+ * 依据:R18 基线剖面(.probe/r18-vera-baseline.json,真机口径三种子)—— 默认口径恒取分岔对首张(荆甲),
+ *   荆甲 21 / 21 / 19† 且 HP 波动带只 0.118(全程满血)、棘行者 21 / 17† / 21 但带宽 0.756;
+ *   两条在**深度**上只差 0.7 章(噪声内),在**形状**上差一个数量级 —— 缺的正是"选了要放弃什么"。
+ * 单位:倍率(0.8 = 圆环半径 −20%;0.75 = 圆环爆发伤害 −25%)。
+ * 注:荆甲的半径代价与共鸣档位(半径 ×1.5)同键,共鸣到手会覆盖它 —— 质变是更高一层的报酬,不叠加惩罚。
+ */
+export const VERA_BRANCH_COST = { armorRadiusMult: 0.8, walkerPowerMult: 0.75 } as const;
+
+/** 局首姿势二选一里的一张卡 */
+export interface ThornStance {
+  mode: ThornGainMode;
+  /** 卡面名 */
+  name: string;
+  /** 卡面正文:发动条件 + 报酬(R19 纪律「状态标签必须写清怎么发动」) */
+  desc: string;
+  /** 挂机档说明(自动走位跟着姿势走,写在卡面上免得玩家以为这档要手动维持) */
+  aiNote: string;
+}
+
+/**
+ * 薇拉的两种姿势(R22:姿势从分岔摘出来,改成**局首二选一** —— 每局开局选一副、两态开局即可用)。
+ * 依据:反伤角色的乐趣在"这一局我站桩吃伤害,还是绕场养层",这该是开局的一次身份选择,
+ *   而不是打到 12 级才摸到的分岔奖励。分岔因此只剩"核心怎么打"(`coreMorph` 的几何差)+ 数值代价,
+ *   分支差要按新形状复量(docs/DESIGN-HERO-PIPELINE.md §5.5)。
+ * 两态共有的前提:**贴身 110px 内有敌才涨层**(`combat.THORN_STACK.contactRadius`),姿势只决定还要不要"停"或"走"。
+ * 这条前提带**接触记忆**(`THORN_STACK.contactEchoDecayPerSec`):怪刚在圈里被清掉也算这一拍,
+ * 否则稀怪章的怪进闸半秒就死、层永远养不起来(R22 试玩实测,两态同享)。
+ * 顺序 = 局首弹层里的卡序,首项同时是"没走到这一层"的兜底档(模拟器 / 机器人局读它)。
+ */
+export const VERA_STANCES: readonly ThornStance[] = [
+  {
+    mode: "still",
+    name: "站定",
+    desc: "停下不动才攒荆棘层:站进怪群里养层再爆,半径与威力按层数给;怪刚在圈里被清掉也算这一拍。代价是要挪位置时层数会断",
+    aiNote: "挂机档自动站住不打围",
+  },
+  {
+    mode: "move",
+    name: "绕场",
+    desc: "边走边贴身才攒荆棘层:绕着怪圈转就能不断养层,刺地也留在身后;怪刚在圈里被清掉也算这一拍。代价是站下不动就不涨",
+    aiNote: "挂机档自动绕场巡逻",
+  },
+];
+
+/** 哪些英雄有哪几副姿势(只有走荆棘层的英雄需要选;其余返回空表 = 局首不弹这一层) */
+const HERO_STANCES: Partial<Record<HeroId, readonly ThornStance[]>> = { vera: VERA_STANCES };
+
+/** 该英雄的姿势表(空表 = 这一局没有姿势可选) */
+export function heroStances(id: HeroId | null | undefined): readonly ThornStance[] {
+  return (id && HERO_STANCES[id]) || [];
+}
+
+/** 姿势的兜底档:没走到局首弹层时(模拟器 / 机器人 / 老档)按表首项跑,保证可复现 */
+export const DEFAULT_THORN_MODE: ThornGainMode = VERA_STANCES[0].mode;
+
+/** 分岔主循环:值住 heroBuild.ts,这里只按路线 id 取引用,不另抄一份系数 */
+function loopOf(branchId: string) {
+  return buildBranch(branchId)?.loop ?? {};
+}
 
 const VERA: readonly HeroSkillDef[] = [
   {
     id: "vera_core", heroId: "vera", kind: "core", name: "荆棘圆环", rhythm: "hit", rhythmTune: CORE_RHYTHM_TUNE.vera,
-    desc: "受击时向周围爆出荆棘",
-    effect: "nova", params: { damage: 50, radius: 200, speed: 1 },
+    desc: "受击时向周围爆出荆棘;贴身才攒荆棘层(满 6 层半径 +36%、每秒回 6 血),层数掉了威力与血都跟着掉",
+    effect: "nova",
+    params: {
+      damage: 50, radius: 200, speed: 1,
+      stackRadiusPer: VERA_STACK_TUNE.radiusPerStack,
+      stackPowerLoss: VERA_STACK_TUNE.powerLossAtZero,
+      sustainHeal: VERA_SUSTAIN.coreHealPerSec,
+    },
     resonancePassive: "duration", resonanceName: "荆棘领域", resonanceDesc: "荆棘范围 ×1.5,伤害 ×1.2(近似「留下荆棘地」)",
     resonanceMorph: { radiusMult: 1.5, power: 1.2 },
   },
   {
     id: "vera_armor", heroId: "vera", kind: "branch", name: "荆甲", rhythm: "hurt",
-    desc: "生命低于一半时获得护盾;解锁【低血】节律",
+    desc: "生命低于一半时获得护盾;荆棘圆环改为在打你的敌人脚下爆出(绕开盾面);解锁【低血】节律;代价:圆环半径 −20%",
     effect: "shield", params: { amount: 8, duration: 4 },
     resonancePassive: "duration", resonanceName: "不朽荆甲", resonanceDesc: "护盾持续 ×3、吸收 ×1.5(近似「不消失改为衰减」)",
     resonanceMorph: { durationMult: 3, power: 1.5 },
+    // 低血反噬身份落到形态上:爆发不再以自身为中心,而是搬到最近一次打我的人脚下
+    // (半径 −20% = 这扇门:换来"只打得到刚打我的人",换来的是落点不再永远撞在盾卫/Boss 的正面弧里)
+    coreMorph: { castAtAttacker: true, radiusMult: VERA_BRANCH_COST.armorRadiusMult, loop: loopOf("vera.a") },
   },
   {
     id: "vera_walker", heroId: "vera", kind: "branch", name: "棘行者", rhythm: "move",
-    desc: "移动时在身后留下荆棘刺地;解锁【移动】节律",
+    desc: "移动时在身后留下荆棘刺地;荆棘圆环爆完在落点长出荆棘带;解锁【移动】节律;代价:圆环爆发 −25%",
     effect: "magma_trail", params: { dps: 20, radius: 56, duration: 2.5 },
     resonancePassive: "split", resonanceName: "裂棘", resonanceDesc: "刺地范围翻倍",
     resonanceMorph: { radiusMult: 2 },
+    /**
+     * 生棘身份落到核心上:圆环结算后留一片荆棘带。
+     * 取值:dps = 新星单发 50 × 0.12 = 6/s、持续 3 秒 ≈ 新星单发的 36%(分支级报酬,不抢核心的清场位);
+     * 半径 = 新星 200 × 0.6 = 120px(小于爆发圈,读得出"残留"而不是"再来一圈")。
+     * 伤害 −25% = 这扇门:即时爆发换延迟结算的地面(地面不吃正面减伤,但要求把敌人留在地上)。
+     */
+    coreMorph: { afterCastGround: { radiusMult: 0.6, duration: 3, dpsPerDamage: 0.12 }, power: VERA_BRANCH_COST.walkerPowerMult, loop: loopOf("vera.b") },
   },
   {
     id: "vera_blood", heroId: "vera", kind: "advance", name: "血棘", rhythm: "hit",
-    desc: "受击时汲取生命(近似:受击回复,冷却 1.2 秒)",
-    effect: "drain", params: { heal: 6 },
+    // R19:从"受击回 6 点"改成续航的第二档 —— 回血只认层数,不认挨了几下(总量按秒钳住,不随最大生命成长)
+    desc: "荆棘再养你一层:满层时每秒再多回 4 血(与圆环同一套层数,层空了两边都停)",
+    effect: "drain", params: { sustainHeal: VERA_SUSTAIN.advanceHealPerSec },
     resonancePassive: "lifesteal", resonanceName: "饮血荆棘", resonanceDesc: "汲取量翻倍",
     resonanceMorph: { healMult: 2 },
   },
@@ -210,18 +333,22 @@ const KYLE: readonly HeroSkillDef[] = [
     resonanceMorph: { haste: 0.5 },
   },
   {
-    id: "kyle_overload", heroId: "kyle", kind: "branch", name: "连杀过载", rhythm: "combo",
-    desc: "连杀达标时追加一轮双倍伤害齐射;解锁【连杀】节律",
+    // V1.1 弹幕风暴:分岔技能 = 连杀节律的额外齐射;核心主循环 = 有效命中蓄过载,满 100 卸 8 束
+    id: "kyle_overload", heroId: "kyle", kind: "branch", name: "弹幕风暴", rhythm: "combo",
+    desc: "连杀达标时追加一轮齐射;核心每轮按不同命中目标蓄过载,满 100 卸 8 束扇射(3.6s ICD);解锁【连杀】节律",
     effect: "ray", params: { damage: 60, speed: 620, radius: 640, spread: 8, pierce: 1, slow: 0.45, duration: 2 },
     resonancePassive: "power", resonanceName: "过载不熄", resonanceDesc: "过载齐射伤害再 ×1.5",
     resonanceMorph: { power: 1.5 },
+    coreMorph: { loop: loopOf("kyle.a") },
   },
   {
-    id: "kyle_hunter", heroId: "kyle", kind: "branch", name: "猎手步伐", rhythm: "move",
-    desc: "移动时向前方扇形收拢齐射,伤害 ×1.4;解锁【移动】节律",
+    // V1.1 冰晶狙猎:分岔技能 = 移动节律的三束聚束;核心基础轮改 3 束同向,6 印剥离冰锥
+    id: "kyle_hunter", heroId: "kyle", kind: "branch", name: "冰晶狙猎", rhythm: "move",
+    desc: "移动时向前方三束聚束齐射;核心基础轮改 3 束同向,同轮同靶叠印,满 6 印发单靶冰锥;解锁【移动】节律",
     effect: "ray", params: { damage: 42, speed: 620, radius: 640, spread: 3, pierce: 1, slow: 0.45, duration: 2 },
     resonancePassive: "pierce", resonanceName: "贯穿猎步", resonanceDesc: "扇形弹穿透 +2",
     resonanceMorph: { pierce: 2 },
+    coreMorph: { loop: loopOf("kyle.b") },
   },
   {
     id: "kyle_shard", heroId: "kyle", kind: "advance", name: "冰晶穿刺", rhythm: "pulse",
@@ -358,14 +485,56 @@ const LOKA: readonly HeroSkillDef[] = [
   },
 ];
 
-/* ---------- 通用职业包(其余 6 英雄与未选英雄的过渡表) ---------- */
+/* ---------- 薇洛:V1.1 专属表(狼群统帅 / 亡影剧团) ---------- */
+
+/**
+ * 薇洛的四技能底子(核心 + 两分岔 + 进阶),主循环由分岔 `coreMorph.loop` 承载:
+ *  - A 狼群统帅:核心两狼同靶配对 3 记 → 头狼扑击;分岔主动件 = 受击时的头狼突袭;
+ *  - B 亡影剧团:核心狼槽被亡影替代(3s 定拍),分岔主动件 = 亡影入场;四幕谢幕。
+ * 数值初值见 docs/DESIGN-HERO-BUILD.md §3.3;均为待验证。
+ */
+const WILLOW: readonly HeroSkillDef[] = [
+  {
+    id: "willow_core", heroId: "willow", kind: "core", name: "影群哨笛", rhythm: "move",
+    desc: "移动时唤出两狼协战;A 路线同靶配对 3 记放头狼,B 路线改由亡影按 3 秒定拍入场",
+    effect: "spirit_wolves", params: { count: 2, damage: 14, duration: 12 },
+    resonancePassive: "power", resonanceName: "影群哨笛·极", resonanceDesc: "召唤物伤害 ×1.3",
+    resonanceMorph: { power: 1.3 },
+  },
+  {
+    id: "willow_wolves", heroId: "willow", kind: "branch", name: "狼群统帅", rhythm: "hurt",
+    desc: "受击时头狼突袭最近敌(2×14);两狼同靶交替咬出 3 道猎记后,下一拍头狼扑击;解锁【低血】节律",
+    effect: "icelance", params: { damage: 28, speed: 700, radius: 640, homing: 4 },
+    resonancePassive: "power", resonanceName: "头狼锋", resonanceDesc: "头狼突袭伤害 ×1.5",
+    resonanceMorph: { power: 1.5 },
+    coreMorph: { loop: loopOf("willow.a") },
+  },
+  {
+    id: "willow_shades", heroId: "willow", kind: "branch", name: "亡影剧团", rhythm: "pulse",
+    // 3.0s 定拍 = 周期 2.4 × 1.25;与 DESIGN-HERO-BUILD §3.3 的 0/3/6s 同拍
+    rhythmTune: { interval: 1.25 },
+    desc: "亡影替代职业狼槽:每 3 秒在靶前召一影横扫(14 伤/3 靶);入场与自然退场攒幕,满 4 幕谢幕;解锁【周期】节律",
+    effect: "haunt_crown", params: { damage: 14, duration: 4 },
+    resonancePassive: "split", resonanceName: "幕间加演", resonanceDesc: "谢幕额外落点 +1(近似分裂)",
+    resonanceMorph: { splitExtra: 1 },
+    coreMorph: { loop: loopOf("willow.b") },
+  },
+  {
+    id: "willow_focus", heroId: "willow", kind: "advance", name: "哨刃回响", rhythm: "pulse",
+    desc: "周期追发一轮四散哨刃(30 伤/4 发),两路线共用",
+    effect: "knife", params: { damage: 30, speed: 560, radius: 640, spread: 4, pierce: 1 },
+    resonancePassive: "split", resonanceName: "双哨", resonanceDesc: "哨刃 +3 发",
+    resonanceMorph: { splitExtra: 3 },
+  },
+];
+
+/* ---------- 通用职业包(其余 5 英雄与未选英雄的过渡表) ---------- */
 
 /** 各套组现初始武器的效果与参数(与 equipmentGen.makeSetStarterEquipment 同数;通用包核心技能读这里) */
-const GENERIC_CORE: Record<Exclude<HeroId, "vera" | "kyle" | "bran" | "sia" | "nora" | "loka">, { name: string; effect: EffectType; params: EffectParams }> = {
+const GENERIC_CORE: Record<Exclude<HeroId, "vera" | "kyle" | "bran" | "sia" | "nora" | "loka" | "willow">, { name: string; effect: EffectType; params: EffectParams }> = {
   doran: { name: "熔核之心", effect: "meteor", params: { damage: 65, radius: 160, delay: 0.6 } },
   sally: { name: "瘟薪熔炉", effect: "cloud", params: { dps: 15, radius: 150, duration: 4.5 } },
   rayne: { name: "炽牙雷殛", effect: "chain", params: { damage: 44, jumps: 5, radius: 400 } },
-  willow: { name: "影群哨笛", effect: "spirit_wolves", params: { count: 2, damage: 14, duration: 12 } },
   oden: { name: "镇魂安可", effect: "skeleton", params: { count: 2, damage: 13, duration: 14 } },
   // R6 数值 pass:狼伤 11 → 14 与幻影剧团(willow)同款对齐;3 种子 10/10/5 → 10/10/21,第 10 章召唤流之墙仍在(TODO 下一轮看 wolves 生存 / 章型)
   // healOnHit:狼每次命中回玩家血(伤害 × 30%)—— 节律表备注里的「缠斗回复」身份;3 种子对照下狼存活 / 狼数都过不了第 10 / 15 章精英开场的爆发,回血是唯一对症项
@@ -432,13 +601,13 @@ export const HERO_SKILLS: Record<HeroId, readonly HeroSkillDef[]> = {
   doran: genericPack("doran", GENERIC_CORE.doran, "move"),
   sally: genericPack("sally", GENERIC_CORE.sally, "hurt"),
   rayne: genericPack("rayne", GENERIC_CORE.rayne, "combo"),
-  willow: genericPack("willow", GENERIC_CORE.willow, "move"),
+  willow: WILLOW,
   oden: genericPack("oden", GENERIC_CORE.oden, "kill"),
   mu: genericPack("mu", GENERIC_CORE.mu, "hit"),
 };
 
 /** 有专属表(非通用职业包)的英雄 */
-export const BESPOKE_HEROES: readonly HeroId[] = ["vera", "kyle", "bran", "sia", "nora", "loka"];
+export const BESPOKE_HEROES: readonly HeroId[] = ["vera", "kyle", "bran", "sia", "nora", "loka", "willow"];
 
 export const GENERIC_HERO_SKILLS: readonly HeroSkillDef[] = genericPack("generic", DEFAULT_CORE, "pulse");
 
@@ -465,16 +634,37 @@ export function branchSkillsOf(heroId: HeroId | null | undefined): readonly Hero
 // 第二本命候选 = 两个分岔技能的节律(./rhythm 的 heroRhythmOptions 读这里,注入避免循环 import)
 _bindSecondRhythmSource((heroId) => branchSkillsOf(heroId).map((b) => b.rhythm));
 
+/**
+ * 该英雄本局**可达**的独有技能件数上限(件)。
+ * 分岔互斥:同一对里选一个、另一个永久消失,故 N 条分岔只贡献 N/2 件。
+ * 件套门槛必须按本值标定 —— 现 4 条表(1 核心 + 2 互斥分岔 + 1 进阶)上限只有 3 件,
+ * 直接套 `SET_PIECE_TIERS.tier2 = 6` 会让质变档永远打不开;6 件要等独有技能 4→6 落地才可达。
+ */
+export function heroSkillCapacity(heroId: HeroId | null | undefined): number {
+  const list = heroSkills(heroId);
+  const branch = list.filter((s) => s.kind === "branch").length;
+  return list.length - branch + Math.floor(branch / 2);
+}
+
+/**
+ * 件套线计数源:本局已装备的**本英雄**独有技能数(件)。
+ * 与共鸣线正交 —— 这里只看技能在不在身上,不看它有没有配到那一枚指定被动法宝,
+ * 因此不存在「技能 + 指定被动都要凑齐」的双份隐藏依赖(那条只决定单技能自己的 `resonanceMorph`)。
+ */
+export function heroSkillPieces(list: readonly Equipment[], heroId: HeroId | null | undefined): number {
+  const ids = new Set(heroSkills(heroId).map((d) => d.id));
+  let n = 0;
+  for (const eq of list) if (eq.kind === "skill" && eq.skillId && ids.has(eq.skillId)) n += 1;
+  return n;
+}
+
 /* ---------- 升级三选一的出卡策略(纯函数,LevelUpModel 只调用) ---------- */
 
 /** 一张待选卡的"身份"(不含运行时实例;实例化由模型层做) */
 export type SkillOffer =
   | { kind: "skill"; def: HeroSkillDef }
   | { kind: "rank"; skillId: string }
-  | { kind: "rhythm"; rhythm: RhythmId }
-  /** 重置分岔(花金币撤掉已选分岔,分岔二选一重来;docs/DESIGN-HERO-RHYTHM.md §6) */
-  | { kind: "reset" }
-  | { kind: "fallback"; id: FallbackId };
+  | { kind: "rhythm"; rhythm: RhythmId };
 
 export interface SkillOfferInput {
   heroId: HeroId | null;
@@ -486,10 +676,11 @@ export interface SkillOfferInput {
   rhythms: ReadonlyMap<RhythmId, number>;
   /** 本轮不该再出的身份键(锁定卡 / 重随时的其余两格) */
   exclude?: ReadonlySet<string>;
-  /** 「重置分岔」这一轮可出(已选分岔、次数未用完、金币够;由模型层判) */
-  resetAvailable?: boolean;
-  /** 「重置分岔」保底到期:这一轮必出(占一格,排在分岔对之后、随机抽之前) */
-  resetGuaranteed?: boolean;
+  /**
+   * 这一局是否走章节节点层(V1.1)。缺省 = true;legacy 夹具可显式传 false,
+   * 用来单独验证 5–8 级成对分岔的老路径。
+   */
+  chapterBuild?: boolean;
 }
 
 /** 身份键(去重与排除用) */
@@ -501,15 +692,13 @@ export function offerKey(o: SkillOffer): string {
       return `rank:${o.skillId}`;
     case "rhythm":
       return `rhythm:${o.rhythm}`;
-    case "reset":
-      return "reset";
-    case "fallback":
-      return `fallback:${o.id}`;
   }
 }
 
 /** 分岔二选一这一轮要不要出:两分岔都未拥有、未做过选择,且等级过线(到保底线必出,否则五成) */
 export function branchPairDue(input: SkillOfferInput, rand: () => number): readonly HeroSkillDef[] | null {
+  // 三原型(V1.1)的分岔改到第 2 章开章二选一,不再走 5–8 级升级发牌;9 位 legacy 英雄不变
+  if (input.chapterBuild !== false && hasChapterBuild(input.heroId)) return null;
   if (input.branchChosen) return null;
   const pair = branchSkillsOf(input.heroId).filter((b) => !input.owned.has(b.id));
   if (pair.length !== 2) return null;
@@ -519,7 +708,7 @@ export function branchPairDue(input: SkillOfferInput, rand: () => number): reado
   return rand() < 0.5 ? pair : null;
 }
 
-/** 除分岔外的全部候选(新进阶技能 / 升阶 / 节律强化 / 重置分岔),带权重 */
+/** 除分岔外的全部候选(新进阶技能 / 升阶 / 节律强化),带权重 */
 export function offerCandidates(input: SkillOfferInput): { offer: SkillOffer; weight: number }[] {
   const out: { offer: SkillOffer; weight: number }[] = [];
   const ex = input.exclude ?? new Set<string>();
@@ -539,12 +728,12 @@ export function offerCandidates(input: SkillOfferInput): { offer: SkillOffer; we
     const o: SkillOffer = { kind: "rhythm", rhythm: r };
     if (!ex.has(offerKey(o))) out.push({ offer: o, weight: OFFER_WEIGHTS.rhythm });
   }
-  if (input.resetAvailable && input.branchChosen && !ex.has("reset")) out.push({ offer: { kind: "reset" }, weight: OFFER_WEIGHTS.reset });
   return out;
 }
 
 /**
- * 出 `count` 张:分岔到期时先占两格(左右并排),其余按权重不放回抽;候选不够用兜底三张补齐。
+ * 出 `count` 张:分岔到期时先占两格(左右并排),其余按权重不放回抽。
+ * 候选抽空就少出几张(R20:不再有「补给」兜底卡)—— 一张都不剩时返回空数组,由模型层决定不开这一轮弹层。
  * `rand` 注入以便复现。
  */
 export function rollSkillOffers(input: SkillOfferInput, count: number, rand: () => number = Math.random): SkillOffer[] {
@@ -552,12 +741,6 @@ export function rollSkillOffers(input: SkillOfferInput, count: number, rand: () 
   const pair = branchPairDue(input, rand);
   if (pair && count >= 2) for (const def of pair) out.push({ kind: "skill", def });
   const pool = offerCandidates(input);
-  // 重置保底:到期且可出 → 先占一格,再从池里把它摘掉(免得重复)
-  if (input.resetGuaranteed && input.resetAvailable && input.branchChosen && out.length < count && !(input.exclude?.has("reset"))) {
-    out.push({ kind: "reset" });
-    const i = pool.findIndex((c) => c.offer.kind === "reset");
-    if (i >= 0) pool.splice(i, 1);
-  }
   while (out.length < count && pool.length > 0) {
     const total = pool.reduce((s, c) => s + c.weight, 0);
     let x = rand() * total;
@@ -568,12 +751,6 @@ export function rollSkillOffers(input: SkillOfferInput, count: number, rand: () 
     }
     out.push(pool[idx].offer);
     pool.splice(idx, 1);
-  }
-  const used = new Set(out.map(offerKey));
-  for (const fb of FALLBACK_OFFERS) {
-    if (out.length >= count) break;
-    const o: SkillOffer = { kind: "fallback", id: fb.id };
-    if (!used.has(offerKey(o)) && !(input.exclude?.has(offerKey(o)))) out.push(o);
   }
   return out.slice(0, count);
 }

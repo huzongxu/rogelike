@@ -21,7 +21,7 @@ import { updateProjectile, projectileHits, steerHoming, type Projectile, _resetP
 import { spawnCloud, spawnGem, type Cloud, type Minion, type Gem, _resetObjectUids, type Obstacle, rollChapterObstacles, pushOutOfPillar, isInPool, OBSTACLE } from "@game/entities/objects";
 import { WaveManager, type ArenaRect, type SpawnIntel } from "@game/systems/waves";
 import { CHAPTER_ARENA } from "@game/data/stages";
-import { MINION_HEAL_ON_HIT_PCT, RETALIATION_HEAL } from "@game/data/combat";
+import { MINION_HEAL_ON_HIT_PCT, RETALIATION_HEAL, THORN_STACK, type ThornGainMode } from "@game/data/combat";
 import { chapterIntel } from "@game/data/intel";
 import { ELITE_INTEL_DELAY_SEC, chapterTypeInfo } from "@game/data/chapters";
 import type { Equipment } from "@game/data/equipmentGen";
@@ -32,10 +32,11 @@ import { RUN_AD_SLOT_LIMIT, shopCardPrice } from "@game/data/shop";
 import { BOSS_GOLD, ELITE_GEM_COUNT, GOLD_PER_XP } from "@game/data/combat";
 import { makeTrigger, makeEffect, makeModifier, type EffectType } from "@game/data/affixes";
 import { makeSkillEquipment, resonanceBonusState, upgradeEquipment } from "@game/data/equipmentGen";
-import { FALLBACK_OFFERS, SKILL_MAX_RANK, coreSkillOf, rollSkillOffers, type SkillOffer } from "@game/data/heroSkills";
+import { DEFAULT_THORN_MODE, SKILL_MAX_RANK, coreSkillOf, heroSkillDef, rollSkillOffers, type SkillOffer } from "@game/data/heroSkills";
+import { buildBranches, buildProfile, nodeOptions, type BuildTier } from "@game/data/heroBuild";
 import type { HeroId } from "@game/data/heroes";
 import { RHYTHM_MAX_LEVEL } from "@game/data/rhythm";
-import type { SetId } from "@game/data/sets";
+import { SET_BONUSES, type SetId } from "@game/data/sets";
 import { comboStates, COMBO_OFF } from "@game/data/combos";
 import { vec2, type Vec2 } from "@game/core/math";
 
@@ -83,6 +84,21 @@ export interface SimOptions {
   /** 随机种子(确定性与可复现) */
   seed?: number;
   /**
+   * 钉住分岔选择(诊断用,默认关):autoPick 原本恒取分岔对里的**首个**,导致「选 A 还是选 B」
+   * 在 sim 里不可对照。给出技能 id 时优先取它;**不给时行为与基线逐字一致**,不影响指纹与标定用例。
+   */
+  forceBranch?: string;
+  /** V1.1 章节节点:按层序钉住节点 id(第 4 / 8 / 12 章;缺省 = 该层第一项) */
+  forceNodes?: readonly string[];
+  /** V1.1 章节节点层开关(缺省 true;false = 组 0 原系统,用于地形 / 旧锚点对照) */
+  chapterBuild?: boolean;
+  /**
+   * 钉住荆棘层的**姿势**(R22:姿势改成局首二选一,不再由分岔给)。诊断用,默认 = 姿势表首档
+   * (`heroSkills.DEFAULT_THORN_MODE` = 站定),与游戏里"没走到弹层"的兜底同一支。
+   * 给 `"move"` 即绕场档:边走边贴身才涨层、挂机档改 orbit。
+   */
+  stance?: ThornGainMode;
+  /**
    * 逐秒剖面(诊断用,默认关):每秒往 `report.trace` 记一行 HP / 敌数 / 精英数 / 贴身围数 /
    * 弹体发射与命中 / 伤害与击杀。只读累加,**不吃 Math.random、不改任何结算分支**,
    * 关闭时与基线逐帧一致;开启也不影响 perMinute / totalDamage 等既有读数。
@@ -108,6 +124,8 @@ export interface SimTraceRow {
   elites: number;
   /** 贴身 110px 内围数的本秒峰值(站桩档的躲藏触发阈值读的就是这个数) */
   nearMax: number;
+  /** 该秒末的荆棘层读数(0 = 没带该资源的英雄 / 未贴身;只读累加,不吃随机、不改结算) */
+  stack: number;
   /** 本秒弹体发射数 / 命中事件数 */
   launched: number;
   hits: number;
@@ -416,6 +434,35 @@ function runSimInner(opts: SimOptions): SimReport {
   for (const eq of player.castList) for (const t of eq.kind === "skill" ? eq.triggers.slice(0, 1) : eq.triggers) if (isRhythm(t.def.type)) rhythmSet.add(t.def.type);
   player.rhythms = rhythmSet.size > 0 ? [...rhythmSet] : ["pulse"];
   /**
+   * V1.1 章节节点层(与 battleWorld.nextChapter / commitBuild 同语义):
+   * 第 2 章自动选支,第 4/8/12 章自动选节点;`forceBranch` 可传路线 id 或技能 id。
+   */
+  const buildRun = buildProfile(heroId ?? null);
+  const applyChapterBuild = (ch: number): void => {
+    if (!buildRun || opts.chapterBuild === false) return;
+    player.clearBuildTemp();
+    if (!player.buildBranchId) {
+      const list = buildBranches(heroId);
+      const pick = list.find((b) => b.id === opts.forceBranch || b.skillId === opts.forceBranch) ?? list[0];
+      if (!pick) return;
+      const skill = heroSkillDef(pick.skillId);
+      if (skill) {
+        player.skills.push(makeSkillEquipment(skill));
+        player.unlockRhythm(skill.rhythm);
+        player.branchChosen = skill.id;
+        player.buildBranchId = pick.id;
+      }
+    }
+    const tiers: readonly number[] = [4, 8, 12];
+    for (let i = 0; i < 3; i++) {
+      if (ch < tiers[i] || player.buildNodes[i] || !player.buildBranchId) continue;
+      const wanted = opts.forceNodes?.[i];
+      const list = nodeOptions(heroId, player.buildBranchId, (i + 1) as BuildTier);
+      const pick = list.find((n) => n.id === wanted) ?? list[0];
+      if (pick) player.buildNodes[i] = pick.id;
+    }
+  };
+  /**
    * 升级三选一的自动选择(镜像游戏:升级 → 三张独有技能卡 → 选一张)。策略固定可复现:
    * 分岔(首个)> 新技能 > 核心升阶 > 其余升阶 > 节律强化 > 兜底回血。
    */
@@ -431,7 +478,9 @@ function runSimInner(opts: SimOptions): SimReport {
       if (o.kind === "rhythm") return 4;
       return 5;
     };
-    const pick = [...offers].sort((a, b) => rank(a) - rank(b))[0];
+    // 诊断口径:钉住分支时优先取那一张(分岔对被选中后 branchChosen 置位、不再出对,故只需在首次出现时钉住)
+    const forced = opts.forceBranch ? offers.find((o) => o.kind === "skill" && o.def.id === opts.forceBranch) : undefined;
+    const pick = forced ?? [...offers].sort((a, b) => rank(a) - rank(b))[0];
     if (!pick) return;
     switch (pick.kind) {
       case "skill": {
@@ -450,15 +499,6 @@ function runSimInner(opts: SimOptions): SimReport {
       case "rhythm":
         if (player.rhythmLevelOf(pick.rhythm) < RHYTHM_MAX_LEVEL) player.rhythmLevelUp(pick.rhythm);
         break;
-      case "fallback": {
-        const fb = FALLBACK_OFFERS.find((f) => f.id === pick.id)!;
-        if ("healPct" in fb) player.heal(Math.round(player.maxHp * fb.healPct));
-        if ("maxHp" in fb) {
-          player.maxHp += fb.maxHp;
-          player.heal(fb.maxHp);
-        }
-        break;
-      }
     }
   };
   const engine = new EquipmentEngine();
@@ -634,6 +674,7 @@ function runSimInner(opts: SimOptions): SimReport {
       t: sec, ch: waves.wave, hp: Math.round(player.hp), maxHp: Math.round(player.maxHp),
       inCh: sec - trSecBase,
       enemies: enemies.length, minions: minions.length, elites, nearMax: trNearMax,
+      stack: +player.thornStack.toFixed(2),
       launched: trLaunched, hits: trHits, skillLaunched: trSkillLaunched, skillHits: trSkillHits,
       hitsHidden: trHitsHidden, hidden,
       dmgRetHidden: trRetHidden, dmgRetClamp: trRetClamp, projEaten: trEaten,
@@ -676,6 +717,7 @@ function runSimInner(opts: SimOptions): SimReport {
           player.pos.y = (arena.y0 + arena.y1) / 2;
           if (opts.clearMinionsOnChapter) minions.length = 0;
           else for (const m of minions) { m.pos.x = player.pos.x + (Math.random() - 0.5) * 80; m.pos.y = player.pos.y + (Math.random() - 0.5) * 80; }
+          applyChapterBuild(ch);
         }
       }
     }
@@ -799,15 +841,32 @@ function runSimInner(opts: SimOptions): SimReport {
       player.retaliationPct = retalPct;
       player.tickRetaliation(dt);
     }
+    // 荆棘层前半段(与游戏 updatePlayer 同款):只定"走不走层数";姿势是局首二选一的结果(R22),
+    // 游戏里读 player.thornGainMode、这里读 opts.stance ?? 表首档。累加在位移之后做。
+    let thornStacked = false;
+    for (const eq of player.castList) {
+      const pr = eq.effect.params;
+      if ((pr.stackRadiusPer ?? 0) > 0 || (pr.sustainHeal ?? 0) > 0) thornStacked = true;
+    }
+    const thornMode: ThornGainMode = opts.stance ?? DEFAULT_THORN_MODE;
+    player.stackDriven = thornStacked;
+    player.thornGainMode = thornMode;
     if (opts.move === "kite") {
       // 与游戏挂机 AI 一致:按本命节律取挂机档位(docs/DESIGN-HERO-RHYTHM.md §2.3)——
       // kite 贴身才躲(110px)平时巡场;hold 允许被围、只在围数过多或血量过低时才躲;orbit 持续绕场
-      const profile = RHYTHM_AI_PROFILE[player.rhythms[0] ?? "pulse"];
+      // 姿势会改写这一档(站定 → hold、绕场 → orbit),与游戏同一处口径
+      const baseProfile = RHYTHM_AI_PROFILE[player.rhythms[0] ?? "pulse"];
+      const profile = !thornStacked ? baseProfile : thornMode === "move" ? "orbit" : "hold";
       const near = nearest(player.pos, 110);
       let dodge = !!near;
       if (near && profile === "hold") {
-        const around = enemies.filter((e) => e.hp > 0 && Math.hypot(e.pos.x - player.pos.x, e.pos.y - player.pos.y) <= 110).length;
-        dodge = around >= AI_PROFILE_PARAMS.hold.maxContacts || player.hp / player.maxHp < AI_PROFILE_PARAMS.hold.fleeHpPct;
+        if (thornStacked && thornMode === "still") {
+          // 荆甲档:站定才涨层 → 不因围数逃跑(与游戏同一处口径),只在血量过低时撤
+          dodge = player.hp / player.maxHp < AI_PROFILE_PARAMS.hold.fleeHpPct;
+        } else {
+          const around = enemies.filter((e) => e.hp > 0 && Math.hypot(e.pos.x - player.pos.x, e.pos.y - player.pos.y) <= 110).length;
+          dodge = around >= AI_PROFILE_PARAMS.hold.maxContacts || player.hp / player.maxHp < AI_PROFILE_PARAMS.hold.fleeHpPct;
+        }
       }
       if (near && profile === "orbit") {
         dodge = Math.hypot(near.pos.x - player.pos.x, near.pos.y - player.pos.y) <= AI_PROFILE_PARAMS.orbit.dodgeRadius;
@@ -856,6 +915,22 @@ function runSimInner(opts: SimOptions): SimReport {
       } else {
         poolTickAcc = 0;
       }
+    }
+    // 荆棘层累加(与游戏同位:必须在位移之后,still / move 两档读的就是"本帧动不动")
+    if (thornStacked) {
+      const cr2 = THORN_STACK.contactRadius * THORN_STACK.contactRadius;
+      let contacts = 0;
+      for (const e of enemies) {
+        if (e.hp <= 0) continue;
+        const ddx = e.pos.x - player.pos.x;
+        const ddy = e.pos.y - player.pos.y;
+        if (ddx * ddx + ddy * ddy <= cr2) contacts += 1;
+      }
+      const sb = ctx.setBonus;
+      const gainMult = sb && sb.id === "thorn" && sb.bonus3 ? SET_BONUSES.thorn3StackGainMult : 1;
+      player.tickThornStack(dt, contacts, player.movedThisFrame, true, thornMode, gainMult);
+    } else {
+      player.tickThornStack(dt, 0, player.movedThisFrame, false, thornMode);
     }
     player.update(dt);
     // 连杀狂潮计时
@@ -939,6 +1014,8 @@ function runSimInner(opts: SimOptions): SimReport {
             break;
           }
           damageEnemy(e, e.kind === "devourer" ? Math.round(p.damage * slay) : p.damage, p.source, p.lifesteal, 30, p.pos, p.splitChild === true);
+          // 章节节点层(V1.1):与游戏同一回调(过载 / 冰印)
+          engine.recordBuildHit(p.source, e, ctx);
           if (p.kind === "ray" && p.slow) applySlow(e, p.slow, p.slowDuration ?? 2);
           if (p.explode) engine.explode(p.source, ctx, p.pos, p.explode, { power: 1, haste: 0, durationBonus: 0, chainTargets: 0, splitExtra: 0, lifesteal: p.lifesteal, pierce: 0 });
           if (p.chainLeft > 0) {
@@ -1021,18 +1098,28 @@ function runSimInner(opts: SimOptions): SimReport {
     for (const m of minions) {
       m.ttl -= dt;
       m.attackCd -= dt;
-      const target = nearest(m.pos, 320);
+      let target = nearest(m.pos, 320);
+      if (m.wolfSide) {
+        const w = player.buildRes.wolf;
+        if (w && w.focusUntil > player.buildTime) {
+          const f = enemies.find((e) => e.id === w.focusTargetId && e.hp > 0);
+          if (f) target = f;
+        }
+        if (m.guardRadius && target && Math.hypot(target.pos.x - player.pos.x, target.pos.y - player.pos.y) > 100) target = null;
+      }
       if (target && m.attackCd <= 0) {
         const d = Math.hypot(target.pos.x - m.pos.x, target.pos.y - m.pos.y);
         if (d <= 100) {
           m.attackCd = m.attackInterval;
           damageEnemy(target, m.damage, m.source, 0, 20, m.pos);
+          engine.onMinionHit(m, target, ctx);
           if (m.healOnHit) {
             const base = Math.round(m.damage * MINION_HEAL_ON_HIT_PCT);
             player.heal(base + Math.round(player.drawRetaliation(Math.round(base * RETALIATION_HEAL.perHitMult))));
           }
         } else {
-          const dx = target.pos.x - m.pos.x;
+          const aimX = m.flank && m.wolfSide ? target.pos.x + (m.wolfSide === "l" ? -m.flank : m.flank) : target.pos.x;
+          const dx = aimX - m.pos.x;
           const dy = target.pos.y - m.pos.y;
           const l = Math.hypot(dx, dy) || 1;
           m.pos.x += (dx / l) * m.speed * dt;
@@ -1049,7 +1136,11 @@ function runSimInner(opts: SimOptions): SimReport {
       }
     }
     for (let i = minions.length - 1; i >= 0; i--) {
-      if (minions[i].ttl <= 0) minions.splice(i, 1);
+      const m = minions[i];
+      if (m.ttl <= 0) {
+        if (m.shade) engine.onShadeExpire(m, ctx);
+        minions.splice(i, 1);
+      }
     }
 
     // 宝石

@@ -23,7 +23,7 @@ import {
   type HeroSelectLayout,
   type Rect,
 } from "@game/ui/heroSelectLayout";
-import { allHeroes, isHeroReleased, releasedHeroes } from "@game/data/heroes";
+import { allHeroes, heroSetPieces, isHeroReleased, releasedHeroes } from "@game/data/heroes";
 import { SCROLL_TRACK_W } from "@game/ui/scrollList";
 import { ui } from "@game/ui/theme";
 
@@ -31,7 +31,7 @@ const W = 560;
 const H0 = 996; // 标定档
 const H1 = 1246; // 伸展上限
 const HEROES = allHeroes();
-const MAX_SWEEP = 568; // 996 档滚程(内容 952 − 视口 384)
+const MAX_SWEEP = 616; // 996 档滚程(内容 952 − 视口 336)
 const PAD = HERO_PAD; // 屏内页边距 16(英雄屏走自己的网格,不是全局 ui.pad 的 14)
 
 const right = (r: Rect): number => r.x + r.w;
@@ -53,7 +53,7 @@ describe("英雄页常量", () => {
     expect(HERO_LIST_TOP).toBe(84);
     expect(HERO_ROW_H).toBe(72);
     expect(HERO_ROW_GAP).toBe(8);
-    expect(HERO_DETAIL_H).toBe(440);
+    expect(HERO_DETAIL_H).toBe(488);
     expect(HERO_PORTRAIT).toBe(168);
     expect(HERO_CONFIRM_W).toBe(260);
     expect(HERO_CONFIRM_H).toBe(52);
@@ -74,12 +74,12 @@ describe("英雄页常量", () => {
 describe("996 标定档锚点", () => {
   const L = layoutAt(H0);
 
-  it("四带:顶栏 0..64 / 列表 84..468 / 详情 476..916 / 按钮 928..980", () => {
-    expect(L.list).toEqual({ x: 16, y: 84, w: 528, h: 384 });
-    expect(L.detail).toEqual({ x: 16, y: 476, w: 528, h: 440 });
+  it("四带:顶栏 0..64 / 列表 84..420 / 详情 428..916 / 按钮 928..980", () => {
+    expect(L.list).toEqual({ x: 16, y: 84, w: 528, h: 336 });
+    expect(L.detail).toEqual({ x: 16, y: 428, w: 528, h: 488 });
     expect(L.confirm).toEqual({ x: 150, y: 928, w: 260, h: 52 });
     expect(L.clearBtn).toEqual({ x: 16, y: 932, w: 88, h: 44 });
-    expect(L.track).toEqual({ x: 540, y: 84, w: SCROLL_TRACK_W, h: 384 });
+    expect(L.track).toEqual({ x: 540, y: 84, w: SCROLL_TRACK_W, h: 336 });
     // 右缘恒落 544:内容列与滚动轨同一把尺
     expect(L.list.x + L.list.w).toBe(544);
     expect(L.detail.x + L.detail.w).toBe(544);
@@ -87,24 +87,34 @@ describe("996 标定档锚点", () => {
     expect(L.clearBtn.h).toBeGreaterThanOrEqual(44); // 热区下限
   });
 
-  it("12 行内容 952 高 → 视口 384 → 滚程 568(全量平铺必须滚动)", () => {
+  it("12 行内容 952 高 → 视口 336 → 滚程 616(全量平铺必须滚动)", () => {
     expect(HEROES.length).toBe(12);
     expect(L.contentH).toBe(952);
-    expect(L.maxScroll).toBe(568);
+    expect(L.maxScroll).toBe(616);
   });
 
-  it("详情区:立绘 168 见方,文案带右移不重叠,技能 4 行铺满剩余", () => {
-    expect(L.portrait).toEqual({ x: 32, y: 492, w: 168, h: 168 });
+  it("详情区:立绘 168 见方,文案带右移不重叠,技能 5 行铺满剩余(末行「套装」高一档)", () => {
+    expect(L.portrait).toEqual({ x: 32, y: 444, w: 168, h: 168 });
     expect(L.textX).toBe(216);
-    expect(L.nameY).toBe(526);
-    expect(L.titleY).toBe(554);
-    expect(L.loreY).toBe(588);
+    expect(L.nameY).toBe(478);
+    expect(L.titleY).toBe(506);
+    expect(L.loreY).toBe(540);
     expect(L.loreW).toBe(312);
-    expect(L.skillRows.length).toBe(4);
-    expect(L.skillRows[0].rect).toEqual({ x: 32, y: 694, w: 496, h: 46 });
-    expect(bottom(L.skillRows[3].rect)).toBe(896);
+    expect(L.skillRows.length).toBe(5);
+    expect(L.skillRows[0].rect).toEqual({ x: 32, y: 646, w: 496, h: 42 });
+    expect(L.skillRows[4].rect).toEqual({ x: 32, y: 838, w: 496, h: 58 });
+    expect(bottom(L.skillRows[4].rect)).toBe(896);
     expect(right(L.portrait)).toBeLessThan(L.textX);
     expect(L.textX + L.loreW).toBe(L.detail.x + L.detail.w - PAD);
+  });
+
+  it("立绘右侧那条带:正文盒两行、其下「本套计件」清单盒,两盒相接且收到立绘带底缘", () => {
+    expect(L.lore).toEqual({ x: 216, y: 504, w: 312, h: 36 });
+    expect(L.pieces).toEqual({ x: 216, y: 544, w: 312, h: 68 });
+    expect(bottom(L.lore)).toBeLessThan(L.pieces.y); // 正文与清单之间留缝
+    expect(bottom(L.pieces)).toBe(bottom(L.portrait)); // 清单正好吃到立绘带底缘
+    expect(bottom(L.pieces)).toBeLessThan(L.skillLabelY); // 不压「技能详情」题行
+    expect(L.pieces.h % 2).toBe(0);
   });
 
   it("行内几何:小立绘/文本起点/基线/徽章位逐像素", () => {
@@ -127,8 +137,8 @@ describe("996 标定档锚点", () => {
     expect(bottom(r.badge)).toBeLessThanOrEqual(bottom(r.rect) - 16);
   });
 
-  it("技能行基线与胶囊落在行内", () => {
-    expect(L.skillRows.map((s) => s.index)).toEqual([0, 1, 2, 3]);
+  it("技能行基线与胶囊落在行内,desc 行盒由行高给出(套装行折两行)", () => {
+    expect(L.skillRows.map((s) => s.index)).toEqual([0, 1, 2, 3, 4]);
     for (const s of L.skillRows) {
       expect(s.rect.h % 2).toBe(0); // 行高取偶
       expect(s.chip.y).toBeGreaterThanOrEqual(s.rect.y);
@@ -138,6 +148,8 @@ describe("996 标定档锚点", () => {
       expect(s.descY).toBeLessThan(bottom(s.rect));
       expect(s.descW).toBe(s.rect.w - HERO_SKILL_TEXT_X - PAD);
     }
+    expect(L.skillRows.slice(0, 4).map((s) => s.descLines)).toEqual([1, 1, 1, 1]);
+    expect(L.skillRows[4].descLines).toBe(2);
   });
 });
 
@@ -147,15 +159,15 @@ describe("996 标定档锚点", () => {
 const hh = (v: number): number => Math.floor(v / 2) * 2;
 
 describe("屏高伸展规则", () => {
-  it("列表视口高 = 384 + (evenDown(h) − 996),其余带高恒定", () => {
+  it("列表视口高 = 336 + (evenDown(h) − 996),其余带高恒定", () => {
     for (const h of HEIGHTS) {
       const L = layoutAt(h);
       expect(L.list.y).toBe(HERO_LIST_TOP);
-      expect(L.list.h).toBe(384 + (hh(h) - H0));
+      expect(L.list.h).toBe(336 + (hh(h) - H0));
       expect(L.detail.h).toBe(HERO_DETAIL_H);
       expect(L.confirm.h).toBe(HERO_CONFIRM_H);
       expect(L.portrait.w).toBe(HERO_PORTRAIT);
-      expect(L.skillRows.length).toBe(4);
+      expect(L.skillRows.length).toBe(5);
     }
   });
 
@@ -170,7 +182,7 @@ describe("屏高伸展规则", () => {
   });
 
   it("视口越高滚程越短;1246 档 12 行仍超出 → 仍要滚", () => {
-    expect(layoutAt(H1).maxScroll).toBe(952 - 634);
+    expect(layoutAt(H1).maxScroll).toBe(952 - 586);
     expect(layoutAt(H1).maxScroll).toBeGreaterThan(0);
   });
 
@@ -221,7 +233,7 @@ describe("屏高伸展规则", () => {
       expect(bottom(L.confirm)).toBeLessThanOrEqual(h);
       expect(L.skillLabelY).toBeGreaterThan(bottom(L.portrait));
       expect(L.skillLabelY).toBeLessThan(L.skillRows[0].rect.y);
-      expect(bottom(L.skillRows[3].rect)).toBeLessThanOrEqual(bottom(L.detail) - PAD);
+      expect(bottom(L.skillRows[4].rect)).toBeLessThanOrEqual(bottom(L.detail) - PAD);
     }
   });
 });
@@ -323,5 +335,40 @@ describe("列表顺序与数据源", () => {
 
   it("平铺顺序天然按发布季分组(3×3×3×3),无需 Tab 也能读到「新英雄在前」的层次", () => {
     expect(HEROES.map((h) => h.releaseSeason)).toEqual([1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4]);
+  });
+});
+
+/* ---------- 7. 详情带的文案容量(超行会被 CLAMP 裁掉 → 版面与内容在这里对账) ---------- */
+
+/**
+ * 与 `ui/PanelKit.approxW` 同一把尺的本地副本:CJK = 1×px,ASCII = 0.55×px,空格 = 0.3×px。
+ * PanelKit 依赖 cc,测试跑在 node 里 → 这里只复制量字系数,不复制逻辑;系数本身在 ViewTable 的 hud 段。
+ */
+function approxW(t: string, px: number): number {
+  let w = 0;
+  for (const ch of t) {
+    if (ch === " ") w += px * 0.3;
+    else if (ch.charCodeAt(0) > 0x2e7f) w += px;
+    else w += px * 0.55;
+  }
+  return w;
+}
+/** 折行数(与 PanelKit.fitLines 同口径的粗算:按宽度均摊) */
+const wrapCount = (t: string, px: number, maxW: number): number => Math.max(1, Math.ceil(approxW(t, px) / maxW));
+
+describe("详情带文案容量", () => {
+  const L = layoutAt(H0);
+
+  it("12 位英雄的人物设定在正文盒里最多两行(视图 LORE_LINES 也是两行,再多就被裁)", () => {
+    for (const h of HEROES) expect(wrapCount(h.lore, 13, L.lore.w), h.id).toBeLessThanOrEqual(2);
+  });
+
+  it("12 套的「本套计件」清单非空、每项都有名字,且在清单盒里最多三行(盒高 68 − 题行 16 = 3 档)", () => {
+    for (const h of HEROES) {
+      const names = heroSetPieces(h.id);
+      expect(names.length, h.id).toBeGreaterThanOrEqual(2);
+      expect(names.every((n) => n.trim().length > 0), h.id).toBe(true);
+      expect(wrapCount(names.join(" · "), 12, L.pieces.w), h.id).toBeLessThanOrEqual(3);
+    }
   });
 });

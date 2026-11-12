@@ -35,7 +35,7 @@
   },
   "battle": {
     "chapterSeconds": 60,
-    "chaptersPerStage": 20,
+    "chaptersPerStage": 15,
     "echoRetainRate": 0.4,
     "monsterCountBase": 30,
     "monsterCountGrowth": 1.15,
@@ -55,13 +55,13 @@
   },
   "chapterTypes": {
     "eliteChapters": [
-      5,
-      10,
-      15
+      4,
+      8,
+      12
     ],
     "treasureChapters": [
-      7,
-      14
+      6,
+      10
     ],
     "eliteSpawnScale": 1.3,
     "eliteBurst": 1.5,

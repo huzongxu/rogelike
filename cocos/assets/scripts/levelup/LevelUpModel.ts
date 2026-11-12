@@ -41,24 +41,31 @@ import {
   type Equipment,
 } from "../game/data/equipmentGen";
 import {
-  FALLBACK_OFFERS,
   BRANCH_GUARANTEE_LEVEL,
   BRANCH_MIN_LEVEL,
   BRANCH_TEASE_LEVEL,
   GENERIC_HERO_SKILLS,
   HERO_SKILLS,
-  RESET_GUARANTEE_ROUNDS,
   SKILL_MAX_RANK,
   heroSkillDef,
+  heroStances,
   offerKey,
   rollSkillOffers,
-  type FallbackId,
   type HeroSkillDef,
   type SkillOffer,
+  type ThornStance,
 } from "../game/data/heroSkills";
-import { RHYTHM_MAX_LEVEL, rhythmDef, type RhythmId } from "../game/data/rhythm";
+import { RHYTHM_MAX_LEVEL, rhythmDef, rhythmShort, type RhythmId } from "../game/data/rhythm";
+import {
+  BUILD_NODE_CHAPTERS,
+  hasChapterBuild,
+  type BuildOption,
+  type BuildStep,
+  type BuildTier,
+} from "../game/data/heroBuild";
+import { THORN_STACK } from "../game/data/combat";
 import { ARTIFACT_DEFS, PASSIVE_DEFS, PASSIVE_SLOTS, isRelicType, passiveDesc, type PassiveArtifact } from "../game/data/artifacts";
-import { DESTROY_REFUND_RATE, RESET_BRANCH_LIMIT, resetBranchCost } from "../game/data/shop";
+import { DESTROY_REFUND_RATE } from "../game/data/shop";
 import { qualityBasePrice } from "../game/data/equipmentGen";
 import { qualityDef } from "../game/data/quality";
 import { rareBonusFor, type TalentId } from "../game/data/talents";
@@ -88,15 +95,17 @@ export interface LevelUpWorld {
   rhythmLevelUp(r: RhythmId): boolean;
   branchChosen(): string | null;
   setBranchChosen(id: string): void;
-  /** 重置分岔(可选,老宿主不给 = 不出这张卡):撤掉已选分岔与其节律、法宝重挂;返回是否成功 */
-  resetBranch?(): boolean;
-  /** 本局已重置次数(与 resetBranch 成对) */
-  branchResets?(): number;
+  /** 章节节点层:提交一次开章二选一(分岔 / 节点);失败返回 false,状态不变 */
+  commitBuild?(id: string): boolean;
+  /** 这一局是否走章节节点层(缺省 true;legacy 夹具可返回 false,单独验证 5–8 级分岔) */
+  chapterBuild?(): boolean;
+  /**
+   * 局首姿势二选一的落点(R22):写本局的荆棘层攒法。宿主没接这一支时弹层不会开
+   * (`openStance()` 先问 `heroStances(heroId())`,只有走层数的英雄才有姿势可出)。
+   */
+  setThornGainMode?(mode: ThornStance["mode"]): void;
   gold(): number;
   setGold(v: number): void;
-  /** 兜底卡:按最大生命比例回血 / 加最大生命 */
-  healPct(pct: number): void;
-  addMaxHp(v: number): void;
   /** 总槽位(基础 + 天赋 + 本局广告开槽);首章法宝三选一要有空槽 */
   slots(): number;
   /** 局内章节(免费重随按它分段:进下一章清零) */
@@ -120,18 +129,18 @@ export type Choice =
   | { kind: "rhythm"; rhythm: RhythmId }
   /** 首章法宝三选一的一张主动法宝 */
   | { kind: "equip"; eq: Equipment }
-  /** 重置分岔(花金币撤掉已选分岔,分岔二选一重来) */
-  | { kind: "reset" }
+  /** 局首姿势二选一的一张卡(R22:荆棘层走"站定 / 绕场",两态都要贴身才涨层) */
+  | { kind: "stance"; stance: ThornStance }
+  /** 章节节点层的一张卡(第 2 章分岔 / 第 4/8/12 章节点;二选一,本局 / 本层锁定) */
+  | { kind: "build"; opt: BuildOption }
   /** 被动管理形态的一格:一枚被动法宝(选它 = 销毁回收) */
-  | { kind: "passive"; p: PassiveArtifact }
-  /** 技能池耗尽后的兜底 */
-  | { kind: "fallback"; id: FallbackId };
+  | { kind: "passive"; p: PassiveArtifact };
 
 /** 一次「选它」的结果 */
 export type LevelUpPick =
   | { ok: true; kind: Choice["kind"] }
-  /** `slots` = 空槽不够(首章法宝放不进);`missing` = 这一格没卡 / 升阶目标已不在;`maxed` = 节律已满级;`gold` = 重置分岔钱不够 */
-  | { ok: false; reason: "slots" | "missing" | "maxed" | "gold" };
+  /** `slots` = 空槽不够(首章法宝放不进);`missing` = 这一格没卡 / 升阶目标已不在;`maxed` = 节律已满级 */
+  | { ok: false; reason: "slots" | "missing" | "maxed" };
 
 /** 一张卡的文案与形态位(几何不在这里,只有"这一格写什么、按不按得动") */
 export interface LevelUpCardContent {
@@ -165,15 +174,21 @@ export interface LevelUpContent {
 
 export type LevelUpAction = { kind: "pick" | "reroll" | "lock"; index: number };
 
-/** 弹层形态:升级三选一 / 首章法宝三选一 / 被动管理(商店「被动」钮,R2) */
-export type LevelUpMode = "levelup" | "first" | "passives";
+/** 弹层形态:升级三选一 / 首章法宝三选一 / 局首姿势 / 章节节点二选一 / 被动管理(商店「被动」钮,R2) */
+export type LevelUpMode = "levelup" | "first" | "stance" | "build" | "passives";
 
 /** 卡面文案的字面量(本屏没有 Web 基准,文案即设计口径,单立一处便于整屏翻新) */
 export const LV_TEXT = {
   title: "升级!选择一项",
   titleFirst: "开局法宝 · 选一件带走",
+  titleStance: "开局姿势 · 选一副面孔",
+  titleBranch: "第 2 章 · 选择道路",
+  titleNode: "第 %s 章 · 符文二选一",
   hint: "锁定可留到下一次升级;每章可免费重随 1 次",
   hintFirst: "标「共鸣」的法宝与你的本命节律相合,拿到即变形",
+  hintStance: "两态都要贴身才涨层,怪刚被清掉也算这一拍;姿势只决定「停」或「走」",
+  hintBranch: "两岔本局互斥;不占技能槽 / 商店槽,不可重随",
+  hintNode: "本层二选一,选完才开打;不占技能槽 / 商店槽,不可重随",
   pick: "选它",
   rerollPrefix: "重随(免费 ",
   rerollSuffix: ")",
@@ -184,11 +199,10 @@ export const LV_TEXT = {
   tagRank: "升阶",
   tagRhythm: "节律强化",
   tagEquip: "主动法宝",
+  tagStance: "姿势 · 本局",
   tagResonant: "共鸣!",
-  tagFallback: "补给",
-  tagReset: "重置分岔",
-  resetName: "另辟蹊径",
-  resetDesc: "撤掉已选的分岔技能与它解锁的节律,分岔二选一重新出现;挂在那条节律上的法宝改回本命",
+  // 原 tagFallback「补给」/ tagReset「重置分岔」/ resetName「另辟蹊径」/ resetDesc 四项随 R20 退场:
+  // 升级层只卖"我怎么打 / 我是谁"两类决策,技能池耗尽就不开这一层(见 `open()`)。
   titlePassives: "被动法宝 · 管理",
   hintPassives: "销毁回收基础价一半;被动槽满了才腾得出位",
   destroyPrefix: "销毁 · 回收 ",
@@ -210,7 +224,8 @@ export const LV_TEXT = {
 export function levelUpDescLines(lines: readonly string[], chars: number, maxLines: number): string[] {
   const out: string[] = [];
   for (const src of lines) {
-    const cs = [...src];
+    // Array.from 而非 [...src]:Cocos 构建把字符串展开 downlevel 成 [].concat(src) → 整段变单元素、折行静默失效
+    const cs = Array.from(src);
     for (let k = 0; k * chars < cs.length; k++) out.push(cs.slice(k * chars, k * chars + chars).join(""));
     if (out.length >= maxLines) break;
   }
@@ -237,15 +252,14 @@ export class LevelUpModel {
   lockedIndex = -1;
   visible = false;
   mode: LevelUpMode = "levelup";
+  /** build 形态:分岔还是节点(标题与提示用) */
+  buildKind: "branch" | "node" | null = null;
+  buildTier: BuildTier | null = null;
   /** 本章已用的免费重随次数(进下一章清零) */
   rerolls = 0;
 
   private lock: Choice | null = null;
   private chapterSeen = 0;
-  /** 重置保底账:分岔选定后开过几轮升级、这段时间里重置卡有没有出现过(分岔换了 / 撤了就归零) */
-  private branchSeen: string | null = null;
-  private roundsSinceBranch = 0;
-  private resetOfferedSinceBranch = false;
 
   constructor(private readonly w: LevelUpWorld, private readonly rand: () => number = Math.random) {}
 
@@ -273,14 +287,16 @@ export class LevelUpModel {
     if (!this.visible || !this.choices[i]) return false;
     // 被动管理:重随钮 = 翻页,有下一页才亮
     if (this.mode === "passives") return this.passivePages() > 1;
+    // 局首姿势与章节节点:明牌身份 / 规则选择,没有"再随一次"这一说
+    if (this.mode === "stance" || this.mode === "build") return false;
     if (this.lockedIndex === i) return false;
     return this.rerollsLeft() > 0;
   }
 
-  /** 这一格的锁定按不按得动:首章法宝不可锁;升级形态任一格都可按 —— 已有锁定时按别的格就是换锁(上一格释放) */
+  /** 这一格的锁定按不按得动:首章法宝与局首姿势不可锁;升级形态任一格都可按 —— 已有锁定时按别的格就是换锁(上一格释放) */
   canLock(i: number): boolean {
     if (!this.visible || !this.choices[i]) return false;
-    if (this.mode === "first") return false;
+    if (this.mode === "first" || this.mode === "stance" || this.mode === "build") return false;
     // 被动管理:锁定钮 = 关闭,恒可按
     if (this.mode === "passives") return true;
     return this.lockedIndex === i || this.lockLeft() > 0 || this.lockedIndex >= 0;
@@ -296,24 +312,11 @@ export class LevelUpModel {
         return this.w.rhythmLevel(c.rhythm) < RHYTHM_MAX_LEVEL;
       case "equip":
         return this.freeSlots() > 0;
-      case "reset":
-        return this.resetAvailable() && this.w.gold() >= this.resetCost();
       case "passive":
         return (this.w.passives ?? []).includes(c.p);
       default:
         return true;
     }
-  }
-
-  /** 重置分岔的价(金):共享表 resetBranchCost(章) */
-  resetCost(): number {
-    return resetBranchCost(this.w.chapter());
-  }
-
-  /** 这一轮能不能出「重置分岔」:宿主接了 resetBranch、已选分岔、次数未用完、金币够 */
-  private resetAvailable(): boolean {
-    if (!this.w.resetBranch || !this.w.branchChosen()) return false;
-    return (this.w.branchResets?.() ?? 0) < RESET_BRANCH_LIMIT && this.w.gold() >= this.resetCost();
   }
 
   /* ================= 开层 ================= */
@@ -330,21 +333,8 @@ export class LevelUpModel {
       playerLevel: this.w.playerLevel(),
       rhythms,
       exclude,
-      resetAvailable: this.resetAvailable(),
-      // 保底(RESET_GUARANTEE_ROUNDS):分岔选定后到第 N 轮仍没见过重置卡 → 这一轮必出
-      resetGuaranteed: this.roundsSinceBranch >= RESET_GUARANTEE_ROUNDS && !this.resetOfferedSinceBranch,
+      chapterBuild: this.w.chapterBuild?.() ?? true,
     };
-  }
-
-  /** 每次开升级轮先记账:分岔换了就重新数;这一轮开完后若卡里有重置就把"已出现"记上 */
-  private trackBranchRounds(): void {
-    const b = this.w.branchChosen();
-    if (b !== this.branchSeen) {
-      this.branchSeen = b;
-      this.roundsSinceBranch = 0;
-      this.resetOfferedSinceBranch = false;
-    }
-    if (b) this.roundsSinceBranch += 1;
   }
 
   /**
@@ -352,6 +342,8 @@ export class LevelUpModel {
    * 读数行末尾提示分岔何时出现;到 BRANCH_MIN_LEVEL 仍未出改提「最迟」;BRANCH_GUARANTEE_LEVEL 起必出,不再提示。
    */
   branchTease(): string {
+    // 三原型在第 2 章开章选支,不走 5–8 级的分岔预告(legacy 夹具可显式关掉)
+    if (this.w.chapterBuild?.() !== false && hasChapterBuild(this.w.heroId())) return "";
     const lv = this.w.playerLevel();
     if (lv < BRANCH_TEASE_LEVEL || lv >= BRANCH_GUARANTEE_LEVEL) return "";
     if (this.w.branchChosen()) return "";
@@ -374,10 +366,6 @@ export class LevelUpModel {
       }
       case "rhythm":
         return { kind: "rhythm", rhythm: o.rhythm };
-      case "reset":
-        return { kind: "reset" };
-      case "fallback":
-        return { kind: "fallback", id: o.id };
     }
   }
 
@@ -389,12 +377,12 @@ export class LevelUpModel {
         return `rank:${c.skillId}`;
       case "rhythm":
         return `rhythm:${c.rhythm}`;
-      case "reset":
-        return "reset";
-      case "fallback":
-        return `fallback:${c.id}`;
       case "equip":
         return `equip:${c.eq.id}`;
+      case "stance":
+        return `stance:${c.stance.mode}`;
+      case "build":
+        return `build:${c.opt.id}`;
       case "passive":
         return `passive:${c.p.id}`;
     }
@@ -403,8 +391,10 @@ export class LevelUpModel {
   /**
    * 开一轮升级三选一。章节换了就把免费重随清零;锁定卡恒落第 0 格(下一轮必再出现是结构性的),
    * 其余格由 `rollSkillOffers` 现出(分岔到期时成对占两格)。
+   * 返回 false = **这一轮无可选项**(独有技能与节律全部满级、又没有锁定卡待取):不开层,
+   * 由宿主把升级队列收掉(R20 起不再有「补给」兜底卡 —— 那三张卖的是金币与生命,与本层口径不同宗)。
    */
-  open(): void {
+  open(): boolean {
     this.mode = "levelup";
     const ch = this.w.chapter();
     if (ch !== this.chapterSeen) {
@@ -419,12 +409,15 @@ export class LevelUpModel {
     }
     const exclude = this.lock ? new Set([this.keyOf(this.lock)]) : undefined;
     const need = this.lock ? LEVELUP_OFFER_COUNT - LEVELUP_LOCK_LIMIT : LEVELUP_OFFER_COUNT;
-    this.trackBranchRounds();
     const fresh = rollSkillOffers(this.offerInput(exclude), need, this.rand).map((o) => this.materialize(o));
     this.choices = this.lock ? [this.lock, ...fresh] : fresh;
     this.lockedIndex = this.lock ? 0 : -1;
-    if (this.choices.some((c) => c.kind === "reset")) this.resetOfferedSinceBranch = true;
+    if (this.choices.length === 0) {
+      this.close();
+      return false;
+    }
     this.visible = true;
+    return true;
   }
 
   /* ================= 被动管理形态(商店「被动」钮) ================= */
@@ -473,6 +466,39 @@ export class LevelUpModel {
     this.choices = this.rollFirstPicks(FIRST_PICK_COUNT);
     this.lockedIndex = -1;
     this.visible = true;
+  }
+
+  /**
+   * 局首姿势二选一(R22):走荆棘层的英雄开局先挑一副面孔 —— 站定才涨层 / 边走边涨层,两态都要贴身。
+   * 返回 false = 这一局没有姿势可选(该英雄不走荆棘层),宿主据此跳过这一层、直接开首章法宝三选一。
+   * 卡序 = `heroSkills.heroStances()` 表序;不可锁、不可重随(这是身份选择,不是抽牌)。
+   */
+  openStance(): boolean {
+    const stances = heroStances(this.w.heroId());
+    if (stances.length === 0) return false;
+    this.mode = "stance";
+    this.chapterSeen = this.w.chapter();
+    this.choices = stances.map((s): Choice => ({ kind: "stance", stance: s }));
+    this.lockedIndex = -1;
+    this.visible = true;
+    return true;
+  }
+
+  /**
+   * 章节节点层(V1.1):第 2 章分岔 / 第 4/8/12 章节点,两张明牌二选一。
+   * 返回 false = 这一步没有合法选项(数据缺口 / 已选完),宿主跳过本层。
+   * 不可锁定、不可重随;选中即 `LevelUpWorld.commitBuild`,由世界层原子写入。
+   */
+  openBuild(step: BuildStep): boolean {
+    if (step.options.length === 0) return false;
+    this.mode = "build";
+    this.buildKind = step.kind;
+    this.buildTier = step.kind === "node" ? step.tier : null;
+    this.chapterSeen = this.w.chapter();
+    this.choices = step.options.map((opt): Choice => ({ kind: "build", opt }));
+    this.lockedIndex = -1;
+    this.visible = true;
+    return true;
   }
 
   private rollFirstPicks(count: number): Choice[] {
@@ -534,18 +560,20 @@ export class LevelUpModel {
         if (!this.w.rhythmLevelUp(c.rhythm)) return { ok: false, reason: "maxed" };
         break;
       }
-      case "reset": {
-        const cost = this.resetCost();
-        if (!this.w.resetBranch || !this.w.branchChosen()) return { ok: false, reason: "missing" };
-        if (this.w.gold() < cost) return { ok: false, reason: "gold" };
-        if (!this.w.resetBranch()) return { ok: false, reason: "missing" };
-        this.w.setGold(this.w.gold() - cost);
-        break;
-      }
       case "equip": {
         if (this.freeSlots() <= 0) return { ok: false, reason: "slots" };
         this.w.equipment.push(c.eq);
         this.w.recordEquipment(c.eq);
+        break;
+      }
+      case "stance": {
+        // 姿势只写本局态(不落存档):每局开局重选一次,下一局不继承
+        this.w.setThornGainMode?.(c.stance.mode);
+        break;
+      }
+      case "build": {
+        // 章节节点层:世界层原子写入分岔 / 节点;失败不改任何状态
+        if (!this.w.commitBuild?.(c.opt.id)) return { ok: false, reason: "missing" };
         break;
       }
       case "passive": {
@@ -558,13 +586,6 @@ export class LevelUpModel {
         if (list.length === 0) this.close();
         else this.refreshPassives();
         return { ok: true, kind: "passive" };
-      }
-      case "fallback": {
-        const fb = FALLBACK_OFFERS.find((f) => f.id === c.id)!;
-        if ("healPct" in fb) this.w.healPct(fb.healPct);
-        if ("gold" in fb) this.w.setGold(this.w.gold() + fb.gold);
-        if ("maxHp" in fb) this.w.addMaxHp(fb.maxHp);
-        break;
       }
     }
     this.closeWith(c);
@@ -626,9 +647,8 @@ export class LevelUpModel {
     this.choices = [];
     this.visible = false;
     this.mode = "levelup";
-    this.branchSeen = null;
-    this.roundsSinceBranch = 0;
-    this.resetOfferedSinceBranch = false;
+    this.buildKind = null;
+    this.buildTier = null;
   }
 
   private closeWith(picked: Choice): void {
@@ -641,7 +661,8 @@ export class LevelUpModel {
   /* ================= 几何与文案 ================= */
 
   layout(w: number, screenH: number): LevelUpLayout {
-    return levelUpScreenLayout(w, screenH);
+    // 局首姿势层 / 章节节点层出几张 = 实际选项数(其余形态恒三张,走 layout 的缺省档)
+    return levelUpScreenLayout(w, screenH, this.mode === "stance" || this.mode === "build" ? Math.max(1, this.choices.length) : undefined);
   }
 
   content(): LevelUpContent {
@@ -651,6 +672,26 @@ export class LevelUpModel {
         title: LV_TEXT.titlePassives,
         readoutText: `被动 ${list.length}/${PASSIVE_SLOTS} · 第 ${this.passivePage + 1}/${this.passivePages()} 页 · 金币 ${this.w.gold()}`,
         hint: LV_TEXT.hintPassives,
+        cards: this.choices.map((c, i) => this.cardContent(c, i)),
+      };
+    }
+    if (this.mode === "stance") {
+      // 读数行把两态共有的前提写在明面上:贴身距离闸的半径与接触记忆的窗口都直接读 combat.THORN_STACK,不在这里复述数字
+      const echoSec = (1 / THORN_STACK.contactEchoDecayPerSec).toFixed(2);
+      return {
+        title: LV_TEXT.titleStance,
+        readoutText: `第 1 章前 · 本局姿势 · 贴身 ${THORN_STACK.contactRadius}px 内才涨层 · 每只死后留 ${echoSec} 秒记忆`,
+        hint: LV_TEXT.hintStance,
+        cards: this.choices.map((c, i) => this.cardContent(c, i)),
+      };
+    }
+    if (this.mode === "build") {
+      const branch = this.buildKind === "branch";
+      const chapter = branch ? 2 : BUILD_NODE_CHAPTERS[(this.buildTier ?? 1) - 1];
+      return {
+        title: branch ? LV_TEXT.titleBranch : LV_TEXT.titleNode.replace("%s", String(chapter)),
+        readoutText: `第 ${this.w.chapter()} 章 · 第 ${chapter} 章的挑战之前 · 二选一${branch ? "本局锁定" : "本层锁定"}`,
+        hint: branch ? LV_TEXT.hintBranch : LV_TEXT.hintNode,
         cards: this.choices.map((c, i) => this.cardContent(c, i)),
       };
     }
@@ -692,7 +733,7 @@ export class LevelUpModel {
           color: q.color,
           frameKey: `frame_${q.key}`,
           hidden: false,
-          descLines: levelUpDescLines([c.def.desc, ...equipmentDescription(c.eq).slice(1)], LV_DESC_CHARS, LV_DESC_MAX_LINES),
+          descLines: levelUpDescLines([c.def.desc, ...(branch ? [`${rhythmDef(c.def.rhythm).name}节律:${rhythmShort(c.def.rhythm)}`] : []), ...equipmentDescription(c.eq).slice(1)], LV_DESC_CHARS, LV_DESC_MAX_LINES),
           deltaText: "",
           tagText: locked ? LV_TEXT.tagLocked : branch ? `${LV_TEXT.tagBranch}【${rhythmDef(c.def.rhythm).name}】节律` : LV_TEXT.tagSkill,
         };
@@ -750,6 +791,39 @@ export class LevelUpModel {
           tagText: resonant ? LV_TEXT.tagResonant : LV_TEXT.tagEquip,
         };
       }
+      case "stance": {
+        // 姿势卡:名 = 档名,品质行位置给"挂机档跟着怎么变",正文 = 发动条件与代价(全部读姿势表)
+        const q = qualityDef("epic");
+        const s = c.stance;
+        return {
+          ...base,
+          kind: c.kind,
+          nameText: s.name,
+          qualityText: s.aiNote,
+          color: q.color,
+          frameKey: `frame_${q.key}`,
+          hidden: false,
+          descLines: levelUpDescLines([s.desc], LV_DESC_CHARS, LV_DESC_MAX_LINES),
+          deltaText: "",
+          tagText: LV_TEXT.tagStance,
+        };
+      }
+      case "build": {
+        // 节点 / 分岔卡:名 = 表名,品质行位置给"层 + 锁定语义",正文 = 机制一段
+        const q = qualityDef("epic");
+        return {
+          ...base,
+          kind: c.kind,
+          nameText: c.opt.name,
+          qualityText: c.opt.tier ? `节点 · 第 ${BUILD_NODE_CHAPTERS[c.opt.tier - 1]} 章` : "分岔 · 第 2 章",
+          color: q.color,
+          frameKey: `frame_${q.key}`,
+          hidden: false,
+          descLines: levelUpDescLines([c.opt.desc], LV_DESC_CHARS, LV_DESC_MAX_LINES),
+          deltaText: "",
+          tagText: c.opt.tag,
+        };
+      }
       case "passive": {
         const q = qualityDef(PASSIVE_DEFS[c.p.type].rare ? "hidden" : c.p.quality);
         const relic = isRelicType(c.p.type);
@@ -768,38 +842,6 @@ export class LevelUpModel {
           pickText: `${LV_TEXT.destroyPrefix}${this.passiveRefund(c.p)}${LV_TEXT.destroySuffix}`,
           rerollText: LV_TEXT.nextPage,
           lockText: LV_TEXT.close,
-        };
-      }
-      case "reset": {
-        const q = qualityDef("epic");
-        const cost = this.resetCost();
-        return {
-          ...base,
-          kind: c.kind,
-          nameText: LV_TEXT.resetName,
-          qualityText: `${LV_TEXT.tagReset} · ${cost} 金`,
-          color: q.color,
-          frameKey: `frame_${q.key}`,
-          hidden: false,
-          descLines: levelUpDescLines([LV_TEXT.resetDesc, `本局剩 ${Math.max(0, RESET_BRANCH_LIMIT - (this.w.branchResets?.() ?? 0))} 次 · 金币 ${this.w.gold()}`], LV_DESC_CHARS, LV_DESC_MAX_LINES),
-          deltaText: "",
-          tagText: locked ? LV_TEXT.tagLocked : LV_TEXT.tagReset,
-        };
-      }
-      case "fallback": {
-        const fb = FALLBACK_OFFERS.find((f) => f.id === c.id)!;
-        const q = qualityDef("common");
-        return {
-          ...base,
-          kind: c.kind,
-          nameText: fb.name,
-          qualityText: "补给",
-          color: q.color,
-          frameKey: `frame_${q.key}`,
-          hidden: false,
-          descLines: levelUpDescLines([fb.desc], LV_DESC_CHARS, LV_DESC_MAX_LINES),
-          deltaText: "",
-          tagText: locked ? LV_TEXT.tagLocked : LV_TEXT.tagFallback,
         };
       }
     }

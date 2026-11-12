@@ -144,9 +144,9 @@ describe("地形标定(§3.4)", () => {
       const offW: number[] = [];
       const onW: number[] = [];
       for (let seed = 1; seed <= SEEDS; seed++) {
-        // 真机口径(R13):章首清场 + 章型同开
-        const off = runSim({ build: "set_barrage", move: "kite", shopGrowth: true, set: "barrage", chapterReset: true, chapterTypes: true, maxSeconds: 1200, seed });
-        const on = runSim({ build: "set_barrage", move: "kite", shopGrowth: true, set: "barrage", chapterReset: true, chapterTypes: true, maxSeconds: 1200, seed, obstacles: true });
+        // 真机口径(R13):章首清场 + 章型同开;V1.1 章节节点层单独成组(组 0 原系统)
+        const off = runSim({ build: "set_barrage", move: "kite", shopGrowth: true, set: "barrage", chapterReset: true, chapterTypes: true, chapterBuild: false, maxSeconds: 1200, seed });
+        const on = runSim({ build: "set_barrage", move: "kite", shopGrowth: true, set: "barrage", chapterReset: true, chapterTypes: true, chapterBuild: false, maxSeconds: 1200, seed, obstacles: true });
         offW.push(off.wave);
         onW.push(on.wave);
       }

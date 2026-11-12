@@ -1183,6 +1183,11 @@ export interface Phase3Params {
     /** 顶信息条套组进度胶囊:宽 / 高(Web drawBar(g,bx,52,90,6)) */
     setBarW: number;
     setBarH: number;
+    /**
+     * 顶信息条套组文本盒宽(px;ShopView 的 setText 与进度条起点 `pad + min(setHintW, approxW) + 8` 同源)。
+     * 模型侧改长文案会溢出压到进度条,故宽度闸按本值判,不允许视图另写字面量。
+     */
+    setHintW: number;
     soldOutFrame: string;
 }
 
@@ -1221,6 +1226,7 @@ export const PHASE3_DEFAULTS: Phase3Params = {
     soldOutFrame: "#3A465C",
     setBarW: 90,
     setBarH: 6,
+    setHintW: 150,
 };
 
 

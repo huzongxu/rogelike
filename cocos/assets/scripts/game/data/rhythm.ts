@@ -39,6 +39,20 @@ export function rhythmDef(id: RhythmId): RhythmDef {
   return RHYTHM_DEFS[id];
 }
 
+/** 描述的分隔符:前半 = 发动条件(界面窄位用),后半 = 打法形状(详情位用) */
+const RHYTHM_DESC_SEP = " —— ";
+
+/** 发动条件一句话(如受击 → 「被敌人击中时发动」);界面里"受击节律"这种裸标签的补语 */
+export function rhythmShort(id: RhythmId): string {
+  return (RHYTHM_DEFS[id].desc.split(RHYTHM_DESC_SEP)[0] ?? "").trim();
+}
+
+/** 打法形状一句话(如受击 → 「站桩承伤,怪越多越强」) */
+export function rhythmPlay(id: RhythmId): string {
+  const parts = RHYTHM_DEFS[id].desc.split(RHYTHM_DESC_SEP);
+  return (parts.length > 1 ? parts[1] : parts[0]).trim();
+}
+
 /** 一个触发器类型是否是节律(隐藏触发器返回 false) */
 export function isRhythm(t: TriggerType): t is RhythmId {
   return (RHYTHM_IDS as readonly string[]).includes(t);

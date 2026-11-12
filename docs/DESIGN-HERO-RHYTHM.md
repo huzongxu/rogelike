@@ -1,6 +1,9 @@
 # 英雄节律 × 独有技能 × 法宝（局内成长重构设计）
 
 > 状态：**S1 全部与 S2 三项已落地**（2026-09-13；Q1–Q7 裁定见 §1，落地对账见 §12）。数值仍为初值。未完成事项见 `docs/TODO-HERO-RHYTHM.md`。
+> **R20 撤销两处（2026-09-17，落地见 `docs/CONTEXT.md` 71）**：升级弹层的「重置分岔」卡（R8）与技能池耗尽的「补给」兜底三张（§3.1）。本层的商品从此只有独有技能与节律两类；牌发完就不再弹这一层。下文相关条目已就地标注，裁定史本身不改写。
+> **R23 章节节点层（2026-11-10）**：薇拉 / 凯尔 / 薇洛三原型把分岔搬到第 2 章开章，第 4/8/12 章各加一层二选一节点；其余 9 人维持 5–8 级分岔。合同见 [DESIGN-HERO-BUILD](DESIGN-HERO-BUILD.md)。
+> 流程与判据（**怎么做英雄、怎么判强弱**：七步流程、站位语义、六态度量表、12 英雄矩阵、薇拉范例卡）见 [DESIGN-HERO-PIPELINE](DESIGN-HERO-PIPELINE.md)；本文件只定结构与裁定史。
 > 解决的问题：升级三选一与章间商店卖同一种商品、体感割裂；英雄是纯皮肤、没有独有技能；触发器随机导致"职业技能体感奇怪"。
 > 关系：本设计**替代** [DESIGN-SEASON-FEEL](DESIGN-SEASON-FEEL.md) 的 A2 商品口径、D2 六独有六常规、D3 道具；**保留**其 B（压力）、C（Boss）两批。对应关系见 §9。
 > 数值纪律沿用 [DESIGN-VALUES-SPEC](DESIGN-VALUES-SPEC.md)：全部入表，禁止内联。`S/` = `cocos/assets/scripts/`，行号为撰写时事实。
@@ -84,7 +87,7 @@ RhythmId = "hit" | "pulse" | "kill" | "move" | "combo" | "hurt"
 | 分岔 | 2（互斥） | 三选一中出现，选一个另一个永久消失 | **选中即解锁该分岔的第 2 节律**；这是一局最重的决策 |
 | 进阶 | 1 | 三选一中出现 | 被动型，改写核心技能的一条规则 |
 
-每个技能 5 阶，三选一里"升阶"与"新技能"同池出现。一局约 25–35 级（[DESIGN-SEASON-FEEL](DESIGN-SEASON-FEEL.md) B2 口径），内容量 = 4 技能 × 5 阶 + 节律强化 2 × 5 = 30 次选择，与等级数匹配；耗尽后三选一改出「回血 30% / 金币 +80 / 下一章首刷免费」三张兜底。
+每个技能 5 阶，三选一里"升阶"与"新技能"同池出现。一局约 25–35 级（[DESIGN-SEASON-FEEL](DESIGN-SEASON-FEEL.md) B2 口径），内容量 = 4 技能 × 5 阶 + 节律强化 2 × 5 = 30 次选择，与等级数匹配；~~耗尽后三选一改出「回血 30% / 金币 +80 / 下一章首刷免费」三张兜底~~ —— **R20 撤销**：牌发完就不弹这一层（兜底卡卖的是金币与生命，与本层口径不同宗）。
 
 ### 3.2 S1 三英雄详表（荆棘 / 弹幕 / 余烬）
 
@@ -217,7 +220,7 @@ RhythmId = "hit" | "pulse" | "kill" | "move" | "combo" | "hurt"
 ```
 
 - **升级弹层**（`S/levelup/LevelUpModel.ts`）：商品源从 `generateChoices` 换成 `HeroSkillPool.offer(hero, owned, 3)`；金币重随退役，`LEVELUP_FREE_REROLL_PER_CHAPTER = 1`；锁定沿用 `lock/lockedIndex`。分岔卡成对出现在同一轮（左右并排），选一张另一张标灰消失。
-- **商店**（`S/shop/ShopModel.ts`）：卡位商品改为法宝（主动 / 被动混出，主动 : 被动 = 2 : 1）；武器行新增「切换节律」；新增「重置分岔」1 次/局，价 `RESET_BRANCH_COST = 400 × (1 + 章 × 0.05)`，重置后分岔二选一在下次升级重新出现。热区顺序：工具钮 → 槽位 → 三卡 → 法宝行（切换节律 > 强化 > 销毁）→ 进化 → 下一章。
+- **商店**（`S/shop/ShopModel.ts`）：卡位商品改为法宝（主动 / 被动混出，主动 : 被动 = 2 : 1）；武器行新增「切换节律」；~~新增「重置分岔」1 次/局~~ —— **R20 撤销**（分岔互斥是一局最重的决策，不给可回退的第二条路）。热区顺序：工具钮 → 槽位 → 三卡 → 法宝行（切换节律 > 强化 > 销毁）→ 进化 → 下一章。
 - **首章三选一**：复用升级弹层几何（`S/game/ui/levelUpLayout.ts`），商品 = 3 张主动法宝 common 品质，`FIRST_PICK_RESONANCE_GUARANTEE = 1`（至少 1 张与本命共鸣）。
 
 ---
@@ -237,7 +240,7 @@ S/game/data/heroSkills.ts
   SKILL_MAX_RANK            = 5
   BRANCH_MIN_LEVEL          = 5        // 分岔卡最早出现的玩家等级
   BRANCH_GUARANTEE_LEVEL    = 8        // 到此级未出现则必出
-  FALLBACK_OFFERS           = [heal30, gold80, freeRefresh]
+  FALLBACK_OFFERS           = [heal30, gold80, freeRefresh]   ← R20 撤销：池耗尽不再补牌
 
 S/game/data/artifacts.ts
   ARTIFACT_DEFS : Record<EffectType, { name, innerCd, resonance: RhythmId[2], morph }>
@@ -252,7 +255,7 @@ S/game/data/levelUp.ts（改）
   REROLL_CURVE / REROLL_HIDDEN     → 退役（隐藏词条改走稀有被动法宝）
 
 S/game/data/shop.ts（改）
-  RESET_BRANCH_COST_BASE    = 400
+  RESET_BRANCH_COST_BASE    = 400   ← R20 撤销：该表值与 resetBranchCost 已删
   FIRST_PICK_RESONANCE_GUARANTEE = 1
 
 S/game/data/combat.ts（改）
@@ -316,12 +319,13 @@ S/game/data/combat.ts（改）
 | R5 | 赛季新鲜感层怎么落在法宝体系上 | ✅ 已裁定（2026-09-13，「B+」）：**每季换共鸣格**——S2–S4 各 3 对「法宝 × 节律」新格（填基础表空格），当季全量、过季降为**回响共鸣**（改名保留、补丁 ×`SEASON_ECHO_MULT` 0.5）；**每季 1 枚赛季法宝**（现效果变体，自带 1 条共鸣格，与本季一对同节律），上市季商店按 `SEASON_FACE_OFFER_CHANCE` 0.25 偏向，过季进通用池按件数均摊、常驻可收藏；S1 不加新格，只标 3 格基础共鸣为「本季首发」 | 换共鸣改的是「任何一次挂法宝」的期待值，每局都碰得到；老组合不消失只回落，重学成本是找新组合；赛季法宝是图鉴里那一格「脸」。S5+ 无表 = 只剩回响，第 2 轮主题循环时补 |
 | R6 | 12 英雄节律分配（§2.2） | 初稿；**复审数据已出**（2026-09-13，`balance-sim` 12 英雄 × 2 种子、1200s、商店成长 + 章型、风筝挡）：首章击杀全部 59–66（无节律在前期掉队）；最终深度按英雄分化而非按节律 —— 同为周期的 kyle 7 / 10 章 vs nora 11 / 21 章，同为低血的 sia 11 / 11 vs sally 21 / 21，同为移动的 willow 19 / 19 vs doran 11 / 9，同为连杀的 loka 15 / 8 vs rayne 21 / 19；受击 vera 21 / 19、mu 15 / 21，击杀 bran / oden 四局全满 | ✅ 已裁定（2026-09-14，A）：**节律表不动**，核心技能带「节律调率」`CORE_RHYTHM_TUNE`（kyle / nora 周期 ×0.5 → 1.2s、loka 连杀数 ×0.6 → 3、doran 移动距离 ×0.7、sia 低血阈值 ×1.4 → 0.7），并给事件节律核心加**底拍**（`CORE_BASELINE_INTERVAL` 3.0s 慢周期，vera ×0.7、loka ×0.5）。复审时把 sim 核心改成与真机同口径后暴露冷启动死锁：击杀 / 连杀本命英雄开局零输出、真机 13s 阵亡，底拍即修复。复跑：12 英雄首章全部存活，最弱 kyle / loka 在种子 123 于第 6 章精英台阶阵亡（另一种子 21 / 11 章），其余 ≥ 10 章；64 种子地形聚合下 kyle 失败谷过半（8 束 × 1.2s 仍只有旧弹幕 3/8 密度）→ 核心束数回到 16（21 / 21）；数值 pass（3 种子对照）：loka 底拍 0.5 → 0.4（1.2s）得 21 / 17，mu 狼伤 11 → 14 得 15 / 10；穆第 10 / 15 章精英开场之墙:狼存活 / 狼数 / 风筝 / 站桩逃血线 / 围数 / 精英加权 / 狼命中回血六根数值杠杆全部无效(CONTEXT 56),只留身份项「狼命中回血」,机制层(章首保留召唤物 / 精英开场延迟)留 TODO |
 | R7 | 主动槽经济（§4.3 的 4 / 6） | ✅ 已裁定（2026-09-13，B）：**基础 4、硬顶 6**（`PLAYER_BASE.slots` 4、`SHOP_SLOT_CAP` 6）；天赋「额外武装」「槽位扩展 I」各 +1，「槽位扩展 II」改为**被动槽 +1**（id 不变）；本局广告开槽 `RUN_AD_SLOT_LIMIT` 1 | 3 技能 + 4 法宝 = 7 个施放源，每件看得清；取舍提前到第 2–3 章；共鸣 2 / 4 处成为要凑的目标。金币出口转到强化 / 进化 → 20 章到达态品质上移，Boss 血量曲线 `BOSS_HP_CURVE.base` 2.0 → 4.0 重锚（TTK 首关 ≈18s / 末关 ≈34s） |
-| R8 | 「重置分岔」落点 | ✅ 已裁定（2026-09-13）：**升级弹层**的一张卡（权重 1，已选分岔、金币够、本局未用过时进候选），价走商店表 `resetBranchCost`；**保底**：分岔选定后最迟第 `RESET_GUARANTEE_ROUNDS`（3）轮升级必出现一次 | 商店工具钮行 4 钮已满，加钮要动几何；分岔本就在升级层做，重置放同一层更顺；保底消掉"等不到"的挫败 |
+| R8 | 「重置分岔」落点 | ❌ **R20 撤销**（2026-09-17，用户「取消另辟蹊径这种重置」）：互斥分岔不给可回退的第二条路，表值与 `Player.resetBranch` 一并删除；原裁定 ↓ 保留作史 | ✅ 已裁定（2026-09-13）：**升级弹层**的一张卡（权重 1，已选分岔、金币够、本局未用过时进候选），价走商店表 `resetBranchCost`；**保底**：分岔选定后最迟第 `RESET_GUARANTEE_ROUNDS`（3）轮升级必出现一次 | 商店工具钮行 4 钮已满，加钮要动几何；分岔本就在升级层做，重置放同一层更顺；保底消掉"等不到"的挫败 |
 | R12 | 精英章开场对站桩 / 召唤流的压力 | ✅ 已裁定（2026-09-15，A 章型复审）：**精英入场延迟** `ELITE_INTEL_DELAY_SEC` 6s —— 精英章章首 6 秒内开局 burst 与刷怪不强制精英敌情（只有密度 ×1.3），第 6 秒起按 `ELITE_INTEL_BIAS` 0.3 入场；密度、爆发、偏向都不动 | 7 英雄 × 3 种子对照（章首清场口径）：延迟 0 / 3 / 6 与偏向 0.15 的深度总和 368 / 343 / 387 / 385，穆 30 → 46 章、其余在噪声内；选 6s 而非降偏向，是保住精英章"精英多"的身份，只把"开场就贴身"改成"第 6 秒精英入场"的预告感 |
 | R11 | 召唤物是否跨章保留 | ✅ 已裁定（2026-09-15，A）：`nextChapter` 不再清空 `minions`，召唤物跟主人回场心（`MINION_CARRY_SPREAD` 80 内散布），剩余存活照常倒数、上限仍 `LIMITS.minions` 24；`startRun` 仍清空。B「精英章开场延迟 3s」不采用（磨平全员的台阶感只为救一个流派） | 召唤流的"资产感"：军队是上一章攒下来的，越打越满；正好补穆在精英章开场那 10s 的空窗。sim 本来就不清召唤物，复审数据不变；补了 `chapterReset` 真机口径后对照：召唤英雄保留 vs 清掉全在种子噪声内（穆 10 / 10 vs 10 / 21、奥登 13 / 21 vs 19 / 17），**深度上无可测收益，定性为体验项**；穆的精英章开场之墙仍在，数值 / 机制两层都已试过，留给章型设计复审 |
 | R10 | 技能与法宝在界面上是否同列 | ✅ 已裁定（2026-09-15，用户「法宝和技能应该分俩个列表」→ C）：**HUD 底坞两排**——上排独有技能（≤3，技能排卡框描节律色细边），下排主动法宝（平时 4 / Boss 3，多的收 +N），排间 1px 分隔线，只有一类时单排；**商店**在槽位钮与法宝管理之间加一段只读「独有技能」行（≤3 行、行高 28：名 / 核心·分岔·进阶 / 节律 / 阶数），没有技能或宿主没接时该段不出、几何与之前逐位相同 | 技能不占槽、不能销毁 / 切节律，混在一列里看不出谁是谁；分列后 HUD 一眼能对上「哪招在放」，商店里也能对照阶数选升级 |
 | R9 | 第二本命解锁条件 | ✅ 已裁定（2026-09-13）：该英雄任一关 **3 星通关** | 考的是玩得好不好而非玩得久，第 1 关就能拿到，门槛一句话能说清；累计共鸣次数的进度藏在图鉴里不可读 |
 | R4 | （补记）通用职业包的替换节奏 | ✅ 已裁定（2026-09-13）：按赛季走，S3 补熔核三人、S4 补亡影三人 | — |
+| R23 | 三原型是否引入章节节点层 | ✅ 已落地（2026-11-09）：薇拉 / 凯尔 / 薇洛把分岔搬到**第 2 章开章二选一**，第 4/8/12 章各加一层二选一节点；分岔技能 = 路线主动件，`coreMorph.loop` 承载主循环，节点 patch 改主循环；每支 2³ = 8 组合，不占升级槽 / 商店槽 / 共鸣计数 | 其余 9 人维持 5–8 级分岔；普通升级节奏不动（CR-01 另批）。合同、36 节点表与生命周期见 [DESIGN-HERO-BUILD](DESIGN-HERO-BUILD.md) |
 
 ---
 
@@ -349,12 +353,13 @@ S/game/data/combat.ts（改）
 | R10 两列表 | ✅ `hud.castDockLayout`（技能排 + 法宝排，各自卡宽 / +N）、`HudView.dockCells / rebuildCards` 重排 + 分隔线 + 技能排细边（`hud.colors.skillEdge`）；`shopLayoutPure(opts.skillCount)` 在槽位钮后插 4 档技能段（0 时四档全 0）；`ShopModel.skills() / content().skills / skillHeader`、`ShopView` 3 行只读槽；`GameShell` ShopWorld 接 `skills` | `S/game/ui/hud.ts`、`S/battle/HudView.ts`、`S/game/ui/shop.ts`、`S/shop/ShopModel.ts`、`S/shop/ShopView.ts` |
 | §5.1 赛季共鸣（R5） | ✅ 表 + 判定 + 引擎 / 世界 / 商店 / 弹层 / HUD 全链路接 `seasonId`；`Equipment.variant` 入档随收藏走 | `artifacts.SEASON_RESONANCES / SEASON_ARTIFACTS / echoMorph`、`equipmentGen.equipmentResonance / rollSeasonVariant / defaultRhythmOf`、`equipmentEngine.morphOf(ctx.seasonId)`、`battleWorld.detectResonance` 角标 |
 | R2 融合入口移主菜单 + 商店被动管理 | ✅ 主菜单入口带 7 枚（`MENU_LAYOUT_DEFAULTS.origin.entryCount` = 7，等宽取偶 64）；`GameShell.openFusion` 守卫「收藏 < 2 件」轻提示；`LevelUpModel.openPassives()` 形态 `passives`：每页 3 枚、重随钮 = 翻页、锁定钮 = 关闭、选它 = 销毁回收 | `S/menu/MenuContentModel.ts`、`S/game/ui/menuLayout.ts`、`S/levelup/LevelUpModel.ts`、`S/shop/ShopModel.ts`（工具钮 `passive`） |
-| §6 「重置分岔」 | ✅ 落点改为升级弹层的一张卡（R8）；每局 1 次，价 `resetBranchCost(章)`；撤技能 + 收节律 + 法宝重挂 | `LevelUpModel`（kind `reset`）、`Player.resetBranch`、`battleWorld.resetBranch` |
+| §6 「重置分岔」 | ❌ **R20 撤销**（原裁定：落点改为升级弹层的一张卡）（R8）；每局 1 次，价 `resetBranchCost(章)`；撤技能 + 收节律 + 法宝重挂 | `LevelUpModel`（kind `reset`）、`Player.resetBranch`、`battleWorld.resetBranch` |
 | §7 数值初值 | ✅ 全部入表 | 各表见上 |
 | B2 等级收益 +8 生命 | ✅ | `battleWorld.killEnemy` 按级数调 `levelUpGrowth` |
 | 战斗指纹 / Boss TTK 锚 / 平衡 sim | 🔁 重标（P6）：sim 补技能自动选卡、被动购买、广告槽、A4 金币口径；Boss 血量曲线按新 DPS 锚重取 | `scripts/balance-sim.ts`、`tests/battle-fingerprint.test.ts`、`tests/boss.test.ts` |
 | HUD 显示技能 + 法宝（含共鸣改名） | ✅ | `HudView` 读 `player.castList` + `equipmentDisplayName(eq, passives)` |
 | S2 跨局第二本命 | ✅ 任一关 3 星通关解锁（R9）→ 英雄页第 4 行「本命节律」点行在本命与两条分岔节律间轮转，确定出战落盘；开局核心技能与挂机档跟着所选节律 | `save.heroRhythmUnlock / heroRhythmChoice`、`HeroSelectModel`、`battleWorld.startRun` |
 | S2 D3 道具并入被动池 | ✅ 8 枚遗物类被动（命运骰 / 裂核 / 沙漏 / 透镜 / 稳定器 / 磁轭 / 护心镜 / 假命），常规池修饰器 : 遗物 = 2 : 1；沙漏 / 透镜 / 稳定器走引擎，其余挂世界层结算位 | `artifacts.ts` 的 `RELIC_DEFS / RELIC_VALUES`、`battleWorld.hurtPlayer / contactMult / updateGems / damageEnemy` |
-| S2 再补 3 英雄专属表 | ✅ 极北（希雅）/ 冰川（诺拉）/ 白啸（洛卡）各 4 技能；其余 6 英雄仍走通用职业包 | `heroSkills.ts`（`BESPOKE_HEROES`） |
+| S2 再补 3 英雄专属表 | ✅ 极北（希雅）/ 冰川（诺拉）/ 白啸（洛卡）各 4 技能；V1.1 后薇洛转专属，其余 5 英雄仍走通用职业包 | `heroSkills.ts`（`BESPOKE_HEROES`） |
 | 英雄页四行 | ✅ 改为核心 / 分岔 / 进阶 / 本命节律 | `heroes.heroSkillLines` |
+| R23 章节节点层（三原型） | ✅ 数据 / 流程 / 主循环 / 36 节点 / 测试已落地；英雄页第六行与 60 种子带宽待后续 | `game/data/heroBuild.ts`、`GameShell.openBuildStep`、`LevelUpModel` 的 `build` 形态、`battleWorld.buildStep/commitBuild`、`tests/hero-build.test.ts` |

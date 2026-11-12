@@ -1,7 +1,7 @@
 /**
  * 英雄数据层测试(英雄系统批次 M0)。
  * 守住三条纪律:英雄无数值(字段不得长出数值)、派生字段不手抄(与 sets/seasonSets 同源)、
- * 英雄 ↔ 套组双射;并锁住发布门控、出战选择的唯一同步点与技能详情四条文案的来源。
+ * 英雄 ↔ 套组双射;并锁住发布门控、出战选择的唯一同步点、技能详情五条文案与「本套计件」清单的来源。
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -10,6 +10,7 @@ import {
   heroDef,
   heroOfSet,
   heroOfSetOrNull,
+  heroSetPieces,
   heroSkillLines,
   isHeroReleased,
   normalizeHeroId,
@@ -19,10 +20,11 @@ import {
   showcaseHero,
   type HeroSelection,
 } from "@game/data/heroes";
-import { allSets, setDef, setReleaseSeason } from "@game/data/sets";
+import { RESONANCE_TIERS, allSets, setDef, setReleaseSeason } from "@game/data/sets";
+import { ARTIFACT_DEFS } from "@game/data/artifacts";
 import { isSeasonBoosted, seasonThemeIndex } from "@game/data/seasonSets";
 import { heroSkills } from "@game/data/heroSkills";
-import { HERO_RHYTHM, heroRhythmOptions, rhythmDef } from "@game/data/rhythm";
+import { HERO_RHYTHM, heroRhythmOptions, rhythmDef, rhythmShort } from "@game/data/rhythm";
 
 const SEASONS = [1, 2, 3, 4] as const;
 const PER_SEASON = 3;
@@ -198,23 +200,23 @@ describe("applyHeroSelection / showcaseHero / normalizeHeroId", () => {
   });
 });
 
-/* ---------- 6. 技能详情:恒 4 条,零自产数值 ---------- */
+/* ---------- 6. 技能详情:恒 5 条,零自产数值 ---------- */
 
 describe("heroSkillLines", () => {
   const SEASON_RANGE = [0, ...SEASONS, 5, 6];
 
-  it("12 英雄 × 全部赛季恒 4 条,tag 顺序固定(核心 / 分岔 / 进阶 / 本命节律)", () => {
-    const TAGS = ["核心技能", "分岔", "进阶", "本命节律"];
+  it("12 英雄 × 全部赛季恒 5 条,tag 顺序固定(核心 / 分岔 / 进阶 / 本命节律 / 套装)", () => {
+    const TAGS = ["核心技能", "分岔", "进阶", "本命节律", "套装"];
     for (const h of allHeroes()) {
       for (const s of SEASON_RANGE) {
         const lines = heroSkillLines(h.id, s);
-        expect(lines.length, `${h.id}@S${s}`).toBe(4);
+        expect(lines.length, `${h.id}@S${s}`).toBe(5);
         expect(lines.map((l) => l.tag)).toEqual(TAGS);
       }
     }
   });
 
-  it("四条文案无脏值(NaN / undefined / Infinity / [object)", () => {
+  it("五条文案无脏值(NaN / undefined / Infinity / [object)", () => {
     for (const h of allHeroes()) {
       for (const s of SEASON_RANGE) {
         const texts = heroSkillLines(h.id, s).flatMap((l) => [l.label, l.desc]);
@@ -225,25 +227,34 @@ describe("heroSkillLines", () => {
     }
   });
 
-  it("核心 / 分岔 / 进阶 / 本命节律逐条取自技能表与节律表,本模块不另立文案", () => {
+  it("核心 / 分岔 / 进阶 / 本命节律 / 套装逐条取自技能表、节律表与套组表,本模块不另立文案", () => {
     for (const h of allHeroes()) {
       const skills = heroSkills(h.id);
       const core = skills.find((s) => s.kind === "core")!;
       const [b1, b2] = skills.filter((s) => s.kind === "branch");
       const adv = skills.find((s) => s.kind === "advance")!;
-      const [l1, l2, l3, l4] = heroSkillLines(h.id, h.releaseSeason);
+      const set = setDef(h.setId);
+      const [l1, l2, l3, l4, l5] = heroSkillLines(h.id, h.releaseSeason);
       expect(l1.label).toBe(core.name);
       expect(l1.desc).toBe(core.desc);
       expect(l2.label).toBe(`${b1.name} / ${b2.name}`);
-      expect(l2.desc).toBe(`${b1.desc};${b2.desc}`);
+      expect(l2.desc).toBe(
+        `${b1.desc};${b2.desc} 两岔各解锁:${b1.name}→${rhythmDef(b1.rhythm).name}(${rhythmShort(b1.rhythm)}),${b2.name}→${rhythmDef(b2.rhythm).name}(${rhythmShort(b2.rhythm)})`,
+      );
       expect(l3.label).toBe(adv.name);
       expect(l3.desc).toBe(adv.desc);
       expect(l4.label).toBe(`${rhythmDef(HERO_RHYTHM[h.id]).name}节律`);
       expect(l4.desc).toContain("解锁第二本命");
+      // 套装行:发动门槛读 RESONANCE_TIERS(共鸣 2 / 4 处,不是退役的 3 / 6 件),正文读 bonus3 / bonus6
+      expect(l5.label).toBe(`${set.name} · ${set.desc}`);
+      expect(l5.desc).toBe(
+        `共鸣 ${RESONANCE_TIERS.tier1} 处「${set.bonus3.name}」${set.bonus3.desc} · ${RESONANCE_TIERS.tier2} 处「${set.bonus6.name}」${set.bonus6.desc}`,
+      );
+      expect(l5.desc).not.toMatch(/3 件|6 件/);
     }
   });
 
-  it("本命节律行:未解锁提示 3 星解锁;解锁后列出可选节律并标出第二本命;赛季号不影响四行", () => {
+  it("本命节律行:未解锁提示 3 星解锁;解锁后列出可选节律并标出第二本命;赛季号不影响五行", () => {
     for (const h of allHeroes()) {
       const base = heroSkillLines(h.id, 1);
       for (const s of [2, 3, 4, 5, 6]) expect(heroSkillLines(h.id, s)).toEqual(base);
@@ -256,6 +267,27 @@ describe("heroSkillLines", () => {
       for (const r of opts) expect(line.desc).toContain(rhythmDef(r).name);
       // 传了本命自己:不带「第二本命」后缀
       expect(heroSkillLines(h.id, 1, { rhythm: opts[0], unlocked: true })[3].label).toBe(`${rhythmDef(opts[0]).name}节律`);
+    }
+  });
+});
+
+/* ---------- 6b. 「本套计件」清单:套组认领的每种效果 = 一枚主动法宝 ---------- */
+
+describe("heroSetPieces", () => {
+  it("12 英雄逐项等于「该套 effects → ARTIFACT_DEFS 同名法宝」,顺序随表、本模块不另立文案", () => {
+    for (const h of allHeroes()) {
+      const set = setDef(h.setId);
+      expect(heroSetPieces(h.id), h.id).toEqual(set.effects.map((e) => ARTIFACT_DEFS[e].name));
+    }
+  });
+
+  it("每套至少两枚、至多四枚,名字互不重复且非空", () => {
+    for (const h of allHeroes()) {
+      const names = heroSetPieces(h.id);
+      expect(names.length, h.id).toBeGreaterThanOrEqual(2);
+      expect(names.length, h.id).toBeLessThanOrEqual(4);
+      expect(new Set(names).size, h.id).toBe(names.length);
+      expect(names.every((n) => n.trim().length > 0), h.id).toBe(true);
     }
   });
 });

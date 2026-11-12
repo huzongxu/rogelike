@@ -263,7 +263,9 @@ export function approxW(text: string, px: number): number {
 /** 单行限宽(对标 Web fitOne:超宽逐字截断补「…」) */
 export function fitOne(text: string, maxW: number, px: number): string {
   if (approxW(text, px) <= maxW) return text;
-  const chars = [...text];
+  // Array.from 而非 [...text]:Cocos 构建把字符串展开 downlevel 成 [].concat(text),整串会变成单元素数组,
+  // 于是这里既不截断、又给整串补一个「…」——实机表现为文字一路顶到盒边被 CLAMP 裁掉(见 tests/text-fit 守卫)
+  const chars = Array.from(text);
   while (chars.length > 1 && approxW(chars.join("") + "…", px) > maxW) chars.pop();
   return chars.join("") + "…";
 }
@@ -272,7 +274,7 @@ export function fitOne(text: string, maxW: number, px: number): string {
 export function fitLines(text: string, maxW: number, px: number): string[] {
   const out: string[] = [];
   let line = "";
-  for (const c of [...text]) {
+  for (const c of Array.from(text)) {
     const test = line + c;
     if (line && approxW(test, px) > maxW) {
       out.push(line);

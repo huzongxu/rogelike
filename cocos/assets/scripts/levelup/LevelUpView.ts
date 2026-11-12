@@ -168,13 +168,15 @@ export class LevelUpView {
   }
 
   private makeCardSlot(name: string): CardSlot {
-    const desc: Txt[] = [];
-    for (let i = 0; i < LV_DESC_MAX_LINES; i++) desc.push(new Txt(name + "Desc" + i, this.root));
     const btn = (k: string): BtnSlot => ({ plate: new Plate(name + k + "Plate", this.root, this.frames), flat: flatBox(name + k + "Btn", this.root), text: new Txt(name + k + "Text", this.root) });
     const plate = new Plate(name + "Plate", this.root, this.frames);
     const frame = qualityBox(name + "Frame", this.root, this.frames);
     const emblem = new Plate(name + "Emblem", this.root, this.frames);
     emblem.node.addComponent(UIOpacity).opacity = LV_EMBLEM_ALPHA;
+    // 兄弟序 = 渲染次序:desc 必须建在卡板 / 品质框 / 徽记水印**之后**,否则会被这三层依次盖掉
+    // (实机对照:.probe/r22-first.png 里三张档的说明行整段不出图,就是这个顺序造成的)
+    const desc: Txt[] = [];
+    for (let i = 0; i < LV_DESC_MAX_LINES; i++) desc.push(new Txt(name + "Desc" + i, this.root));
     return {
       plate,
       frame,
